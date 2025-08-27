@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect} from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import {colors, commonStyles} from '../styles/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors } from '../styles/theme';
 
 interface MPINLoginProps {
   onMPINLogin: (mpin: string) => Promise<void>;
@@ -17,65 +18,345 @@ interface MPINLoginProps {
   userEmail?: string;
 }
 
+interface LoginResponse {
+  message: string;
+  token?: string;
+  user?: {
+    email: string;
+    name?: string;
+  };
+}
+
 const MPINLogin: React.FC<MPINLoginProps> = ({
   onMPINLogin,
   onUsePassword,
   isLoading,
   userEmail,
 }) => {
-  const [mpin, setMPin] = useState(['', '', '', '']);
+  const [mpin, setMPin] = useState(['', '', '', '', '', '']);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState('');
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
+  
+  const BACKEND_URL = 'http://127.0.0.1:8000';
+  const TOKEN_2_KEY = 'token_2';
+  const MPIN_ATTEMPTS_KEY = 'mpin_attempts';
+  const MPIN_BLOCK_TIME_KEY = 'mpin_block_time';
+  const MAX_ATTEMPTS = 3;
+  const BLOCK_DURATION = 30 * 60 * 1000; 
+ 
   useEffect(() => {
-    inputRefs.current[0]?.focus();
+    loadAttemptData();
   }, []);
 
-  const handleMPINChange = (value: string, index: number) => {
-    if (!/^\d*$/.test(value)) return;
+  const loadAttemptData = async () => {
+    try {
+      const storedAttempts = await AsyncStorage.getItem(MPIN_ATTEMPTS_KEY);
+      const storedBlockTime = await AsyncStorage.getItem(MPIN_BLOCK_TIME_KEY);
+      
+      const attempts = storedAttempts ? parseInt(storedAttempts) : 0;
+      const blockTime = storedBlockTime ? parseInt(storedBlockTime) : 0;
+      
+      const currentTime = Date.now();
+      
+      
+      if (blockTime > 0 && (currentTime - blockTime) < BLOCK_DURATION) {
+        setIsBlocked(true);
+        setAttemptCount(MAX_ATTEMPTS);
+        const remainingTime = Math.ceil((BLOCK_DURATION - (currentTime - blockTime)) / 60000);
+        setError(`Too many failed attempts. Try again in ${remainingTime} minutes.`);
+      } else if (blockTime > 0 && (currentTime - blockTime) >= BLOCK_DURATION) {
+       
+        await clearAttemptData();
+        setAttemptCount(0);
+        setIsBlocked(false);
+      } else {
+        setAttemptCount(attempts);
+      }
+    } catch (error) {
+      console.error('Error loading attempt data:', error);
+    }
+  };
 
+  const incrementAttempts = async () => {
+    const newAttemptCount = attemptCount + 1;
+    console.log(`MPIN attempt ${newAttemptCount}/${MAX_ATTEMPTS}`);
+    
+    setAttemptCount(newAttemptCount);
+    
+    try {
+      await AsyncStorage.setItem(MPIN_ATTEMPTS_KEY, newAttemptCount.toString());
+      
+      if (newAttemptCount >= MAX_ATTEMPTS) {
+  
+        const blockTime = Date.now();
+        await AsyncStorage.setItem(MPIN_BLOCK_TIME_KEY, blockTime.toString());
+        setIsBlocked(true);
+        
+        console.log('Maximum MPIN attempts reached. Blocking user and redirecting to login.');
+        
+        Alert.alert(
+          'Account Temporarily Locked',
+          'You have exceeded the maximum number of MPIN attempts. For security reasons, you will be redirected to the login page.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('User acknowledged lock alert, redirecting...');
+               
+                onUsePassword();
+              }
+            }
+          ],
+          { cancelable: false }
+        );
+        
+        
+        setTimeout(() => {
+          console.log('Fallback redirect triggered');
+          onUsePassword();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error saving attempt data:', error);
+    }
+  };
+
+  const clearAttemptData = async () => {
+    try {
+      await AsyncStorage.multiRemove([MPIN_ATTEMPTS_KEY, MPIN_BLOCK_TIME_KEY]);
+      console.log('MPIN attempt data cleared');
+    } catch (error) {
+      console.error('Error clearing attempt data:', error);
+    }
+  };
+
+
+  const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          mpin,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || errorData?.detail || `MPIN login failed with status ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      
+      return {
+        message: data.message || 'Login successful',
+        token: data.token,
+        user: data.user,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Network error occurred during MPIN login');
+    }
+  };
+
+  const handleMPINChange = (value: string, index: number) => {
+    if (isBlocked) return;
+    if (value.length > 1) return; 
+    
     const newMPin = [...mpin];
     newMPin[index] = value;
     setMPin(newMPin);
-    setError(''); 
+    setError('');
 
-    if (value && index < 3) {
+    if (value !== '' && index < 5) {
+  
+      setCurrentIndex(index + 1);
       inputRefs.current[index + 1]?.focus();
+    } else if (value === '' && index > 0) {
+
+      setCurrentIndex(index - 1);
+      inputRefs.current[index - 1]?.focus();
     }
 
-    if (index === 3 && value && newMPin.every(digit => digit !== '')) {
-      handleSubmit(newMPin.join(''));
+   
+    if (index === 5 && value !== '') {
+      const completeMPin = newMPin.join('');
+      if (completeMPin.length === 6) {
+        setTimeout(() => handleSubmit(completeMPin), 100);
+      }
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !mpin[index] && index > 0) {
+    if (isBlocked) return;
+    
+    if (e.nativeEvent.key === 'Backspace' && mpin[index] === '' && index > 0) {
+      const newMPin = [...mpin];
+      newMPin[index - 1] = '';
+      setMPin(newMPin);
+      setCurrentIndex(index - 1);
       inputRefs.current[index - 1]?.focus();
     }
   };
 
+  const isAuthenticationError = (error: Error): boolean => {
+    const errorMessage = error.message.toLowerCase();
+    return (
+      errorMessage.includes('401') || 
+      errorMessage.includes('invalid') || 
+      errorMessage.includes('unauthorized') ||
+      errorMessage.includes('wrong') ||
+      errorMessage.includes('incorrect')
+    );
+  };
+
   const handleSubmit = async (mpinValue?: string) => {
-    const mpinToSubmit = mpinValue || mpin.join('');
-    
-    if (mpinToSubmit.length !== 4) {
-      setError('Please enter complete 4-digit MPIN');
+    if (isBlocked) {
+      setError('Account is temporarily locked. Please use email and password to login.');
       return;
     }
 
+    const completeMPin = mpinValue || mpin.join('');
+    
+    if (completeMPin.length !== 6) {
+      setError('Please enter all 6 digits');
+      return;
+    }
+
+    if (!/^\d{6}$/.test(completeMPin)) {
+      setError('MPIN must contain only numbers');
+      return;
+    }
+
+    setIsSubmitting(true);
+    console.log('Attempting MPIN login...');
+    
     try {
-      await onMPINLogin(mpinToSubmit);
-    } catch (error) {
-      setError('Invalid MPIN. Please try again.');
-      setMPin(['', '', '', '']); 
+     
+      const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+      
+      if (!storedToken) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await mpinLoginAPI(storedToken, completeMPin);
+  
+      console.log('MPIN login successful, clearing attempt data');
+      await clearAttemptData();
+      setAttemptCount(0);
+      setIsBlocked(false);
+      await onMPINLogin(completeMPin);
+      
+      console.log('MPIN login successful:', response.message);
+    } catch (error: any) {
+      console.error('MPIN login error:', error);
+      
+      let errorMessage = 'Invalid MPIN. Please try again.';
+      let shouldIncrementAttempts = false;
+      
+      if (error instanceof Error) {
+        if (isAuthenticationError(error)) {
+          shouldIncrementAttempts = true;
+          const remainingAttempts = MAX_ATTEMPTS - attemptCount - 1;
+          if (remainingAttempts > 0) {
+            errorMessage = `Invalid MPIN. ${remainingAttempts} attempt(s) remaining.`;
+          } else {
+            errorMessage = 'Invalid MPIN. This is your last attempt.';
+          }
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else if (error.message.includes('No authentication token')) {
+          errorMessage = 'Session expired. Please login with email and password.';
+      
+          setTimeout(() => {
+            Alert.alert(
+              'Session Expired',
+              'Please login with your email and password.',
+              [{ text: 'OK', onPress: onUsePassword }]
+            );
+          }, 500);
+        } else {
+          errorMessage = error.message;
+
+          if (error.message.includes('400') || error.message.includes('403')) {
+            shouldIncrementAttempts = true;
+          }
+        }
+      }
+      
+      setError(errorMessage);
+      
+
+      setMPin(['', '', '', '', '', '']);
+      setCurrentIndex(0);
       inputRefs.current[0]?.focus();
+      
+
+      if (shouldIncrementAttempts) {
+        console.log('Authentication error detected, incrementing attempts...');
+        await incrementAttempts();
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const clearMPIN = () => {
-    setMPin(['', '', '', '']);
+    if (isBlocked) return;
+    
+    setMPin(['', '', '', '', '', '']);
+    setCurrentIndex(0);
     setError('');
     inputRefs.current[0]?.focus();
   };
+
+  const getDisplayEmail = () => {
+    if (!userEmail) return 'your account';
+    const parts = userEmail.split('@');
+    if (parts.length !== 2) return userEmail;
+    const username = parts[0];
+    const domain = parts[1];
+    if (username.length <= 2) return userEmail;
+    const maskedUsername = username[0] + '*'.repeat(username.length - 2) + username[username.length - 1];
+    return `${maskedUsername}@${domain}`;
+  };
+
+  const getAttemptIndicator = () => {
+    if (attemptCount === 0) return null;
+    
+    const remainingAttempts = MAX_ATTEMPTS - attemptCount;
+    
+    if (isBlocked) {
+      return (
+        <View style={styles.attemptIndicator}>
+          <Text style={styles.attemptText}>🔒 Account locked - Use email & password</Text>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.attemptIndicator}>
+        <Text style={styles.attemptText}>
+          ⚠️ {remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining
+        </Text>
+      </View>
+    );
+  };
+
+  useEffect(() => {
+    console.log(`Current attempt count: ${attemptCount}, Is blocked: ${isBlocked}`);
+  }, [attemptCount, isBlocked]);
 
   return (
     <View style={styles.container}>
@@ -85,52 +366,94 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         </View>
       </View>
 
-      <Text style={styles.title}>Enter MPIN</Text>
-      {userEmail && <Text style={styles.subtitle}>{userEmail}</Text>}
+      <Text style={styles.title}>Enter Your MPIN</Text>
+      <Text style={styles.subtitle}>
+        Enter your 6-digit MPIN for {getDisplayEmail()}
+      </Text>
 
-      <View style={styles.formContainer}>
-        <View style={styles.mpinContainer}>
-          <Text style={styles.label}>4-Digit MPIN</Text>
-          <View style={styles.mpinInputContainer}>
-            {mpin.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={ref => (inputRefs.current[index] = ref)}
-                style={[styles.mpinInput, error ? styles.mpinInputError : null]}
-                value={digit}
-                onChangeText={value => handleMPINChange(value, index)}
-                onKeyPress={e => handleKeyPress(e, index)}
-                keyboardType="numeric"
-                maxLength={1}
-                secureTextEntry
-                selectTextOnFocus
-                textAlign="center"
-              />
-            ))}
-          </View>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        </View>
+      {getAttemptIndicator()}
 
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.clearButton} onPress={clearMPIN}>
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
+      <View style={styles.mpinContainer}>
+        {mpin.map((digit, index) => (
+          <TextInput
+            key={index}
+            ref={(ref) => (inputRefs.current[index] = ref)}
+            style={[
+              styles.mpinInput,
+              currentIndex === index ? styles.mpinInputFocused : null,
+              error ? styles.mpinInputError : null,
+              isBlocked ? styles.mpinInputDisabled : null,
+            ]}
+            value={digit}
+            onChangeText={(value) => handleMPINChange(value, index)}
+            onKeyPress={(e) => handleKeyPress(e, index)}
+            keyboardType="numeric"
+            maxLength={1}
+            secureTextEntry
+            selectTextOnFocus
+            editable={!isLoading && !isSubmitting && !isBlocked}
+          />
+        ))}
+      </View>
 
-          <TouchableOpacity
-            style={[styles.submitButton, isLoading ? styles.submitButtonDisabled : null]}
-            onPress={() => handleSubmit()}
-            disabled={isLoading || mpin.join('').length !== 4}>
-            {isLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.submitButtonText}>Login</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <TouchableOpacity onPress={onUsePassword} style={styles.usePasswordButton}>
-          <Text style={styles.usePasswordText}>Use Password Instead</Text>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[
+            styles.submitButton,
+            (isLoading || isSubmitting || isBlocked) ? styles.submitButtonDisabled : null,
+          ]}
+          onPress={() => handleSubmit()}
+          disabled={isLoading || isSubmitting || isBlocked || mpin.join('').length !== 6}
+        >
+          {(isLoading || isSubmitting) ? (
+            <ActivityIndicator color={colors.white} size="small" />
+          ) : (
+            <Text style={styles.submitButtonText}>
+              {isBlocked ? 'Account Locked' : 'Login'}
+            </Text>
+          )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.clearButton,
+            isBlocked ? styles.clearButtonDisabled : null,
+          ]}
+          onPress={clearMPIN}
+          disabled={isLoading || isSubmitting || isBlocked}
+        >
+          <Text style={[
+            styles.clearButtonText,
+            isBlocked ? styles.clearButtonTextDisabled : null,
+          ]}>
+            Clear
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.alternativeContainer}>
+        <Text style={styles.alternativeText}>Having trouble?</Text>
+        <TouchableOpacity
+          style={styles.usePasswordButton}
+          onPress={() => {
+            console.log('Manual redirect to password login');
+            onUsePassword();
+          }}
+          disabled={isLoading || isSubmitting}
+        >
+          <Text style={styles.usePasswordText}>Use Email & Password Instead</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.securityInfo}>
+        <Text style={styles.securityText}>
+          🔒 Your MPIN is authenticated securely with our servers
+          {attemptCount > 0 && !isBlocked && (
+            `\n⚠️ Account will be locked after ${MAX_ATTEMPTS} failed attempts`
+          )}
+        </Text>
       </View>
     </View>
   );
@@ -172,74 +495,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
+    lineHeight: 24,
   },
-  formContainer: {
-    width: '100%',
+  attemptIndicator: {
+    backgroundColor: '#FFF3CD',
+    borderColor: '#FFEAA7',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  attemptText: {
+    fontSize: 14,
+    color: '#856404',
+    fontWeight: '500',
+    textAlign: 'center',
   },
   mpinContainer: {
-    marginBottom: 32,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  mpinInputContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 12,
   },
   mpinInput: {
-    width: 60,
-    height: 60,
+    width: 45,
+    height: 56,
     borderWidth: 2,
     borderColor: colors.border,
     borderRadius: 12,
+    textAlign: 'center',
     fontSize: 24,
     fontWeight: '600',
-    textAlign: 'center',
+    color: colors.text,
     backgroundColor: colors.white,
+  },
+  mpinInputFocused: {
+    borderColor: colors.primary,
+    backgroundColor: '#F0F8FF',
   },
   mpinInputError: {
     borderColor: colors.error,
+  },
+  mpinInputDisabled: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#E0E0E0',
+    color: '#A0A0A0',
   },
   errorText: {
     color: colors.error,
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 8,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 16,
     marginBottom: 24,
   },
-  clearButton: {
-    flex: 1,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: colors.gray,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clearButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+  buttonContainer: {
+    marginBottom: 32,
   },
   submitButton: {
-    flex: 1,
-    height: 56,
-    borderRadius: 12,
     backgroundColor: colors.primary,
+    borderRadius: 12,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
   },
   submitButtonDisabled: {
     opacity: 0.6,
@@ -249,14 +569,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  clearButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: 12,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonDisabled: {
+    borderColor: '#E0E0E0',
+  },
+  clearButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  clearButtonTextDisabled: {
+    color: '#A0A0A0',
+  },
+  alternativeContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  alternativeText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
   usePasswordButton: {
-    alignSelf: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   usePasswordText: {
     color: colors.primary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  securityInfo: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  securityText: {
+    fontSize: 12,
+    color: '#4A5568',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
 

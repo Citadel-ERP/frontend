@@ -7,9 +7,13 @@ import {
   ScrollView,
   SafeAreaView,
   StatusBar,
-  Image,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+interface DashboardProps {
+  onLogout: () => void;
+}
 
 interface AttendanceCardProps {
   value: string;
@@ -28,7 +32,7 @@ interface UpcomingEvent {
   initials: string;
 }
 
-const Dashboard = () => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const insets = useSafeAreaInsets();
   
   const upcomingEvents: UpcomingEvent[] = [
@@ -38,6 +42,24 @@ const Dashboard = () => {
     { name: 'Biju Unni', date: '19 Aug', initials: 'BU' },
     { name: 'Priyanka Raj', date: '19 Aug', initials: 'PR' },
   ];
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: onLogout,
+        },
+      ]
+    );
+  };
 
   const AttendanceCard = ({ value, label }: AttendanceCardProps) => (
     <View style={styles.card}>
@@ -80,11 +102,11 @@ const Dashboard = () => {
             <Text style={styles.logoName}>CITADEL</Text>
           </View>
           
-          <TouchableOpacity style={styles.notificationContainer}>
-            <View style={styles.bellIcon}>
-              <Text style={styles.bellEmoji}>🔔</Text>
-            </View>
-            <View style={styles.notificationBadge} />
+          <TouchableOpacity 
+            style={styles.logoutButton}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
 
@@ -181,7 +203,7 @@ const Dashboard = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2D3748', // Dark blue header background
+    backgroundColor: '#2D3748', 
   },
   header: {
     backgroundColor: '#2D3748',
@@ -229,27 +251,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1,
   },
-  notificationContainer: {
-    position: 'relative',
-    padding: 4,
+  logoutButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  bellIcon: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bellEmoji: {
-    fontSize: 18,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 8,
-    height: 8,
-    backgroundColor: '#FF4444',
-    borderRadius: 4,
+  logoutText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
   },
   userInfo: {
     flexDirection: 'row',

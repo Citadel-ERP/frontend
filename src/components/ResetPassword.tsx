@@ -1,4 +1,3 @@
-// src/components/ResetPassword.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -14,9 +13,13 @@ import { colors, commonStyles } from '../styles/theme';
 interface ResetPasswordProps {
   email: string;
   otp: string;
-  onPasswordReset: (email: string, otp: string, password: string) => Promise<void>;
+  onPasswordReset: (email: string, otp: string, newPassword: string) => Promise<void>;
   onBack: () => void;
   isLoading?: boolean;
+}
+
+interface ResetPasswordResponse {
+  message: string;
 }
 
 const ResetPassword: React.FC<ResetPasswordProps> = ({
@@ -26,32 +29,67 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
   onBack,
   isLoading,
 }) => {
-  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({
-    password: '',
+    newPassword: '',
     confirmPassword: '',
   });
 
+
+  const BACKEND_URL = 'http://127.0.0.1:8000';
+
+
+  const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          old_password: oldPassword, 
+          new_password: newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || errorData?.detail || `Reset password failed with status ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      
+      return {
+        message: data.message || 'Password reset successful',
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Network error occurred during password reset');
+    }
+  };
+
   const validateForm = () => {
-    const newErrors = { password: '', confirmPassword: '' };
+    const newErrors = { newPassword: '', confirmPassword: '' };
     let isValid = true;
 
-    if (!password.trim()) {
-      newErrors.password = 'New password is required';
+    if (!newPassword.trim()) {
+      newErrors.newPassword = 'New password is required';
       isValid = false;
-    } else if (password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-      isValid = false;
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      newErrors.password = 'Password must contain uppercase, lowercase, and number';
+    } else if (newPassword.length < 6) {
+      newErrors.newPassword = 'Password must be at least 6 characters';
       isValid = false;
     }
 
     if (!confirmPassword.trim()) {
       newErrors.confirmPassword = 'Please confirm your password';
       isValid = false;
-    } else if (password !== confirmPassword) {
+    } else if (newPassword !== confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
       isValid = false;
     }
@@ -63,10 +101,40 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    setIsSubmitting(true);
     try {
-      await onPasswordReset(email, otp, password);
+   
+      const response = await resetPasswordAPI(email, otp, newPassword);
+      
+
+      Alert.alert(
+        'Success', 
+        response.message || 'Password reset successfully', 
+        [{ 
+          text: 'OK', 
+          onPress: () => {
+         
+            onPasswordReset(email, otp, newPassword);
+          }
+        }]
+      );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to reset password');
+      console.error('Password reset error:', error);
+      
+      let errorMessage = 'Failed to reset password. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Invalid')) {
+          errorMessage = 'Invalid credentials or expired OTP. Please try again.';
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -80,26 +148,27 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
       <Text style={styles.title}>Reset Password</Text>
       <Text style={styles.subtitle}>
-        Create a new password for your account
+        Create a new secure password for your account
       </Text>
 
       <View style={styles.formContainer}>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>New Password</Text>
           <TextInput
-            style={[styles.input, errors.password ? styles.inputError : null]}
-            value={password}
-            onChangeText={setPassword}
+            style={[styles.input, errors.newPassword ? styles.inputError : null]}
+            value={newPassword}
+            onChangeText={setNewPassword}
             placeholder="Enter new password"
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isLoading && !isSubmitting}
           />
-          {errors.password ? (
-            <Text style={styles.errorText}>{errors.password}</Text>
+          {errors.newPassword ? (
+            <Text style={styles.errorText}>{errors.newPassword}</Text>
           ) : null}
           <Text style={styles.hintText}>
-            Password must be 8+ characters with uppercase, lowercase, and number
+            Password must be at least 6 characters
           </Text>
         </View>
 
@@ -113,6 +182,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isLoading && !isSubmitting}
           />
           {errors.confirmPassword ? (
             <Text style={styles.errorText}>{errors.confirmPassword}</Text>
@@ -123,7 +193,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={onBack}
-            disabled={isLoading}>
+            disabled={isLoading || isSubmitting}>
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
 
@@ -131,17 +201,23 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
             style={[
               styles.button,
               styles.primaryButton,
-              isLoading ? styles.primaryButtonDisabled : null,
+              (isLoading || isSubmitting) ? styles.primaryButtonDisabled : null,
             ]}
             onPress={handleSubmit}
-            disabled={isLoading}>
-            {isLoading ? (
-              <ActivityIndicator color={colors.white} />
+            disabled={isLoading || isSubmitting}>
+            {(isLoading || isSubmitting) ? (
+              <ActivityIndicator color={colors.white} size="small" />
             ) : (
               <Text style={styles.primaryButtonText}>Reset Password</Text>
             )}
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.infoContainer}>
+        <Text style={styles.infoText}>
+          🔒 After resetting your password, you can login with your new credentials
+        </Text>
       </View>
     </View>
   );
@@ -188,6 +264,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
+    marginBottom: 24,
   },
   inputContainer: {
     marginBottom: 24,
@@ -248,6 +325,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: '600',
+  },
+  infoContainer: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#4A5568',
+    lineHeight: 20,
   },
 });
 

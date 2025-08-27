@@ -8,13 +8,23 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Config from 'react-native-config';
 import {colors, commonStyles} from '../styles/theme';
 
+// Environment configuration
+const BACKEND_URL = Config.BASE_URL || 'http://127.0.0.1:8000';
+
 interface CreateMPINProps {
-  onCreateMPIN: (email: string, mpin: string, newPassword: string) => Promise<void>;
+  onCreateMPIN: (email: string, mpin: string, newPassword: string, token?: string) => Promise<void>;
   onBack: () => void;
   isLoading?: boolean;
   initialEmail?: string;
+  newPassword?: string;
+}
+
+interface CreateMPINResponse {
+  message: string;
+  token: string;
 }
 
 const CreateMPIN: React.FC<CreateMPINProps> = ({
@@ -22,20 +32,59 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
   onBack,
   isLoading,
   initialEmail = '',
+  newPassword = '',
 }) => {
   const [email, setEmail] = useState(initialEmail);
   const [mpin, setMPin] = useState('');
   const [confirmMPin, setConfirmMPin] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({
     email: '',
     mpin: '',
     confirmMPin: '',
-    newPassword: '',
   });
 
+  // Backend API call for creating MPIN
+  const createMPINAPI = async (email: string, mpin: string, password: string): Promise<CreateMPINResponse> => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/createMpin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          mpin,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || errorData?.detail || `Create MPIN failed with status ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      
+      if (!data.token) {
+        throw new Error('Invalid response format from server - token missing');
+      }
+
+      return {
+        message: data.message || 'Create MPIN successful',
+        token: data.token,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Network error occurred during MPIN creation');
+    }
+  };
+
   const validateForm = () => {
-    const newErrors = {email: '', mpin: '', confirmMPin: '', newPassword: ''};
+    const newErrors = {email: '', mpin: '', confirmMPin: ''};
     let isValid = true;
 
     if (!email.trim()) {
@@ -49,8 +98,8 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
     if (!mpin.trim()) {
       newErrors.mpin = 'MPIN is required';
       isValid = false;
-    } else if (mpin.length !== 4 || !/^\d{4}$/.test(mpin)) {
-      newErrors.mpin = 'MPIN must be exactly 4 digits';
+    } else if (mpin.length !== 6 || !/^\d{6}$/.test(mpin)) {
+      newErrors.mpin = 'MPIN must be exactly 6 digits';
       isValid = false;
     }
 
@@ -62,14 +111,6 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
       isValid = false;
     }
 
-    if (!newPassword.trim()) {
-      newErrors.newPassword = 'New password is required';
-      isValid = false;
-    } else if (newPassword.length < 8) {
-      newErrors.newPassword = 'Password must be at least 8 characters';
-      isValid = false;
-    }
-
     setErrors(newErrors);
     return isValid;
   };
@@ -77,12 +118,46 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    if (!newPassword) {
+      Alert.alert('Error', 'Password information is missing. Please go back and try again.');
+      return;
+    }
+
+    setLoading(true);
     try {
-      await onCreateMPIN(email, mpin, newPassword);
+      // Call backend API to create MPIN and get token
+      const response = await createMPINAPI(email, mpin, newPassword);
+      
+      // Call the parent handler which will:
+      // 1. Reset password on backend
+      // 2. Store tokens locally
+      // 3. Navigate to welcome screen
+      await onCreateMPIN(email, mpin, newPassword, response.token);
+      
+      Alert.alert('Success', response.message || 'MPIN created successfully!', [{ text: 'OK' }]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create MPIN. Please try again.');
+      console.error('Create MPIN error:', error);
+      
+      let errorMessage = 'Failed to create MPIN. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('409') || error.message.includes('already exists')) {
+          errorMessage = 'MPIN already exists for this account. Please try logging in.';
+        } else if (error.message.includes('400') || error.message.includes('Invalid')) {
+          errorMessage = 'Invalid input. Please check your details and try again.';
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('MPIN Creation Failed', errorMessage, [{ text: 'Retry' }]);
+    } finally {
+      setLoading(false);
     }
   };
+
+  const isFormLoading = isLoading || loading;
 
   return (
     <View style={styles.container}>
@@ -93,36 +168,48 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
       </View>
 
       <Text style={styles.title}>Create MPIN</Text>
+      <Text style={styles.subtitle}>
+        Create a 6-digit MPIN for quick login access
+      </Text>
 
       <View style={styles.formContainer}>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={[styles.input, errors.email ? styles.inputError : null]}
+            style={[
+              styles.input, 
+              errors.email ? styles.inputError : null,
+              initialEmail ? { backgroundColor: '#F7FAFC' } : null
+            ]}
             value={email}
             onChangeText={setEmail}
-            placeholder=""
+            placeholder="Enter your email"
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!initialEmail && !isFormLoading}
           />
           {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Create 4-Digit MPIN</Text>
+          <Text style={styles.label}>Create 6-Digit MPIN</Text>
           <TextInput
             style={[styles.input, errors.mpin ? styles.inputError : null]}
             value={mpin}
             onChangeText={setMPin}
-            placeholder=""
+            placeholder="Enter 6-digit MPIN"
             keyboardType="numeric"
-            maxLength={4}
+            maxLength={6}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isFormLoading}
           />
           {errors.mpin ? <Text style={styles.errorText}>{errors.mpin}</Text> : null}
+          <Text style={styles.hintText}>
+            Choose a unique 6-digit number that you'll remember easily
+          </Text>
         </View>
 
         <View style={styles.inputContainer}>
@@ -131,39 +218,30 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
             style={[styles.input, errors.confirmMPin ? styles.inputError : null]}
             value={confirmMPin}
             onChangeText={setConfirmMPin}
-            placeholder=""
+            placeholder="Re-enter 6-digit MPIN"
             keyboardType="numeric"
-            maxLength={4}
+            maxLength={6}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isFormLoading}
           />
           {errors.confirmMPin ? (
             <Text style={styles.errorText}>{errors.confirmMPin}</Text>
           ) : null}
         </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>New Password</Text>
-          <TextInput
-            style={[styles.input, errors.newPassword ? styles.inputError : null]}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder=""
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {errors.newPassword ? (
-            <Text style={styles.errorText}>{errors.newPassword}</Text>
-          ) : null}
+        <View style={styles.infoContainer}>
+          <Text style={styles.infoText}>
+            💡 Your MPIN will be used for quick login access after your initial setup is complete.
+          </Text>
         </View>
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={onBack}
-            disabled={isLoading}>
+            disabled={isFormLoading}>
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
 
@@ -171,12 +249,12 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
             style={[
               styles.button,
               styles.primaryButton,
-              isLoading ? styles.primaryButtonDisabled : null,
+              isFormLoading ? styles.primaryButtonDisabled : null,
             ]}
             onPress={handleSubmit}
-            disabled={isLoading}>
-            {isLoading ? (
-              <ActivityIndicator color={colors.white} />
+            disabled={isFormLoading}>
+            {isFormLoading ? (
+              <ActivityIndicator color={colors.white} size="small" />
             ) : (
               <Text style={styles.primaryButtonText}>Create MPIN</Text>
             )}
@@ -217,7 +295,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
     marginBottom: 40,
+    lineHeight: 22,
   },
   formContainer: {
     width: '100%',
@@ -242,6 +327,25 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 14,
     marginTop: 4,
+  },
+  hintText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  infoContainer: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#4A5568',
+    lineHeight: 20,
   },
   buttonContainer: {
     flexDirection: 'row',
