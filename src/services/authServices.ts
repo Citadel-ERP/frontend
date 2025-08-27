@@ -1,27 +1,33 @@
+// src/services/authServices.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'https://your-api-domain.com/api'; 
+const API_BASE_URL = '127.0.0.1:8000';
 
 export interface LoginResponse {
-  token1?: string;
-  token2?: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-  };
-  requiresPasswordChange?: boolean;
-  requiresMPINSetup?: boolean;
+  message: string;
+  first_login?: boolean;
+  token?: string;
 }
 
-export interface AuthTokens {
-  token1: string | null;
-  token2: string | null;
+export interface CreateMPINResponse {
+  message: string;
+  token: string;
 }
+
+export interface ApiResponse {
+  message: string;
+}
+
+const STORAGE_KEYS = {
+  TOKEN: 'auth_token',
+  EMAIL: 'user_email',
+  FIRST_LOGIN: 'first_login',
+  LAST_ACTIVITY: 'last_activity',
+};
 
 class AuthService {
   private static instance: AuthService;
-  private tokens: AuthTokens = { token1: null, token2: null };
+  private token: string | null = null;
 
   private constructor() {}
 
@@ -32,27 +38,36 @@ class AuthService {
     return AuthService.instance;
   }
 
-  async initializeTokens(): Promise<AuthTokens> {
+  async initializeAuth(): Promise<{
+    token: string | null;
+    email: string | null;
+    firstLogin: boolean;
+  }> {
     try {
-      const token1 = await AsyncStorage.getItem('token1');
-      const token2 = await AsyncStorage.getItem('token2');
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
+      const email = await AsyncStorage.getItem(STORAGE_KEYS.EMAIL);
+      const firstLogin = await AsyncStorage.getItem(STORAGE_KEYS.FIRST_LOGIN);
       
-      this.tokens = { token1, token2 };
-      return this.tokens;
+      this.token = token;
+      
+      return {
+        token,
+        email,
+        firstLogin: firstLogin === 'true',
+      };
     } catch (error) {
-      console.error('Error loading tokens:', error);
-      return { token1: null, token2: null };
+      console.error('Error initializing auth:', error);
+      return {
+        token: null,
+        email: null,
+        firstLogin: false,
+      };
     }
-  }
-
-
-  getTokens(): AuthTokens {
-    return this.tokens;
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`http://${API_BASE_URL}/core/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,127 +75,108 @@ class AuthService {
         body: JSON.stringify({ email, password }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
-      }
-
       const data: LoginResponse = await response.json();
 
-      if (data.token1) {
-        await AsyncStorage.setItem('token1', data.token1);
-        this.tokens.token1 = data.token1;
+      if (response.ok) {
+        // Store user data
+        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL, email);
+        await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LOGIN, (data.first_login || false).toString());
+        await AsyncStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+        
+        return data;
+      } else {
+        throw new Error(data.message || 'Login failed');
       }
-
-      if (data.token2) {
-        await AsyncStorage.setItem('token2', data.token2);
-        this.tokens.token2 = data.token2;
-      }
-
-      return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
       throw error;
     }
   }
 
-  async loginWithMPIN(mpin: string): Promise<LoginResponse> {
+  async loginWithMPIN(token: string, mpin: string): Promise<LoginResponse> {
     try {
-      if (!this.tokens.token1 || !this.tokens.token2) {
-        throw new Error('Required tokens not found');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/auth/mpin-login`, {
+      const response = await fetch(`http://${API_BASE_URL}/core/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.tokens.token1}`,
-          'X-Token2': this.tokens.token2,
         },
-        body: JSON.stringify({ mpin }),
+        body: JSON.stringify({ token, mpin }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'MPIN login failed');
-      }
-
       const data: LoginResponse = await response.json();
-      return data;
-    } catch (error) {
+
+      if (response.ok) {
+        await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, 'authenticated');
+        await AsyncStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+        this.token = 'authenticated';
+        return data;
+      } else {
+        throw new Error(data.message || 'MPIN login failed');
+      }
+    } catch (error: any) {
       console.error('MPIN login error:', error);
       throw error;
     }
   }
 
-  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  async resetPassword(oldPassword: string, newPassword: string, email: string): Promise<ApiResponse> {
     try {
-      if (!this.tokens.token1) {
-        throw new Error('Authentication required');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      const response = await fetch(`http://${API_BASE_URL}/core/resetPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.tokens.token1}`,
         },
-        body: JSON.stringify({ oldPassword, newPassword }),
+        body: JSON.stringify({
+          old_password: oldPassword,
+          new_password: newPassword,
+          email: email,
+        }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Password change failed');
-      }
+      const data: ApiResponse = await response.json();
 
-      const data = await response.json();
-
-      if (data.token2) {
-        await AsyncStorage.setItem('token2', data.token2);
-        this.tokens.token2 = data.token2;
+      if (response.ok) {
+        // Update first login status
+        await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LOGIN, 'false');
+        return data;
+      } else {
+        throw new Error(data.message || 'Password reset failed');
       }
-    } catch (error) {
-      console.error('Change password error:', error);
+    } catch (error: any) {
+      console.error('Reset password error:', error);
       throw error;
     }
   }
 
-  async createMPIN(email: string, mpin: string, newPassword: string): Promise<void> {
+  async createMPIN(email: string, mpin: string, password: string): Promise<CreateMPINResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/create-mpin`, {
+      const response = await fetch(`http://${API_BASE_URL}/core/createMpin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, mpin, newPassword }),
+        body: JSON.stringify({ email, mpin, password }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'MPIN creation failed');
-      }
+      const data: CreateMPINResponse = await response.json();
 
-      const data = await response.json();
-
-      if (data.token1) {
-        await AsyncStorage.setItem('token1', data.token1);
-        this.tokens.token1 = data.token1;
+      if (response.ok) {
+        // Store the token from create MPIN response
+        await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+        this.token = data.token;
+        return data;
+      } else {
+        throw new Error(data.message || 'MPIN creation failed');
       }
-
-      if (data.token2) {
-        await AsyncStorage.setItem('token2', data.token2);
-        this.tokens.token2 = data.token2;
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Create MPIN error:', error);
       throw error;
     }
   }
 
-
-  async forgotPassword(email: string): Promise<void> {
+  async forgotPassword(email: string): Promise<ApiResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      const response = await fetch(`http://${API_BASE_URL}/core/forgotPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,62 +184,103 @@ class AuthService {
         body: JSON.stringify({ email }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Forgot password request failed');
+      const data: ApiResponse = await response.json();
+
+      if (response.ok) {
+        return data;
+      } else {
+        throw new Error(data.message || 'Forgot password request failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Forgot password error:', error);
+      throw error;
+    }
+  }
+
+  async resetPasswordWithOTP(email: string, otp: string, password: string): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`http://${API_BASE_URL}/core/resetPasswordOtp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, otp, password }),
+      });
+
+      const data: ApiResponse = await response.json();
+
+      if (response.ok) {
+        return data;
+      } else {
+        throw new Error(data.message || 'Password reset with OTP failed');
+      }
+    } catch (error: any) {
+      console.error('Reset password with OTP error:', error);
+      throw error;
+    }
+  }
+
+  async forgotMPIN(email: string): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`http://${API_BASE_URL}/core/forgotMpin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data: ApiResponse = await response.json();
+
+      if (response.ok) {
+        return data;
+      } else {
+        throw new Error(data.message || 'Forgot MPIN request failed');
+      }
+    } catch (error: any) {
+      console.error('Forgot MPIN error:', error);
       throw error;
     }
   }
 
   async logout(): Promise<void> {
     try {
-      if (this.tokens.token1) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.tokens.token1}`,
-          },
-        }).catch(error => {
-          console.warn('Logout API call failed:', error);
-        });
-      }
-
-      await AsyncStorage.multiRemove(['token1', 'token2']);
-      this.tokens = { token1: null, token2: null };
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.TOKEN,
+        STORAGE_KEYS.EMAIL,
+        STORAGE_KEYS.FIRST_LOGIN,
+        STORAGE_KEYS.LAST_ACTIVITY,
+      ]);
+      this.token = null;
     } catch (error) {
       console.error('Logout error:', error);
       throw error;
     }
   }
 
-  getAuthStatus(): 'not_authenticated' | 'partial_auth' | 'full_auth' {
-    if (!this.tokens.token1) {
-      return 'not_authenticated';
-    }
-    
-    if (!this.tokens.token2) {
-      return 'partial_auth';
-    }
-    
-    return 'full_auth';
+  getToken(): string | null {
+    return this.token;
   }
 
-  async validateToken(token: string): Promise<boolean> {
+  async checkInactivity(): Promise<boolean> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/validate-token`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const lastActivity = await AsyncStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+      if (!lastActivity) return true;
 
-      return response.ok;
+      const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+      const timeSinceLastActivity = Date.now() - parseInt(lastActivity);
+      return timeSinceLastActivity > INACTIVITY_TIMEOUT;
     } catch (error) {
-      console.error('Token validation error:', error);
-      return false;
+      console.error('Error checking inactivity:', error);
+      return true;
+    }
+  }
+
+  async updateLastActivity(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+    } catch (error) {
+      console.error('Error updating last activity:', error);
     }
   }
 }

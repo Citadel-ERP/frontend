@@ -1,31 +1,27 @@
-export const colors = {
+// src/styles/theme.ts
 
-  primary: '#2F3349', 
+export const colors = {
+  primary: '#2F3349',
   primaryLight: '#4A4E6A',
   primaryDark: '#1A1D2E',
-  
 
   background: '#FFFFFF',
   backgroundSecondary: '#F8F9FA',
-  
 
   text: '#2F3349',
   textSecondary: '#6C7293',
   textLight: '#8B92B2',
-  
 
   white: '#FFFFFF',
   black: '#000000',
   gray: '#F1F3F4',
   border: '#E0E4E7',
-  
 
   success: '#28A745',
   error: '#DC3545',
   warning: '#FFC107',
   info: '#17A2B8',
-  
- 
+
   link: '#007BFF',
   disabled: '#6C757D',
 };
@@ -60,30 +56,21 @@ export const borderRadius = {
 export const shadows = {
   sm: {
     shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
   md: {
     shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   lg: {
     shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
@@ -91,10 +78,11 @@ export const shadows = {
 };
 
 export const commonStyles = {
+  // Inputs
   input: {
     height: 56,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.lg,
@@ -103,7 +91,8 @@ export const commonStyles = {
     color: colors.text,
     ...shadows.sm,
   },
-  
+
+  // Buttons
   primaryButton: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.lg,
@@ -113,13 +102,11 @@ export const commonStyles = {
     alignItems: 'center' as const,
     ...shadows.sm,
   },
-  
   primaryButtonText: {
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600' as const,
   },
-  
   secondaryButton: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -131,59 +118,65 @@ export const commonStyles = {
     borderColor: colors.border,
     ...shadows.sm,
   },
-  
   secondaryButtonText: {
     color: colors.primary,
     fontSize: fontSize.md,
     fontWeight: '600' as const,
   },
-  
+
+  // Containers
   container: {
     flex: 1,
     backgroundColor: colors.background,
     paddingHorizontal: spacing.lg,
   },
-  
   centerContainer: {
     flex: 1,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
- 
   card: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     ...shadows.md,
   },
- 
+
+  // Typography
   h1: {
     fontSize: fontSize.xxxl,
     fontWeight: '700' as const,
     color: colors.text,
     marginBottom: spacing.md,
   },
-  
   h2: {
     fontSize: fontSize.xxl,
     fontWeight: '600' as const,
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  
   h3: {
     fontSize: fontSize.xl,
     fontWeight: '600' as const,
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  
+  title: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700' as const,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  subtitle: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
   body: {
     fontSize: fontSize.md,
     color: colors.text,
     lineHeight: 24,
   },
-  
   caption: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,

@@ -1,207 +1,231 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
   View,
-  TouchableOpacity,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
-import AuthNavigator from './src/components/AuthNavigator';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import SplashScreen from './src/components/SplashScreen';
-import authService from './src/services/authServices';
-import { colors, commonStyles } from './src/styles/theme';
+import Login from './src/components/Login';
+import ChangePassword from './src/components/ChangePassword';
+import CreateMPIN from './src/components/CreateMPIN';
+import MPINLogin from './src/components/MPINLogin';
+import ForgotPassword from './src/components/ForgotPassword';
+import OTPVerification from './src/components/OTPVerification';
+import ResetPassword from './src/components/ResetPassword';
+import WelcomeScreen from './src/components/WelcomeScreen';
+import Dashboard from './src/components/Dashboard';
+import { colors } from './src/styles/theme';
+
+type Screen =
+  | 'splash'
+  | 'login'
+  | 'changePassword'
+  | 'createMPIN'
+  | 'mpinLogin'
+  | 'forgotPassword'
+  | 'otpVerification'
+  | 'resetPassword'
+  | 'welcome'
+  | 'dashboard';
 
 interface User {
-  id: string;
   email: string;
-  name: string;
+  name?: string;
+}
+
+interface UserData {
+  email?: string;
+  firstLogin?: boolean;
+  isAuthenticated?: boolean;
 }
 
 function App(): React.JSX.Element {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState<Screen>('splash');
+  const [userData, setUserData] = useState<UserData>({});
   const [user, setUser] = useState<User | null>(null);
-  const [isSplashVisible, setIsSplashVisible] = useState(true); 
+  const [isLoading, setIsLoading] = useState(false);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  const [tempData, setTempData] = useState<{ email?: string; otp?: string }>({});
 
-  const handleAuthSuccess = (userData: User) => {
-    setUser(userData);
-    setIsAuthenticated(true);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, []);
+
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    setAppState(nextAppState);
   };
 
-  const handleLogout = async () => {
+  const handleSplashComplete = async () => {
+    setCurrentScreen('login');
+  };
+
+  // Login flow (replace with API later)
+  const handleLogin = async (email: string, password: string) => {
+    setIsLoading(true);
     try {
-      await authService.logout();
-      setUser(null);
-      setIsAuthenticated(false);
-    } catch (error) {
-      console.error('Logout error:', error);
+      const hardcodedEmail = "test@citadel.com";
+      const hardcodedPassword = "password123";
+
+      if (email === hardcodedEmail && password === hardcodedPassword) {
+        setUserData({
+          email,
+          firstLogin: false,
+          isAuthenticated: true,
+        });
+        setUser({ email });
+        setCurrentScreen('changePassword');
+      } 
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const handleChangePassword = async () => {
+    setCurrentScreen('createMPIN');
+  };
 
-  if (isSplashVisible) {
-    return <SplashScreen onSplashComplete={() => setIsSplashVisible(false)} />;
-  }
+  const handleCreateMPIN = async () => {
+    setCurrentScreen('welcome');
+  };
 
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-        <AuthNavigator onAuthSuccess={handleAuthSuccess} />
-      </SafeAreaView>
-    );
-  }
+  const handleMPINLogin = async (mpin: string) => {
+    if (mpin === "1234") {
+      setCurrentScreen('welcome');
+    }
+  };
 
+  const handleUsePassword = () => {
+    setCurrentScreen('login');
+  };
+
+  const handleForgotPassword = () => {
+    setCurrentScreen('forgotPassword');
+  };
+
+  const handleOTPSent = (email: string) => {
+    setTempData({ email });
+    setCurrentScreen('otpVerification');
+  };
+
+  const handleResendOTP = async () => {
+    // Placeholder for API call
+  };
+
+  const handleOTPVerified = (email: string, otp: string) => {
+    if (otp === "0000") {
+      setTempData({ email, otp });
+      setCurrentScreen('resetPassword');
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setCurrentScreen('login');
+  };
+
+  const handleBack = () => {
+    switch (currentScreen) {
+      case 'changePassword':
+      case 'forgotPassword':
+        setCurrentScreen('login');
+        break;
+      case 'createMPIN':
+        setCurrentScreen('changePassword');
+        break;
+      case 'otpVerification':
+        setCurrentScreen('forgotPassword');
+        break;
+      case 'resetPassword':
+        setCurrentScreen('otpVerification');
+        break;
+      default:
+        setCurrentScreen('login');
+    }
+  };
+
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case 'splash':
+        return <SplashScreen onSplashComplete={handleSplashComplete} />;
+      case 'login':
+        return (
+          <Login
+            onLogin={handleLogin}
+            onForgotPassword={handleForgotPassword}
+            isLoading={isLoading}
+          />
+        );
+      case 'changePassword':
+        return (
+          <ChangePassword
+            onChangePassword={handleChangePassword}
+            onBack={handleBack}
+            isLoading={isLoading}
+          />
+        );
+      case 'createMPIN':
+        return (
+          <CreateMPIN
+            onCreateMPIN={handleCreateMPIN}
+            onBack={handleBack}
+            isLoading={isLoading}
+            initialEmail={userData.email}
+          />
+        );
+      case 'mpinLogin':
+        return (
+          <MPINLogin
+            onMPINLogin={handleMPINLogin}
+            onUsePassword={handleUsePassword}
+            isLoading={isLoading}
+            userEmail={userData.email}
+          />
+        );
+      case 'forgotPassword':
+        return (
+          <ForgotPassword
+            onBack={handleBack}
+            onOTPSent={handleOTPSent}
+            isLoading={isLoading}
+          />
+        );
+      case 'otpVerification':
+        return (
+          <OTPVerification
+            email={tempData.email || ''}
+            onOTPVerified={handleOTPVerified}
+            onBack={handleBack}
+            onResendOTP={handleResendOTP}
+            isLoading={isLoading}
+          />
+        );
+      case 'resetPassword':
+        return (
+          <ResetPassword
+            email={tempData.email || ''}
+            otp={tempData.otp || ''}
+            onPasswordReset={handlePasswordReset}
+            onBack={handleBack}
+            isLoading={isLoading}
+          />
+        );
+      case 'welcome':
+        return <WelcomeScreen name="Priyanka" onContinue={() => setCurrentScreen('dashboard')} />;
+      case 'dashboard':
+        return <Dashboard />;
+      default:
+        return <SplashScreen onSplashComplete={handleSplashComplete} />;
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logo}>
-              <Text style={styles.logoText}>CITADEL</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.content}>
-          <View style={styles.welcomeCard}>
-            <Text style={styles.welcomeTitle}>Welcome to Citadel</Text>
-            <Text style={styles.welcomeSubtitle}>
-              Hello, {user?.name || user?.email}
-            </Text>
-            <Text style={styles.welcomeDescription}>
-              You have successfully authenticated and can now access the application.
-            </Text>
-          </View>
-
-          <View style={styles.featuresCard}>
-            <Text style={styles.cardTitle}>Features</Text>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureText}>✓ Secure Authentication</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureText}>✓ MPIN Support</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureText}>✓ Password Management</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureText}>✓ Token-based Security</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.cardTitle}>Quick Actions</Text>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionButtonText}>Change Password</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionButtonText}>Reset MPIN</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {renderScreen()}
+      </View>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logo: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  logoText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  logoutButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.error,
-    borderRadius: 8,
-  },
-  logoutButtonText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  content: {
-    padding: 24,
-    gap: 20,
-  },
-  welcomeCard: {
-    ...commonStyles.card,
-    alignItems: 'center',
-    textAlign: 'center',
-  },
-  welcomeTitle: {
-    ...commonStyles.h1,
-    marginBottom: 8,
-  },
-  welcomeSubtitle: {
-    ...commonStyles.h3,
-    color: colors.primary,
-    marginBottom: 12,
-  },
-  welcomeDescription: {
-    ...commonStyles.body,
-    textAlign: 'center',
-    color: colors.textSecondary,
-  },
-  featuresCard: {
-    ...commonStyles.card,
-  },
-  cardTitle: {
-    ...commonStyles.h2,
-    marginBottom: 16,
-  },
-  featureItem: {
-    marginBottom: 8,
-  },
-  featureText: {
-    ...commonStyles.body,
-    color: colors.textSecondary,
-  },
-  infoCard: {
-    ...commonStyles.card,
-  },
-  actionButton: {
-    ...commonStyles.secondaryButton,
-    marginBottom: 12,
-  },
-  actionButtonText: {
-    ...commonStyles.secondaryButtonText,
-  },
-});
 
 export default App;
