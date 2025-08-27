@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Config from 'react-native-config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../styles/theme';
 
@@ -42,7 +43,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   
-  const BACKEND_URL = 'http://127.0.0.1:8000';
+ const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
   const TOKEN_2_KEY = 'token_2';
   const MPIN_ATTEMPTS_KEY = 'mpin_attempts';
   const MPIN_BLOCK_TIME_KEY = 'mpin_block_time';
@@ -92,37 +93,52 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       await AsyncStorage.setItem(MPIN_ATTEMPTS_KEY, newAttemptCount.toString());
       
       if (newAttemptCount >= MAX_ATTEMPTS) {
-  
+        // Block the account
         const blockTime = Date.now();
         await AsyncStorage.setItem(MPIN_BLOCK_TIME_KEY, blockTime.toString());
         setIsBlocked(true);
         
         console.log('Maximum MPIN attempts reached. Blocking user and redirecting to login.');
         
+        // Clear MPIN input immediately
+        setMPin(['', '', '', '', '', '']);
+        setCurrentIndex(0);
+        
+        // Show alert and redirect to login
         Alert.alert(
           'Account Temporarily Locked',
-          'You have exceeded the maximum number of MPIN attempts. For security reasons, you will be redirected to the login page.',
+          'You have exceeded the maximum number of MPIN attempts. For security reasons, you will be redirected to the login page where you can use your email and password.',
           [
             {
               text: 'OK',
               onPress: () => {
-                console.log('User acknowledged lock alert, redirecting...');
-               
-                onUsePassword();
+                console.log('User acknowledged lock alert, redirecting to login...');
+                handleRedirectToLogin();
               }
             }
           ],
           { cancelable: false }
         );
         
-        
+        // Fallback redirect in case alert doesn't work
         setTimeout(() => {
-          console.log('Fallback redirect triggered');
-          onUsePassword();
-        }, 1000);
+          console.log('Fallback redirect to login triggered');
+          handleRedirectToLogin();
+        }, 2000);
       }
     } catch (error) {
       console.error('Error saving attempt data:', error);
+    }
+  };
+
+  const handleRedirectToLogin = () => {
+    try {
+      console.log('Redirecting to login page due to exceeded MPIN attempts');
+      onUsePassword();
+    } catch (error) {
+      console.error('Error during redirect to login:', error);
+      // Force redirect even if there's an error
+      setTimeout(() => onUsePassword(), 100);
     }
   };
 
@@ -134,7 +150,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       console.error('Error clearing attempt data:', error);
     }
   };
-
 
   const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
     try {
@@ -180,16 +195,14 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     setError('');
 
     if (value !== '' && index < 5) {
-  
       setCurrentIndex(index + 1);
       inputRefs.current[index + 1]?.focus();
     } else if (value === '' && index > 0) {
-
       setCurrentIndex(index - 1);
       inputRefs.current[index - 1]?.focus();
     }
 
-   
+    // Auto-submit when all 6 digits are entered
     if (index === 5 && value !== '') {
       const completeMPin = newMPin.join('');
       if (completeMPin.length === 6) {
@@ -217,13 +230,16 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       errorMessage.includes('invalid') || 
       errorMessage.includes('unauthorized') ||
       errorMessage.includes('wrong') ||
-      errorMessage.includes('incorrect')
+      errorMessage.includes('incorrect') ||
+      errorMessage.includes('400') ||
+      errorMessage.includes('403')
     );
   };
 
   const handleSubmit = async (mpinValue?: string) => {
     if (isBlocked) {
       setError('Account is temporarily locked. Please use email and password to login.');
+      handleRedirectToLogin();
       return;
     }
 
@@ -243,7 +259,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     console.log('Attempting MPIN login...');
     
     try {
-     
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
       
       if (!storedToken) {
@@ -278,17 +293,17 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           errorMessage = 'Network error. Please check your internet connection.';
         } else if (error.message.includes('No authentication token')) {
           errorMessage = 'Session expired. Please login with email and password.';
-      
           setTimeout(() => {
             Alert.alert(
               'Session Expired',
               'Please login with your email and password.',
-              [{ text: 'OK', onPress: onUsePassword }]
+              [{ text: 'OK', onPress: handleRedirectToLogin }]
             );
           }, 500);
+          return;
         } else {
           errorMessage = error.message;
-
+          // Any other 4xx errors should also increment attempts
           if (error.message.includes('400') || error.message.includes('403')) {
             shouldIncrementAttempts = true;
           }
@@ -297,12 +312,12 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       
       setError(errorMessage);
       
-
+      // Clear MPIN input and reset focus
       setMPin(['', '', '', '', '', '']);
       setCurrentIndex(0);
       inputRefs.current[0]?.focus();
       
-
+      // Increment attempts if it's an authentication error
       if (shouldIncrementAttempts) {
         console.log('Authentication error detected, incrementing attempts...');
         await incrementAttempts();
@@ -339,20 +354,33 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     
     if (isBlocked) {
       return (
-        <View style={styles.attemptIndicator}>
-          <Text style={styles.attemptText}>🔒 Account locked - Use email & password</Text>
+        <View style={[styles.attemptIndicator, styles.blockedIndicator]}>
+          <Text style={styles.blockedText}>🔒 Account locked - Redirecting to login page...</Text>
         </View>
       );
     }
     
     return (
-      <View style={styles.attemptIndicator}>
-        <Text style={styles.attemptText}>
+      <View style={[styles.attemptIndicator, remainingAttempts === 1 ? styles.criticalIndicator : null]}>
+        <Text style={[styles.attemptText, remainingAttempts === 1 ? styles.criticalText : null]}>
           ⚠️ {remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining
+          {remainingAttempts === 1 && ' - Account will be locked after next failed attempt'}
         </Text>
       </View>
     );
   };
+
+  // Effect to handle automatic redirect when blocked
+  useEffect(() => {
+    if (isBlocked && attemptCount >= MAX_ATTEMPTS) {
+      const redirectTimer = setTimeout(() => {
+        console.log('Auto-redirecting to login after account lock');
+        handleRedirectToLogin();
+      }, 3000); // Auto redirect after 3 seconds
+
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [isBlocked, attemptCount]);
 
   useEffect(() => {
     console.log(`Current attempt count: ${attemptCount}, Is blocked: ${isBlocked}`);
@@ -439,7 +467,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           style={styles.usePasswordButton}
           onPress={() => {
             console.log('Manual redirect to password login');
-            onUsePassword();
+            handleRedirectToLogin();
           }}
           disabled={isLoading || isSubmitting}
         >
@@ -507,10 +535,28 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     alignItems: 'center',
   },
+  criticalIndicator: {
+    backgroundColor: '#FFF2F2',
+    borderColor: '#FFCDD2',
+  },
+  blockedIndicator: {
+    backgroundColor: '#FFEBEE',
+    borderColor: '#E57373',
+  },
   attemptText: {
     fontSize: 14,
     color: '#856404',
     fontWeight: '500',
+    textAlign: 'center',
+  },
+  criticalText: {
+    color: '#D32F2F',
+    fontWeight: '600',
+  },
+  blockedText: {
+    fontSize: 14,
+    color: '#D32F2F',
+    fontWeight: '600',
     textAlign: 'center',
   },
   mpinContainer: {

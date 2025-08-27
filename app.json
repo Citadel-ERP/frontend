@@ -28,6 +28,9 @@
     "web": {
       "favicon": "./assets/images/logo.png"
     },
-    "entryPoint": "./index.js"
+    "entryPoint": "./index.js",
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

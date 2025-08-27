@@ -19,7 +19,7 @@ import WelcomeScreen from './src/components/WelcomeScreen';
 import Dashboard from './src/components/Dashboard';
 import { colors } from './src/styles/theme';
 
-const BACKEND_URL = Config.BASE_URL || 'http://127.0.0.1:8000';
+const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
 
 type Screen =
   | 'splash'
@@ -45,6 +45,7 @@ interface UserData {
 
 interface LoginResponse {
   message: string;
+  first_login?: boolean;
   token?: string;
   mpin?: string;
   user?: {
@@ -57,7 +58,6 @@ interface ResetPasswordResponse {
   message: string;
 }
 
-
 const TOKEN_1_KEY = 'token_1';
 const TOKEN_2_KEY = 'token_2';
 const MPIN_KEY = 'user_mpin';
@@ -68,7 +68,7 @@ function App(): React.JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
-  const [tempData, setTempData] = useState<{ email?: string; otp?: string; newPassword?: string }>({});
+  const [tempData, setTempData] = useState<{ email?: string; oldPassword?: string; newPassword?: string; otp?: string }>({});
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
@@ -79,9 +79,9 @@ function App(): React.JSX.Element {
     setAppState(nextAppState);
   };
 
-
   const loginAPI = async (email: string, password: string): Promise<LoginResponse> => {
     try {
+      console.log(BACKEND_URL);
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -103,6 +103,7 @@ function App(): React.JSX.Element {
       
       return {
         message: data.message || 'Login successful',
+        first_login: data.first_login,
         token: data.token,
         mpin: data.mpin,
         user: data.user,
@@ -186,19 +187,18 @@ function App(): React.JSX.Element {
   const handleSplashComplete = async () => {
     try {
       const token1 = await AsyncStorage.getItem(TOKEN_1_KEY);
-      const token2 = await AsyncStorage.getItem(TOKEN_2_KEY);
-      const storedMPin = await AsyncStorage.getItem(MPIN_KEY);
       const email = await AsyncStorage.getItem('user_email');
 
-      console.log('Token check:', { token1: !!token1, token2: !!token2, mpin: !!storedMPin, email });
+      console.log('Token check:', { token1: !!token1, email });
 
-    
-      if (token1 && token2 && storedMPin && email) {
+      // If token1 exists, show MPIN login
+      if (token1 && email) {
         setUserData({ email, isAuthenticated: false });
         setCurrentScreen('mpinLogin');
         return;
       }
 
+      // Otherwise show login
       setCurrentScreen('login');
     } catch (error) {
       console.error('Error checking tokens:', error);
@@ -211,34 +211,33 @@ function App(): React.JSX.Element {
     try {
       const response = await loginAPI(email, password);
       
-      setUserData({
-        email,
-        isAuthenticated: true,
-      });
-      
+      console.log('Login response:', response);
+
+      // Store email regardless of login type
+      await AsyncStorage.setItem('user_email', email);
+      setUserData({ email, isAuthenticated: true });
       setUser({ 
         email, 
         name: response.user?.name 
       });
 
-      
-      await AsyncStorage.setItem('user_email', email);
-
-      
-      if (response.token) {
+      // Check if this is first login
+      if (response.first_login === true) {
+        // First login - store old password and redirect to reset password
+        setTempData({ email, oldPassword: password }); 
+        setCurrentScreen('resetPassword');
+      } else if (response.first_login === false && response.token) {
+        // Not first login and we have token - save it and proceed
         await AsyncStorage.setItem(TOKEN_2_KEY, response.token);
-      }
-      
-      if (response.mpin) {
-        await AsyncStorage.setItem(MPIN_KEY, response.mpin);
-    
+        
+        // Generate token1 and proceed to welcome/dashboard
         const token1 = generateRandomToken();
         await AsyncStorage.setItem(TOKEN_1_KEY, token1);
-
+        
         setCurrentScreen('welcome');
       } else {
- 
-        setCurrentScreen('createMPIN');
+        // Handle unexpected response
+        Alert.alert('Error', 'Unexpected response from server. Please try again.');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -264,19 +263,22 @@ function App(): React.JSX.Element {
     }
   };
 
-
   const generateRandomToken = (): string => {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   };
 
-
-  const handleCreateMPIN = async (email: string, mpin: string) => {
+  const handleCreateMPIN = async (email: string, mpin: string, newPassword: string, token?: string) => {
     setIsLoading(true);
     try {
-   
+      // The API call has already been made in CreateMPIN component
+      // Just save the token and navigate
+      if (token) {
+        await AsyncStorage.setItem(TOKEN_2_KEY, token);
+      }
+      
+      // Generate token1 and save MPIN
       const token1 = generateRandomToken();
       
-
       await AsyncStorage.multiSet([
         [TOKEN_1_KEY, token1],
         [MPIN_KEY, mpin]
@@ -284,13 +286,12 @@ function App(): React.JSX.Element {
 
       setCurrentScreen('welcome');
     } catch (error) {
-      console.error('Error creating MPIN:', error);
-      Alert.alert('Error', 'Failed to create MPIN. Please try again.');
+      console.error('Error storing MPIN data:', error);
+      Alert.alert('Error', 'Failed to save MPIN data. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
-
   
   const handleMPINLogin = async (mpin: string) => {
     setIsLoading(true);
@@ -301,7 +302,6 @@ function App(): React.JSX.Element {
         throw new Error('No authentication token found');
       }
 
-
       try {
         const response = await mpinLoginAPI(storedToken, mpin);
         setCurrentScreen('welcome');
@@ -309,7 +309,7 @@ function App(): React.JSX.Element {
       } catch (backendError) {
         console.log('Backend MPIN login failed, trying local verification:', backendError);
         
-      
+        // Fallback to local MPIN verification
         const storedMPin = await AsyncStorage.getItem(MPIN_KEY);
         
         if (mpin === storedMPin) {
@@ -334,7 +334,6 @@ function App(): React.JSX.Element {
     }
   };
 
-
   const handleUsePassword = () => {
     setCurrentScreen('login');
   };
@@ -358,7 +357,7 @@ function App(): React.JSX.Element {
   };
 
   const handleOTPVerified = (email: string, otp: string) => {
-   
+    // Mock OTP verification
     if (otp === "0000") { 
       setTempData({ email, otp });
       setCurrentScreen('resetPassword');
@@ -367,30 +366,12 @@ function App(): React.JSX.Element {
     }
   };
 
-
-  const handlePasswordReset = async (email: string, otp: string, newPassword: string) => {
-    setIsLoading(true);
-    try {
-
-      await resetPasswordAPI(email, otp, newPassword);
-      
-      Alert.alert(
-        'Success', 
-        'Password reset successfully', 
-        [{ text: 'OK', onPress: () => setCurrentScreen('login') }]
-      );
-    } catch (error) {
-      console.error('Password reset error:', error);
-      
-      let errorMessage = 'Failed to reset password. Please try again.';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
+  // Password reset handler for first-time login
+  const handlePasswordReset = async (email: string, oldPassword: string, newPassword: string) => {
+    // Store the new password for CreateMPIN page
+    setTempData({ email, newPassword: newPassword });
+    // Navigate to create MPIN
+    setCurrentScreen('createMPIN');
   };
 
   const handleBack = () => {
@@ -405,7 +386,8 @@ function App(): React.JSX.Element {
         setCurrentScreen('forgotPassword');
         break;
       case 'resetPassword':
-        setCurrentScreen('otpVerification');
+        // For first login reset password, go back to login
+        setCurrentScreen('login');
         break;
       case 'mpinLogin':
         setCurrentScreen('login');
@@ -415,10 +397,9 @@ function App(): React.JSX.Element {
     }
   };
 
-
   const handleLogout = async () => {
     try {
-     
+      // Clear all stored data
       await AsyncStorage.multiRemove([TOKEN_1_KEY, TOKEN_2_KEY, MPIN_KEY, 'user_email']);
       setUserData({});
       setUser(null);
@@ -426,7 +407,7 @@ function App(): React.JSX.Element {
       setCurrentScreen('login');
     } catch (error) {
       console.error('Error during logout:', error);
-
+      // Force clear even if there's an error
       await AsyncStorage.multiRemove([TOKEN_1_KEY, TOKEN_2_KEY, MPIN_KEY, 'user_email']);
       setUserData({});
       setUser(null);
@@ -454,6 +435,7 @@ function App(): React.JSX.Element {
             onBack={handleBack}
             isLoading={isLoading}
             initialEmail={userData.email}
+            newPassword={tempData.newPassword || ''} // Pass the new password
           />
         );
       case 'mpinLogin':
@@ -486,8 +468,8 @@ function App(): React.JSX.Element {
       case 'resetPassword':
         return (
           <ResetPassword
-            email={tempData.email || ''}
-            otp={tempData.otp || ''}
+            email={userData.email || ''}
+            oldPassword={tempData.oldPassword || ''} // Pass the login password as old password
             onPasswordReset={handlePasswordReset}
             onBack={handleBack}
             isLoading={isLoading}

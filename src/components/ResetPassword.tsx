@@ -8,12 +8,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Config from 'react-native-config'; 
 import { colors, commonStyles } from '../styles/theme';
 
 interface ResetPasswordProps {
   email: string;
-  otp: string;
-  onPasswordReset: (email: string, otp: string, newPassword: string) => Promise<void>;
+  oldPassword: string; // Now passed from login screen
+  onPasswordReset: (email: string, oldPassword: string, newPassword: string) => Promise<void>;
   onBack: () => void;
   isLoading?: boolean;
 }
@@ -24,7 +25,7 @@ interface ResetPasswordResponse {
 
 const ResetPassword: React.FC<ResetPasswordProps> = ({
   email,
-  otp,
+  oldPassword, // Received from login screen
   onPasswordReset,
   onBack,
   isLoading,
@@ -37,12 +38,11 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
     confirmPassword: '',
   });
 
-
-  const BACKEND_URL = 'http://127.0.0.1:8000';
-
+  const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
 
   const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
     try {
+      console.log('Reset Password API Call:', { email, old_password: oldPassword, new_password: newPassword });
       const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
         method: 'POST',
         headers: {
@@ -103,18 +103,15 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
     setIsSubmitting(true);
     try {
-   
-      const response = await resetPasswordAPI(email, otp, newPassword);
+      const response = await resetPasswordAPI(email, oldPassword, newPassword);
       
-
       Alert.alert(
         'Success', 
         response.message || 'Password reset successfully', 
         [{ 
           text: 'OK', 
           onPress: () => {
-         
-            onPasswordReset(email, otp, newPassword);
+            onPasswordReset(email, oldPassword, newPassword);
           }
         }]
       );
@@ -124,7 +121,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
       let errorMessage = 'Failed to reset password. Please try again.';
       if (error instanceof Error) {
         if (error.message.includes('401') || error.message.includes('Invalid')) {
-          errorMessage = 'Invalid credentials or expired OTP. Please try again.';
+          errorMessage = 'Invalid current password. Please check and try again.';
         } else if (error.message.includes('Network')) {
           errorMessage = 'Network error. Please check your internet connection and try again.';
         } else {
@@ -148,7 +145,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
       <Text style={styles.title}>Reset Password</Text>
       <Text style={styles.subtitle}>
-        Create a new secure password for your account
+        Please change your default password to secure your account
       </Text>
 
       <View style={styles.formContainer}>
@@ -216,7 +213,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
       <View style={styles.infoContainer}>
         <Text style={styles.infoText}>
-          🔒 After resetting your password, you can login with your new credentials
+          🔒 After resetting your password, you will create your MPIN for quick access
         </Text>
       </View>
     </View>

@@ -12,7 +12,7 @@ import Config from 'react-native-config';
 import {colors, commonStyles} from '../styles/theme';
 
 // Environment configuration
-const BACKEND_URL = Config.BASE_URL || 'http://127.0.0.1:8000';
+ const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
 
 interface CreateMPINProps {
   onCreateMPIN: (email: string, mpin: string, newPassword: string, token?: string) => Promise<void>;
@@ -34,12 +34,10 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
   initialEmail = '',
   newPassword = '',
 }) => {
-  const [email, setEmail] = useState(initialEmail);
   const [mpin, setMPin] = useState('');
   const [confirmMPin, setConfirmMPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({
-    email: '',
     mpin: '',
     confirmMPin: '',
   });
@@ -47,6 +45,7 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
   // Backend API call for creating MPIN
   const createMPINAPI = async (email: string, mpin: string, password: string): Promise<CreateMPINResponse> => {
     try {
+      console.log('CreateMPIN API Call:', { email, mpin, password });
       const response = await fetch(`${BACKEND_URL}/core/createMpin`, {
         method: 'POST',
         headers: {
@@ -84,16 +83,8 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
   };
 
   const validateForm = () => {
-    const newErrors = {email: '', mpin: '', confirmMPin: ''};
+    const newErrors = {mpin: '', confirmMPin: ''};
     let isValid = true;
-
-    if (!email.trim()) {
-      newErrors.email = 'Email is required';
-      isValid = false;
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
-      isValid = false;
-    }
 
     if (!mpin.trim()) {
       newErrors.mpin = 'MPIN is required';
@@ -123,16 +114,18 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
       return;
     }
 
+    if (!initialEmail) {
+      Alert.alert('Error', 'Email information is missing. Please go back and try again.');
+      return;
+    }
+
     setLoading(true);
     try {
       // Call backend API to create MPIN and get token
-      const response = await createMPINAPI(email, mpin, newPassword);
+      const response = await createMPINAPI(initialEmail, mpin, newPassword);
       
-      // Call the parent handler which will:
-      // 1. Reset password on backend
-      // 2. Store tokens locally
-      // 3. Navigate to welcome screen
-      await onCreateMPIN(email, mpin, newPassword, response.token);
+      // Call the parent handler which will store tokens locally and navigate
+      await onCreateMPIN(initialEmail, mpin, newPassword, response.token);
       
       Alert.alert('Success', response.message || 'MPIN created successfully!', [{ text: 'OK' }]);
     } catch (error) {
@@ -173,23 +166,12 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
       </Text>
 
       <View style={styles.formContainer}>
+        {/* Email display (read-only) */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[
-              styles.input, 
-              errors.email ? styles.inputError : null,
-              initialEmail ? { backgroundColor: '#F7FAFC' } : null
-            ]}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!initialEmail && !isFormLoading}
-          />
-          {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+          <View style={[styles.input, { backgroundColor: '#F7FAFC', justifyContent: 'center' }]}>
+            <Text style={{ color: colors.text, fontSize: 16 }}>{initialEmail}</Text>
+          </View>
         </View>
 
         <View style={styles.inputContainer}>
@@ -233,7 +215,7 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
 
         <View style={styles.infoContainer}>
           <Text style={styles.infoText}>
-            💡 Your MPIN will be used for quick login access after your initial setup is complete.
+            Your MPIN will be used for quick login access after your initial setup is complete.
           </Text>
         </View>
 
