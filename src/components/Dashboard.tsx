@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,14 +14,17 @@ import {
   Platform,
   Dimensions,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '../styles/theme';
+import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface DashboardProps {
   onLogout: () => void;
+  token?: string; // Add token prop
 }
 
 interface AttendanceCardProps {
@@ -43,7 +46,7 @@ interface UpcomingEvent {
 
 interface ModuleItemProps {
   title: string;
-  icon: string;
+  iconUrl: string; // Changed from icon to iconUrl
   onPress: () => void;
 }
 
@@ -53,33 +56,186 @@ interface MenuItemType {
   isActive?: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+interface UserData {
+  role: string;
+  employee_id: string;
+  email: string;
+  token: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  mpin: string;
+  home_address: {
+    id: number;
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    zip_code: string;
+  };
+  office: {
+    id: number;
+    name: string;
+    address: {
+      id: number;
+      address: string;
+      city: string;
+      state: string;
+      country: string;
+      zip_code: string;
+    };
+  };
+  phone_number: string;
+  profile_picture: string | null;
+  current_location: {
+    id: number;
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    zip_code: string;
+  };
+  is_approved_by_hr: boolean;
+  is_approved_by_admin: boolean;
+  approved_by_hr_at: string | null;
+  approved_by_admin_at: string | null;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  earned_leaves: number;
+  sick_leaves: number;
+  casual_leaves: number;
+  login_time: string | null;
+  logout_time: string | null;
+  first_login: boolean;
+  bio: string;
+  designation?: string; // Add designation field
+  user_tags: Array<{
+    id: number;
+    tag: {
+      id: number;
+      tag_name: string;
+      tag_id: string;
+      tag_type: string;
+      created_at: string;
+      updated_at: string;
+    };
+    created_at: string;
+    updated_at: string;
+  }>;
+  reporting_tags: Array<{
+    id: number;
+    reporting_tag: {
+      id: number;
+      tag_name: string;
+      tag_id: string;
+      tag_type: string;
+      created_at: string;
+      updated_at: string;
+    };
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
+interface ApiResponse {
+  message: string;
+  modules: Array<{
+    module_name: string;
+    is_generic: boolean;
+    module_id: string;
+    module_icon: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+  user: UserData;
+  upcoming_birthdays: UserData[];
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPAR" }) => {
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
   const [activeMenuItem, setActiveMenuItem] = useState('Profile');
-  const [activeNavItem, setActiveNavItem] = useState('home'); // State for bottom navigation
+  const [activeNavItem, setActiveNavItem] = useState('home');
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [modules, setModules] = useState<any[]>([]);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState<UserData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const upcomingEvents: UpcomingEvent[] = [
-    { name: 'Priyanka C', date: '25 Jul', initials: 'PC' },
-    { name: 'Ashritha', date: '26 Jul', initials: 'AS' },
-    { name: 'Sushma', date: '1 Aug', initials: 'SU' },
-    { name: 'Biju Unni', date: '19 Aug', initials: 'BU' },
-    { name: 'Priyanka Raj', date: '19 Aug', initials: 'PR' },
-  ];
+  // Fetch user data from API
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token
+          }),
+        });
 
-  const modules = [
-    { title: 'Attendance', icon: '📅' },
-    { title: 'Leave Management', icon: '🗓️' },
-    { title: 'Payroll', icon: '💰' },
-    { title: 'Performance', icon: '📊' },
-    { title: 'Training', icon: '🎓' },
-    { title: 'Documents', icon: '📄' },
-    { title: 'Directory', icon: '📞' },
-    { title: 'Reports', icon: '📈' },
-  ];
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-  // Custom Icon Components
+        const data: ApiResponse = await response.json();
+        
+        if (data.message === "Get modules successful") {
+          setUserData(data.user);
+          setModules(data.modules);
+          setUpcomingBirthdays(data.upcoming_birthdays || []);
+        } else {
+          throw new Error(data.message || 'Failed to fetch user data');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
+        Alert.alert('Error', 'Failed to load user data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [token]);
+
+  // Generate initials from full name
+  const getInitials = (fullName: string): string => {
+    return fullName
+      .split(' ')
+      .map(name => name.charAt(0).toUpperCase())
+      .join('')
+      .substring(0, 2);
+  };
+
+  // Format date for birthdays (you might need to adjust this based on your date format)
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  };
+
+  // Map modules from API to display format
+  const getDisplayModules = () => {
+    console.log(modules);
+
+    return modules.map(module => ({
+      title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
+      iconUrl: module.module_icon, // Changed from icon to iconUrl
+      module_id: module.module_id,
+      is_generic: module.is_generic
+    }));
+  };
+
+  const displayModules = getDisplayModules();
+
+  // Custom Icon Components (keeping existing ones)
   const UserIcon = ({ color = colors.textSecondary, size = 20 }: { color?: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -237,7 +393,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  // Bottom Navigation Icons
+  // Bottom Navigation Icons (keeping existing ones)
   const HomeIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -490,6 +646,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
   };
 
+  // Show loading screen
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Show error screen
+  if (error || !userData) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+        <Text style={styles.errorText}>Failed to load data</Text>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          // onPress={() => window.location.reload()}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const AttendanceCard = ({ value, label }: AttendanceCardProps) => (
     <View style={styles.card}>
       <Text style={styles.cardValue}>{value}</Text>
@@ -511,10 +694,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const ModuleItem = ({ title, icon, onPress }: ModuleItemProps) => (
+  const ModuleItem = ({ title, iconUrl, onPress }: ModuleItemProps) => (
     <TouchableOpacity style={styles.moduleItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.moduleIconContainer}>
-        <Text style={styles.moduleIcon}>{icon}</Text>
+        <Image 
+          source={{ uri: iconUrl }}
+          style={styles.moduleIconImage}
+          resizeMode="contain"
+          onError={(error) => {
+            console.log('Error loading module icon:', error.nativeEvent.error);
+          }}
+        />
       </View>
       <Text style={styles.moduleTitle}>{title}</Text>
     </TouchableOpacity>
@@ -541,15 +731,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
           ]}
         >
-          {/* Menu Header - No Logo */}
+          {/* Menu Header */}
           <View style={[styles.menuHeader, { paddingTop: insets.top }]}>
             <View style={styles.menuHeaderContent}>
               <View style={styles.menuUserAvatarCircle}>
                 <UserIcon color={colors.white} size={24} />
               </View>
               <View style={styles.menuUserDetails}>
-                <Text style={styles.menuUserRole}>Director</Text>
-                <Text style={styles.menuUserName}>Priyanka Raj</Text>
+                <Text style={styles.menuUserRole}>
+                  {userData.designation || userData.role || 'Employee'}
+                </Text>
+                <Text style={styles.menuUserName}>{userData.full_name}</Text>
               </View>
             </View>
           </View>
@@ -632,8 +824,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
           <View style={styles.userInfo}>
             <View style={styles.userDetails}>
-              <Text style={styles.userRole}>Director</Text>
-              <Text style={styles.userName}>Priyanka Raj</Text>
+              <Text style={styles.userRole}>
+                {userData.designation || userData.role || 'Employee'}
+              </Text>
+              <Text style={styles.userName}>{userData.full_name}</Text>
             </View>
           </View>
         </View>
@@ -656,7 +850,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <View style={styles.cardGrid}>
                 <View style={styles.cardRow}>
                   <AttendanceCard value="261" label="Days Present" />
-                  <AttendanceCard value="3" label="Leaves Applied" />
+                  <AttendanceCard 
+                    value={String(userData.earned_leaves + userData.sick_leaves + userData.casual_leaves)} 
+                    label="Leaves Applied" 
+                  />
                 </View>
                 <View style={styles.cardRow}>
                   <AttendanceCard value="7" label="Holidays" />
@@ -682,14 +879,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 style={styles.eventsScroll}
                 contentContainerStyle={styles.eventsScrollContent}
               >
-                {upcomingEvents.map((event, index) => (
-                  <EventAvatar
-                    key={index}
-                    name={event.name}
-                    date={event.date}
-                    initials={event.initials}
-                  />
-                ))}
+                {upcomingBirthdays.length > 0 ? (
+                  upcomingBirthdays.map((person, index) => (
+                    <EventAvatar
+                      key={index}
+                      name={person.full_name}
+                      date={formatDate(person.created_at)} // You might want to use a birthday field when available
+                      initials={getInitials(person.full_name)}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.noBirthdaysText}>No upcoming birthdays</Text>
+                )}
               </ScrollView>
             </View>
 
@@ -701,14 +902,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </View>
 
               <View style={styles.modulesGrid}>
-                {modules.map((module, index) => (
-                  <ModuleItem
-                    key={index}
-                    title={module.title}
-                    icon={module.icon}
-                    onPress={() => handleModulePress(module.title)}
-                  />
-                ))}
+                {displayModules.length > 0 ? (
+                  displayModules.map((module, index) => (
+                    <ModuleItem
+                      key={index}
+                      title={module.title}
+                      iconUrl={module.iconUrl}
+                      onPress={() => handleModulePress(module.title)}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.noModulesText}>No modules available</Text>
+                )}
               </View>
             </View>
           </ScrollView>
@@ -792,6 +997,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.primary, 
   },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    marginTop: spacing.md,
+  },
+  errorText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    color: colors.primary,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  noBirthdaysText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
+  },
+  noModulesText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
+    width: '100%',
+  },
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
@@ -823,7 +1069,7 @@ const styles = StyleSheet.create({
   logo: {
     width: 70,
     height: 70,
-    backgroundColor: 'transparent', // Remove any background
+    backgroundColor: 'transparent',
   },
   headerSpacer: {
     width: 36,
@@ -993,9 +1239,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.sm,
+    overflow: 'hidden',
   },
-  moduleIcon: {
-    fontSize: 24,
+  moduleIconImage: {
+    width: 32,
+    height: 32,
   },
   moduleTitle: {
     fontSize: fontSize.sm,
@@ -1015,7 +1263,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    gap: 4, // Space between icon and label
+    gap: 4,
   },
   navLabel: {
     fontSize: 10,
