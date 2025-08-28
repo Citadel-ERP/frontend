@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
-import Config from 'react-native-config';
+import { BACKEND_URL } from '../config/config'; 
 import { colors, commonStyles } from '../styles/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -56,7 +56,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
-    const backendUrl = Config.BACKEND_URL;
+    const backendUrl = BACKEND_URL;
     
     if (!backendUrl) {
       console.error('BACKEND_URL not found in environment variables');

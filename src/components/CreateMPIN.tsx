@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
-import Config from 'react-native-config';
+import { BACKEND_URL } from '../config/config'; 
 import { colors, commonStyles } from '../styles/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -25,8 +25,6 @@ const containerPadding = isTablet ? 48 : 24;
 const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
 
 // Environment configuration
-const BACKEND_URL = Config.BACKEND_URL || 'http://127.0.0.1:8000';
-
 interface CreateMPINProps {
   onCreateMPIN: (email: string, mpin: string, newPassword: string, token?: string) => Promise<void>;
   onBack: () => void;

@@ -2,7 +2,7 @@
 #
 .DS_Store
 .env
-
+/src/config/
 # Xcode
 #
 build/

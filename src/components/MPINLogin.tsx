@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
-import Config from 'react-native-config';
+import { BACKEND_URL } from '../config/config'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../styles/theme';
 
@@ -66,7 +66,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
-    const backendUrl = Config.BACKEND_URL;
+    const backendUrl = BACKEND_URL;
     
     if (!backendUrl) {
       console.error('BACKEND_URL not found in environment variables');
