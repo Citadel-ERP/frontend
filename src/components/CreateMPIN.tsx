@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,25 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Image,
+  Dimensions,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import Config from 'react-native-config';
-import {colors, commonStyles} from '../styles/theme';
+import { colors, commonStyles } from '../styles/theme';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Responsive dimensions
+const isTablet = screenWidth >= 768;
+const isSmallDevice = screenHeight < 700;
+const containerPadding = isTablet ? 48 : 24;
+const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
 
 // Environment configuration
- const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
+const BACKEND_URL = Config.BACKEND_URL || 'http://127.0.0.1:8000';
 
 interface CreateMPINProps {
   onCreateMPIN: (email: string, mpin: string, newPassword: string, token?: string) => Promise<void>;
@@ -42,6 +55,9 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
     confirmMPin: '',
   });
 
+  const scrollViewRef = useRef<ScrollView>(null);
+  const confirmMPinInputRef = useRef<TextInput>(null);
+
   // Backend API call for creating MPIN
   const createMPINAPI = async (email: string, mpin: string, password: string): Promise<CreateMPINResponse> => {
     try {
@@ -65,7 +81,7 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
       }
 
       const data = await response.json();
-      
+
       if (!data.token) {
         throw new Error('Invalid response format from server - token missing');
       }
@@ -83,7 +99,7 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
   };
 
   const validateForm = () => {
-    const newErrors = {mpin: '', confirmMPin: ''};
+    const newErrors = { mpin: '', confirmMPin: '' };
     let isValid = true;
 
     if (!mpin.trim()) {
@@ -123,14 +139,14 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
     try {
       // Call backend API to create MPIN and get token
       const response = await createMPINAPI(initialEmail, mpin, newPassword);
-      
+
       // Call the parent handler which will store tokens locally and navigate
       await onCreateMPIN(initialEmail, mpin, newPassword, response.token);
-      
+
       Alert.alert('Success', response.message || 'MPIN created successfully!', [{ text: 'OK' }]);
     } catch (error) {
       console.error('Create MPIN error:', error);
-      
+
       let errorMessage = 'Failed to create MPIN. Please try again.';
       if (error instanceof Error) {
         if (error.message.includes('409') || error.message.includes('already exists')) {
@@ -143,34 +159,52 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert('MPIN Creation Failed', errorMessage, [{ text: 'Retry' }]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle focus to scroll to input when keyboard appears
+  const handleInputFocus = (inputType: 'mpin' | 'confirmMPin') => {
+    setTimeout(() => {
+      const scrollY = inputType === 'mpin' ? 
+        (isSmallDevice ? 200 : 250) : 
+        (isSmallDevice ? 300 : 350);
+      
+      scrollViewRef.current?.scrollTo({
+        y: scrollY,
+        animated: true,
+      });
+    }, 100);
+  };
+
   const isFormLoading = isLoading || loading;
 
-  return (
-    <View style={styles.container}>
+  const renderContent = () => (
+    <View style={styles.contentContainer}>
       <View style={styles.logoContainer}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>CITADEL</Text>
-        </View>
+        <Image
+          source={require('../assets/Logo.png')}
+          style={[styles.logo, { width: logoSize, height: logoSize }]}
+          resizeMode="contain"
+        />
       </View>
 
-      <Text style={styles.title}>Create MPIN</Text>
-      <Text style={styles.subtitle}>
-        Create a 6-digit MPIN for quick login access
-      </Text>
+      <View style={styles.titleContainer}>
+        <Text style={styles.title}>Create MPIN</Text>
+        <Text style={styles.subtitle}>
+          Create a 6-digit MPIN for quick login access
+        </Text>
+      </View>
 
       <View style={styles.formContainer}>
         {/* Email display (read-only) */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>
-          <View style={[styles.input, { backgroundColor: '#F7FAFC', justifyContent: 'center' }]}>
-            <Text style={{ color: colors.text, fontSize: 16 }}>{initialEmail}</Text>
+          <View style={[styles.input, styles.readOnlyInput]}>
+            <Text style={styles.readOnlyText}>{initialEmail}</Text>
           </View>
         </View>
 
@@ -179,14 +213,24 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
           <TextInput
             style={[styles.input, errors.mpin ? styles.inputError : null]}
             value={mpin}
-            onChangeText={setMPin}
+            onChangeText={(text) => {
+              setMPin(text);
+              if (errors.mpin) {
+                setErrors(prev => ({ ...prev, mpin: '' }));
+              }
+            }}
+            onFocus={() => handleInputFocus('mpin')}
             placeholder="Enter 6-digit MPIN"
+            placeholderTextColor={colors.textSecondary}
             keyboardType="numeric"
             maxLength={6}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isFormLoading}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmMPinInputRef.current?.focus()}
+            blurOnSubmit={false}
           />
           {errors.mpin ? <Text style={styles.errorText}>{errors.mpin}</Text> : null}
           <Text style={styles.hintText}>
@@ -197,16 +241,26 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Confirm MPIN</Text>
           <TextInput
+            ref={confirmMPinInputRef}
             style={[styles.input, errors.confirmMPin ? styles.inputError : null]}
             value={confirmMPin}
-            onChangeText={setConfirmMPin}
+            onChangeText={(text) => {
+              setConfirmMPin(text);
+              if (errors.confirmMPin) {
+                setErrors(prev => ({ ...prev, confirmMPin: '' }));
+              }
+            }}
+            onFocus={() => handleInputFocus('confirmMPin')}
             placeholder="Re-enter 6-digit MPIN"
+            placeholderTextColor={colors.textSecondary}
             keyboardType="numeric"
             maxLength={6}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isFormLoading}
+            returnKeyType="done"
+            onSubmitEditing={handleSubmit}
           />
           {errors.confirmMPin ? (
             <Text style={styles.errorText}>{errors.confirmMPin}</Text>
@@ -223,7 +277,9 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={onBack}
-            disabled={isFormLoading}>
+            disabled={isFormLoading}
+            activeOpacity={0.7}
+          >
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
 
@@ -234,7 +290,9 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
               isFormLoading ? styles.primaryButtonDisabled : null,
             ]}
             onPress={handleSubmit}
-            disabled={isFormLoading}>
+            disabled={isFormLoading}
+            activeOpacity={0.8}
+          >
             {isFormLoading ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
@@ -245,101 +303,177 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
       </View>
     </View>
   );
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+      >
+        {renderContent()}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: Platform.OS === 'ios' ? 50 : 20,
+  },
+  contentContainer: {
+    paddingHorizontal: containerPadding,
+    paddingVertical: isSmallDevice ? 20 : 40,
+    minHeight: screenHeight - (Platform.OS === 'ios' ? 100 : 50),
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: isSmallDevice ? 20 : 30,
   },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: isTablet ? 30 : isSmallDevice ? 16 : 24,
   },
-  logoText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
+  titleContainer: {
+    marginBottom: isSmallDevice ? 24 : 40,
   },
   title: {
-    fontSize: 28,
+    fontSize: isTablet ? 32 : isSmallDevice ? 24 : 28,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : isSmallDevice ? 14 : 16,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 22,
+    lineHeight: isTablet ? 28 : isSmallDevice ? 20 : 24,
+    paddingHorizontal: isTablet ? 20 : 12,
   },
   formContainer: {
     width: '100%',
+    maxWidth: isTablet ? 400 : '100%',
+    alignSelf: 'center',
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: isSmallDevice ? 20 : 24,
   },
   label: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '500',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.3,
   },
   input: {
     ...commonStyles.input,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    paddingHorizontal: isTablet ? 20 : 16,
+    borderRadius: isTablet ? 16 : 12,
+    backgroundColor: colors.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  readOnlyInput: {
+    backgroundColor: '#F7FAFC',
+    justifyContent: 'center',
+  },
+  readOnlyText: {
+    color: colors.text,
+    fontSize: isTablet ? 18 : 16,
+    fontWeight: '400',
   },
   inputError: {
     borderColor: colors.error,
+    backgroundColor: '#FFF5F5',
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: isTablet ? 16 : 14,
+    marginTop: 6,
+    fontWeight: '500',
+    paddingLeft: 4,
   },
   hintText: {
     color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 16,
+    fontSize: isTablet ? 14 : 12,
+    marginTop: 6,
+    lineHeight: isTablet ? 20 : 16,
+    paddingLeft: 4,
   },
   infoContainer: {
     backgroundColor: '#F0F8FF',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
+    borderRadius: isTablet ? 12 : 8,
+    padding: isTablet ? 20 : 16,
+    marginBottom: isSmallDevice ? 24 : 32,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
   infoText: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     color: '#4A5568',
-    lineHeight: 20,
+    lineHeight: isTablet ? 24 : 20,
+    textAlign: 'center',
+    fontWeight: '400',
   },
   buttonContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 16,
+    flexDirection: isTablet ? 'row' : 'column',
+    gap: isTablet ? 16 : 12,
+    alignItems: 'stretch',
+    marginBottom: isSmallDevice ? 20 : 40,
   },
   button: {
-    flex: 1,
-    height: 56,
-    borderRadius: 12,
+    flex: isTablet ? 1 : 0,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    borderRadius: isTablet ? 16 : 12,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   primaryButton: {
     backgroundColor: colors.primary,
@@ -349,17 +483,18 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   secondaryButton: {
-    backgroundColor: colors.gray,
-    borderWidth: 1,
+    backgroundColor: colors.white,
+    borderWidth: 2,
     borderColor: colors.border,
   },
   secondaryButtonText: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
   },
 });

@@ -1,5 +1,4 @@
-// src/components/ForgotPassword.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,8 +7,21 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Image,
+  Dimensions,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { colors, commonStyles } from '../styles/theme';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Responsive dimensions
+const isTablet = screenWidth >= 768;
+const isSmallDevice = screenHeight < 700;
+const containerPadding = isTablet ? 48 : 24;
+const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -24,6 +36,8 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const validateEmail = () => {
     if (!email.trim()) {
@@ -62,18 +76,34 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
     }
   };
 
-  return (
-    <View style={styles.container}>
+  // Handle focus to scroll to input when keyboard appears
+  const handleInputFocus = () => {
+    setTimeout(() => {
+      const scrollY = isSmallDevice ? 200 : 250;
+      
+      scrollViewRef.current?.scrollTo({
+        y: scrollY,
+        animated: true,
+      });
+    }, 100);
+  };
+
+  const renderContent = () => (
+    <View style={styles.contentContainer}>
       <View style={styles.logoContainer}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>CITADEL</Text>
-        </View>
+        <Image
+          source={require('../assets/Logo.png')}
+          style={[styles.logo, { width: logoSize, height: logoSize }]}
+          resizeMode="contain"
+        />
       </View>
 
-      <Text style={styles.title}>Forgot Password</Text>
-      <Text style={styles.subtitle}>
-        Enter your email address and we'll send you a verification code to reset your password.
-      </Text>
+      <View style={styles.titleContainer}>
+        <Text style={styles.title}>Forgot Password</Text>
+        <Text style={styles.subtitle}>
+          Enter your email address and we'll send you a verification code to reset your password.
+        </Text>
+      </View>
 
       <View style={styles.formContainer}>
         <View style={styles.inputContainer}>
@@ -83,12 +113,19 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
             value={email}
             onChangeText={(text) => {
               setEmail(text);
-              setError('');
+              if (error) {
+                setError('');
+              }
             }}
+            onFocus={handleInputFocus}
             placeholder="Enter your email"
+            placeholderTextColor={colors.textSecondary}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isLoading}
+            returnKeyType="done"
+            onSubmitEditing={handleSendOTP}
           />
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
@@ -97,7 +134,9 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={onBack}
-            disabled={isLoading}>
+            disabled={isLoading}
+            activeOpacity={0.7}
+          >
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
 
@@ -108,16 +147,44 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
               isLoading ? styles.primaryButtonDisabled : null,
             ]}
             onPress={handleSendOTP}
-            disabled={isLoading}>
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
             {isLoading ? (
-              <ActivityIndicator color={colors.white} />
+              <ActivityIndicator color={colors.white} size="small" />
             ) : (
               <Text style={styles.primaryButtonText}>Send OTP</Text>
             )}
           </TouchableOpacity>
         </View>
       </View>
+
+      <View style={styles.infoContainer}>
+        <Text style={styles.infoText}>
+          Check your email inbox and spam folder for the verification code. The code will expire in 10 minutes.
+        </Text>
+      </View>
     </View>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+      >
+        {renderContent()}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -125,76 +192,109 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: Platform.OS === 'ios' ? 50 : 20,
+  },
+  contentContainer: {
+    paddingHorizontal: containerPadding,
+    paddingVertical: isSmallDevice ? 20 : 40,
+    minHeight: screenHeight - (Platform.OS === 'ios' ? 100 : 50),
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: isSmallDevice ? 20 : 30,
   },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: isTablet ? 30 : isSmallDevice ? 16 : 24,
   },
-  logoText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
+  titleContainer: {
+    marginBottom: isSmallDevice ? 24 : 40,
   },
   title: {
-    fontSize: 28,
+    fontSize: isTablet ? 32 : isSmallDevice ? 24 : 28,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : isSmallDevice ? 14 : 16,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
-    paddingHorizontal: 12,
+    lineHeight: isTablet ? 28 : isSmallDevice ? 20 : 24,
+    paddingHorizontal: isTablet ? 20 : 12,
   },
   formContainer: {
     width: '100%',
+    maxWidth: isTablet ? 400 : '100%',
+    alignSelf: 'center',
+    marginBottom: isSmallDevice ? 24 : 32,
   },
   inputContainer: {
-    marginBottom: 32,
+    marginBottom: isSmallDevice ? 24 : 32,
   },
   label: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '500',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.3,
   },
   input: {
     ...commonStyles.input,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    paddingHorizontal: isTablet ? 20 : 16,
+    borderRadius: isTablet ? 16 : 12,
+    backgroundColor: colors.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   inputError: {
     borderColor: colors.error,
+    backgroundColor: '#FFF5F5',
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: isTablet ? 16 : 14,
+    marginTop: 6,
+    fontWeight: '500',
+    paddingLeft: 4,
   },
   buttonContainer: {
-    flexDirection: 'row',
-    gap: 16,
+    flexDirection: isTablet ? 'row' : 'column',
+    gap: isTablet ? 16 : 12,
+    alignItems: 'stretch',
   },
   button: {
-    flex: 1,
-    height: 56,
-    borderRadius: 12,
+    flex: isTablet ? 1 : 0,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    borderRadius: isTablet ? 16 : 12,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   primaryButton: {
     backgroundColor: colors.primary,
@@ -204,18 +304,46 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   secondaryButton: {
-    backgroundColor: colors.gray,
-    borderWidth: 1,
+    backgroundColor: colors.white,
+    borderWidth: 2,
     borderColor: colors.border,
   },
   secondaryButtonText: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
+  },
+  infoContainer: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: isTablet ? 12 : 8,
+    padding: isTablet ? 20 : 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    marginHorizontal: isTablet ? 20 : 0,
+    marginBottom: isSmallDevice ? 20 : 40,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  infoText: {
+    fontSize: isTablet ? 16 : 14,
+    color: '#4A5568',
+    textAlign: 'center',
+    lineHeight: isTablet ? 24 : 20,
+    fontWeight: '400',
   },
 });
 

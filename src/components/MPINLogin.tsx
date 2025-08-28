@@ -7,10 +7,25 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Image,
+  Dimensions,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import Config from 'react-native-config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../styles/theme';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Responsive dimensions
+const isTablet = screenWidth >= 768;
+const isSmallDevice = screenHeight < 700;
+const containerPadding = isTablet ? 48 : 24;
+const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
+const mpinInputSize = isTablet ? 55 : isSmallDevice ? 40 : 45;
+const mpinInputHeight = isTablet ? 66 : isSmallDevice ? 50 : 56;
 
 interface MPINLoginProps {
   onMPINLogin: (mpin: string) => Promise<void>;
@@ -41,15 +56,32 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const [attemptCount, setAttemptCount] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  
- const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
   const TOKEN_2_KEY = 'token_2';
   const MPIN_ATTEMPTS_KEY = 'mpin_attempts';
   const MPIN_BLOCK_TIME_KEY = 'mpin_block_time';
   const MAX_ATTEMPTS = 3;
-  const BLOCK_DURATION = 30 * 60 * 1000; 
- 
+  const BLOCK_DURATION = 30 * 60 * 1000;
+
+  // Get backend URL from environment variables
+  const getBackendUrl = (): string => {
+    const backendUrl = Config.BACKEND_URL;
+    
+    if (!backendUrl) {
+      console.error('BACKEND_URL not found in environment variables');
+      throw new Error('Backend URL not configured. Please check your environment setup.');
+    }
+    
+    return backendUrl;
+  };
+
+  // Check if user has entered any digits
+  const hasEnteredDigits = mpin.some(digit => digit !== '');
+  
+  // Check if MPIN is complete (all 6 digits filled)
+  const isMPINComplete = mpin.every(digit => digit !== '') && mpin.join('').length === 6;
+
   useEffect(() => {
     loadAttemptData();
   }, []);
@@ -58,20 +90,18 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     try {
       const storedAttempts = await AsyncStorage.getItem(MPIN_ATTEMPTS_KEY);
       const storedBlockTime = await AsyncStorage.getItem(MPIN_BLOCK_TIME_KEY);
-      
+
       const attempts = storedAttempts ? parseInt(storedAttempts) : 0;
       const blockTime = storedBlockTime ? parseInt(storedBlockTime) : 0;
-      
+
       const currentTime = Date.now();
-      
-      
+
       if (blockTime > 0 && (currentTime - blockTime) < BLOCK_DURATION) {
         setIsBlocked(true);
         setAttemptCount(MAX_ATTEMPTS);
         const remainingTime = Math.ceil((BLOCK_DURATION - (currentTime - blockTime)) / 60000);
         setError(`Too many failed attempts. Try again in ${remainingTime} minutes.`);
       } else if (blockTime > 0 && (currentTime - blockTime) >= BLOCK_DURATION) {
-       
         await clearAttemptData();
         setAttemptCount(0);
         setIsBlocked(false);
@@ -86,25 +116,22 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const incrementAttempts = async () => {
     const newAttemptCount = attemptCount + 1;
     console.log(`MPIN attempt ${newAttemptCount}/${MAX_ATTEMPTS}`);
-    
+
     setAttemptCount(newAttemptCount);
-    
+
     try {
       await AsyncStorage.setItem(MPIN_ATTEMPTS_KEY, newAttemptCount.toString());
-      
+
       if (newAttemptCount >= MAX_ATTEMPTS) {
-        // Block the account
         const blockTime = Date.now();
         await AsyncStorage.setItem(MPIN_BLOCK_TIME_KEY, blockTime.toString());
         setIsBlocked(true);
-        
+
         console.log('Maximum MPIN attempts reached. Blocking user and redirecting to login.');
-        
-        // Clear MPIN input immediately
+
         setMPin(['', '', '', '', '', '']);
         setCurrentIndex(0);
-        
-        // Show alert and redirect to login
+
         Alert.alert(
           'Account Temporarily Locked',
           'You have exceeded the maximum number of MPIN attempts. For security reasons, you will be redirected to the login page where you can use your email and password.',
@@ -119,8 +146,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           ],
           { cancelable: false }
         );
-        
-        // Fallback redirect in case alert doesn't work
+
         setTimeout(() => {
           console.log('Fallback redirect to login triggered');
           handleRedirectToLogin();
@@ -137,7 +163,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       onUsePassword();
     } catch (error) {
       console.error('Error during redirect to login:', error);
-      // Force redirect even if there's an error
       setTimeout(() => onUsePassword(), 100);
     }
   };
@@ -153,6 +178,8 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
     try {
+      const BACKEND_URL = getBackendUrl();
+      
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -171,7 +198,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       }
 
       const data = await response.json();
-      
+
       return {
         message: data.message || 'Login successful',
         token: data.token,
@@ -187,8 +214,8 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const handleMPINChange = (value: string, index: number) => {
     if (isBlocked) return;
-    if (value.length > 1) return; 
-    
+    if (value.length > 1) return;
+
     const newMPin = [...mpin];
     newMPin[index] = value;
     setMPin(newMPin);
@@ -202,18 +229,17 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       inputRefs.current[index - 1]?.focus();
     }
 
-    // Auto-submit when all 6 digits are entered
+    // REMOVED: Automatic submission when 6th digit is entered
+    // The user must now manually press the login button
     if (index === 5 && value !== '') {
-      const completeMPin = newMPin.join('');
-      if (completeMPin.length === 6) {
-        setTimeout(() => handleSubmit(completeMPin), 100);
-      }
+      // Just blur the last input, don't auto-submit
+      inputRefs.current[index]?.blur();
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
     if (isBlocked) return;
-    
+
     if (e.nativeEvent.key === 'Backspace' && mpin[index] === '' && index > 0) {
       const newMPin = [...mpin];
       newMPin[index - 1] = '';
@@ -226,8 +252,8 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const isAuthenticationError = (error: Error): boolean => {
     const errorMessage = error.message.toLowerCase();
     return (
-      errorMessage.includes('401') || 
-      errorMessage.includes('invalid') || 
+      errorMessage.includes('401') ||
+      errorMessage.includes('invalid') ||
       errorMessage.includes('unauthorized') ||
       errorMessage.includes('wrong') ||
       errorMessage.includes('incorrect') ||
@@ -244,7 +270,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     }
 
     const completeMPin = mpinValue || mpin.join('');
-    
+
     if (completeMPin.length !== 6) {
       setError('Please enter all 6 digits');
       return;
@@ -257,31 +283,33 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
     setIsSubmitting(true);
     console.log('Attempting MPIN login...');
-    
+
     try {
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-      
+
       if (!storedToken) {
         throw new Error('No authentication token found');
       }
 
       const response = await mpinLoginAPI(storedToken, completeMPin);
-  
+
       console.log('MPIN login successful, clearing attempt data');
       await clearAttemptData();
       setAttemptCount(0);
       setIsBlocked(false);
       await onMPINLogin(completeMPin);
-      
+
       console.log('MPIN login successful:', response.message);
     } catch (error: any) {
       console.error('MPIN login error:', error);
-      
+
       let errorMessage = 'Invalid MPIN. Please try again.';
       let shouldIncrementAttempts = false;
-      
+
       if (error instanceof Error) {
-        if (isAuthenticationError(error)) {
+        if (error.message.includes('Backend URL not configured')) {
+          errorMessage = 'Configuration error. Please contact support.';
+        } else if (isAuthenticationError(error)) {
           shouldIncrementAttempts = true;
           const remainingAttempts = MAX_ATTEMPTS - attemptCount - 1;
           if (remainingAttempts > 0) {
@@ -303,21 +331,18 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           return;
         } else {
           errorMessage = error.message;
-          // Any other 4xx errors should also increment attempts
           if (error.message.includes('400') || error.message.includes('403')) {
             shouldIncrementAttempts = true;
           }
         }
       }
-      
+
       setError(errorMessage);
-      
-      // Clear MPIN input and reset focus
+
       setMPin(['', '', '', '', '', '']);
       setCurrentIndex(0);
       inputRefs.current[0]?.focus();
-      
-      // Increment attempts if it's an authentication error
+
       if (shouldIncrementAttempts) {
         console.log('Authentication error detected, incrementing attempts...');
         await incrementAttempts();
@@ -329,7 +354,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const clearMPIN = () => {
     if (isBlocked) return;
-    
+
     setMPin(['', '', '', '', '', '']);
     setCurrentIndex(0);
     setError('');
@@ -349,9 +374,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const getAttemptIndicator = () => {
     if (attemptCount === 0) return null;
-    
+
     const remainingAttempts = MAX_ATTEMPTS - attemptCount;
-    
+
     if (isBlocked) {
       return (
         <View style={[styles.attemptIndicator, styles.blockedIndicator]}>
@@ -359,7 +384,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         </View>
       );
     }
-    
+
     return (
       <View style={[styles.attemptIndicator, remainingAttempts === 1 ? styles.criticalIndicator : null]}>
         <Text style={[styles.attemptText, remainingAttempts === 1 ? styles.criticalText : null]}>
@@ -370,13 +395,12 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     );
   };
 
-  // Effect to handle automatic redirect when blocked
   useEffect(() => {
     if (isBlocked && attemptCount >= MAX_ATTEMPTS) {
       const redirectTimer = setTimeout(() => {
         console.log('Auto-redirecting to login after account lock');
         handleRedirectToLogin();
-      }, 3000); // Auto redirect after 3 seconds
+      }, 3000);
 
       return () => clearTimeout(redirectTimer);
     }
@@ -386,18 +410,32 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     console.log(`Current attempt count: ${attemptCount}, Is blocked: ${isBlocked}`);
   }, [attemptCount, isBlocked]);
 
-  return (
-    <View style={styles.container}>
+  // Handle focus to scroll to MPIN inputs when keyboard appears
+  const handleInputFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        y: isSmallDevice ? 200 : 300,
+        animated: true,
+      });
+    }, 100);
+  };
+
+  const renderContent = () => (
+    <View style={styles.contentContainer}>
       <View style={styles.logoContainer}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>CITADEL</Text>
-        </View>
+        <Image
+          source={require('../assets/Logo.png')}
+          style={[styles.logo, { width: logoSize, height: logoSize }]}
+          resizeMode="contain"
+        />
       </View>
 
-      <Text style={styles.title}>Enter Your MPIN</Text>
-      <Text style={styles.subtitle}>
-        Enter your 6-digit MPIN for {getDisplayEmail()}
-      </Text>
+      <View style={styles.titleContainer}>
+        <Text style={styles.title}>Enter Your MPIN</Text>
+        <Text style={styles.subtitle}>
+          Enter your 6-digit MPIN for {getDisplayEmail()}
+        </Text>
+      </View>
 
       {getAttemptIndicator()}
 
@@ -408,6 +446,11 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
             ref={(ref) => (inputRefs.current[index] = ref)}
             style={[
               styles.mpinInput,
+              {
+                width: mpinInputSize,
+                height: mpinInputHeight,
+                fontSize: isTablet ? 28 : isSmallDevice ? 20 : 24,
+              },
               currentIndex === index ? styles.mpinInputFocused : null,
               error ? styles.mpinInputError : null,
               isBlocked ? styles.mpinInputDisabled : null,
@@ -415,6 +458,10 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
             value={digit}
             onChangeText={(value) => handleMPINChange(value, index)}
             onKeyPress={(e) => handleKeyPress(e, index)}
+            onFocus={() => {
+              setCurrentIndex(index);
+              handleInputFocus();
+            }}
             keyboardType="numeric"
             maxLength={1}
             secureTextEntry
@@ -430,35 +477,44 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         <TouchableOpacity
           style={[
             styles.submitButton,
+            !isMPINComplete ? styles.submitButtonSecondary : null,
             (isLoading || isSubmitting || isBlocked) ? styles.submitButtonDisabled : null,
           ]}
           onPress={() => handleSubmit()}
-          disabled={isLoading || isSubmitting || isBlocked || mpin.join('').length !== 6}
+          disabled={isLoading || isSubmitting || isBlocked || !isMPINComplete}
         >
           {(isLoading || isSubmitting) ? (
-            <ActivityIndicator color={colors.white} size="small" />
+            <ActivityIndicator 
+              color={isMPINComplete ? colors.white : colors.textSecondary} 
+              size="small" 
+            />
           ) : (
-            <Text style={styles.submitButtonText}>
+            <Text style={[
+              styles.submitButtonText,
+              !isMPINComplete ? styles.submitButtonTextSecondary : null,
+            ]}>
               {isBlocked ? 'Account Locked' : 'Login'}
             </Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.clearButton,
-            isBlocked ? styles.clearButtonDisabled : null,
-          ]}
-          onPress={clearMPIN}
-          disabled={isLoading || isSubmitting || isBlocked}
-        >
-          <Text style={[
-            styles.clearButtonText,
-            isBlocked ? styles.clearButtonTextDisabled : null,
-          ]}>
-            Clear
-          </Text>
-        </TouchableOpacity>
+        {hasEnteredDigits && (
+          <TouchableOpacity
+            style={[
+              styles.clearButton,
+              isBlocked ? styles.clearButtonDisabled : null,
+            ]}
+            onPress={clearMPIN}
+            disabled={isLoading || isSubmitting || isBlocked}
+          >
+            <Text style={[
+              styles.clearButtonText,
+              isBlocked ? styles.clearButtonTextDisabled : null,
+            ]}>
+              Clear
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.alternativeContainer}>
@@ -485,55 +541,76 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       </View>
     </View>
   );
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+      >
+        {renderContent()}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: Platform.OS === 'ios' ? 50 : 20,
+  },
+  contentContainer: {
+    paddingHorizontal: containerPadding,
+    paddingVertical: isSmallDevice ? 20 : 40,
+    minHeight: screenHeight - (Platform.OS === 'ios' ? 100 : 50),
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: isSmallDevice ? 20 : 30,
   },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: isTablet ? 30 : isSmallDevice ? 16 : 24,
   },
-  logoText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
+  titleContainer: {
+    marginBottom: isSmallDevice ? 20 : 32,
   },
   title: {
-    fontSize: 28,
+    fontSize: isTablet ? 32 : isSmallDevice ? 24 : 28,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : isSmallDevice ? 14 : 16,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
+    lineHeight: isTablet ? 28 : isSmallDevice ? 20 : 24,
+    paddingHorizontal: isTablet ? 0 : 16,
   },
   attemptIndicator: {
     backgroundColor: '#FFF3CD',
     borderColor: '#FFEAA7',
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 24,
+    borderRadius: 12,
+    padding: isTablet ? 16 : 12,
+    marginBottom: isSmallDevice ? 16 : 24,
     alignItems: 'center',
+    marginHorizontal: isTablet ? 40 : 0,
   },
   criticalIndicator: {
     backgroundColor: '#FFF2F2',
@@ -544,46 +621,59 @@ const styles = StyleSheet.create({
     borderColor: '#E57373',
   },
   attemptText: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     color: '#856404',
     fontWeight: '500',
     textAlign: 'center',
+    lineHeight: 20,
   },
   criticalText: {
     color: '#D32F2F',
     fontWeight: '600',
   },
   blockedText: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     color: '#D32F2F',
     fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 20,
   },
   mpinContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    gap: 12,
+    marginBottom: isSmallDevice ? 20 : 32,
+    gap: isTablet ? 16 : isSmallDevice ? 8 : 12,
+    paddingHorizontal: isTablet ? 0 : 10,
   },
   mpinInput: {
-    width: 45,
-    height: 56,
     borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: isTablet ? 16 : 12,
     textAlign: 'center',
-    fontSize: 24,
     fontWeight: '600',
     color: colors.text,
     backgroundColor: colors.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   mpinInputFocused: {
     borderColor: colors.primary,
     backgroundColor: '#F0F8FF',
+    transform: [{ scale: 1.05 }],
   },
   mpinInputError: {
     borderColor: colors.error,
+    backgroundColor: '#FFF5F5',
   },
   mpinInputDisabled: {
     backgroundColor: '#F5F5F5',
@@ -592,35 +682,69 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: isSmallDevice ? 16 : 24,
+    fontWeight: '500',
+    paddingHorizontal: 16,
+    lineHeight: 20,
   },
   buttonContainer: {
-    marginBottom: 32,
+    marginBottom: isSmallDevice ? 24 : 32,
+    paddingHorizontal: isTablet ? 60 : 0,
   },
   submitButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
-    height: 56,
+    borderRadius: isTablet ? 16 : 12,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  submitButtonSecondary: {
+    backgroundColor: colors.textSecondary || '#9CA3AF',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.textSecondary || '#9CA3AF',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
   submitButtonText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  submitButtonTextSecondary: {
+    color: colors.white,
+    opacity: 0.9,
   },
   clearButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: 12,
-    height: 48,
+    borderRadius: isTablet ? 16 : 12,
+    height: isTablet ? 56 : 48,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -629,7 +753,7 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '500',
   },
   clearButtonTextDisabled: {
@@ -637,35 +761,39 @@ const styles = StyleSheet.create({
   },
   alternativeContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: isSmallDevice ? 20 : 32,
+    paddingHorizontal: 16,
   },
   alternativeText: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     color: colors.textSecondary,
     marginBottom: 12,
   },
   usePasswordButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
   },
   usePasswordText: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     fontWeight: '500',
     textDecorationLine: 'underline',
   },
   securityInfo: {
     backgroundColor: '#F0F8FF',
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: isTablet ? 12 : 8,
+    padding: isTablet ? 20 : 16,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
+    marginHorizontal: isTablet ? 40 : 0,
+    marginBottom: isSmallDevice ? 20 : 40,
   },
   securityText: {
-    fontSize: 12,
+    fontSize: isTablet ? 14 : 12,
     color: '#4A5568',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: isTablet ? 22 : 18,
   },
 });
 

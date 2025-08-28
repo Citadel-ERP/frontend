@@ -29,7 +29,6 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onSplashComplete }) => {
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.appName}>CITADEL</Text>
         <Text style={styles.tagline}>Secure Authentication</Text>
       </View>
       

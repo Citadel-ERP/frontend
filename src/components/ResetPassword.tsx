@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,26 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Image,
+  Dimensions,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
-import Config from 'react-native-config'; 
+import Config from 'react-native-config';
 import { colors, commonStyles } from '../styles/theme';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Responsive dimensions
+const isTablet = screenWidth >= 768;
+const isSmallDevice = screenHeight < 700;
+const containerPadding = isTablet ? 48 : 24;
+const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
 
 interface ResetPasswordProps {
   email: string;
-  oldPassword: string; // Now passed from login screen
+  oldPassword: string;
   onPasswordReset: (email: string, oldPassword: string, newPassword: string) => Promise<void>;
   onBack: () => void;
   isLoading?: boolean;
@@ -25,7 +38,7 @@ interface ResetPasswordResponse {
 
 const ResetPassword: React.FC<ResetPasswordProps> = ({
   email,
-  oldPassword, // Received from login screen
+  oldPassword,
   onPasswordReset,
   onBack,
   isLoading,
@@ -38,11 +51,27 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
     confirmPassword: '',
   });
 
-  const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
+  const scrollViewRef = useRef<ScrollView>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
+
+  // Get backend URL from environment variables
+  const getBackendUrl = (): string => {
+    const backendUrl = Config.BACKEND_URL;
+    
+    if (!backendUrl) {
+      console.error('BACKEND_URL not found in environment variables');
+      throw new Error('Backend URL not configured. Please check your environment setup.');
+    }
+    
+    return backendUrl;
+  };
 
   const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
     try {
+      const BACKEND_URL = getBackendUrl();
+      
       console.log('Reset Password API Call:', { email, old_password: oldPassword, new_password: newPassword });
+      
       const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
         method: 'POST',
         headers: {
@@ -50,7 +79,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
         },
         body: JSON.stringify({
           email,
-          old_password: oldPassword, 
+          old_password: oldPassword,
           new_password: newPassword,
         }),
       });
@@ -62,7 +91,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
       }
 
       const data = await response.json();
-      
+
       return {
         message: data.message || 'Password reset successful',
       };
@@ -104,12 +133,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
     setIsSubmitting(true);
     try {
       const response = await resetPasswordAPI(email, oldPassword, newPassword);
-      
+
       Alert.alert(
-        'Success', 
-        response.message || 'Password reset successfully', 
-        [{ 
-          text: 'OK', 
+        'Success',
+        response.message || 'Password reset successfully',
+        [{
+          text: 'OK',
           onPress: () => {
             onPasswordReset(email, oldPassword, newPassword);
           }
@@ -117,10 +146,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
       );
     } catch (error: any) {
       console.error('Password reset error:', error);
-      
+
       let errorMessage = 'Failed to reset password. Please try again.';
       if (error instanceof Error) {
-        if (error.message.includes('401') || error.message.includes('Invalid')) {
+        if (error.message.includes('Backend URL not configured')) {
+          errorMessage = 'Configuration error. Please contact support.';
+        } else if (error.message.includes('401') || error.message.includes('Invalid')) {
           errorMessage = 'Invalid current password. Please check and try again.';
         } else if (error.message.includes('Network')) {
           errorMessage = 'Network error. Please check your internet connection and try again.';
@@ -128,38 +159,69 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <View style={styles.container}>
+  // Handle focus to scroll to input when keyboard appears
+  const handleInputFocus = (inputType: 'newPassword' | 'confirmPassword') => {
+    setTimeout(() => {
+      const scrollY = inputType === 'newPassword' ? 
+        (isSmallDevice ? 200 : 250) : 
+        (isSmallDevice ? 300 : 350);
+      
+      scrollViewRef.current?.scrollTo({
+        y: scrollY,
+        animated: true,
+      });
+    }, 100);
+  };
+
+  const renderContent = () => (
+    <View style={styles.contentContainer}>
       <View style={styles.logoContainer}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>CITADEL</Text>
-        </View>
+        <Image
+          source={require('../assets/Logo.png')}
+          style={[styles.logo, { width: logoSize, height: logoSize }]}
+          resizeMode="contain"
+        />
       </View>
 
-      <Text style={styles.title}>Reset Password</Text>
-      <Text style={styles.subtitle}>
-        Please change your default password to secure your account
-      </Text>
+      <View style={styles.titleContainer}>
+        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.subtitle}>
+          Please change your default password to secure your account
+        </Text>
+      </View>
 
       <View style={styles.formContainer}>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>New Password</Text>
           <TextInput
-            style={[styles.input, errors.newPassword ? styles.inputError : null]}
+            style={[
+              styles.input, 
+              errors.newPassword ? styles.inputError : null
+            ]}
             value={newPassword}
-            onChangeText={setNewPassword}
+            onChangeText={(text) => {
+              setNewPassword(text);
+              if (errors.newPassword) {
+                setErrors(prev => ({ ...prev, newPassword: '' }));
+              }
+            }}
+            onFocus={() => handleInputFocus('newPassword')}
             placeholder="Enter new password"
+            placeholderTextColor={colors.textSecondary}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isLoading && !isSubmitting}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+            blurOnSubmit={false}
           />
           {errors.newPassword ? (
             <Text style={styles.errorText}>{errors.newPassword}</Text>
@@ -172,14 +234,27 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Confirm New Password</Text>
           <TextInput
-            style={[styles.input, errors.confirmPassword ? styles.inputError : null]}
+            ref={confirmPasswordInputRef}
+            style={[
+              styles.input, 
+              errors.confirmPassword ? styles.inputError : null
+            ]}
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              if (errors.confirmPassword) {
+                setErrors(prev => ({ ...prev, confirmPassword: '' }));
+              }
+            }}
+            onFocus={() => handleInputFocus('confirmPassword')}
             placeholder="Confirm new password"
+            placeholderTextColor={colors.textSecondary}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isLoading && !isSubmitting}
+            returnKeyType="done"
+            onSubmitEditing={handleSubmit}
           />
           {errors.confirmPassword ? (
             <Text style={styles.errorText}>{errors.confirmPassword}</Text>
@@ -190,7 +265,9 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={onBack}
-            disabled={isLoading || isSubmitting}>
+            disabled={isLoading || isSubmitting}
+            activeOpacity={0.7}
+          >
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
 
@@ -201,7 +278,9 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
               (isLoading || isSubmitting) ? styles.primaryButtonDisabled : null,
             ]}
             onPress={handleSubmit}
-            disabled={isLoading || isSubmitting}>
+            disabled={isLoading || isSubmitting}
+            activeOpacity={0.8}
+          >
             {(isLoading || isSubmitting) ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
@@ -218,122 +297,203 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
       </View>
     </View>
   );
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+      >
+        {renderContent()}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: Platform.OS === 'ios' ? 50 : 20,
+  },
+  contentContainer: {
+    paddingHorizontal: containerPadding,
+    paddingVertical: isSmallDevice ? 20 : 40,
+    minHeight: screenHeight - (Platform.OS === 'ios' ? 100 : 50),
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: isSmallDevice ? 20 : 30,
   },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: isTablet ? 30 : isSmallDevice ? 16 : 24,
   },
-  logoText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
+  titleContainer: {
+    marginBottom: isSmallDevice ? 24 : 40,
   },
   title: {
-    fontSize: 28,
+    fontSize: isTablet ? 32 : isSmallDevice ? 24 : 28,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : isSmallDevice ? 14 : 16,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
+    lineHeight: isTablet ? 28 : isSmallDevice ? 20 : 24,
   },
   formContainer: {
     width: '100%',
-    marginBottom: 24,
+    maxWidth: isTablet ? 400 : '100%',
+    alignSelf: 'center',
+    marginBottom: isSmallDevice ? 20 : 24,
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: isSmallDevice ? 16 : 20,
   },
   label: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '500',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
+    letterSpacing: 0.3,
   },
   input: {
     ...commonStyles.input,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    paddingHorizontal: isTablet ? 20 : 16,
+    borderRadius: isTablet ? 16 : 12,
+    backgroundColor: colors.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   inputError: {
     borderColor: colors.error,
+    backgroundColor: '#FFF5F5',
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: isTablet ? 16 : 14,
+    marginTop: 6,
+    fontWeight: '500',
+    paddingLeft: 4,
   },
   hintText: {
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: isTablet ? 14 : 12,
     marginTop: 4,
-    lineHeight: 16,
+    lineHeight: isTablet ? 20 : 16,
+    paddingLeft: 4,
+    fontWeight: '400',
   },
   buttonContainer: {
     flexDirection: 'row',
     gap: 16,
-    marginTop: 16,
+    marginTop: isSmallDevice ? 16 : 20,
   },
   button: {
     flex: 1,
-    height: 56,
-    borderRadius: 12,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    borderRadius: isTablet ? 16 : 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   primaryButton: {
     backgroundColor: colors.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   primaryButtonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   secondaryButton: {
-    backgroundColor: colors.gray,
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   secondaryButtonText: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   infoContainer: {
-    backgroundColor: '#F0F8FF',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: '#F7FAFC',
+    borderRadius: isTablet ? 12 : 8,
+    padding: isTablet ? 20 : 16,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
+    marginHorizontal: isTablet ? 20 : 0,
+    marginBottom: isSmallDevice ? 20 : 40,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
   infoText: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     color: '#4A5568',
-    lineHeight: 20,
+    lineHeight: isTablet ? 24 : 20,
+    textAlign: 'center',
+    fontWeight: '400',
   },
 });
 

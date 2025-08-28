@@ -1,7 +1,7 @@
 // src/styles/theme.ts
 
 export const colors = {
-  primary: '#2F3349',
+  primary: '#161b34ff',
   primaryLight: '#4A4E6A',
   primaryDark: '#1A1D2E',
 
@@ -20,7 +20,7 @@ export const colors = {
   success: '#28A745',
   error: '#DC3545',
   warning: '#FFC107',
-  info: '#17A2B8',
+  info: '#e07935ff',
 
   link: '#007BFF',
   disabled: '#6C757D',

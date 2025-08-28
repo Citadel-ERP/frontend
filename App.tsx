@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Config from 'react-native-config'; // Import environment config
+import Config from 'react-native-config';
 import SplashScreen from './src/components/SplashScreen';
 import Login from './src/components/Login';
 import CreateMPIN from './src/components/CreateMPIN';
@@ -18,8 +18,6 @@ import ResetPassword from './src/components/ResetPassword';
 import WelcomeScreen from './src/components/WelcomeScreen';
 import Dashboard from './src/components/Dashboard';
 import { colors } from './src/styles/theme';
-
-const BACKEND_URL = Config.BACKEND_URL || 'https://962xzp32-8000.inc1.devtunnels.ms';
 
 type Screen =
   | 'splash'
@@ -70,6 +68,18 @@ function App(): React.JSX.Element {
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
   const [tempData, setTempData] = useState<{ email?: string; oldPassword?: string; newPassword?: string; otp?: string }>({});
 
+  // Get backend URL from environment variables
+  const getBackendUrl = (): string => {
+    const backendUrl = Config.BACKEND_URL;
+    
+    if (!backendUrl) {
+      console.error('BACKEND_URL not found in environment variables');
+      throw new Error('Backend URL not configured. Please check your environment setup.');
+    }
+    
+    return backendUrl;
+  };
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
@@ -81,7 +91,9 @@ function App(): React.JSX.Element {
 
   const loginAPI = async (email: string, password: string): Promise<LoginResponse> => {
     try {
-      console.log(BACKEND_URL);
+      const BACKEND_URL = getBackendUrl();
+      console.log('Using Backend URL:', BACKEND_URL);
+      
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -100,7 +112,7 @@ function App(): React.JSX.Element {
       }
 
       const data = await response.json();
-      
+
       return {
         message: data.message || 'Login successful',
         first_login: data.first_login,
@@ -118,6 +130,8 @@ function App(): React.JSX.Element {
 
   const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
     try {
+      const BACKEND_URL = getBackendUrl();
+      
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -136,7 +150,7 @@ function App(): React.JSX.Element {
       }
 
       const data = await response.json();
-      
+
       return {
         message: data.message || 'Login successful',
         token: data.token,
@@ -153,6 +167,8 @@ function App(): React.JSX.Element {
 
   const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
     try {
+      const BACKEND_URL = getBackendUrl();
+      
       const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
         method: 'POST',
         headers: {
@@ -172,7 +188,7 @@ function App(): React.JSX.Element {
       }
 
       const data = await response.json();
-      
+
       return {
         message: data.message || 'Reset password successful',
       };
@@ -210,30 +226,30 @@ function App(): React.JSX.Element {
     setIsLoading(true);
     try {
       const response = await loginAPI(email, password);
-      
+
       console.log('Login response:', response);
 
       // Store email regardless of login type
       await AsyncStorage.setItem('user_email', email);
       setUserData({ email, isAuthenticated: true });
-      setUser({ 
-        email, 
-        name: response.user?.name 
+      setUser({
+        email,
+        name: response.user?.name
       });
 
       // Check if this is first login
       if (response.first_login === true) {
         // First login - store old password and redirect to reset password
-        setTempData({ email, oldPassword: password }); 
+        setTempData({ email, oldPassword: password });
         setCurrentScreen('resetPassword');
       } else if (response.first_login === false && response.token) {
         // Not first login and we have token - save it and proceed
         await AsyncStorage.setItem(TOKEN_2_KEY, response.token);
-        
+
         // Generate token1 and proceed to welcome/dashboard
         const token1 = generateRandomToken();
         await AsyncStorage.setItem(TOKEN_1_KEY, token1);
-        
+
         setCurrentScreen('welcome');
       } else {
         // Handle unexpected response
@@ -241,10 +257,12 @@ function App(): React.JSX.Element {
       }
     } catch (error) {
       console.error('Login error:', error);
-      
+
       let errorMessage = 'Login failed. Please try again.';
       if (error instanceof Error) {
-        if (error.message.includes('401') || error.message.includes('Invalid credentials')) {
+        if (error.message.includes('Backend URL not configured')) {
+          errorMessage = 'Configuration error. Please contact support.';
+        } else if (error.message.includes('401') || error.message.includes('Invalid credentials')) {
           errorMessage = 'Invalid email or password. Please check your credentials and try again.';
         } else if (error.message.includes('Network')) {
           errorMessage = 'Network error. Please check your internet connection and try again.';
@@ -252,7 +270,7 @@ function App(): React.JSX.Element {
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert(
         'Login Error',
         errorMessage,
@@ -275,10 +293,10 @@ function App(): React.JSX.Element {
       if (token) {
         await AsyncStorage.setItem(TOKEN_2_KEY, token);
       }
-      
+
       // Generate token1 and save MPIN
       const token1 = generateRandomToken();
-      
+
       await AsyncStorage.multiSet([
         [TOKEN_1_KEY, token1],
         [MPIN_KEY, mpin]
@@ -292,12 +310,12 @@ function App(): React.JSX.Element {
       setIsLoading(false);
     }
   };
-  
+
   const handleMPINLogin = async (mpin: string) => {
     setIsLoading(true);
     try {
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-      
+
       if (!storedToken) {
         throw new Error('No authentication token found');
       }
@@ -308,15 +326,15 @@ function App(): React.JSX.Element {
         return;
       } catch (backendError) {
         console.log('Backend MPIN login failed, trying local verification:', backendError);
-        
+
         // Fallback to local MPIN verification
         const storedMPin = await AsyncStorage.getItem(MPIN_KEY);
-        
+
         if (mpin === storedMPin) {
           setCurrentScreen('welcome');
         } else {
           Alert.alert(
-            'Invalid MPIN', 
+            'Invalid MPIN',
             'Please enter the correct MPIN and try again.',
             [{ text: 'Retry' }]
           );
@@ -324,9 +342,15 @@ function App(): React.JSX.Element {
       }
     } catch (error) {
       console.error('MPIN login error:', error);
+      
+      let errorMessage = 'Something went wrong. Please login with your email and password.';
+      if (error instanceof Error && error.message.includes('Backend URL not configured')) {
+        errorMessage = 'Configuration error. Please contact support.';
+      }
+      
       Alert.alert(
         'Authentication Error',
-        'Something went wrong. Please login with your email and password.',
+        errorMessage,
         [{ text: 'OK', onPress: () => setCurrentScreen('login') }]
       );
     } finally {
@@ -358,7 +382,7 @@ function App(): React.JSX.Element {
 
   const handleOTPVerified = (email: string, otp: string) => {
     // Mock OTP verification
-    if (otp === "0000") { 
+    if (otp === "0000") {
       setTempData({ email, otp });
       setCurrentScreen('resetPassword');
     } else {
@@ -477,9 +501,9 @@ function App(): React.JSX.Element {
         );
       case 'welcome':
         return (
-          <WelcomeScreen 
-            name={user?.name || userData.email?.split('@')[0] || "User"} 
-            onContinue={() => setCurrentScreen('dashboard')} 
+          <WelcomeScreen
+            name={user?.name || userData.email?.split('@')[0] || "User"}
+            onContinue={() => setCurrentScreen('dashboard')}
           />
         );
       case 'dashboard':
