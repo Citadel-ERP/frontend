@@ -19,6 +19,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Attendance from './Attendance';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -152,7 +154,9 @@ interface ApiResponse {
   upcoming_birthdays: UserData[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPAR" }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
+  const [token, setToken] = useState<string | null>(null);
+  const [showAttendance, setShowAttendance] = useState(false);
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
@@ -164,6 +168,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem('token_2');
+        setToken(storedToken);
+      } catch (error) {
+        console.error('Error getting token:', error);
+      }
+    };
+    
+    getToken();
+  }, []);
+
   // Fetch user data from API
   useEffect(() => {
     const fetchUserData = async () => {
@@ -205,6 +222,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
 
     fetchUserData();
   }, [token]);
+
+  
 
   // Generate initials from full name
   const getInitials = (fullName: string): string => {
@@ -637,8 +656,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
     Alert.alert('Coming Soon', `${item} feature will be available soon!`);
   };
 
-  const handleModulePress = (module: string) => {
-    Alert.alert('Coming Soon', `${module} module will be available soon!`);
+  const handleModulePress = (module: string, moduleId?: string) => {
+    if (module.toLowerCase().includes('attendance') || moduleId === 'attendance') {
+      setShowAttendance(true);
+    } else {
+      Alert.alert('Coming Soon', `${module} module will be available soon!`);
+    }
+  };
+
+  // Add this function to handle back from attendance
+  const handleBackFromAttendance = () => {
+    setShowAttendance(false);
   };
 
   const handleNavItemPress = (navItem: string) => {
@@ -795,10 +823,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+  <KeyboardAvoidingView 
+    style={{ flex: 1 }} 
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  >
+    {showAttendance ? (
+      <Attendance onBack={handleBackFromAttendance} />
+    ) : (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
         
@@ -861,7 +892,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.applyButton} activeOpacity={0.8}>
+              <TouchableOpacity 
+                style={styles.applyButton} 
+                activeOpacity={0.8}
+                onPress={() => setShowAttendance(true)}
+              >
                 <Text style={styles.applyButtonText}>Apply Leave</Text>
               </TouchableOpacity>
             </View>
@@ -908,7 +943,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
                       key={index}
                       title={module.title}
                       iconUrl={module.iconUrl}
-                      onPress={() => handleModulePress(module.title)}
+                      onPress={() => handleModulePress(module.title, module.module_id)}
                     />
                   ))
                 ) : (
@@ -986,8 +1021,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, token = "DYCe6cWPy0jWPA
         {/* Hamburger Menu */}
         <HamburgerMenu />
       </View>
-    </KeyboardAvoidingView>
-  );
+    )}
+  </KeyboardAvoidingView>
+);
 };
 
 export default Dashboard;
