@@ -16,7 +16,6 @@ import { colors, commonStyles } from '../styles/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Responsive dimensions
 const isTablet = screenWidth >= 768;
 const isSmallDevice = screenHeight < 700;
 const containerPadding = isTablet ? 48 : 24;

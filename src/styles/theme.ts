@@ -1,8 +1,6 @@
-// src/styles/theme.ts
-
 export const colors = {
   primary: '#161b34ff',
-  primaryLight: '#4A4E6A',
+  primaryLight: '#c1c7f4ff',
   primaryDark: '#1A1D2E',
 
   background: '#FFFFFF',
@@ -78,7 +76,6 @@ export const shadows = {
 };
 
 export const commonStyles = {
-  // Inputs
   input: {
     height: 56,
     paddingHorizontal: spacing.md,
@@ -92,7 +89,6 @@ export const commonStyles = {
     ...shadows.sm,
   },
 
-  // Buttons
   primaryButton: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.lg,
@@ -124,7 +120,6 @@ export const commonStyles = {
     fontWeight: '600' as const,
   },
 
-  // Containers
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -142,7 +137,6 @@ export const commonStyles = {
     ...shadows.md,
   },
 
-  // Typography
   h1: {
     fontSize: fontSize.xxxl,
     fontWeight: '700' as const,

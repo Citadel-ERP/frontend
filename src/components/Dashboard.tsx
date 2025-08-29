@@ -21,12 +21,13 @@ import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './Attendance';
+import Profile from './Profile'; // Import the Profile component
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface DashboardProps {
   onLogout: () => void;
-  token?: string; // Add token prop
+  token?: string; 
 }
 
 interface AttendanceCardProps {
@@ -157,10 +158,11 @@ interface ApiResponse {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
   const [token, setToken] = useState<string | null>(null);
   const [showAttendance, setShowAttendance] = useState(false);
+  const [showProfile, setShowProfile] = useState(false); // Add state for Profile
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
-  const [activeMenuItem, setActiveMenuItem] = useState('Profile');
+  const [activeMenuItem, setActiveMenuItem] = useState('Dashboard'); // Changed default to Dashboard
   const [activeNavItem, setActiveNavItem] = useState('home');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [modules, setModules] = useState<any[]>([]);
@@ -182,46 +184,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
   }, []);
 
   // Fetch user data from API
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            token: token
-          }),
-        });
+useEffect(() => {
+  if (!token) return; // 🚀 Prevents calling with null token
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const data: ApiResponse = await response.json();
-        
-        if (data.message === "Get modules successful") {
-          setUserData(data.user);
-          setModules(data.modules);
-          setUpcomingBirthdays(data.upcoming_birthdays || []);
-        } else {
-          throw new Error(data.message || 'Failed to fetch user data');
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
-        Alert.alert('Error', 'Failed to load user data. Please try again.');
-      } finally {
-        setLoading(false);
+      const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
 
-    fetchUserData();
-  }, [token]);
+      const data: ApiResponse = await response.json();
+
+      if (data.message === "Get modules successful") {
+        setUserData(data.user);
+        setModules(data.modules);
+        setUpcomingBirthdays(data.upcoming_birthdays || []);
+      } else {
+        throw new Error(data.message || 'Failed to fetch user data');
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch user data');
+      Alert.alert('Error', 'Failed to load user data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchUserData();
+}, [token]); // 👈 runs only when token is non-null
 
   
 
@@ -246,7 +248,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
 
     return modules.map(module => ({
       title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-      iconUrl: module.module_icon, // Changed from icon to iconUrl
+      iconUrl: module.module_id === 'attendance' 
+        ? 'https://cdn-icons-png.flaticon.com/512/8847/8847444.png' 
+        : module.module_icon, // Use high-quality favicon for attendance
       module_id: module.module_id,
       is_generic: module.is_generic
     }));
@@ -276,6 +280,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
     </View>
   );
 
+  // Updated Settings Icon (Gear style)
   const SettingsIcon = ({ color = colors.textSecondary, size = 20 }: { color?: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -284,15 +289,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
         borderRadius: size * 0.4,
         borderWidth: 2,
         borderColor: color,
+        position: 'relative',
       }}>
+        {/* Gear teeth */}
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, index) => (
+          <View
+            key={index}
+            style={{
+              position: 'absolute',
+              width: size * 0.15,
+              height: size * 0.15,
+              backgroundColor: color,
+              top: '50%',
+              left: '50%',
+              transform: [
+                { translateX: -size * 0.075 },
+                { translateY: -size * 0.075 },
+                { rotate: `${angle}deg` },
+                { translateY: -size * 0.35 }
+              ],
+            }}
+          />
+        ))}
+        {/* Center circle */}
         <View style={{
           position: 'absolute',
-          top: size * 0.3,
-          left: size * 0.3,
-          width: size * 0.2,
-          height: size * 0.2,
-          borderRadius: size * 0.1,
+          top: '50%',
+          left: '50%',
+          width: size * 0.25,
+          height: size * 0.25,
+          borderRadius: size * 0.125,
           backgroundColor: color,
+          transform: [{ translateX: -size * 0.125 }, { translateY: -size * 0.125 }],
         }} />
       </View>
     </View>
@@ -381,38 +409,54 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
     </View>
   );
 
+  // Updated Logout Icon (Door with arrow)
   const LogoutIcon = ({ color = colors.error, size = 20 }: { color?: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Door frame */}
       <View style={{
-        width: size * 0.8,
-        height: size * 0.6,
+        width: size * 0.7,
+        height: size * 0.8,
         borderWidth: 2,
         borderColor: color,
         borderRadius: size * 0.05,
-        borderRightColor: 'transparent',
-      }} />
+        position: 'relative',
+      }}>
+        {/* Door handle */}
+        <View style={{
+          position: 'absolute',
+          right: size * 0.1,
+          top: '50%',
+          width: size * 0.08,
+          height: size * 0.08,
+          borderRadius: size * 0.04,
+          backgroundColor: color,
+          transform: [{ translateY: -size * 0.04 }],
+        }} />
+      </View>
+      {/* Exit arrow */}
       <View style={{
         position: 'absolute',
-        right: size * 0.1,
-        width: size * 0.3,
+        right: -size * 0.1,
+        width: size * 0.4,
         height: 2,
         backgroundColor: color,
-      }} />
-      <View style={{
-        position: 'absolute',
-        right: size * 0.15,
-        top: size * 0.25,
-        width: size * 0.15,
-        height: size * 0.15,
-        borderTopWidth: 2,
-        borderRightWidth: 2,
-        borderColor: color,
-        transform: [{ rotate: '45deg' }],
-      }} />
+      }}>
+        <View style={{
+          position: 'absolute',
+          right: 0,
+          top: -size * 0.05,
+          width: size * 0.1,
+          height: size * 0.1,
+          borderTopWidth: 2,
+          borderRightWidth: 2,
+          borderColor: color,
+          transform: [{ rotate: '45deg' }],
+        }} />
+      </View>
     </View>
   );
 
-  // Bottom Navigation Icons (keeping existing ones)
+  // Bottom Navigation Icons - Updated with new 5 icons
   const HomeIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -442,69 +486,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
     </View>
   );
 
-  const CalendarIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.8,
-        height: size * 0.7,
-        borderWidth: 2,
-        borderColor: color,
-        borderRadius: size * 0.1,
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: -size * 0.15,
-          left: size * 0.15,
-          width: 2,
-          height: size * 0.25,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: -size * 0.15,
-          right: size * 0.15,
-          width: 2,
-          height: size * 0.25,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: size * 0.2,
-          left: size * 0.15,
-          right: size * 0.15,
-          height: 1,
-          backgroundColor: color,
-        }} />
-      </View>
-    </View>
-  );
-
-  const LocationIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.6,
-        height: size * 0.8,
-        borderRadius: size * 0.3,
-        borderBottomLeftRadius: 0,
-        borderBottomRightRadius: 0,
-        borderWidth: 2,
-        borderColor: color,
-        transform: [{ rotate: '45deg' }],
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: size * 0.15,
-          left: size * 0.15,
-          width: size * 0.2,
-          height: size * 0.2,
-          borderRadius: size * 0.1,
-          backgroundColor: color,
-        }} />
-      </View>
-    </View>
-  );
-
-  const HandshakeIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
+  // New Message Icon
+  const MessageIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
         width: size * 0.8,
@@ -514,66 +497,175 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
         borderRadius: size * 0.1,
         position: 'relative',
       }}>
+        {/* Message lines */}
         <View style={{
           position: 'absolute',
-          top: size * 0.1,
-          left: size * 0.1,
-          width: size * 0.2,
-          height: size * 0.2,
-          borderRadius: size * 0.1,
+          top: size * 0.15,
+          left: size * 0.15,
+          right: size * 0.15,
+          height: 1.5,
           backgroundColor: color,
         }} />
         <View style={{
           position: 'absolute',
-          top: size * 0.1,
-          right: size * 0.1,
-          width: size * 0.2,
-          height: size * 0.2,
-          borderRadius: size * 0.1,
+          top: size * 0.25,
+          left: size * 0.15,
+          width: size * 0.35,
+          height: 1.5,
           backgroundColor: color,
+        }} />
+      </View>
+      {/* Message tail */}
+      <View style={{
+        position: 'absolute',
+        bottom: size * 0.15,
+        left: size * 0.25,
+        width: size * 0.15,
+        height: size * 0.15,
+        borderTopWidth: 2,
+        borderLeftWidth: 2,
+        borderColor: color,
+        transform: [{ rotate: '-45deg' }],
+      }} />
+    </View>
+  );
+
+  // New Organisation Icon
+  const OrganisationIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{
+        width: size * 0.8,
+        height: size * 0.8,
+        borderWidth: 2,
+        borderColor: color,
+        borderRadius: size * 0.05,
+        position: 'relative',
+      }}>
+        {/* Building windows */}
+        <View style={{
+          position: 'absolute',
+          top: size * 0.15,
+          left: size * 0.15,
+          width: size * 0.15,
+          height: size * 0.15,
+          borderWidth: 1,
+          borderColor: color,
+        }} />
+        <View style={{
+          position: 'absolute',
+          top: size * 0.15,
+          right: size * 0.15,
+          width: size * 0.15,
+          height: size * 0.15,
+          borderWidth: 1,
+          borderColor: color,
+        }} />
+        <View style={{
+          position: 'absolute',
+          top: size * 0.4,
+          left: size * 0.15,
+          width: size * 0.15,
+          height: size * 0.15,
+          borderWidth: 1,
+          borderColor: color,
+        }} />
+        <View style={{
+          position: 'absolute',
+          top: size * 0.4,
+          right: size * 0.15,
+          width: size * 0.15,
+          height: size * 0.15,
+          borderWidth: 1,
+          borderColor: color,
         }} />
       </View>
     </View>
   );
 
-  const TeamIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
+  // New AI Bot Icon
+  const AIBotIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{
-          width: size * 0.3,
-          height: size * 0.3,
-          borderRadius: size * 0.15,
-          borderWidth: 2,
-          borderColor: color,
-          marginRight: -size * 0.1,
-        }} />
-        <View style={{
-          width: size * 0.35,
-          height: size * 0.35,
-          borderRadius: size * 0.175,
-          borderWidth: 2,
-          borderColor: color,
-          backgroundColor: 'transparent',
-          zIndex: 1,
-        }} />
-        <View style={{
-          width: size * 0.3,
-          height: size * 0.3,
-          borderRadius: size * 0.15,
-          borderWidth: 2,
-          borderColor: color,
-          marginLeft: -size * 0.1,
-        }} />
-      </View>
+      {/* Robot head */}
       <View style={{
         width: size * 0.7,
-        height: size * 0.3,
+        height: size * 0.6,
         borderWidth: 2,
         borderColor: color,
         borderRadius: size * 0.15,
-        marginTop: size * 0.1,
-        borderTopColor: 'transparent',
-      }} />
+        position: 'relative',
+      }}>
+        {/* Robot eyes */}
+        <View style={{
+          position: 'absolute',
+          top: size * 0.15,
+          left: size * 0.12,
+          width: size * 0.12,
+          height: size * 0.12,
+          borderRadius: size * 0.06,
+          backgroundColor: color,
+        }} />
+        <View style={{
+          position: 'absolute',
+          top: size * 0.15,
+          right: size * 0.12,
+          width: size * 0.12,
+          height: size * 0.12,
+          borderRadius: size * 0.06,
+          backgroundColor: color,
+        }} />
+        {/* Robot mouth */}
+        <View style={{
+          position: 'absolute',
+          bottom: size * 0.1,
+          left: '50%',
+          width: size * 0.25,
+          height: 1.5,
+          backgroundColor: color,
+          transform: [{ translateX: -size * 0.125 }],
+        }} />
+      </View>
+      {/* Robot antenna */}
+      <View style={{
+        position: 'absolute',
+        top: size * 0.05,
+        left: '50%',
+        width: 1.5,
+        height: size * 0.2,
+        backgroundColor: color,
+        transform: [{ translateX: -0.75 }],
+      }}>
+        <View style={{
+          position: 'absolute',
+          top: -size * 0.05,
+          left: '50%',
+          width: size * 0.08,
+          height: size * 0.08,
+          borderRadius: size * 0.04,
+          backgroundColor: color,
+          transform: [{ translateX: -size * 0.04 }],
+        }} />
+      </View>
+    </View>
+  );
+
+  // Updated Help Icon for bottom nav
+  const HelpNavIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{
+        width: size * 0.8,
+        height: size * 0.8,
+        borderRadius: size * 0.4,
+        borderWidth: 2,
+        borderColor: color,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          color: color,
+          fontSize: size * 0.5,
+          fontWeight: 'bold',
+        }}>?</Text>
+      </View>
     </View>
   );
 
@@ -653,7 +745,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
   const handleMenuItemPress = (item: string) => {
     setActiveMenuItem(item);
     closeMenu();
-    Alert.alert('Coming Soon', `${item} feature will be available soon!`);
+    
+    // Handle Profile navigation
+    if (item === 'Profile') {
+      setShowProfile(true);
+    } else {
+      Alert.alert('Coming Soon', `${item} feature will be available soon!`);
+    }
   };
 
   const handleModulePress = (module: string, moduleId?: string) => {
@@ -667,11 +765,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
   // Add this function to handle back from attendance
   const handleBackFromAttendance = () => {
     setShowAttendance(false);
+    setActiveMenuItem('Dashboard'); // Reset to Dashboard when coming back
+  };
+
+  // Add this function to handle back from profile
+  const handleBackFromProfile = () => {
+    setShowProfile(false);
+    setActiveMenuItem('Dashboard'); // Reset to Dashboard when coming back
   };
 
   const handleNavItemPress = (navItem: string) => {
     setActiveNavItem(navItem);
-    Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
+    if (navItem !== 'home') {
+      Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
+    }
   };
 
   // Show loading screen
@@ -829,6 +936,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
   >
     {showAttendance ? (
       <Attendance onBack={handleBackFromAttendance} />
+    ) : showProfile ? (
+      <Profile onBack={handleBackFromProfile} userData={userData} />
     ) : (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
@@ -844,7 +953,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
             
             <View style={styles.logoContainer}>
               <Image
-                source={require('../assets/Logo.png')}
+                source={require('../assets/logo_back.png')}
                 style={styles.logo}
                 resizeMode="contain"
               />
@@ -953,7 +1062,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
             </View>
           </ScrollView>
 
-          {/* Bottom Navigation with Custom Icons and Labels */}
+          {/* Updated Bottom Navigation with 5 new icons */}
           <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
             <TouchableOpacity 
               style={styles.navItem} 
@@ -969,50 +1078,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.navItem}
-              onPress={() => handleNavItemPress('calendar')}
+              onPress={() => handleNavItemPress('message')}
             >
-              <CalendarIcon color={activeNavItem === 'calendar' ? colors.primary : colors.textSecondary} />
+              <MessageIcon color={activeNavItem === 'message' ? colors.primary : colors.textSecondary} />
               <Text style={[
                 styles.navLabel,
-                { color: activeNavItem === 'calendar' ? colors.primary : colors.textSecondary }
+                { color: activeNavItem === 'message' ? colors.primary : colors.textSecondary }
               ]}>
-                Calendar
+                Message
               </Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.navItem}
-              onPress={() => handleNavItemPress('location')}
+              onPress={() => handleNavItemPress('organisation')}
             >
-              <LocationIcon color={activeNavItem === 'location' ? colors.primary : colors.textSecondary} />
+              <OrganisationIcon color={activeNavItem === 'organisation' ? colors.primary : colors.textSecondary} />
               <Text style={[
                 styles.navLabel,
-                { color: activeNavItem === 'location' ? colors.primary : colors.textSecondary }
+                { color: activeNavItem === 'organisation' ? colors.primary : colors.textSecondary }
               ]}>
-                Location
+                Organisation
               </Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.navItem}
-              onPress={() => handleNavItemPress('handshake')}
+              onPress={() => handleNavItemPress('ai-bot')}
             >
-              <HandshakeIcon color={activeNavItem === 'handshake' ? colors.primary : colors.textSecondary} />
+              <AIBotIcon color={activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary} />
               <Text style={[
                 styles.navLabel,
-                { color: activeNavItem === 'handshake' ? colors.primary : colors.textSecondary }
+                { color: activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary }
               ]}>
-                Partners
+                AI Bot
               </Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.navItem}
-              onPress={() => handleNavItemPress('team')}
+              onPress={() => handleNavItemPress('help')}
             >
-              <TeamIcon color={activeNavItem === 'team' ? colors.primary : colors.textSecondary} />
+              <HelpNavIcon color={activeNavItem === 'help' ? colors.primary : colors.textSecondary} />
               <Text style={[
                 styles.navLabel,
-                { color: activeNavItem === 'team' ? colors.primary : colors.textSecondary }
+                { color: activeNavItem === 'help' ? colors.primary : colors.textSecondary }
               ]}>
-                Team
+                Help
               </Text>
             </TouchableOpacity>
           </View>
@@ -1025,6 +1134,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout}) => {
   </KeyboardAvoidingView>
 );
 };
+
 
 export default Dashboard;
 
@@ -1103,8 +1213,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logo: {
-    width: 70,
-    height: 70,
+    width: 90,
+    height: 80,
     backgroundColor: 'transparent',
   },
   headerSpacer: {

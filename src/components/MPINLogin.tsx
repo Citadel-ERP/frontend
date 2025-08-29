@@ -19,7 +19,6 @@ import { colors } from '../styles/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Responsive dimensions
 const isTablet = screenWidth >= 768;
 const isSmallDevice = screenHeight < 700;
 const containerPadding = isTablet ? 48 : 24;
@@ -64,7 +63,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const MAX_ATTEMPTS = 3;
   const BLOCK_DURATION = 30 * 60 * 1000;
 
-  // Get backend URL from environment variables
   const getBackendUrl = (): string => {
     const backendUrl = BACKEND_URL;
     
@@ -76,10 +74,8 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     return backendUrl;
   };
 
-  // Check if user has entered any digits
   const hasEnteredDigits = mpin.some(digit => digit !== '');
   
-  // Check if MPIN is complete (all 6 digits filled)
   const isMPINComplete = mpin.every(digit => digit !== '') && mpin.join('').length === 6;
 
   useEffect(() => {
@@ -229,10 +225,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       inputRefs.current[index - 1]?.focus();
     }
 
-    // REMOVED: Automatic submission when 6th digit is entered
-    // The user must now manually press the login button
     if (index === 5 && value !== '') {
-      // Just blur the last input, don't auto-submit
       inputRefs.current[index]?.blur();
     }
   };
@@ -410,7 +403,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     console.log(`Current attempt count: ${attemptCount}, Is blocked: ${isBlocked}`);
   }, [attemptCount, isBlocked]);
 
-  // Handle focus to scroll to MPIN inputs when keyboard appears
   const handleInputFocus = () => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
@@ -443,7 +435,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         {mpin.map((digit, index) => (
           <TextInput
             key={index}
-            ref={(ref) => (inputRefs.current[index] = ref)}
+            ref={(ref) => {
+              inputRefs.current[index] = ref;
+            }}
             style={[
               styles.mpinInput,
               {

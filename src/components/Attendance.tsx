@@ -13,13 +13,14 @@ import {
   TextInput,
   Platform,
   Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
+import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface AttendanceProps {
   onBack: () => void;
@@ -63,11 +64,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
   
-  // Attendance states
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   
-  // Leave states
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     casual_leaves: 0,
     sick_leaves: 0,
@@ -81,12 +80,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     reason: ''
   });
   
-  // Holiday states
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   
-  // Report states
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
 
   useEffect(() => {
     const getToken = async () => {
@@ -348,6 +347,94 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     </View>
   );
 
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
+
+  const MonthDropdown = () => (
+    <Modal
+      visible={showMonthDropdown}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowMonthDropdown(false)}
+    >
+      <TouchableOpacity 
+        style={styles.dropdownOverlay} 
+        onPress={() => setShowMonthDropdown(false)}
+      >
+        <View style={styles.dropdownContainer}>
+          <ScrollView style={styles.dropdownContent}>
+            {monthNames.map((month, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.dropdownItem,
+                  selectedMonth === index + 1 && styles.selectedDropdownItem
+                ]}
+                onPress={() => {
+                  setSelectedMonth(index + 1);
+                  setShowMonthDropdown(false);
+                  fetchAttendanceRecords();
+                }}
+              >
+                <Text style={[
+                  styles.dropdownItemText,
+                  selectedMonth === index + 1 && styles.selectedDropdownItemText
+                ]}>
+                  {month}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  const YearDropdown = () => (
+    <Modal
+      visible={showYearDropdown}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowYearDropdown(false)}
+    >
+      <TouchableOpacity 
+        style={styles.dropdownOverlay} 
+        onPress={() => setShowYearDropdown(false)}
+      >
+        <View style={styles.dropdownContainer}>
+          <ScrollView style={styles.dropdownContent}>
+            {years.map((year) => (
+              <TouchableOpacity
+                key={year}
+                style={[
+                  styles.dropdownItem,
+                  selectedYear === year && styles.selectedDropdownItem
+                ]}
+                onPress={() => {
+                  setSelectedYear(year);
+                  setShowYearDropdown(false);
+                  fetchAttendanceRecords();
+                }}
+              >
+                <Text style={[
+                  styles.dropdownItemText,
+                  selectedYear === year && styles.selectedDropdownItemText
+                ]}>
+                  {year}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const LeaveApplicationModal = () => (
     <Modal
       visible={isLeaveModalVisible}
@@ -355,64 +442,73 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       animationType="slide"
       onRequestClose={() => setIsLeaveModalVisible(false)}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView 
+        style={styles.modalOverlay} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Apply for Leave</Text>
           
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Start Date</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={leaveForm.startDate}
-              onChangeText={(text) => setLeaveForm({...leaveForm, startDate: text})}
-              placeholder="YYYY-MM-DD"
-            />
-          </View>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>End Date</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={leaveForm.endDate}
-              onChangeText={(text) => setLeaveForm({...leaveForm, endDate: text})}
-              placeholder="YYYY-MM-DD"
-            />
-          </View>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Leave Type</Text>
-            <View style={styles.leaveTypeContainer}>
-              {['casual', 'sick', 'earned'].map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.leaveTypeButton,
-                    leaveForm.leaveType === type && styles.leaveTypeButtonActive
-                  ]}
-                  onPress={() => setLeaveForm({...leaveForm, leaveType: type})}
-                >
-                  <Text style={[
-                    styles.leaveTypeText,
-                    leaveForm.leaveType === type && styles.leaveTypeTextActive
-                  ]}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Start Date</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={leaveForm.startDate}
+                onChangeText={(text) => setLeaveForm({...leaveForm, startDate: text})}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textSecondary}
+              />
             </View>
-          </View>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Reason</Text>
-            <TextInput
-              style={styles.reasonInput}
-              value={leaveForm.reason}
-              onChangeText={(text) => setLeaveForm({...leaveForm, reason: text})}
-              placeholder="Enter reason for leave"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>End Date</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={leaveForm.endDate}
+                onChangeText={(text) => setLeaveForm({...leaveForm, endDate: text})}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Leave Type</Text>
+              <View style={styles.leaveTypeContainer}>
+                {['casual', 'sick', 'earned'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.leaveTypeButton,
+                      leaveForm.leaveType === type && styles.leaveTypeButtonActive
+                    ]}
+                    onPress={() => setLeaveForm({...leaveForm, leaveType: type})}
+                  >
+                    <Text style={[
+                      styles.leaveTypeText,
+                      leaveForm.leaveType === type && styles.leaveTypeTextActive
+                    ]}>
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Reason</Text>
+              <TextInput
+                style={styles.reasonInput}
+                value={leaveForm.reason}
+                onChangeText={(text) => setLeaveForm({...leaveForm, reason: text})}
+                placeholder="Enter reason for leave"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+          </ScrollView>
           
           <View style={styles.modalButtons}>
             <TouchableOpacity
@@ -434,34 +530,46 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
   const renderAttendanceTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Today's Attendance */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Today's Attendance</Text>
         <View style={styles.attendanceCard}>
           {todayAttendance ? (
             <View style={styles.attendanceInfo}>
-              <Text style={styles.attendanceStatus}>
-                Status: <Text style={styles.statusText}>{todayAttendance.status}</Text>
-              </Text>
-              {todayAttendance.check_in_time && (
-                <Text style={styles.timeText}>
-                  Check In: {formatTime(todayAttendance.check_in_time)}
+              <View style={styles.statusContainer}>
+                <View style={[
+                  styles.statusIndicator,
+                  { backgroundColor: getStatusColor(todayAttendance.status) }
+                ]} />
+                <Text style={styles.attendanceStatus}>
+                  Status: <Text style={[styles.statusText, { color: getStatusColor(todayAttendance.status) }]}>
+                    {todayAttendance.status.replace('_', ' ')}
+                  </Text>
                 </Text>
+              </View>
+              {todayAttendance.check_in_time && (
+                <View style={styles.timeRow}>
+                  <Text style={styles.timeLabel}>Check In:</Text>
+                  <Text style={styles.timeValue}>{formatTime(todayAttendance.check_in_time)}</Text>
+                </View>
               )}
               {todayAttendance.check_out_time && (
-                <Text style={styles.timeText}>
-                  Check Out: {formatTime(todayAttendance.check_out_time)}
-                </Text>
+                <View style={styles.timeRow}>
+                  <Text style={styles.timeLabel}>Check Out:</Text>
+                  <Text style={styles.timeValue}>{formatTime(todayAttendance.check_out_time)}</Text>
+                </View>
               )}
             </View>
           ) : (
             <View style={styles.noAttendanceContainer}>
+              <View style={styles.noAttendanceIconContainer}>
+                <Text style={styles.noAttendanceIcon}>📅</Text>
+              </View>
               <Text style={styles.noAttendanceText}>No attendance marked today</Text>
               <TouchableOpacity 
                 style={styles.markAttendanceButton} 
@@ -479,38 +587,56 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         </View>
       </View>
 
-      {/* Recent Attendance Records */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recent Records</Text>
-        {attendanceRecords.slice(0, 5).map((record, index) => (
-          <View key={index} style={styles.recordItem}>
-            <Text style={styles.recordDate}>{formatDate(record.date)}</Text>
-            <Text style={[styles.recordStatus, { color: getStatusColor(record.status) }]}>
-              {record.status}
-            </Text>
-          </View>
-        ))}
+        <View style={styles.recordsContainer}>
+          {attendanceRecords.length > 0 ? (
+            attendanceRecords.slice(0, 5).map((record, index) => (
+              <View key={index} style={styles.recordItem}>
+                <View style={styles.recordLeft}>
+                  <View style={[
+                    styles.recordStatusDot,
+                    { backgroundColor: getStatusColor(record.status) }
+                  ]} />
+                  <Text style={styles.recordDate}>{formatDate(record.date)}</Text>
+                </View>
+                <Text style={[
+                  styles.recordStatus, 
+                  { color: getStatusColor(record.status) }
+                ]}>
+                  {record.status.replace('_', ' ')}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No attendance records found</Text>
+            </View>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
 
   const renderLeaveTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Leave Balance */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Leave Balance</Text>
-        <View style={styles.leaveBalanceContainer}>
+        <View style={styles.leaveBalanceGrid}>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceNumber}>{leaveBalance.casual_leaves}</Text>
             <Text style={styles.balanceLabel}>Casual</Text>
+            <View style={[styles.balanceIndicator, { backgroundColor: colors.info }]} />
           </View>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceNumber}>{leaveBalance.sick_leaves}</Text>
             <Text style={styles.balanceLabel}>Sick</Text>
+            <View style={[styles.balanceIndicator, { backgroundColor: colors.error }]} />
           </View>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceNumber}>{leaveBalance.earned_leaves}</Text>
             <Text style={styles.balanceLabel}>Earned</Text>
+            <View style={[styles.balanceIndicator, { backgroundColor: colors.success }]} />
           </View>
         </View>
         
@@ -522,7 +648,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Leave Applications */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Leave Applications</Text>
         {leaveApplications.length > 0 ? (
@@ -532,21 +657,27 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 <Text style={styles.leaveDateRange}>
                   {formatDate(application.start_date)} - {formatDate(application.end_date)}
                 </Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusBadgeColor(application.status) }]}>
+                <View style={[
+                  styles.statusBadge, 
+                  { backgroundColor: getStatusBadgeColor(application.status) }
+                ]}>
                   <Text style={styles.statusBadgeText}>{application.status}</Text>
                 </View>
               </View>
               <Text style={styles.leaveType}>{application.leave_type} Leave</Text>
               <Text style={styles.leaveReason}>{application.leave_reason}</Text>
               {application.rejection_reason && (
-                <Text style={styles.rejectionReason}>
-                  Rejection Reason: {application.rejection_reason}
-                </Text>
+                <View style={styles.rejectionContainer}>
+                  <Text style={styles.rejectionLabel}>Rejection Reason:</Text>
+                  <Text style={styles.rejectionReason}>{application.rejection_reason}</Text>
+                </View>
               )}
             </View>
           ))
         ) : (
-          <Text style={styles.noDataText}>No leave applications found</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No leave applications found</Text>
+          </View>
         )}
       </View>
     </ScrollView>
@@ -559,13 +690,21 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         {holidays.length > 0 ? (
           holidays.map((holiday) => (
             <View key={holiday.id} style={styles.holidayItem}>
-              <Text style={styles.holidayName}>{holiday.name}</Text>
-              <Text style={styles.holidayDate}>{formatDate(holiday.date)}</Text>
-              <Text style={styles.holidayType}>{holiday.type}</Text>
+              <View style={styles.holidayLeft}>
+                <View style={styles.holidayDateContainer}>
+                  <Text style={styles.holidayDateText}>{formatDate(holiday.date)}</Text>
+                </View>
+                <View style={styles.holidayDetails}>
+                  <Text style={styles.holidayName}>{holiday.name}</Text>
+                  <Text style={styles.holidayType}>{holiday.type}</Text>
+                </View>
+              </View>
             </View>
           ))
         ) : (
-          <Text style={styles.noDataText}>No holidays found</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No holidays found</Text>
+          </View>
         )}
       </View>
     </ScrollView>
@@ -576,40 +715,45 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Attendance Report</Text>
         
-        <View style={styles.reportFilters}>
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Month</Text>
-            <TextInput
-              style={styles.filterInput}
-              value={selectedMonth.toString()}
-              onChangeText={(text) => setSelectedMonth(parseInt(text) || 1)}
-              keyboardType="numeric"
-              placeholder="Month (1-12)"
-            />
+        <View style={styles.reportCard}>
+          <View style={styles.reportFilters}>
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Month</Text>
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setShowMonthDropdown(true)}
+              >
+                <Text style={styles.dropdownButtonText}>
+                  {monthNames[selectedMonth - 1]}
+                </Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Year</Text>
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setShowYearDropdown(true)}
+              >
+                <Text style={styles.dropdownButtonText}>
+                  {selectedYear}
+                </Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Year</Text>
-            <TextInput
-              style={styles.filterInput}
-              value={selectedYear.toString()}
-              onChangeText={(text) => setSelectedYear(parseInt(text) || new Date().getFullYear())}
-              keyboardType="numeric"
-              placeholder="Year"
-            />
-          </View>
+          <TouchableOpacity 
+            style={styles.downloadButton}
+            onPress={downloadAttendanceReport}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={styles.downloadText}>📄 Download PDF Report</Text>
+            )}
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity 
-          style={styles.downloadButton}
-          onPress={downloadAttendanceReport}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <Text style={styles.downloadText}>Download PDF Report</Text>
-          )}
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -635,9 +779,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
@@ -646,7 +789,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Tab Navigation */}
       <View style={styles.tabNavigation}>
         {[
           { key: 'attendance', label: 'Attendance' },
@@ -669,7 +811,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         ))}
       </View>
 
-      {/* Tab Content */}
       <View style={styles.contentContainer}>
         {activeTab === 'attendance' && renderAttendanceTab()}
         {activeTab === 'leave' && renderLeaveTab()}
@@ -677,8 +818,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         {activeTab === 'reports' && renderReportsTab()}
       </View>
 
-      {/* Leave Application Modal */}
       <LeaveApplicationModal />
+      <MonthDropdown />
+      <YearDropdown />
     </SafeAreaView>
   );
 };
@@ -686,17 +828,18 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: '#2D3748',
+    backgroundColor: colors.primary,
   },
   backButton: {
     padding: spacing.sm,
+    borderRadius: borderRadius.sm,
   },
   backIcon: {
     width: 24,
@@ -727,19 +870,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    paddingHorizontal: spacing.xs,
   },
   tab: {
     flex: 1,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    borderRadius: borderRadius.sm,
+    marginHorizontal: spacing.xs,
   },
   activeTab: {
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: colors.primary,
+    backgroundColor: colors.backgroundSecondary,
   },
   tabText: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    fontWeight: '500',
   },
   activeTabText: {
     color: colors.primary,
@@ -747,11 +895,12 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.backgroundSecondary,
   },
   tabContent: {
     flex: 1,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
   section: {
     marginBottom: spacing.xl,
@@ -762,95 +911,175 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
+  
   attendanceCard: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.sm,
+    padding: spacing.xl,
+    ...shadows.md,
     borderWidth: 1,
     borderColor: colors.border,
+    marginBottom: spacing.lg,
   },
   attendanceInfo: {
     alignItems: 'center',
   },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.sm,
+  },
   attendanceStatus: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
     color: colors.text,
-    marginBottom: spacing.sm,
+    fontWeight: '500',
   },
   statusText: {
     fontWeight: '600',
     textTransform: 'capitalize',
   },
-  timeText: {
-    fontSize: fontSize.sm,
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  timeLabel: {
+    fontSize: fontSize.md,
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontWeight: '500',
+  },
+  timeValue: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '600',
   },
   noAttendanceContainer: {
     alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  noAttendanceIconContainer: {
+    width: 64,
+    height: 64,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  noAttendanceIcon: {
+    fontSize: 24,
   },
   noAttendanceText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
   },
   markAttendanceButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
+    ...shadows.sm,
   },
   markAttendanceText: {
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
   },
+  
+  recordsContainer: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
   recordItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  recordLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  recordStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: spacing.md,
   },
   recordDate: {
     fontSize: fontSize.md,
     color: colors.text,
+    fontWeight: '500',
   },
   recordStatus: {
     fontSize: fontSize.sm,
     fontWeight: '600',
     textTransform: 'capitalize',
   },
-  leaveBalanceContainer: {
+  
+  leaveBalanceGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: spacing.lg,
+    justifyContent: 'space-between',
+    marginBottom: spacing.xl,
+    gap: spacing.sm,
   },
   balanceCard: {
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
     flex: 1,
-    marginHorizontal: spacing.xs,
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    position: 'relative',
   },
   balanceNumber: {
-    fontSize: fontSize.xxl,
+    fontSize: Math.min(screenWidth * 0.08, 32),
     fontWeight: 'bold',
-    color: colors.primary,
+    color: colors.text,
     marginBottom: spacing.xs,
   },
   balanceLabel: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  balanceIndicator: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
   },
   applyLeaveButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
+    ...shadows.sm,
   },
   applyLeaveText: {
     color: colors.white,
@@ -858,26 +1087,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   leaveItem: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   leaveHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.sm,
   },
   leaveDateRange: {
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.text,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
+    minWidth: 70,
+    alignItems: 'center',
   },
   statusBadgeText: {
     color: colors.white,
@@ -895,18 +1131,59 @@ const styles = StyleSheet.create({
   leaveReason: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  rejectionContainer: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.error,
+  },
+  rejectionLabel: {
+    fontSize: fontSize.xs,
+    color: colors.error,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
   },
   rejectionReason: {
     fontSize: fontSize.sm,
     color: colors.error,
-    marginTop: spacing.sm,
     fontStyle: 'italic',
+    lineHeight: 18,
   },
+  
   holidayItem: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  holidayLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  holidayDateContainer: {
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.md,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  holidayDateText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  holidayDetails: {
+    flex: 1,
   },
   holidayName: {
     fontSize: fontSize.md,
@@ -914,54 +1191,118 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.xs,
   },
-  holidayDate: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
   holidayType: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    textTransform: 'capitalize',
+  },
+  
+  reportCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   reportFilters: {
     flexDirection: 'row',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
   },
   filterGroup: {
     flex: 1,
-    marginRight: spacing.md,
   },
   filterLabel: {
     fontSize: fontSize.sm,
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    fontWeight: '500',
   },
-  filterInput: {
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  dropdownButtonText: {
     fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  dropdownArrow: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  dropdownContainer: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    width: '80%',
+    maxHeight: screenHeight * 0.6,
+    ...shadows.lg,
+  },
+  dropdownContent: {
+    maxHeight: screenHeight * 0.5,
+  },
+  dropdownItem: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  selectedDropdownItem: {
+    backgroundColor: colors.backgroundSecondary,
+  },
+  dropdownItemText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  selectedDropdownItemText: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   downloadButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
+    ...shadows.sm,
   },
   downloadText: {
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
   },
-  noDataText: {
+  
+  emptyState: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyStateText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  // Modal styles
+  
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -971,17 +1312,19 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     padding: spacing.xl,
     width: '100%',
-    maxHeight: '80%',
+    maxWidth: 400,
+    maxHeight: screenHeight * 0.8,
+    ...shadows.lg,
   },
   modalTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   formGroup: {
     marginBottom: spacing.lg,
@@ -1000,20 +1343,21 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     fontSize: fontSize.md,
     color: colors.text,
+    backgroundColor: colors.backgroundSecondary,
   },
   leaveTypeContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   leaveTypeButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    marginHorizontal: spacing.xs,
     alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
   },
   leaveTypeButtonActive: {
     backgroundColor: colors.primary,
@@ -1022,6 +1366,7 @@ const styles = StyleSheet.create({
   leaveTypeText: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    fontWeight: '500',
   },
   leaveTypeTextActive: {
     color: colors.white,
@@ -1035,12 +1380,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     fontSize: fontSize.md,
     color: colors.text,
-    height: 80,
-    textAlignVertical: 'top',
+    height: 100,
+    backgroundColor: colors.backgroundSecondary,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacing.md,
     marginTop: spacing.lg,
   },
   modalCancelButton: {
@@ -1050,7 +1395,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     alignItems: 'center',
-    marginRight: spacing.sm,
+    backgroundColor: colors.backgroundSecondary,
   },
   modalCancelText: {
     color: colors.textSecondary,
@@ -1063,7 +1408,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     alignItems: 'center',
-    marginLeft: spacing.sm,
+    ...shadows.sm,
   },
   modalSubmitText: {
     color: colors.white,
