@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BACKEND_URL } from './src/config/config'; 
+import { BACKEND_URL } from './src/config/config';
 import SplashScreen from './src/components/SplashScreen';
 import Login from './src/components/Login';
 import CreateMPIN from './src/components/CreateMPIN';
@@ -77,12 +77,12 @@ function App(): React.JSX.Element {
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
     const backendUrl = BACKEND_URL;
-    
+
     if (!backendUrl) {
       console.error('BACKEND_URL not found in environment variables');
       throw new Error('Backend URL not configured. Please check your environment setup.');
     }
-    
+
     return backendUrl;
   };
 
@@ -99,7 +99,7 @@ function App(): React.JSX.Element {
     try {
       const BACKEND_URL = getBackendUrl();
       console.log('Using Backend URL:', BACKEND_URL);
-      
+
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -136,7 +136,7 @@ function App(): React.JSX.Element {
   const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
-      
+
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -172,7 +172,7 @@ function App(): React.JSX.Element {
   const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
-      
+
       const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
         method: 'POST',
         headers: {
@@ -209,21 +209,21 @@ function App(): React.JSX.Element {
       const email = await AsyncStorage.getItem('user_email');
       const firstName = await AsyncStorage.getItem('user_first_name');
       const lastName = await AsyncStorage.getItem('user_last_name');
-      
+
       console.log('Token check:', { token1: !!token1, email });
-      
+
       // If token1 exists, show MPIN login
       if (token1 && email) {
-        setUserData({ 
-          email, 
+        setUserData({
+          email,
           first_name: firstName || undefined,
           last_name: lastName || undefined,
-          isAuthenticated: false 
+          isAuthenticated: false
         });
         setCurrentScreen('mpinLogin');
         return;
       }
-      
+
       // Otherwise show login
       setCurrentScreen('login');
     } catch (error) {
@@ -237,10 +237,10 @@ function App(): React.JSX.Element {
     try {
       const response = await loginAPI(email, password);
       console.log('Login response:', response);
-      
+
       // Store email and user data
       await AsyncStorage.setItem('user_email', email);
-      
+
       // Store first_name and last_name if available
       if (response.user?.first_name) {
         await AsyncStorage.setItem('user_first_name', response.user.first_name);
@@ -248,14 +248,14 @@ function App(): React.JSX.Element {
       if (response.user?.last_name) {
         await AsyncStorage.setItem('user_last_name', response.user.last_name);
       }
-      
-      setUserData({ 
-        email, 
+
+      setUserData({
+        email,
         first_name: response.user?.first_name,
         last_name: response.user?.last_name,
-        isAuthenticated: true 
+        isAuthenticated: true
       });
-      
+
       setUser({
         email,
         name: response.user?.name,
@@ -343,12 +343,12 @@ function App(): React.JSX.Element {
         console.log('MPIN login response:', response);
         // Update user data if we get fresh data from the API
         if (response.user) {
-          setUserData(prev => ({ 
-            ...prev, 
+          setUserData(prev => ({
+            ...prev,
             first_name: response.user?.first_name || prev.first_name,
             last_name: response.user?.last_name || prev.last_name
           }));
-          
+
           setUser({
             email: userData.email || '',
             name: response.user?.name,
@@ -356,7 +356,7 @@ function App(): React.JSX.Element {
             last_name: response.user?.last_name
           });
         }
-        
+
         setCurrentScreen('welcome');
         return;
       } catch (backendError) {
@@ -375,12 +375,12 @@ function App(): React.JSX.Element {
       }
     } catch (error) {
       console.error('MPIN login error:', error);
-      
+
       let errorMessage = 'Something went wrong. Please login with your email and password.';
       if (error instanceof Error && error.message.includes('Backend URL not configured')) {
         errorMessage = 'Configuration error. Please contact support.';
       }
-      
+
       Alert.alert(
         'Authentication Error',
         errorMessage,
@@ -520,6 +520,19 @@ function App(): React.JSX.Element {
         return (
           <MPINLogin
             onMPINLogin={handleMPINLogin}
+            onBiometricLogin={async (token) => {
+              // Handle successful biometric login
+              console.log('Biometric login successful');
+              // Update user data and navigate to welcome screen
+              setUserData(prev => ({ ...prev, isAuthenticated: true }));
+              setCurrentScreen('welcome');
+            }}
+            onDashboardRedirect={() => {
+              // Direct navigation to dashboard after biometric auth
+              console.log('Redirecting to dashboard after biometric auth');
+              setUserData(prev => ({ ...prev, isAuthenticated: true }));
+              setCurrentScreen('dashboard');
+            }}
             onUsePassword={handleUsePassword}
             isLoading={isLoading}
             userEmail={userData.email}
