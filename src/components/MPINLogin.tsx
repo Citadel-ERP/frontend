@@ -229,6 +229,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
     try {
       console.log('Attempting biometric authentication...');
+      console.log('Available biometric types:', biometricCapabilities.supportedTypes);
 
       // Determine authentication prompt based on available biometric types
       let promptMessage = 'Authenticate to login';
@@ -242,15 +243,29 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         promptMessage = Platform.OS === 'ios' ? 'Use Touch ID to login' : 'Use Fingerprint to login';
       }
 
-      const authResult = await LocalAuthentication.authenticateAsync({
-        promptMessage,
-        fallbackLabel,
-        cancelLabel: 'Cancel',
-        disableDeviceFallback: false, // Allow device PIN/Pattern as fallback
-        requireConfirmation: false,
-      });
+      // Platform-specific authentication options
+      const authOptions = Platform.OS === 'ios'
+        ? {
+          promptMessage,
+          fallbackLabel,
+          cancelLabel: 'Cancel',
+          disableDeviceFallback: true, // This prevents falling back to device passcode on iOS
+          requireConfirmation: false,
+        }
+        : {
+          promptMessage,
+          fallbackLabel,
+          cancelLabel: 'Cancel',
+          disableDeviceFallback: false, // Keep device fallback on Android for better UX
+          requireConfirmation: false,
+        };
+
+      console.log('Auth options:', authOptions);
+
+      const authResult = await LocalAuthentication.authenticateAsync(authOptions);
 
       console.log('Biometric authentication result:', authResult);
+
       if (authResult.success) {
         console.log('Biometric authentication successful, calling override login...');
 
@@ -265,17 +280,14 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         console.log('Override login successful:', response.message);
 
         // Since override login succeeded, directly call onBiometricLogin
-        // which should navigate to the welcome screen
         if (onBiometricLogin) {
           await onBiometricLogin(storedToken);
         } else {
-          // This should not happen based on your App.tsx, but as a fallback
           console.warn('onBiometricLogin callback not provided, falling back to onMPINLogin');
           await onMPINLogin('__BIOMETRIC_SUCCESS__');
         }
         return;
-      }
-      else if (authResult.error === 'UserCancel' || authResult.error === 'UserFallback') {
+      } else if (authResult.error === 'UserCancel' || authResult.error === 'UserFallback') {
         console.log('User cancelled biometric authentication or chose fallback');
         setShowMPINSection(true);
       } else if (authResult.error === 'SystemCancel') {
@@ -294,7 +306,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     } finally {
       setIsBiometricAuthenticating(false);
     }
-  }, [biometricCapabilities, biometricAttempted, overrideLoginAPI, onBiometricLogin, onDashboardRedirect]);
+  }, [biometricCapabilities, biometricAttempted, overrideLoginAPI, onBiometricLogin, onMPINLogin]);
 
   const handleRetryBiometric = useCallback(() => {
     setBiometricAttempted(false);
