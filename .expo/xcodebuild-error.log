@@ -1,0 +1,9 @@
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:55AB786D-2F05-4C0E-95DD-FACA48EB61D4, OS:18.4, name:iPhone 16 }
+{ platform:iOS Simulator, arch:x86_64, id:55AB786D-2F05-4C0E-95DD-FACA48EB61D4, OS:18.4, name:iPhone 16 }
+** BUILD FAILED **
+
+
+The following build commands failed:
+	Building workspace Citadel with scheme citadel and configuration Debug
+(1 failure)
