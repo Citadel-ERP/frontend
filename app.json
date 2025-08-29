@@ -26,14 +26,24 @@
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.citadel.app"
+      "package": "com.citadel.app",
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/images/logo.png"
     },
     "entryPoint": "./index.js",
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "This app uses Face ID to authenticate users."
+        }
+      ]
     ]
   }
 }
