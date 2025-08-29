@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
+import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
 import { BACKEND_URL } from '../config/config'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../styles/theme';
@@ -28,6 +29,7 @@ const mpinInputHeight = isTablet ? 66 : isSmallDevice ? 50 : 56;
 
 interface MPINLoginProps {
   onMPINLogin: (mpin: string) => Promise<void>;
+  onBiometricLogin?: (token: string) => Promise<void>;
   onUsePassword: () => void;
   isLoading?: boolean;
   userEmail?: string;
@@ -42,28 +44,70 @@ interface LoginResponse {
   };
 }
 
+type BiometryType = 'TouchID' | 'FaceID' | 'Biometrics';
+
+interface BiometricState {
+  isAvailable: boolean;
+  biometryType: BiometryType | null;
+  isEnabled: boolean;
+  isLoading: boolean;
+}
+
 const MPINLogin: React.FC<MPINLoginProps> = ({
   onMPINLogin,
+  onBiometricLogin,
   onUsePassword,
-  isLoading,
+  isLoading = false,
   userEmail,
 }) => {
-  const [mpin, setMPin] = useState(['', '', '', '', '', '']);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0);
-  const [isBlocked, setIsBlocked] = useState(false);
+  const [mpin, setMPin] = useState<string[]>(['', '', '', '', '', '']);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [error, setError] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [attemptCount, setAttemptCount] = useState<number>(0);
+  const [isBlocked, setIsBlocked] = useState<boolean>(false);
+  const [biometric, setBiometric] = useState<BiometricState>({
+    isAvailable: false,
+    biometryType: null,
+    isEnabled: false,
+    isLoading: false,
+  });
+  
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const scrollViewRef = useRef<ScrollView>(null);
+  const rnBiometricsRef = useRef<ReactNativeBiometrics | null>(null);
 
+  // Initialize biometrics instance with better error handling
+  const getBiometricsInstance = useCallback(() => {
+    try {
+      if (!rnBiometricsRef.current) {
+        // Add platform check
+        if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+          console.warn('Biometrics not supported on this platform');
+          return null;
+        }
+        
+        rnBiometricsRef.current = new ReactNativeBiometrics({
+          allowDeviceCredentials: false // Optional: only allow biometric authentication
+        });
+      }
+      return rnBiometricsRef.current;
+    } catch (error) {
+      console.error('Failed to create ReactNativeBiometrics instance:', error);
+      rnBiometricsRef.current = null;
+      return null;
+    }
+  }, []);
+
+  // Constants
   const TOKEN_2_KEY = 'token_2';
   const MPIN_ATTEMPTS_KEY = 'mpin_attempts';
   const MPIN_BLOCK_TIME_KEY = 'mpin_block_time';
+  const BIOMETRIC_ENABLED_KEY = 'biometric_enabled';
   const MAX_ATTEMPTS = 3;
-  const BLOCK_DURATION = 30 * 60 * 1000;
+  const BLOCK_DURATION = 30 * 60 * 1000; // 30 minutes
 
-  const getBackendUrl = (): string => {
+  const getBackendUrl = useCallback((): string => {
     const backendUrl = BACKEND_URL;
     
     if (!backendUrl) {
@@ -72,23 +116,93 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     }
     
     return backendUrl;
-  };
-
-  const hasEnteredDigits = mpin.some(digit => digit !== '');
-  
-  const isMPINComplete = mpin.every(digit => digit !== '') && mpin.join('').length === 6;
-
-  useEffect(() => {
-    loadAttemptData();
   }, []);
 
-  const loadAttemptData = async () => {
-    try {
-      const storedAttempts = await AsyncStorage.getItem(MPIN_ATTEMPTS_KEY);
-      const storedBlockTime = await AsyncStorage.getItem(MPIN_BLOCK_TIME_KEY);
+  const hasEnteredDigits = mpin.some(digit => digit !== '');
+  const isMPINComplete = mpin.every(digit => digit !== '') && mpin.join('').length === 6;
 
-      const attempts = storedAttempts ? parseInt(storedAttempts) : 0;
-      const blockTime = storedBlockTime ? parseInt(storedBlockTime) : 0;
+  const initializeBiometrics = useCallback(async () => {
+    try {
+      setBiometric(prev => ({ ...prev, isLoading: true }));
+      
+      const rnBiometrics = getBiometricsInstance();
+      if (!rnBiometrics) {
+        console.log('ReactNativeBiometrics instance not available');
+        setBiometric({
+          isAvailable: false,
+          biometryType: null,
+          isEnabled: false,
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Add null check before calling methods
+      if (typeof rnBiometrics.isSensorAvailable !== 'function') {
+        console.warn('isSensorAvailable method not available');
+        setBiometric({
+          isAvailable: false,
+          biometryType: null,
+          isEnabled: false,
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Check if biometrics is available with timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Biometric check timeout')), 10000);
+      });
+
+      const biometricPromise = rnBiometrics.isSensorAvailable();
+      
+      const { available, biometryType } = await Promise.race([
+        biometricPromise,
+        timeoutPromise
+      ]) as { available: boolean; biometryType?: BiometryType };
+      
+      if (available && biometryType) {
+        // Check if user has enabled biometrics for this app
+        const biometricEnabled = await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
+        const isEnabled = biometricEnabled === 'true';
+
+        setBiometric({
+          isAvailable: true,
+          biometryType,
+          isEnabled,
+          isLoading: false,
+        });
+
+        console.log(`Biometric type available: ${biometryType}, Enabled: ${isEnabled}`);
+      } else {
+        setBiometric({
+          isAvailable: false,
+          biometryType: null,
+          isEnabled: false,
+          isLoading: false,
+        });
+        console.log('Biometrics not available on this device');
+      }
+    } catch (error) {
+      console.error('Error initializing biometrics:', error);
+      setBiometric({
+        isAvailable: false,
+        biometryType: null,
+        isEnabled: false,
+        isLoading: false,
+      });
+    }
+  }, [getBiometricsInstance]);
+
+  const loadAttemptData = useCallback(async () => {
+    try {
+      const [storedAttempts, storedBlockTime] = await AsyncStorage.multiGet([
+        MPIN_ATTEMPTS_KEY,
+        MPIN_BLOCK_TIME_KEY
+      ]);
+
+      const attempts = storedAttempts[1] ? parseInt(storedAttempts[1], 10) : 0;
+      const blockTime = storedBlockTime[1] ? parseInt(storedBlockTime[1], 10) : 0;
 
       const currentTime = Date.now();
 
@@ -107,9 +221,223 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     } catch (error) {
       console.error('Error loading attempt data:', error);
     }
-  };
+  }, []);
 
-  const incrementAttempts = async () => {
+  const clearAttemptData = useCallback(async () => {
+    try {
+      await AsyncStorage.multiRemove([MPIN_ATTEMPTS_KEY, MPIN_BLOCK_TIME_KEY]);
+      console.log('MPIN attempt data cleared');
+    } catch (error) {
+      console.error('Error clearing attempt data:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAttemptData();
+    
+    // Add a small delay to ensure component is fully mounted
+    const initTimer = setTimeout(() => {
+      initializeBiometrics();
+    }, 500);
+
+    return () => clearTimeout(initTimer);
+  }, [loadAttemptData, initializeBiometrics]);
+
+  const getBiometricPromptMessage = useCallback((): string => {
+    switch (biometric.biometryType) {
+      case BiometryTypes.FaceID:
+        return 'Use Face ID to login';
+      case BiometryTypes.TouchID:
+        return 'Use Touch ID to login';
+      case BiometryTypes.Biometrics:
+        return 'Use biometric authentication to login';
+      default:
+        return 'Use biometric authentication to login';
+    }
+  }, [biometric.biometryType]);
+
+  const getBiometricButtonText = useCallback((): string => {
+    switch (biometric.biometryType) {
+      case BiometryTypes.FaceID:
+        return 'Face ID';
+      case BiometryTypes.TouchID:
+        return 'Touch ID';
+      case BiometryTypes.Biometrics:
+        return 'Biometric';
+      default:
+        return 'Biometric';
+    }
+  }, [biometric.biometryType]);
+
+  const getBiometricIcon = useCallback((): string => {
+    switch (biometric.biometryType) {
+      case BiometryTypes.FaceID:
+        return '👤';
+      case BiometryTypes.TouchID:
+        return '👆';
+      case BiometryTypes.Biometrics:
+        return '🔐';
+      default:
+        return '🔐';
+    }
+  }, [biometric.biometryType]);
+
+  const handleRedirectToLogin = useCallback(() => {
+    try {
+      console.log('Redirecting to login page due to exceeded MPIN attempts');
+      onUsePassword();
+    } catch (error) {
+      console.error('Error during redirect to login:', error);
+      setTimeout(() => onUsePassword(), 100);
+    }
+  }, [onUsePassword]);
+
+  const handleBiometricAuthentication = useCallback(async () => {
+    if (!biometric.isAvailable || !biometric.isEnabled || isBlocked) {
+      return;
+    }
+
+    const rnBiometrics = getBiometricsInstance();
+    if (!rnBiometrics) {
+      setError('Biometric authentication not available');
+      return;
+    }
+
+    setBiometric(prev => ({ ...prev, isLoading: true }));
+    setError('');
+
+    try {
+      // Validate that required methods exist
+      if (typeof rnBiometrics.createSignature !== 'function') {
+        throw new Error('Biometric signature method not available');
+      }
+
+      const epochTimeSeconds = Math.round(Date.now() / 1000).toString();
+      const payload = epochTimeSeconds + (userEmail || '');
+
+      const { success, signature } = await rnBiometrics.createSignature({
+        promptMessage: getBiometricPromptMessage(),
+        payload: payload,
+      });
+
+      if (success && signature) {
+        console.log('Biometric authentication successful');
+        
+        // Get stored token for biometric login
+        const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+        
+        if (!storedToken) {
+          throw new Error('No authentication token found');
+        }
+
+        // Call biometric login API or use existing MPIN login with biometric flag
+        if (onBiometricLogin) {
+          await onBiometricLogin(storedToken);
+        } else {
+          // Fallback: you might want to implement a separate biometric login endpoint
+          console.log('Biometric login successful');
+          Alert.alert('Success', 'Biometric authentication successful', [
+            { text: 'OK', onPress: () => onUsePassword() }
+          ]);
+        }
+      }
+    } catch (error: any) {
+      console.error('Biometric authentication error:', error);
+      
+      if (error.message === 'User cancellation' || error.message === 'UserCancel') {
+        // User cancelled, don't show error
+        setError('');
+      } else if (error.message === 'User fallback' || error.message === 'UserFallback') {
+        // User chose to use password instead
+        setError('');
+      } else if (error.message && error.message.includes('No authentication token')) {
+        setError('Session expired. Please login with email and password.');
+        setTimeout(() => {
+          Alert.alert(
+            'Session Expired',
+            'Please login with your email and password.',
+            [{ text: 'OK', onPress: handleRedirectToLogin }]
+          );
+        }, 500);
+      } else {
+        setError('Biometric authentication failed. Please try again or use your MPIN.');
+      }
+    } finally {
+      setBiometric(prev => ({ ...prev, isLoading: false }));
+    }
+  }, [biometric.isAvailable, biometric.isEnabled, isBlocked, getBiometricsInstance, getBiometricPromptMessage, userEmail, onBiometricLogin, onUsePassword, handleRedirectToLogin]);
+
+  const enableBiometrics = useCallback(async () => {
+    if (!biometric.isAvailable) return;
+
+    const rnBiometrics = getBiometricsInstance();
+    if (!rnBiometrics) {
+      Alert.alert('Error', 'Biometric authentication not available.');
+      return;
+    }
+
+    try {
+      // Validate that required methods exist
+      if (typeof rnBiometrics.biometricKeysExist !== 'function' || 
+          typeof rnBiometrics.createKeys !== 'function' ||
+          typeof rnBiometrics.createSignature !== 'function') {
+        throw new Error('Required biometric methods not available');
+      }
+
+      // Create biometric keys
+      const { keysExist } = await rnBiometrics.biometricKeysExist();
+      
+      if (!keysExist) {
+        const { publicKey } = await rnBiometrics.createKeys();
+        console.log('Biometric keys created:', publicKey);
+      }
+
+      // Test biometric authentication
+      const epochTimeSeconds = Math.round(Date.now() / 1000).toString();
+      const payload = epochTimeSeconds + (userEmail || '');
+
+      const { success } = await rnBiometrics.createSignature({
+        promptMessage: 'Enable biometric authentication for future logins',
+        payload: payload,
+      });
+
+      if (success) {
+        await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
+        setBiometric(prev => ({ ...prev, isEnabled: true }));
+        Alert.alert('Success', 'Biometric authentication has been enabled for your account.');
+      }
+    } catch (error: any) {
+      console.error('Error enabling biometrics:', error);
+      if (error.message !== 'User cancellation' && error.message !== 'UserCancel') {
+        Alert.alert('Error', 'Failed to enable biometric authentication. Please try again.');
+      }
+    }
+  }, [biometric.isAvailable, getBiometricsInstance, userEmail]);
+
+  const disableBiometrics = useCallback(async () => {
+    const rnBiometrics = getBiometricsInstance();
+    
+    try {
+      await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'false');
+      setBiometric(prev => ({ ...prev, isEnabled: false }));
+      
+      // Optionally delete biometric keys
+      if (rnBiometrics && typeof rnBiometrics.deleteKeys === 'function') {
+        try {
+          await rnBiometrics.deleteKeys();
+        } catch (keyError) {
+          console.warn('Could not delete biometric keys:', keyError);
+        }
+      }
+      
+      Alert.alert('Success', 'Biometric authentication has been disabled.');
+    } catch (error) {
+      console.error('Error disabling biometrics:', error);
+      Alert.alert('Error', 'Failed to disable biometric authentication.');
+    }
+  }, [getBiometricsInstance]);
+
+  const incrementAttempts = useCallback(async () => {
     const newAttemptCount = attemptCount + 1;
     console.log(`MPIN attempt ${newAttemptCount}/${MAX_ATTEMPTS}`);
 
@@ -151,28 +479,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     } catch (error) {
       console.error('Error saving attempt data:', error);
     }
-  };
+  }, [attemptCount, handleRedirectToLogin]);
 
-  const handleRedirectToLogin = () => {
-    try {
-      console.log('Redirecting to login page due to exceeded MPIN attempts');
-      onUsePassword();
-    } catch (error) {
-      console.error('Error during redirect to login:', error);
-      setTimeout(() => onUsePassword(), 100);
-    }
-  };
-
-  const clearAttemptData = async () => {
-    try {
-      await AsyncStorage.multiRemove([MPIN_ATTEMPTS_KEY, MPIN_BLOCK_TIME_KEY]);
-      console.log('MPIN attempt data cleared');
-    } catch (error) {
-      console.error('Error clearing attempt data:', error);
-    }
-  };
-
-  const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
+  const mpinLoginAPI = useCallback(async (token: string, mpin: string): Promise<LoginResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
       
@@ -206,9 +515,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       }
       throw new Error('Network error occurred during MPIN login');
     }
-  };
+  }, [getBackendUrl]);
 
-  const handleMPINChange = (value: string, index: number) => {
+  const handleMPINChange = useCallback((value: string, index: number) => {
     if (isBlocked) return;
     if (value.length > 1) return;
 
@@ -228,9 +537,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     if (index === 5 && value !== '') {
       inputRefs.current[index]?.blur();
     }
-  };
+  }, [isBlocked, mpin]);
 
-  const handleKeyPress = (e: any, index: number) => {
+  const handleKeyPress = useCallback((e: any, index: number) => {
     if (isBlocked) return;
 
     if (e.nativeEvent.key === 'Backspace' && mpin[index] === '' && index > 0) {
@@ -240,9 +549,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       setCurrentIndex(index - 1);
       inputRefs.current[index - 1]?.focus();
     }
-  };
+  }, [isBlocked, mpin]);
 
-  const isAuthenticationError = (error: Error): boolean => {
+  const isAuthenticationError = useCallback((error: Error): boolean => {
     const errorMessage = error.message.toLowerCase();
     return (
       errorMessage.includes('401') ||
@@ -253,9 +562,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       errorMessage.includes('400') ||
       errorMessage.includes('403')
     );
-  };
+  }, []);
 
-  const handleSubmit = async (mpinValue?: string) => {
+  const handleSubmit = useCallback(async (mpinValue?: string) => {
     if (isBlocked) {
       setError('Account is temporarily locked. Please use email and password to login.');
       handleRedirectToLogin();
@@ -343,18 +652,18 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [isBlocked, mpin, mpinLoginAPI, onMPINLogin, clearAttemptData, isAuthenticationError, attemptCount, handleRedirectToLogin, incrementAttempts]);
 
-  const clearMPIN = () => {
+  const clearMPIN = useCallback(() => {
     if (isBlocked) return;
 
     setMPin(['', '', '', '', '', '']);
     setCurrentIndex(0);
     setError('');
     inputRefs.current[0]?.focus();
-  };
+  }, [isBlocked]);
 
-  const getDisplayEmail = () => {
+  const getDisplayEmail = useCallback(() => {
     if (!userEmail) return 'your account';
     const parts = userEmail.split('@');
     if (parts.length !== 2) return userEmail;
@@ -363,9 +672,9 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     if (username.length <= 2) return userEmail;
     const maskedUsername = username[0] + '*'.repeat(username.length - 2) + username[username.length - 1];
     return `${maskedUsername}@${domain}`;
-  };
+  }, [userEmail]);
 
-  const getAttemptIndicator = () => {
+  const getAttemptIndicator = useCallback(() => {
     if (attemptCount === 0) return null;
 
     const remainingAttempts = MAX_ATTEMPTS - attemptCount;
@@ -386,7 +695,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         </Text>
       </View>
     );
-  };
+  }, [attemptCount, isBlocked]);
 
   useEffect(() => {
     if (isBlocked && attemptCount >= MAX_ATTEMPTS) {
@@ -397,22 +706,94 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
       return () => clearTimeout(redirectTimer);
     }
-  }, [isBlocked, attemptCount]);
+  }, [isBlocked, attemptCount, handleRedirectToLogin]);
 
-  useEffect(() => {
-    console.log(`Current attempt count: ${attemptCount}, Is blocked: ${isBlocked}`);
-  }, [attemptCount, isBlocked]);
-
-  const handleInputFocus = () => {
+  const handleInputFocus = useCallback(() => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
         y: isSmallDevice ? 200 : 300,
         animated: true,
       });
     }, 100);
-  };
+  }, []);
 
-  const renderContent = () => (
+  const renderBiometricSection = useCallback(() => {
+    // Only show if biometrics is available
+    if (!biometric.isAvailable) return null;
+
+    return (
+      <View style={styles.biometricSection}>
+        <Text style={styles.biometricSectionTitle}>Quick Login</Text>
+        
+        {biometric.isEnabled ? (
+          <View style={styles.biometricEnabledContainer}>
+            <TouchableOpacity
+              style={[
+                styles.biometricButton,
+                isBlocked && styles.biometricButtonDisabled,
+              ]}
+              onPress={handleBiometricAuthentication}
+              disabled={biometric.isLoading || isBlocked || isLoading || isSubmitting}
+            >
+              {biometric.isLoading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <>
+                  <Text style={styles.biometricIcon}>{getBiometricIcon()}</Text>
+                  <Text style={styles.biometricButtonText}>
+                    {isBlocked ? 'Disabled' : `Login with ${getBiometricButtonText()}`}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.biometricSettingsButton}
+              onPress={disableBiometrics}
+              disabled={isLoading || isSubmitting}
+            >
+              <Text style={styles.biometricSettingsText}>Disable Biometric Login</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.biometricDisabledContainer}>
+            <Text style={styles.biometricDisabledText}>
+              Enable {getBiometricButtonText()} for faster and more secure login
+            </Text>
+            <TouchableOpacity
+              style={styles.enableBiometricButton}
+              onPress={enableBiometrics}
+              disabled={isLoading || isSubmitting}
+            >
+              <Text style={styles.enableBiometricButtonText}>
+                Enable {getBiometricButtonText()}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        <View style={styles.dividerContainer}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+      </View>
+    );
+  }, [
+    biometric.isAvailable,
+    biometric.isEnabled,
+    biometric.isLoading,
+    isBlocked,
+    isLoading,
+    isSubmitting,
+    handleBiometricAuthentication,
+    disableBiometrics,
+    enableBiometrics,
+    getBiometricButtonText,
+    getBiometricIcon,
+  ]);
+
+  const renderContent = useCallback(() => (
     <View style={styles.contentContainer}>
       <View style={styles.logoContainer}>
         <Image
@@ -423,92 +804,98 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       </View>
 
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>Enter Your MPIN</Text>
+        <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>
-          Enter your 6-digit MPIN for {getDisplayEmail()}
+          Login to {getDisplayEmail()}
         </Text>
       </View>
 
       {getAttemptIndicator()}
 
-      <View style={styles.mpinContainer}>
-        {mpin.map((digit, index) => (
-          <TextInput
-            key={index}
-            ref={(ref) => {
-              inputRefs.current[index] = ref;
-            }}
-            style={[
-              styles.mpinInput,
-              {
-                width: mpinInputSize,
-                height: mpinInputHeight,
-                fontSize: isTablet ? 28 : isSmallDevice ? 20 : 24,
-              },
-              currentIndex === index ? styles.mpinInputFocused : null,
-              error ? styles.mpinInputError : null,
-              isBlocked ? styles.mpinInputDisabled : null,
-            ]}
-            value={digit}
-            onChangeText={(value) => handleMPINChange(value, index)}
-            onKeyPress={(e) => handleKeyPress(e, index)}
-            onFocus={() => {
-              setCurrentIndex(index);
-              handleInputFocus();
-            }}
-            keyboardType="numeric"
-            maxLength={1}
-            secureTextEntry
-            selectTextOnFocus
-            editable={!isLoading && !isSubmitting && !isBlocked}
-          />
-        ))}
-      </View>
+      {renderBiometricSection()}
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            !isMPINComplete ? styles.submitButtonSecondary : null,
-            (isLoading || isSubmitting || isBlocked) ? styles.submitButtonDisabled : null,
-          ]}
-          onPress={() => handleSubmit()}
-          disabled={isLoading || isSubmitting || isBlocked || !isMPINComplete}
-        >
-          {(isLoading || isSubmitting) ? (
-            <ActivityIndicator 
-              color={isMPINComplete ? colors.white : colors.textSecondary} 
-              size="small" 
+      <View style={styles.mpinSectionContainer}>
+        <Text style={styles.mpinSectionTitle}>Enter Your MPIN</Text>
+        
+        <View style={styles.mpinContainer}>
+          {mpin.map((digit, index) => (
+            <TextInput
+              key={index}
+              ref={(ref) => {
+                inputRefs.current[index] = ref;
+              }}
+              style={[
+                styles.mpinInput,
+                {
+                  width: mpinInputSize,
+                  height: mpinInputHeight,
+                  fontSize: isTablet ? 28 : isSmallDevice ? 20 : 24,
+                },
+                currentIndex === index ? styles.mpinInputFocused : null,
+                error ? styles.mpinInputError : null,
+                isBlocked ? styles.mpinInputDisabled : null,
+              ]}
+              value={digit}
+              onChangeText={(value) => handleMPINChange(value, index)}
+              onKeyPress={(e) => handleKeyPress(e, index)}
+              onFocus={() => {
+                setCurrentIndex(index);
+                handleInputFocus();
+              }}
+              keyboardType="numeric"
+              maxLength={1}
+              secureTextEntry
+              selectTextOnFocus
+              editable={!isLoading && !isSubmitting && !isBlocked}
             />
-          ) : (
-            <Text style={[
-              styles.submitButtonText,
-              !isMPINComplete ? styles.submitButtonTextSecondary : null,
-            ]}>
-              {isBlocked ? 'Account Locked' : 'Login'}
-            </Text>
-          )}
-        </TouchableOpacity>
+          ))}
+        </View>
 
-        {hasEnteredDigits && (
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[
-              styles.clearButton,
-              isBlocked ? styles.clearButtonDisabled : null,
+              styles.submitButton,
+              !isMPINComplete ? styles.submitButtonSecondary : null,
+              (isLoading || isSubmitting || isBlocked) ? styles.submitButtonDisabled : null,
             ]}
-            onPress={clearMPIN}
-            disabled={isLoading || isSubmitting || isBlocked}
+            onPress={() => handleSubmit()}
+            disabled={isLoading || isSubmitting || isBlocked || !isMPINComplete}
           >
-            <Text style={[
-              styles.clearButtonText,
-              isBlocked ? styles.clearButtonTextDisabled : null,
-            ]}>
-              Clear
-            </Text>
+            {(isLoading || isSubmitting) ? (
+              <ActivityIndicator 
+                color={isMPINComplete ? colors.white : colors.textSecondary} 
+                size="small" 
+              />
+            ) : (
+              <Text style={[
+                styles.submitButtonText,
+                !isMPINComplete ? styles.submitButtonTextSecondary : null,
+              ]}>
+                {isBlocked ? 'Account Locked' : 'Login with MPIN'}
+              </Text>
+            )}
           </TouchableOpacity>
-        )}
+
+          {hasEnteredDigits && (
+            <TouchableOpacity
+              style={[
+                styles.clearButton,
+                isBlocked ? styles.clearButtonDisabled : null,
+              ]}
+              onPress={clearMPIN}
+              disabled={isLoading || isSubmitting || isBlocked}
+            >
+              <Text style={[
+                styles.clearButtonText,
+                isBlocked ? styles.clearButtonTextDisabled : null,
+              ]}>
+                Clear
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.alternativeContainer}>
@@ -527,14 +914,33 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
       <View style={styles.securityInfo}>
         <Text style={styles.securityText}>
-          🔒 Your MPIN is authenticated securely with our servers
+          🔒 Your login credentials are authenticated securely with our servers
           {attemptCount > 0 && !isBlocked && (
             `\n⚠️ Account will be locked after ${MAX_ATTEMPTS} failed attempts`
           )}
         </Text>
       </View>
     </View>
-  );
+  ), [
+    getDisplayEmail,
+    getAttemptIndicator,
+    renderBiometricSection,
+    mpin,
+    currentIndex,
+    error,
+    isLoading,
+    isSubmitting,
+    isBlocked,
+    handleMPINChange,
+    handleKeyPress,
+    handleInputFocus,
+    handleSubmit,
+    clearMPIN,
+    hasEnteredDigits,
+    isMPINComplete,
+    attemptCount,
+    handleRedirectToLogin,
+  ]);
 
   return (
     <KeyboardAvoidingView
@@ -631,6 +1037,131 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // Biometric Styles
+  biometricSection: {
+    marginBottom: isSmallDevice ? 20 : 32,
+  },
+  biometricSectionTitle: {
+    fontSize: isTablet ? 20 : 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: isSmallDevice ? 12 : 16,
+  },
+  biometricEnabledContainer: {
+    alignItems: 'center',
+    marginBottom: isSmallDevice ? 16 : 20,
+  },
+  biometricButton: {
+    backgroundColor: colors.primary,
+    borderRadius: isTablet ? 16 : 12,
+    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    paddingHorizontal: isTablet ? 40 : 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    minWidth: isTablet ? 300 : 250,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  biometricButtonDisabled: {
+    opacity: 0.6,
+  },
+  biometricIcon: {
+    fontSize: isTablet ? 24 : 20,
+    marginRight: 12,
+  },
+  biometricButtonText: {
+    color: colors.white,
+    fontSize: isTablet ? 18 : 16,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  biometricSettingsButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  biometricSettingsText: {
+    color: colors.textSecondary,
+    fontSize: isTablet ? 14 : 12,
+    textDecorationLine: 'underline',
+  },
+  biometricDisabledContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: isTablet ? 12 : 8,
+    padding: isTablet ? 20 : 16,
+    alignItems: 'center',
+    marginBottom: isSmallDevice ? 16 : 20,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  biometricDisabledText: {
+    fontSize: isTablet ? 16 : 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  enableBiometricButton: {
+    backgroundColor: colors.primary,
+    borderRadius: isTablet ? 12 : 8,
+    paddingVertical: isTablet ? 12 : 10,
+    paddingHorizontal: isTablet ? 24 : 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  enableBiometricButtonText: {
+    color: colors.white,
+    fontSize: isTablet ? 16 : 14,
+    fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: isSmallDevice ? 16 : 24,
+    paddingHorizontal: isTablet ? 40 : 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    fontSize: isTablet ? 16 : 14,
+    color: colors.textSecondary,
+    marginHorizontal: 16,
+    fontWeight: '500',
+  },
+  // MPIN Styles
+  mpinSectionContainer: {
+    marginBottom: isSmallDevice ? 20 : 32,
+  },
+  mpinSectionTitle: {
+    fontSize: isTablet ? 20 : 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: isSmallDevice ? 16 : 20,
   },
   mpinContainer: {
     flexDirection: 'row',
