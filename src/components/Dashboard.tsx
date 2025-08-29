@@ -1135,7 +1135,6 @@ useEffect(() => {
 );
 };
 
-
 export default Dashboard;
 
 const styles = StyleSheet.create({
