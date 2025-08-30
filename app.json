@@ -2,6 +2,7 @@
   "expo": {
     "name": "Citadel",
     "slug": "citadel",
+    "owner": "ananyavishnoi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
