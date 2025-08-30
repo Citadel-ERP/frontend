@@ -564,7 +564,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         {/* Header with Logo */}
         <View style={styles.headerContainer}>
           <Image
-            source={require('../assets/Logo.png')}
+            source={require('../assets/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />

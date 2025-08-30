@@ -112,7 +112,7 @@ const Login: React.FC<LoginProps> = ({
         {/* Header with Logo */}
         <View style={styles.headerContainer}>
           <Image
-            source={require('../assets/Logo.png')}
+            source={require('../assets/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />

@@ -155,7 +155,7 @@ const WelcomeScreen: React.FC<Props> = ({ name, onContinue }) => {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Animated.Image
-            source={require('../assets/Logo.png')}
+            source={require('../assets/logo.png')}
             style={[
               styles.logo, 
               { 

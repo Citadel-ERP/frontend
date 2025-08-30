@@ -92,7 +92,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
     <View style={styles.contentContainer}>
       <View style={styles.logoContainer}>
         <Image
-          source={require('../assets/Logo.png')}
+          source={require('../assets/logo.png')}
           style={[styles.logo, { width: logoSize, height: logoSize }]}
           resizeMode="contain"
         />
