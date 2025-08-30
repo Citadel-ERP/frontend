@@ -18,14 +18,19 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const isTablet = screenWidth >= 768;
 const isSmallDevice = screenHeight < 700;
-const containerPadding = isTablet ? 48 : 24;
-const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
 
 interface LoginProps {
   onLogin: (email: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
   isLoading?: boolean;
 }
+
+// Eye icon components for password visibility toggle
+const EyeIcon = ({ visible }: { visible: boolean }) => (
+  <View style={styles.eyeIcon}>
+    <Text style={styles.eyeIconText}>{visible ? '👁️' : '👁️‍🗨️'}</Text>
+  </View>
+);
 
 const Login: React.FC<LoginProps> = ({
   onLogin,
@@ -34,6 +39,7 @@ const Login: React.FC<LoginProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({
     email: '',
     password: '',
@@ -73,146 +79,158 @@ const Login: React.FC<LoginProps> = ({
     }
   };
 
-  // Handle focus to scroll to input when keyboard appears
+  // Improved keyboard handling - scroll to the focused input with appropriate offset
   const handleInputFocus = (inputType: 'email' | 'password') => {
     setTimeout(() => {
-      const scrollY = inputType === 'email' ? 
-        (isSmallDevice ? 150 : 200) : 
-        (isSmallDevice ? 250 : 300);
-      
-      scrollViewRef.current?.scrollTo({
-        y: scrollY,
-        animated: true,
-      });
-    }, 100);
+      if (scrollViewRef.current) {
+        const baseOffset = isSmallDevice ? 100 : 120;
+        const inputOffset = inputType === 'password' ? 80 : 0;
+        const totalOffset = baseOffset + inputOffset;
+        
+        scrollViewRef.current.scrollTo({
+          y: totalOffset,
+          animated: true,
+        });
+      }
+    }, 150);
   };
-
-  const renderContent = () => (
-    <View style={styles.contentContainer}>
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/Logo.png')}
-          style={[styles.logo, { width: logoSize, height: logoSize }]}
-          resizeMode="contain"
-        />
-      </View>
-
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
-      </View>
-
-      <View style={styles.formContainer}>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[
-              styles.input, 
-              errors.email ? styles.inputError : null
-            ]}
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              if (errors.email) {
-                setErrors(prev => ({ ...prev, email: '' }));
-              }
-            }}
-            onFocus={() => handleInputFocus('email')}
-            placeholder="Enter your email"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-            returnKeyType="next"
-            onSubmitEditing={() => passwordInputRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-          {errors.email ? (
-            <Text style={styles.errorText}>{errors.email}</Text>
-          ) : null}
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            ref={passwordInputRef}
-            style={[
-              styles.input, 
-              errors.password ? styles.inputError : null
-            ]}
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              if (errors.password) {
-                setErrors(prev => ({ ...prev, password: '' }));
-              }
-            }}
-            onFocus={() => handleInputFocus('password')}
-            placeholder="Enter your password"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-          />
-          {errors.password ? (
-            <Text style={styles.errorText}>{errors.password}</Text>
-          ) : null}
-        </View>
-
-        <TouchableOpacity
-          style={styles.forgotPasswordContainer}
-          onPress={onForgotPassword}
-          disabled={isLoading}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.loginButton,
-            isLoading ? styles.loginButtonDisabled : null,
-          ]}
-          onPress={handleSubmit}
-          disabled={isLoading}
-          activeOpacity={0.8}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.footerContainer}>
-        <Text style={styles.footerText}>
-          First time user? Your password will be provided by your administrator.
-        </Text>
-      </View>
-    </View>
-  );
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        bounces={true}
+        bounces={false}
         scrollEnabled={true}
-        nestedScrollEnabled={true}
       >
-        {renderContent()}
+        {/* Header with Logo */}
+        <View style={styles.headerContainer}>
+          <Image
+            source={require('../assets/Logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Main Content - Login Form */}
+        <View style={styles.mainContent}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Sign in to your account</Text>
+          </View>
+
+          <View style={styles.formContainer}>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  errors.email ? styles.inputError : null
+                ]}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errors.email) {
+                    setErrors(prev => ({ ...prev, email: '' }));
+                  }
+                }}
+                onFocus={() => handleInputFocus('email')}
+                placeholder="Enter your email"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
+                blurOnSubmit={false}
+              />
+              {errors.email ? (
+                <Text style={styles.errorText}>{errors.email}</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  ref={passwordInputRef}
+                  style={[
+                    styles.passwordInput,
+                    errors.password ? styles.inputError : null
+                  ]}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (errors.password) {
+                      setErrors(prev => ({ ...prev, password: '' }));
+                    }
+                  }}
+                  onFocus={() => handleInputFocus('password')}
+                  placeholder="Enter your password"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSubmit}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  <EyeIcon visible={showPassword} />
+                </TouchableOpacity>
+              </View>
+              {errors.password ? (
+                <Text style={styles.errorText}>{errors.password}</Text>
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgotPasswordContainer}
+              onPress={onForgotPassword}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.loginButton,
+                isLoading ? styles.loginButtonDisabled : null,
+              ]}
+              onPress={handleSubmit}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footerContainer}>
+          <View style={styles.footerContent}>
+            <Text style={styles.footerText}>
+              First time user? Your password will be provided by your administrator.
+            </Text>
+          </View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -225,109 +243,172 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingBottom: Platform.OS === 'ios' ? 50 : 20,
+    minHeight: screenHeight,
   },
-  contentContainer: {
-    paddingHorizontal: containerPadding,
-    paddingVertical: isSmallDevice ? 20 : 40,
-    minHeight: screenHeight - (Platform.OS === 'ios' ? 100 : 50),
-  },
-  logoContainer: {
+  
+  // Header with logo
+  headerContainer: {
     alignItems: 'center',
-    marginBottom: isSmallDevice ? 20 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 20,
+    backgroundColor: colors.background,
   },
   logo: {
-    marginBottom: isTablet ? 30 : isSmallDevice ? 16 : 24,
+    width: isTablet ? 120 : 100,
+    height: isTablet ? 120 : 100,
+  },
+
+  // Main content area
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: isTablet ? 48 : 24,
+    paddingVertical: 20,
   },
   titleContainer: {
-    marginBottom: isSmallDevice ? 24 : 40,
+    marginBottom: isSmallDevice ? 32 : 40,
+    alignItems: 'center',
   },
   title: {
-    fontSize: isTablet ? 32 : isSmallDevice ? 24 : 28,
-    fontWeight: '600',
+    fontSize: isTablet ? 32 : isSmallDevice ? 28 : 30,
+    fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: isSmallDevice ? 6 : 8,
-    letterSpacing: 0.5,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: isTablet ? 18 : isSmallDevice ? 14 : 16,
+    fontSize: isTablet ? 18 : isSmallDevice ? 16 : 17,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: isTablet ? 28 : isSmallDevice ? 20 : 24,
+    fontWeight: '400',
   },
+
+  // Form styles
   formContainer: {
     width: '100%',
     maxWidth: isTablet ? 400 : '100%',
     alignSelf: 'center',
-    marginBottom: isSmallDevice ? 24 : 32,
   },
   inputContainer: {
-    marginBottom: isSmallDevice ? 16 : 20,
+    marginBottom: 20,
   },
   label: {
-    fontSize: isTablet ? 18 : 16,
-    fontWeight: '500',
+    fontSize: isTablet ? 16 : 15,
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: isSmallDevice ? 6 : 8,
-    letterSpacing: 0.3,
+    marginBottom: 8,
+    letterSpacing: 0.2,
   },
   input: {
     ...commonStyles.input,
-    fontSize: isTablet ? 18 : 16,
-    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
-    paddingHorizontal: isTablet ? 20 : 16,
-    borderRadius: isTablet ? 16 : 12,
+    fontSize: isTablet ? 16 : 15,
+    height: isTablet ? 56 : 52,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
       },
       android: {
-        elevation: 2,
+        elevation: 1,
       },
     }),
   },
+  
+  // Password field styles
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    ...commonStyles.input,
+    fontSize: isTablet ? 16 : 15,
+    height: isTablet ? 56 : 52,
+    paddingHorizontal: 16,
+    paddingRight: 50,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    flex: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    height: isTablet ? 56 : 52,
+    width: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeIconText: {
+    fontSize: 18,
+    opacity: 0.6,
+  },
+
   inputError: {
     borderColor: colors.error,
     backgroundColor: '#FFF5F5',
   },
   errorText: {
     color: colors.error,
-    fontSize: isTablet ? 16 : 14,
+    fontSize: isTablet ? 14 : 13,
     marginTop: 6,
     fontWeight: '500',
     paddingLeft: 4,
   },
+  
   forgotPasswordContainer: {
     alignItems: 'flex-end',
-    marginBottom: isSmallDevice ? 24 : 32,
-    paddingVertical: 8,
+    marginBottom: 24,
+    paddingVertical: 4,
   },
   forgotPasswordText: {
     color: colors.primary,
-    fontSize: isTablet ? 16 : 14,
+    fontSize: isTablet ? 15 : 14,
     fontWeight: '500',
     textDecorationLine: 'underline',
   },
+  
   loginButton: {
     backgroundColor: colors.primary,
-    borderRadius: isTablet ? 16 : 12,
-    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
+    borderRadius: 12,
+    height: isTablet ? 56 : 52,
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
     }),
   },
@@ -336,25 +417,29 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: colors.white,
-    fontSize: isTablet ? 18 : 16,
+    fontSize: isTablet ? 17 : 16,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
+
+  // Footer styles
   footerContainer: {
-    marginTop: isSmallDevice ? 20 : 32,
-    padding: isTablet ? 20 : 16,
+    paddingHorizontal: isTablet ? 48 : 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingTop: 20,
+  },
+  footerContent: {
     backgroundColor: '#F7FAFC',
-    borderRadius: isTablet ? 12 : 8,
+    borderRadius: 12,
+    padding: isTablet ? 20 : 16,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
-    marginHorizontal: isTablet ? 20 : 0,
-    marginBottom: isSmallDevice ? 20 : 40,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowRadius: 2,
       },
       android: {
         elevation: 1,
@@ -362,9 +447,9 @@ const styles = StyleSheet.create({
     }),
   },
   footerText: {
-    fontSize: isTablet ? 16 : 14,
+    fontSize: isTablet ? 15 : 14,
     color: '#4A5568',
-    lineHeight: isTablet ? 24 : 20,
+    lineHeight: isTablet ? 22 : 20,
     textAlign: 'center',
     fontWeight: '400',
   },
