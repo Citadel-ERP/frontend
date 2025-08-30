@@ -115,5 +115,4 @@ dependencies {
     }
 }
 
-apply from: "../../node_modules/react-native-gradle-plugin/native_modules.gradle"
 
