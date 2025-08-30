@@ -76,11 +76,11 @@ android {
 
     namespace "com.citadel"
     defaultConfig {
-        applicationId "com.citadel"
+        applicationId 'com.citadel.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
     }
     signingConfigs {
         debug {
@@ -115,4 +115,5 @@ dependencies {
     }
 }
 
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+apply from: "../../node_modules/react-native-gradle-plugin/native_modules.gradle"
+

@@ -14,7 +14,7 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "citadel"
+rootProject.name = 'Citadel'
 
 include(":app")
 includeBuild("../node_modules/@react-native/gradle-plugin")
