@@ -17,10 +17,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Constants for attendance tracking
+const TOKEN_2_KEY = 'token_2';
+const ATTENDANCE_COOKIE_KEY = 'attendance_marked_date';
+const ATTENDANCE_START_HOUR = 11; // 11 PM
+const ATTENDANCE_END_MINUTES = 30; // 11:30 PM
+const ATTENDANCE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+const COOKIE_CLEAR_HOUR = 10; // 10:45 PM (45 minutes before 11:30)
+const COOKIE_CLEAR_MINUTES = 45;
 
 interface AttendanceProps {
   onBack: () => void;
@@ -87,10 +97,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
 
+  // Auto attendance tracking state
+  const [attendanceTimer, setAttendanceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [locationPermission, setLocationPermission] = useState<boolean>(false);
+
   useEffect(() => {
     const getToken = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem('token_2');
+        const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
         setToken(storedToken);
       } catch (error) {
         console.error('Error getting token:', error);
@@ -103,8 +117,279 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   useEffect(() => {
     if (token) {
       fetchInitialData();
+      initializeLocationPermission();
+      setupAttendanceTracking();
     }
   }, [token]);
+
+  useEffect(() => {
+    // Cleanup timer on component unmount
+    return () => {
+      if (attendanceTimer) {
+        clearInterval(attendanceTimer);
+      }
+    };
+  }, [attendanceTimer]);
+
+  const initializeLocationPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required for automatic attendance marking.'
+        );
+        setLocationPermission(false);
+        return;
+      }
+      setLocationPermission(true);
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
+      setLocationPermission(false);
+    }
+  };
+
+  const getCurrentLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
+    try {
+      if (!locationPermission) {
+        console.warn('Location permission not granted');
+        return null;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        timeout: 10000,
+      });
+
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      return null;
+    }
+  };
+
+  const isAttendanceMarkedToday = async (): Promise<boolean> => {
+    try {
+      const markedDate = await AsyncStorage.getItem(ATTENDANCE_COOKIE_KEY);
+      if (!markedDate) return false;
+
+      const today = new Date().toDateString();
+      return markedDate === today;
+    } catch (error) {
+      console.error('Error checking attendance cookie:', error);
+      return false;
+    }
+  };
+
+  const setAttendanceMarkedCookie = async () => {
+    try {
+      const today = new Date().toDateString();
+      await AsyncStorage.setItem(ATTENDANCE_COOKIE_KEY, today);
+    } catch (error) {
+      console.error('Error setting attendance cookie:', error);
+    }
+  };
+
+  const clearPreviousDayCookie = async () => {
+    try {
+      const markedDate = await AsyncStorage.getItem(ATTENDANCE_COOKIE_KEY);
+      if (markedDate) {
+        const today = new Date().toDateString();
+        if (markedDate !== today) {
+          await AsyncStorage.removeItem(ATTENDANCE_COOKIE_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing previous day cookie:', error);
+    }
+  };
+
+  const markAttendanceWithLocation = async (): Promise<boolean> => {
+    try {
+      if (!token) {
+        console.error('No token available');
+        return false;
+      }
+
+      // Check if attendance already marked today
+      const alreadyMarked = await isAttendanceMarkedToday();
+      if (alreadyMarked) {
+        console.log('Attendance already marked today');
+        return true;
+      }
+
+      // Get current location
+      const location = await getCurrentLocation();
+      if (!location) {
+        console.warn('Unable to get current location');
+        return false;
+      }
+
+      // Call backend API
+      const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          latitude: location.latitude.toString(),
+          longitude: location.longitude.toString(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.message === 'Mark attendance successful') {
+          await setAttendanceMarkedCookie();
+          await fetchTodayAttendance(); // Refresh today's attendance
+          console.log('Attendance marked successfully');
+          return true;
+        } else if (data.message === 'Attendance already marked') {
+          await setAttendanceMarkedCookie();
+          console.log('Attendance already marked on server');
+          return true;
+        }
+      } else {
+        console.warn('Attendance marking failed:', data.message);
+        return false;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error marking attendance with location:', error);
+      return false;
+    }
+  };
+
+  const shouldStartAttendanceTracking = (): boolean => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinutes;
+    
+    const startTime = ATTENDANCE_START_HOUR * 60; // 10:00 AM in minutes
+    const endTime = ATTENDANCE_START_HOUR * 60 + ATTENDANCE_END_MINUTES; // 10:30 AM in minutes
+    
+    return currentTime >= startTime && currentTime <= endTime;
+  };
+
+  const getNextAttendanceAttemptTime = (): Date | null => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    
+    // If before 10 AM, schedule for 10 AM
+    if (currentHour < ATTENDANCE_START_HOUR) {
+      const nextAttempt = new Date();
+      nextAttempt.setHours(ATTENDANCE_START_HOUR, 0, 0, 0);
+      return nextAttempt;
+    }
+    
+    // If between 10:00 and 10:30, find next 5-minute interval
+    if (currentHour === ATTENDANCE_START_HOUR && currentMinutes <= ATTENDANCE_END_MINUTES) {
+      const nextMinute = Math.ceil(currentMinutes / 5) * 5;
+      if (nextMinute <= ATTENDANCE_END_MINUTES) {
+        const nextAttempt = new Date();
+        nextAttempt.setHours(ATTENDANCE_START_HOUR, nextMinute, 0, 0);
+        return nextAttempt;
+      }
+    }
+    
+    // If after 10:30, schedule for next day 10 AM
+    const nextAttempt = new Date();
+    nextAttempt.setDate(nextAttempt.getDate() + 1);
+    nextAttempt.setHours(ATTENDANCE_START_HOUR, 0, 0, 0);
+    return nextAttempt;
+  };
+
+  const scheduleNotification = async () => {
+    // TODO: Implement notification when backend endpoint is ready
+    // const response = await fetch(`${BACKEND_URL}/sendNotification`, {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify({ token }),
+    // });
+    console.log('Notification scheduled (backend endpoint not yet implemented)');
+  };
+
+  const setupAttendanceTracking = async () => {
+    try {
+      // Clear previous day cookie at 9:45 AM
+      const now = new Date();
+      if (now.getHours() === COOKIE_CLEAR_HOUR && now.getMinutes() >= COOKIE_CLEAR_MINUTES) {
+        await clearPreviousDayCookie();
+      }
+
+      // Check if we should start attendance tracking
+      if (!shouldStartAttendanceTracking()) {
+        const nextAttempt = getNextAttendanceAttemptTime();
+        if (nextAttempt) {
+          const timeUntilNext = nextAttempt.getTime() - now.getTime();
+          setTimeout(() => {
+            setupAttendanceTracking();
+          }, timeUntilNext);
+        }
+        return;
+      }
+
+      // Check if attendance already marked
+      const alreadyMarked = await isAttendanceMarkedToday();
+      if (alreadyMarked) {
+        console.log('Attendance already marked today, skipping automatic tracking');
+        return;
+      }
+
+      // Start periodic attendance attempts
+      let attemptCount = 0;
+      const maxAttempts = Math.floor(ATTENDANCE_END_MINUTES / 5) + 1; // 7 attempts (0, 5, 10, 15, 20, 25, 30)
+
+      const attemptAttendance = async () => {
+        if (attemptCount >= maxAttempts) {
+          // All attempts exhausted, schedule notification
+          await scheduleNotification();
+          return;
+        }
+
+        const success = await markAttendanceWithLocation();
+        if (success) {
+          // Attendance marked successfully, clear timer
+          if (attendanceTimer) {
+            clearInterval(attendanceTimer);
+            setAttendanceTimer(null);
+          }
+          return;
+        }
+
+        attemptCount++;
+        console.log(`Attendance attempt ${attemptCount} failed, will try again in 5 minutes`);
+      };
+
+      // Make first attempt immediately
+      await attemptAttendance();
+
+      // Set up timer for subsequent attempts
+      const timer = setInterval(attemptAttendance, ATTENDANCE_INTERVAL);
+      setAttendanceTimer(timer);
+
+      // Clear timer after final attempt time
+      setTimeout(() => {
+        if (timer) {
+          clearInterval(timer);
+          setAttendanceTimer(null);
+        }
+      }, (maxAttempts - 1) * ATTENDANCE_INTERVAL);
+
+    } catch (error) {
+      console.error('Error setting up attendance tracking:', error);
+    }
+  };
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -147,33 +432,56 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/attendance/mark`, {
+      const location = await getCurrentLocation();
+      if (!location) {
+        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
           token,
-          timestamp: new Date().toISOString()
+          latitude: location.latitude.toString(),
+          longitude: location.longitude.toString(),
         }),
       });
       
+      const data = await response.json();
+      
       if (response.ok) {
-        const data = await response.json();
-        Alert.alert('Success', 'Attendance marked successfully!');
-        await fetchTodayAttendance();
+        if (data.message === 'Mark attendance successful') {
+          Alert.alert('Success', 'Attendance marked successfully!');
+          await setAttendanceMarkedCookie();
+          await fetchTodayAttendance();
+        } else if (data.message === 'Attendance already marked') {
+          Alert.alert('Info', 'Attendance already marked for today');
+          await setAttendanceMarkedCookie();
+        }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to mark attendance');
+        let errorMessage = 'Failed to mark attendance';
+        if (data.message === 'Mark attendance failed, You are not in office') {
+          errorMessage = 'You are not in office location. Please ensure you are within the office premises.';
+        } else if (data.message === 'Mark attendance failed, Invalid Token') {
+          errorMessage = 'Invalid authentication. Please login again.';
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+        Alert.alert('Error', errorMessage);
       }
     } catch (error) {
       console.error('Error marking attendance:', error);
-      Alert.alert('Error', 'Network error occurred');
+      Alert.alert('Error', 'Network error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  // ... (rest of the existing methods remain unchanged)
   const fetchLeaveBalance = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/leave/balance`, {
@@ -585,6 +893,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             </View>
           )}
         </View>
+        
+        {/* Auto attendance status */}
+        <View style={styles.autoAttendanceStatus}>
+          <Text style={styles.autoAttendanceText}>
+            Auto attendance: {locationPermission ? 'Active (11:00-11:30 PM)' : 'Location permission required'}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -750,7 +1065,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             {loading ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
-              <Text style={styles.downloadText}>📄 Download PDF Report</Text>
+              <Text style={styles.downloadText}>Download PDF Report</Text>
             )}
           </TouchableOpacity>
         </View>
