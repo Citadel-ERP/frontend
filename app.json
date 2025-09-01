@@ -24,7 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
+        // "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.citadel.app",
@@ -41,9 +41,8 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/logo.png"
+      // "favicon": "./assets/images/logo.png"
     },
-    "entryPoint": "./index.js",
     "plugins": [
       "expo-secure-store",
       [

@@ -6,6 +6,7 @@ interface AppConfig {
 const configs: Record<string, AppConfig> = {
   development: {
     BACKEND_URL: 'https://0759c3382d84.ngrok-free.app',
+
   },
   production: {
     BACKEND_URL: 'https://0759c3382d84.ngrok-free.app',
