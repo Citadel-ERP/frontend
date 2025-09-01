@@ -21,7 +21,7 @@ import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './Attendance';
-import Profile from './Profile'; // Import the Profile component
+import Profile from './Profile'; 
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -277,52 +277,6 @@ useEffect(() => {
         borderColor: color,
         borderTopColor: 'transparent',
       }} />
-    </View>
-  );
-
-  // Updated Settings Icon (Gear style)
-  const SettingsIcon = ({ color = colors.textSecondary, size = 20 }: { color?: string; size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.8,
-        height: size * 0.8,
-        borderRadius: size * 0.4,
-        borderWidth: 2,
-        borderColor: color,
-        position: 'relative',
-      }}>
-        {/* Gear teeth */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, index) => (
-          <View
-            key={index}
-            style={{
-              position: 'absolute',
-              width: size * 0.15,
-              height: size * 0.15,
-              backgroundColor: color,
-              top: '50%',
-              left: '50%',
-              transform: [
-                { translateX: -size * 0.075 },
-                { translateY: -size * 0.075 },
-                { rotate: `${angle}deg` },
-                { translateY: -size * 0.35 }
-              ],
-            }}
-          />
-        ))}
-        {/* Center circle */}
-        <View style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: size * 0.25,
-          height: size * 0.25,
-          borderRadius: size * 0.125,
-          backgroundColor: color,
-          transform: [{ translateX: -size * 0.125 }, { translateY: -size * 0.125 }],
-        }} />
-      </View>
     </View>
   );
 
@@ -674,11 +628,6 @@ useEffect(() => {
       title: 'Profile', 
       icon: <UserIcon color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />,
       isActive: activeMenuItem === 'Profile'
-    },
-    { 
-      title: 'Settings', 
-      icon: <SettingsIcon color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />,
-      isActive: activeMenuItem === 'Settings'
     },
     { 
       title: 'Notifications', 

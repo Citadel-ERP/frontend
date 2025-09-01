@@ -7,24 +7,23 @@
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
+    "scheme": "citadel",
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadel.app",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users."
+        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
+        "NSCameraUsageDescription": "This app uses the camera for Face ID authentication."
       }
     },
     "android": {
       "adaptiveIcon": {
-        // "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.citadel.app",
@@ -40,15 +39,13 @@
         "android.permission.VIBRATE"
       ]
     },
-    "web": {
-      // "favicon": "./assets/images/logo.png"
-    },
     "plugins": [
       "expo-secure-store",
+      "expo-dev-client",
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "This app uses Face ID to authenticate users."
+          "faceIDPermission": "This app uses Face ID to authenticate users and protect your sensitive data."
         }
       ]
     ],

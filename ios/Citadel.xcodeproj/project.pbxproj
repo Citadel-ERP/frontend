@@ -7,18 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-<<<<<<< HEAD
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+		5935D354B9A1E08B0E6A4732 /* libPods-Citadel.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 66EE85DE345F9A6050FA4B79 /* libPods-Citadel.a */; };
+		704BF72DEA6CA1EE2BB53AB3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9DF7B96A483371DB04F9F17D /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-=======
-		01033C04A1E73BB492C52F95 /* libPods-Citadel.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CF71F4BCA17234AAD75C0FC1 /* libPods-Citadel.a */; };
-		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		7D6D73CAB7EC8B9DDC2C1D37 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 141A64D96092AFFEA6C7A3E8 /* PrivacyInfo.xcprivacy */; };
-		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		C6FE9284CB3A16BB2E66B9D6 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E08C6C250D1B53505C195CDE /* ExpoModulesProvider.swift */; };
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+		D11DB42FE8BC15F49454377E /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 263A46D3946081925FF5B905 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -26,18 +20,13 @@
 		13B07F961A680F5B00A75B9A /* Citadel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Citadel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Citadel/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Citadel/Info.plist; sourceTree = "<group>"; };
-<<<<<<< HEAD
+		263A46D3946081925FF5B905 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Citadel/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		4681B09AB1BF947C548AC438 /* Pods-Citadel.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Citadel.release.xcconfig"; path = "Target Support Files/Pods-Citadel/Pods-Citadel.release.xcconfig"; sourceTree = "<group>"; };
+		66EE85DE345F9A6050FA4B79 /* libPods-Citadel.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Citadel.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9DF7B96A483371DB04F9F17D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Citadel/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Citadel/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-=======
-		141A64D96092AFFEA6C7A3E8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Citadel/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		81FFFD03F004A12D60104F36 /* Pods-Citadel.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Citadel.debug.xcconfig"; path = "Target Support Files/Pods-Citadel/Pods-Citadel.debug.xcconfig"; sourceTree = "<group>"; };
-		87AF3DD4851728D30033CD64 /* Pods-Citadel.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Citadel.release.xcconfig"; path = "Target Support Files/Pods-Citadel/Pods-Citadel.release.xcconfig"; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Citadel/SplashScreen.storyboard; sourceTree = "<group>"; };
-		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		CF71F4BCA17234AAD75C0FC1 /* libPods-Citadel.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Citadel.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		E08C6C250D1B53505C195CDE /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Citadel/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+		C3F114F0DFE88ED87152ADFE /* Pods-Citadel.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Citadel.debug.xcconfig"; path = "Target Support Files/Pods-Citadel/Pods-Citadel.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Citadel/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Citadel-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Citadel-Bridging-Header.h"; path = "Citadel/Citadel-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -48,10 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-<<<<<<< HEAD
-=======
-				01033C04A1E73BB492C52F95 /* libPods-Citadel.a in Frameworks */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				5935D354B9A1E08B0E6A4732 /* libPods-Citadel.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -67,42 +53,16 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-<<<<<<< HEAD
+				9DF7B96A483371DB04F9F17D /* PrivacyInfo.xcprivacy */,
 			);
 			name = Citadel;
-=======
-				141A64D96092AFFEA6C7A3E8 /* PrivacyInfo.xcprivacy */,
-			);
-			name = Citadel;
-			sourceTree = "<group>";
-		};
-		2846E968FCA0E0AF700ADFFE /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				81FFFD03F004A12D60104F36 /* Pods-Citadel.debug.xcconfig */,
-				87AF3DD4851728D30033CD64 /* Pods-Citadel.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		2BEA6A2712E6D8097DB02EFB /* Citadel */ = {
-			isa = PBXGroup;
-			children = (
-				E08C6C250D1B53505C195CDE /* ExpoModulesProvider.swift */,
-			);
-			name = Citadel;
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-<<<<<<< HEAD
-=======
-				CF71F4BCA17234AAD75C0FC1 /* libPods-Citadel.a */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				66EE85DE345F9A6050FA4B79 /* libPods-Citadel.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -121,11 +81,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-<<<<<<< HEAD
-=======
-				2846E968FCA0E0AF700ADFFE /* Pods */,
-				EE31CEA9EF1A277C1F7CCF0A /* ExpoModulesProviders */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				BCEA9BC3D0291A5AE5929CC6 /* Pods */,
+				EE1586DC2991E314772B9BA6 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -140,6 +97,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		91CDF49BC7C8F1BBBCF87847 /* Citadel */ = {
+			isa = PBXGroup;
+			children = (
+				263A46D3946081925FF5B905 /* ExpoModulesProvider.swift */,
+			);
+			name = Citadel;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -147,17 +112,24 @@
 			);
 			name = Supporting;
 			path = Citadel/Supporting;
-<<<<<<< HEAD
-=======
 			sourceTree = "<group>";
 		};
-		EE31CEA9EF1A277C1F7CCF0A /* ExpoModulesProviders */ = {
+		BCEA9BC3D0291A5AE5929CC6 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				2BEA6A2712E6D8097DB02EFB /* Citadel */,
+				C3F114F0DFE88ED87152ADFE /* Pods-Citadel.debug.xcconfig */,
+				4681B09AB1BF947C548AC438 /* Pods-Citadel.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		EE1586DC2991E314772B9BA6 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				91CDF49BC7C8F1BBBCF87847 /* Citadel */,
 			);
 			name = ExpoModulesProviders;
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -168,19 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Citadel" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-<<<<<<< HEAD
-=======
-				C6E04F2B5664BAF2F919F9EC /* [Expo] Configure project */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				C2E3AAE6E7F5D381C2D6FE63 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-<<<<<<< HEAD
-=======
-				136769B2FA6135D4B9BC84CA /* [CP] Embed Pods Frameworks */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				33EEA66F49A66D4664735F7C /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -230,10 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-<<<<<<< HEAD
-=======
-				7D6D73CAB7EC8B9DDC2C1D37 /* PrivacyInfo.xcprivacy in Resources */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				704BF72DEA6CA1EE2BB53AB3 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,22 +240,11 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-<<<<<<< HEAD
-		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
-=======
-		136769B2FA6135D4B9BC84CA /* [CP] Embed Pods Frameworks */ = {
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+		33EEA66F49A66D4664735F7C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
-<<<<<<< HEAD
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Citadel/Pods-Citadel-resources.sh",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXUpdates/EXUpdates.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/RCTI18nStrings.bundle",
-=======
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Citadel/Pods-Citadel-frameworks.sh",
 				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
@@ -340,6 +292,8 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/boost/boost_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-launcher/EXDevLauncher.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-menu/EXDevMenu.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/glog/glog_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/react-native-image-picker/RNImagePickerPrivacyInfo.bundle",
 			);
@@ -372,6 +326,8 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/boost_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevLauncher.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevMenu.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/glog_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNImagePickerPrivacyInfo.bundle",
 			);
@@ -380,7 +336,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Citadel/Pods-Citadel-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C6E04F2B5664BAF2F919F9EC /* [Expo] Configure project */ = {
+		C2E3AAE6E7F5D381C2D6FE63 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -392,25 +348,12 @@
 			);
 			name = "[Expo] Configure project";
 			outputFileListPaths = (
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 			);
-			name = "[CP] Copy Pods Resources";
 			outputPaths = (
-<<<<<<< HEAD
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXUpdates.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RCTI18nStrings.bundle",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Citadel/Pods-Citadel-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-=======
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Citadel/expo-configure-project.sh\"\n";
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -420,10 +363,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-<<<<<<< HEAD
-=======
-				C6FE9284CB3A16BB2E66B9D6 /* ExpoModulesProvider.swift in Sources */,
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+				D11DB42FE8BC15F49454377E /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -432,10 +372,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-<<<<<<< HEAD
-=======
-			baseConfigurationReference = 81FFFD03F004A12D60104F36 /* Pods-Citadel.debug.xcconfig */;
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+			baseConfigurationReference = C3F114F0DFE88ED87152ADFE /* Pods-Citadel.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -458,32 +395,20 @@
 					"-ObjC",
 					"-lc++",
 				);
-<<<<<<< HEAD
-				PRODUCT_BUNDLE_IDENTIFIER = "com.citadel.app";
-				PRODUCT_NAME = "Citadel";
-=======
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.citadel.app;
 				PRODUCT_NAME = Citadel;
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 				SWIFT_OBJC_BRIDGING_HEADER = "Citadel/Citadel-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-<<<<<<< HEAD
-				CODE_SIGN_ENTITLEMENTS = Citadel/Citadel.entitlements;
-=======
 				VERSIONING_SYSTEM = "apple-generic";
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 			};
 			name = Debug;
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-<<<<<<< HEAD
-=======
-			baseConfigurationReference = 87AF3DD4851728D30033CD64 /* Pods-Citadel.release.xcconfig */;
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
+			baseConfigurationReference = 4681B09AB1BF947C548AC438 /* Pods-Citadel.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -501,22 +426,13 @@
 					"-ObjC",
 					"-lc++",
 				);
-<<<<<<< HEAD
-				PRODUCT_BUNDLE_IDENTIFIER = "com.citadel.app";
-				PRODUCT_NAME = "Citadel";
-=======
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.citadel.app;
 				PRODUCT_NAME = Citadel;
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 				SWIFT_OBJC_BRIDGING_HEADER = "Citadel/Citadel-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-<<<<<<< HEAD
-				CODE_SIGN_ENTITLEMENTS = Citadel/Citadel.entitlements;
-=======
 				VERSIONING_SYSTEM = "apple-generic";
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 			};
 			name = Release;
 		};
@@ -572,11 +488,6 @@
 					/usr/lib/swift,
 					"$(inherited)",
 				);
-<<<<<<< HEAD
-				LIBRARY_SEARCH_PATHS = "\"$(inherited)\"";
-				MTL_ENABLE_DEBUG_INFO = YES;
-				ONLY_ACTIVE_ARCH = YES;
-=======
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -585,8 +496,9 @@
 					" ",
 				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				USE_HERMES = true;
 			};
 			name = Debug;
 		};
@@ -635,10 +547,6 @@
 					/usr/lib/swift,
 					"$(inherited)",
 				);
-<<<<<<< HEAD
-				LIBRARY_SEARCH_PATHS = "\"$(inherited)\"";
-				MTL_ENABLE_DEBUG_INFO = NO;
-=======
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				OTHER_LDFLAGS = (
@@ -646,8 +554,8 @@
 					" ",
 				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
->>>>>>> c083df43cf894d2ebdaa1f1e0882cbeda7f6ece8
 				SDKROOT = iphoneos;
+				USE_HERMES = true;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
