@@ -21,7 +21,6 @@ import {
   getBiometricType,
   getBiometricPromptMessage
 } from '../utils/permissions';
-import Constants from 'expo-constants';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -55,16 +54,22 @@ interface BiometricCapabilities {
   hasFingerprintOrTouchID: boolean;
 }
 
-interface DebugInfo {
-  supportedTypes: number[];
-  hasHardware: boolean;
-  isEnrolled: boolean;
-  platform: string;
-  isExpoGo: boolean;
-  lastError?: string;
-  authAttempts: number;
-}
+// Biometric Icons Component
+const BiometricIcon = ({ type }: { type: 'face' | 'fingerprint' | 'default' }) => {
+  const getIconText = () => {
+    switch (type) {
+      case 'face': return '🔐';
+      case 'fingerprint': return '👆';
+      default: return '🔐';
+    }
+  };
 
+  return (
+    <View style={styles.biometricIconContainer}>
+      <Text style={styles.biometricIconText}>{getIconText()}</Text>
+    </View>
+  );
+};
 
 const MPINLogin: React.FC<MPINLoginProps> = ({
   onMPINLogin,
@@ -104,32 +109,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     }
     return backendUrl;
   }, []);
-  // Biometric Icons Component
-  const BiometricIcon = ({ type }: { type: 'face' | 'fingerprint' | 'default' }) => {
-    const getIconText = () => {
-      switch (type) {
-        case 'face': return '🔐';
-        case 'fingerprint': return '👆';
-        default: return '🔐';
-      }
-    };
-
-    return (
-      <View style={styles.biometricIconContainer}>
-        <Text style={styles.biometricIconText}>{getIconText()}</Text>
-      </View>
-    );
-  };
-  const [debugInfo, setDebugInfo] = useState<DebugInfo>({
-    supportedTypes: [],
-    hasHardware: false,
-    isEnrolled: false,
-    platform: Platform.OS,
-    isExpoGo: Constants.appOwnership === 'expo',
-    authAttempts: 0,
-  });
-  const [showDebug, setShowDebug] = useState(false);
-
 
   const hasEnteredDigits = mpin.some(digit => digit !== '');
   const isMPINComplete = mpin.every(digit => digit !== '') && mpin.join('').length === 6;
@@ -164,54 +143,42 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   useEffect(() => {
     debugBiometrics();
   }, []);
-
   const checkBiometricCapabilities = useCallback(async () => {
     try {
-      console.log('Checking biometric capabilities...');
+      console.log('Checking biometric capabilities with permissions...');
 
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      const supportedTypes = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      // Use the enhanced permission checker
+      const permissionResult = await requestBiometricPermissions();
 
-      // Update debug info
-      setDebugInfo(prev => ({
-        ...prev,
-        hasHardware,
-        isEnrolled,
-        supportedTypes,
-      }));
-
-      if (!hasHardware || !isEnrolled) {
-        setShowMPINSection(true);
+      if (!permissionResult.granted) {
+        console.log('Biometric permissions not granted:', permissionResult.error);
         setBiometricCapabilities({
-          hasHardware,
-          isEnrolled,
-          supportedTypes,
+          hasHardware: permissionResult.hasHardware,
+          isEnrolled: permissionResult.isEnrolled,
+          supportedTypes: permissionResult.supportedTypes,
           hasFaceID: false,
           hasFingerprintOrTouchID: false,
         });
+        setShowMPINSection(true);
         return;
       }
 
-      const hasFaceID = supportedTypes.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
-      const hasFingerprintOrTouchID = supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+      // Get biometric types
+      const biometricTypes = getBiometricType(permissionResult.supportedTypes);
 
       const capabilities: BiometricCapabilities = {
-        hasHardware,
-        isEnrolled,
-        supportedTypes,
-        hasFaceID,
-        hasFingerprintOrTouchID,
+        hasHardware: permissionResult.hasHardware,
+        isEnrolled: permissionResult.isEnrolled,
+        supportedTypes: permissionResult.supportedTypes,
+        hasFaceID: biometricTypes.hasFaceID,
+        hasFingerprintOrTouchID: biometricTypes.hasFingerprint,
       };
 
       setBiometricCapabilities(capabilities);
+      console.log('Enhanced biometric capabilities set:', capabilities);
 
     } catch (error) {
-      setDebugInfo(prev => ({
-        ...prev,
-        lastError: error instanceof Error ? error.message : 'Unknown error',
-      }));
-
+      console.error('Error checking enhanced biometric capabilities:', error);
       setBiometricCapabilities({
         hasHardware: false,
         isEnrolled: false,
@@ -257,91 +224,112 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const attemptBiometricAuthentication = useCallback(async () => {
     if (!biometricCapabilities || !biometricCapabilities.isEnrolled || biometricAttempted) {
+      console.log('Biometric authentication not available or already attempted');
       setShowMPINSection(true);
       return;
+    }
+
+    // Check if user has previously disabled biometric authentication
+    try {
+      const biometricPreference = await AsyncStorage.getItem(BIOMETRIC_PREFERENCE_KEY);
+      if (biometricPreference === 'false') {
+        console.log('User has disabled biometric authentication');
+        setShowMPINSection(true);
+        return;
+      }
+    } catch (error) {
+      console.warn('Could not check biometric preference:', error);
     }
 
     setBiometricAttempted(true);
     setIsBiometricAuthenticating(true);
     setBiometricError('');
 
-    // Update debug info
-    setDebugInfo(prev => ({
-      ...prev,
-      authAttempts: prev.authAttempts + 1,
-    }));
-
     try {
-      // Try different authentication strategies
-      let authResult;
+      console.log('Attempting biometric authentication...');
+      console.log('Available biometric types:', biometricCapabilities.supportedTypes);
 
-      // Strategy 1: Try with all available types
+      // Determine authentication prompt based on available biometric types
+      let promptMessage = 'Authenticate to login';
+      let fallbackLabel = 'Use MPIN instead';
+
       if (biometricCapabilities.hasFaceID && biometricCapabilities.hasFingerprintOrTouchID) {
-        authResult = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Authenticate with biometrics',
-          subtitle: 'Use fingerprint or face recognition',
-          fallbackLabel: 'Use MPIN',
-          cancelLabel: 'Cancel',
-          allowedAuthenticationTypes: [
-            LocalAuthentication.AuthenticationType.FINGERPRINT,
-            LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION,
-          ],
-        });
+        promptMessage = 'Use Face ID, Touch ID, or Fingerprint to login';
+      } else if (biometricCapabilities.hasFaceID) {
+        promptMessage = 'Use Face ID to login';
+      } else if (biometricCapabilities.hasFingerprintOrTouchID) {
+        promptMessage = Platform.OS === 'ios' ? 'Use Touch ID to login' : 'Use Fingerprint to login';
       }
-      // Strategy 2: Face recognition only
-      else if (biometricCapabilities.hasFaceID) {
-        authResult = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Use face recognition to login',
-          subtitle: 'Look at your device camera',
-          fallbackLabel: 'Use MPIN',
+
+      // Platform-specific authentication options
+      const authOptions = Platform.OS === 'ios'
+        ? {
+          promptMessage,
+          fallbackLabel,
           cancelLabel: 'Cancel',
-          allowedAuthenticationTypes: [LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION],
-        });
-      }
-      // Strategy 3: Fingerprint only
-      else {
-        authResult = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Use fingerprint to login',
-          subtitle: 'Place finger on sensor',
-          fallbackLabel: 'Use MPIN',
+          disableDeviceFallback: true,
+          requireConfirmation: false,
+        }
+        : {
+          promptMessage,
+          fallbackLabel,
           cancelLabel: 'Cancel',
-          allowedAuthenticationTypes: [LocalAuthentication.AuthenticationType.FINGERPRINT],
-        });
-      }
+          disableDeviceFallback: false,
+          requireConfirmation: false,
+        };
+
+      console.log('Auth options:', authOptions);
+
+      const authResult = await LocalAuthentication.authenticateAsync(authOptions);
+
+      console.log('Biometric authentication result:', authResult);
 
       if (authResult.success) {
+        console.log('Biometric authentication successful, calling override login...');
+
+        // Get stored token for override login
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!storedToken) {
           throw new Error('No authentication token found');
         }
 
+        // Call override login API
         const response = await overrideLoginAPI(storedToken);
+        console.log('Override login successful:', response.message);
 
+        // Since override login succeeded, directly call onBiometricLogin
         if (onBiometricLogin) {
           await onBiometricLogin(storedToken);
         } else {
+          console.warn('onBiometricLogin callback not provided, falling back to onMPINLogin');
           await onMPINLogin('__BIOMETRIC_SUCCESS__');
         }
         return;
       } else {
-        // Update debug info with error
-        setDebugInfo(prev => ({
-          ...prev,
-          lastError: `Auth failed: ${authResult.error}`,
-        }));
+        // Handle authentication failures/cancellations
+        // The authResult.error property contains error information
+        console.log('Biometric authentication failed:', authResult.error);
 
-        setBiometricError(`Authentication failed: ${authResult.error}`);
-        setShowMPINSection(true);
+        // Check if user cancelled or chose fallback
+        if (authResult.error === 'user_cancel' || authResult.error === 'user_fallback') {
+          console.log('User cancelled biometric authentication or chose fallback');
+          setShowMPINSection(true);
+        } else if (authResult.error === 'system_cancel') {
+          console.log('System cancelled biometric authentication');
+          setShowMPINSection(true);
+        } else if (authResult.error === 'app_cancel') {
+          console.log('App cancelled biometric authentication');
+          setShowMPINSection(true);
+        } else {
+          console.log('Biometric authentication failed with error:', authResult.error);
+          setBiometricError('Biometric authentication failed. Please try again or use MPIN.');
+          setShowMPINSection(true);
+        }
       }
 
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setDebugInfo(prev => ({
-        ...prev,
-        lastError: errorMsg,
-      }));
-
-      setBiometricError('Biometric authentication failed. Please use MPIN.');
+      console.error('Biometric authentication error:', error);
+      setBiometricError('Biometric authentication unavailable. Please use MPIN.');
       setShowMPINSection(true);
     } finally {
       setIsBiometricAuthenticating(false);
@@ -593,36 +581,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
             <Text style={styles.subtitle}>Login to {getDisplayEmail()}</Text>
           </View>
 
-          {showDebug && (
-            <View style={styles.debugContainer}>
-              <Text style={styles.debugTitle}>Debug Info (Tap to hide)</Text>
-              <Text style={styles.debugText}>Platform: {debugInfo.platform}</Text>
-              <Text style={styles.debugText}>Is Expo Go: {debugInfo.isExpoGo ? 'Yes' : 'No'}</Text>
-              <Text style={styles.debugText}>Has Hardware: {debugInfo.hasHardware ? 'Yes' : 'No'}</Text>
-              <Text style={styles.debugText}>Is Enrolled: {debugInfo.isEnrolled ? 'Yes' : 'No'}</Text>
-              <Text style={styles.debugText}>Supported Types: [{debugInfo.supportedTypes.join(', ')}]</Text>
-              <Text style={styles.debugText}>Auth Attempts: {debugInfo.authAttempts}</Text>
-              {debugInfo.lastError && (
-                <Text style={styles.debugError}>Last Error: {debugInfo.lastError}</Text>
-              )}
-              <TouchableOpacity
-                style={styles.debugButton}
-                onPress={() => setShowDebug(false)}
-              >
-                <Text style={styles.debugButtonText}>Hide Debug</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.debugToggle}
-            onPress={() => setShowDebug(!showDebug)}
-          >
-            <Text style={styles.debugToggleText}>
-              {showDebug ? 'Hide' : 'Show'} Debug
-            </Text>
-          </TouchableOpacity>
-
           {/* Biometric Section */}
           {!showMPINSection && biometricCapabilities?.isEnrolled ? (
             <View style={styles.biometricSection}>
@@ -683,44 +641,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
                   <Text style={styles.switchToBiometricText}>
                     Use {getBiometricText()} Instead
                   </Text>
-                </TouchableOpacity>
-              )}
-              {biometricCapabilities?.hasFaceID && (
-                <TouchableOpacity
-                  style={[styles.biometricButton, { backgroundColor: '#FF6B6B', marginTop: 10 }]}
-                  onPress={async () => {
-                    try {
-                      setDebugInfo(prev => ({ ...prev, lastError: 'Testing face recognition...' }));
-
-                      const result = await LocalAuthentication.authenticateAsync({
-                        promptMessage: 'Face Recognition Test',
-                        subtitle: 'Look directly at your camera',
-                        allowedAuthenticationTypes: [LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION],
-                        fallbackLabel: 'Cancel',
-                        cancelLabel: 'Cancel',
-                      });
-
-                      setDebugInfo(prev => ({
-                        ...prev,
-                        lastError: `Face test result: ${result.success ? 'SUCCESS' : 'FAILED - ' + result.error}`
-                      }));
-
-                      if (result.success) {
-                        // Handle success
-                        const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-                        if (storedToken && onBiometricLogin) {
-                          await onBiometricLogin(storedToken);
-                        }
-                      }
-                    } catch (error) {
-                      setDebugInfo(prev => ({
-                        ...prev,
-                        lastError: `Face test error: ${error instanceof Error ? error.message : 'Unknown'}`
-                      }));
-                    }
-                  }}
-                >
-                  <Text style={styles.biometricButtonText}>Test Face Recognition Only</Text>
                 </TouchableOpacity>
               )}
 
@@ -1141,56 +1061,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     textDecorationLine: 'underline',
-  },
-  // Add these to your existing styles object
-  debugContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 15,
-    margin: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  debugTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 5,
-  },
-  debugError: {
-    fontSize: 12,
-    color: '#ff0000',
-    marginBottom: 5,
-    fontWeight: 'bold',
-  },
-  debugButton: {
-    backgroundColor: '#007AFF',
-    padding: 8,
-    borderRadius: 5,
-    marginTop: 10,
-  },
-  debugButtonText: {
-    color: 'white',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  debugToggle: {
-    position: 'absolute',
-    top: 50,
-    right: 10,
-    backgroundColor: '#007AFF',
-    padding: 8,
-    borderRadius: 5,
-    zIndex: 1000,
-  },
-  debugToggleText: {
-    color: 'white',
-    fontSize: 10,
   },
 });
 
