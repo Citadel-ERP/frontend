@@ -16,6 +16,11 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../styles/theme';
+import {
+  requestBiometricPermissions,
+  getBiometricType,
+  getBiometricPromptMessage
+} from '../utils/permissions';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -119,20 +124,38 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       attemptBiometricAuthentication();
     }
   }, [biometricCapabilities, biometricAttempted, showMPINSection]);
+  const debugBiometrics = useCallback(async () => {
+    const permissionResult = await requestBiometricPermissions();
+    console.log('=== BIOMETRIC DEBUG ===');
+    console.log('Permission result:', permissionResult);
 
+    if (permissionResult.granted) {
+      const types = getBiometricType(permissionResult.supportedTypes);
+      console.log('Detected types:', types);
+
+      const messages = getBiometricPromptMessage(permissionResult.supportedTypes);
+      console.log('Prompt messages:', messages);
+    }
+    console.log('=====================');
+  }, []);
+
+  // Call this in useEffect for testing
+  useEffect(() => {
+    debugBiometrics();
+  }, []);
   const checkBiometricCapabilities = useCallback(async () => {
     try {
-      console.log('Checking biometric capabilities...');
+      console.log('Checking biometric capabilities with permissions...');
 
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      console.log('Has biometric hardware:', hasHardware);
+      // Use the enhanced permission checker
+      const permissionResult = await requestBiometricPermissions();
 
-      if (!hasHardware) {
-        console.log('No biometric hardware available, showing MPIN section');
+      if (!permissionResult.granted) {
+        console.log('Biometric permissions not granted:', permissionResult.error);
         setBiometricCapabilities({
-          hasHardware: false,
-          isEnrolled: false,
-          supportedTypes: [],
+          hasHardware: permissionResult.hasHardware,
+          isEnrolled: permissionResult.isEnrolled,
+          supportedTypes: permissionResult.supportedTypes,
           hasFaceID: false,
           hasFingerprintOrTouchID: false,
         });
@@ -140,41 +163,22 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         return;
       }
 
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      console.log('Has enrolled biometrics:', isEnrolled);
-
-      if (!isEnrolled) {
-        console.log('No biometrics enrolled, showing MPIN section');
-        setBiometricCapabilities({
-          hasHardware: true,
-          isEnrolled: false,
-          supportedTypes: [],
-          hasFaceID: false,
-          hasFingerprintOrTouchID: false,
-        });
-        setShowMPINSection(true);
-        return;
-      }
-
-      const supportedTypes = await LocalAuthentication.supportedAuthenticationTypesAsync();
-      console.log('Supported authentication types:', supportedTypes);
-
-      const hasFaceID = supportedTypes.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
-      const hasFingerprintOrTouchID = supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+      // Get biometric types
+      const biometricTypes = getBiometricType(permissionResult.supportedTypes);
 
       const capabilities: BiometricCapabilities = {
-        hasHardware,
-        isEnrolled,
-        supportedTypes,
-        hasFaceID,
-        hasFingerprintOrTouchID,
+        hasHardware: permissionResult.hasHardware,
+        isEnrolled: permissionResult.isEnrolled,
+        supportedTypes: permissionResult.supportedTypes,
+        hasFaceID: biometricTypes.hasFaceID,
+        hasFingerprintOrTouchID: biometricTypes.hasFingerprint,
       };
 
       setBiometricCapabilities(capabilities);
-      console.log('Biometric capabilities set:', capabilities);
+      console.log('Enhanced biometric capabilities set:', capabilities);
 
     } catch (error) {
-      console.error('Error checking biometric capabilities:', error);
+      console.error('Error checking enhanced biometric capabilities:', error);
       setBiometricCapabilities({
         hasHardware: false,
         isEnrolled: false,
@@ -305,7 +309,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         // Handle authentication failures/cancellations
         // The authResult.error property contains error information
         console.log('Biometric authentication failed:', authResult.error);
-        
+
         // Check if user cancelled or chose fallback
         if (authResult.error === 'user_cancel' || authResult.error === 'user_fallback') {
           console.log('User cancelled biometric authentication or chose fallback');
@@ -479,7 +483,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       console.error('MPIN login error:', e);
 
       let errorMessage = 'Invalid MPIN. Please try again.';
-      
+
       setError(errorMessage);
       setMPin(['', '', '', '', '', '']);
       setCurrentIndex(0);
@@ -519,7 +523,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         const baseScrollY = isSmallDevice ? 80 : 100;
         const keyboardOffset = Platform.OS === 'ios' ? 0 : 50;
         const scrollY = baseScrollY + keyboardOffset;
-        
+
         scrollViewRef.current.scrollTo({
           y: scrollY,
           animated: true,
@@ -581,7 +585,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           {!showMPINSection && biometricCapabilities?.isEnrolled ? (
             <View style={styles.biometricSection}>
               <BiometricIcon type={getBiometricIconType()} />
-              
+
               {isBiometricAuthenticating ? (
                 <View style={styles.authenticatingContainer}>
                   <ActivityIndicator size="large" color={colors.primary} />
@@ -604,7 +608,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
                       Try {getBiometricText()}
                     </Text>
                   </TouchableOpacity>
-                  
+
                   {biometricError ? (
                     <Text style={styles.errorText}>{biometricError}</Text>
                   ) : null}
@@ -987,7 +991,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  
+
   // Forgot MPIN link - centered like the login page
   forgotMPINLink: {
     alignSelf: 'flex-end',
@@ -996,12 +1000,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   forgotMPINText: {
-      color: colors.primary,
-      fontSize: isTablet ? 15 : 14,
-      fontWeight: '500',
-      textDecorationLine: 'underline',
+    color: colors.primary,
+    fontSize: isTablet ? 15 : 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
-  
+
   // Clear link - positioned at bottom center
   clearLink: {
     alignSelf: 'center',
