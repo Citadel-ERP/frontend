@@ -5,10 +5,10 @@ interface AppConfig {
 // You can also use different configs for different environments
 const configs: Record<string, AppConfig> = {
   development: {
-    BACKEND_URL: 'https://962xzp32-8000.inc1.devtunnels.ms',
+    BACKEND_URL: 'https://0759c3382d84.ngrok-free.app',
   },
   production: {
-    BACKEND_URL: 'https://your-production-url.com',
+    BACKEND_URL: 'https://0759c3382d84.ngrok-free.app',
   },
 };
 
