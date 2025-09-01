@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,1451 +13,637 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
-  PermissionsAndroid,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '../styles/theme';
+import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType, PhotoQuality } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-interface ProfileProps {
-  onBack: () => void;
-  userData?: UserData;
-}
-
-interface UserData {
-  role: string;
-  employee_id: string;
-  email: string;
-  token: string;
-  first_name: string;
-  last_name: string;
-  full_name: string;
-  mpin: string;
-  home_address: {
-    id: number;
-    address: string;
-    city: string;
-    state: string;
-    country: string;
-    zip_code: string;
-  };
-  office: {
-    id: number;
-    name: string;
-    address: {
-      id: number;
-      address: string;
-      city: string;
-      state: string;
-      country: string;
-      zip_code: string;
-    };
-  };
-  phone_number: string;
-  profile_picture: string | null;
-  current_location: {
-    id: number;
-    address: string;
-    city: string;
-    state: string;
-    country: string;
-    zip_code: string;
-  };
-  is_approved_by_hr: boolean;
-  is_approved_by_admin: boolean;
-  approved_by_hr_at: string | null;
-  approved_by_admin_at: string | null;
-  is_archived: boolean;
-  created_at: string;
-  updated_at: string;
-  earned_leaves: number;
-  sick_leaves: number;
-  casual_leaves: number;
-  login_time: string | null;
-  logout_time: string | null;
-  first_login: boolean;
-  bio: string;
-  designation?: string;
-  user_tags: Array<{
-    id: number;
-    tag: {
-      id: number;
-      tag_name: string;
-      tag_id: string;
-      tag_type: string;
-      created_at: string;
-      updated_at: string;
-    };
-    created_at: string;
-    updated_at: string;
-  }>;
-  reporting_tags: Array<{
-    id: number;
-    reporting_tag: {
-      id: number;
-      tag_name: string;
-      tag_id: string;
-      tag_type: string;
-      created_at: string;
-      updated_at: string;
-    };
-    created_at: string;
-    updated_at: string;
-  }>;
-}
-
-interface Document {
-  id: number;
-  document_name: string;
-  document_type: string;
-  document_url: string;
-  uploaded_at: string;
-}
-
-interface ApiResponse {
-  message: string;
-  user: UserData;
-  documents: Document[];
-}
-
-interface ValidationErrors {
-  [key: string]: string;
-}
-
-const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => {
+const Profile = ({ onBack, userData: propUserData }) => {
   const insets = useSafeAreaInsets();
-  const scrollViewRef = useRef<ScrollView>(null);
   
+  // Core States
   const [loading, setLoading] = useState(!propUserData);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [userData, setUserData] = useState<UserData | null>(propUserData || null);
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [userData, setUserData] = useState(propUserData || null);
+  const [token, setToken] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-
-  // Editable form fields
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [bio, setBio] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [homeAddress, setHomeAddress] = useState('');
-  const [homeCity, setHomeCity] = useState('');
-  const [homeState, setHomeState] = useState('');
-  const [homeCountry, setHomeCountry] = useState('');
-  const [homeZipCode, setHomeZipCode] = useState('');
-
-  // Original values for change detection
-  const [originalData, setOriginalData] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalContent, setModalContent] = useState({});
+  
+  // Form States
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    bio: '',
+    phoneNumber: '',
+    homeAddress: '',
+    currentLocation: '',
+  });
+  
+  // Feature Data States
+  const [documents, setDocuments] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [payslips, setPayslips] = useState([]);
 
   useEffect(() => {
-    const getToken = async () => {
-      try {
-        const storedToken = await AsyncStorage.getItem('token_2');
-        setToken(storedToken);
-      } catch (error) {
-        console.error('Error getting token:', error);
-      }
-    };
-    
-    getToken();
+    initializeData();
   }, []);
 
-  // Validation functions
-  const validateField = (field: string, value: string): string => {
-    switch (field) {
-      case 'firstName':
-        return value.trim().length < 2 ? 'First name must be at least 2 characters' : '';
-      case 'lastName':
-        return value.trim().length < 2 ? 'Last name must be at least 2 characters' : '';
-      case 'phoneNumber':
-        const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-        return value && !phoneRegex.test(value.replace(/\s/g, '')) ? 'Please enter a valid phone number' : '';
-      case 'homeZipCode':
-        const zipRegex = /^[0-9]{5,6}$/;
-        return value && !zipRegex.test(value) ? 'Please enter a valid ZIP code' : '';
-      case 'bio':
-        return value.length > 500 ? 'Bio must be less than 500 characters' : '';
-      default:
-        return '';
+  const initializeData = async () => {
+    try {
+      const storedToken = await AsyncStorage.getItem('token_2');
+      setToken(storedToken);
+      
+      if (propUserData) {
+        populateFormData(propUserData);
+        fetchAdditionalData(storedToken);
+      } else if (storedToken) {
+        await fetchUserData(storedToken);
+      }
+    } catch (error) {
+      console.error('Initialization error:', error);
     }
   };
 
-  const validateAllFields = (): boolean => {
-    const errors: ValidationErrors = {};
-    
-    errors.firstName = validateField('firstName', firstName);
-    errors.lastName = validateField('lastName', lastName);
-    errors.phoneNumber = validateField('phoneNumber', phoneNumber);
-    errors.homeZipCode = validateField('homeZipCode', homeZipCode);
-    errors.bio = validateField('bio', bio);
-    
-    const hasErrors = Object.values(errors).some(error => error !== '');
-    setValidationErrors(errors);
-    
-    return !hasErrors;
-  };
-
-  const populateFormFields = (user: UserData) => {
-    const data = {
-      first_name: user.first_name || '',
-      last_name: user.last_name || '',
+  const populateFormData = (user) => {
+    setFormData({
+      firstName: user.first_name || '',
+      lastName: user.last_name || '',
       bio: user.bio || '',
-      phone_number: user.phone_number || '',
+      phoneNumber: user.phone_number || '',
       homeAddress: user.home_address?.address || '',
-      homeCity: user.home_address?.city || '',
-      homeState: user.home_address?.state || '',
-      homeCountry: user.home_address?.country || '',
-      homeZipCode: user.home_address?.zip_code || '',
-    };
-    
-    setFirstName(data.first_name);
-    setLastName(data.last_name);
-    setBio(data.bio);
-    setPhoneNumber(data.phone_number);
-    setHomeAddress(data.homeAddress);
-    setHomeCity(data.homeCity);
-    setHomeState(data.homeState);
-    setHomeCountry(data.homeCountry);
-    setHomeZipCode(data.homeZipCode);
-    
-    setOriginalData(data);
+      currentLocation: user.current_location?.address || '',
+    });
   };
 
-  useEffect(() => {
-    if (propUserData) {
-      setUserData(propUserData);
-      populateFormFields(propUserData);
+  const fetchUserData = async (userToken) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: userToken }),
+      });
+      
+      const data = await response.json();
+      if (data.message === "Get modules successful") {
+        setUserData(data.user);
+        populateFormData(data.user);
+        await fetchAdditionalData(userToken);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch user data');
+    } finally {
       setLoading(false);
     }
-  }, [propUserData]);
+  };
 
-  useEffect(() => {
-    if (!token || propUserData) return;
-
-    const fetchUserData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+  const fetchAdditionalData = async (userToken) => {
+    try {
+      const [docsRes, assetsRes, payslipsRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/core/getDocuments`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token }),
-        });
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: userToken }),
+        }),
+        fetch(`${BACKEND_URL}/core/getAssets`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: userToken }),
+        }),
+        fetch(`${BACKEND_URL}/core/getPayslips`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: userToken }),
+        }),
+      ]);
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      const [docsData, assetsData, payslipsData] = await Promise.all([
+        docsRes.json(),
+        assetsRes.json(),
+        payslipsRes.json(),
+      ]);
 
-        const data: ApiResponse = await response.json();
-
-        if (data.message === "Get modules successful") {
-          setUserData(data.user);
-          setDocuments(data.documents || []);
-          populateFormFields(data.user);
-        } else {
-          throw new Error(data.message || 'Failed to fetch user data');
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, [token, propUserData]);
-
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    // Reset form fields to original values
-    setFirstName(originalData.first_name);
-    setLastName(originalData.last_name);
-    setBio(originalData.bio);
-    setPhoneNumber(originalData.phone_number);
-    setHomeAddress(originalData.homeAddress);
-    setHomeCity(originalData.homeCity);
-    setHomeState(originalData.homeState);
-    setHomeCountry(originalData.homeCountry);
-    setHomeZipCode(originalData.homeZipCode);
-    
-    setValidationErrors({});
-    setIsEditing(false);
-  };
-
-  const checkForChanges = (): boolean => {
-    return (
-      firstName.trim() !== originalData.first_name ||
-      lastName.trim() !== originalData.last_name ||
-      bio.trim() !== originalData.bio ||
-      phoneNumber.trim() !== originalData.phone_number ||
-      homeAddress.trim() !== originalData.homeAddress ||
-      homeCity.trim() !== originalData.homeCity ||
-      homeState.trim() !== originalData.homeState ||
-      homeCountry.trim() !== originalData.homeCountry ||
-      homeZipCode.trim() !== originalData.homeZipCode
-    );
+      setDocuments(docsData.documents || []);
+      setAssets(assetsData.assets || []);
+      setPayslips(payslipsData.payslips || []);
+    } catch (error) {
+      console.error('Error fetching additional data:', error);
+    }
   };
 
   const handleSave = async () => {
-    if (!token || !userData) {
-      Alert.alert('Error', 'Authentication token not found. Please login again.');
-      return;
-    }
-
-    // Check if there are any changes
-    if (!checkForChanges()) {
-      Alert.alert('No Changes', 'No changes were made to save.');
-      setIsEditing(false);
-      return;
-    }
-
-    // Validate all fields
-    if (!validateAllFields()) {
-      Alert.alert('Validation Error', 'Please fix the errors before saving.');
-      return;
-    }
-
+    if (!token) return;
+    
     try {
       setSaving(true);
-      
-      const updateData = {
-        token,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        bio: bio.trim(),
-        phone_number: phoneNumber.trim(),
-        home_address: {
-          address: homeAddress.trim(),
-          city: homeCity.trim(),
-          state: homeState.trim(),
-          country: homeCountry.trim(),
-          zip_code: homeZipCode.trim(),
-        }
-      };
-
-      console.log('Sending update data:', updateData);
-
       const response = await fetch(`${BACKEND_URL}/core/updateProfile`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, ...formData }),
       });
-
-      const result = await response.json();
-      console.log('Update response:', result);
       
-      if (response.ok && (result.message === "Profile updated successfully" || result.success)) {
-        // Update original data to reflect saved state
-        const newOriginalData = {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          bio: bio.trim(),
-          phone_number: phoneNumber.trim(),
-          homeAddress: homeAddress.trim(),
-          homeCity: homeCity.trim(),
-          homeState: homeState.trim(),
-          homeCountry: homeCountry.trim(),
-          homeZipCode: homeZipCode.trim(),
-        };
-        setOriginalData(newOriginalData);
-        
-        // Update userData state
-        if (userData) {
-          setUserData({
-            ...userData,
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-            full_name: `${firstName.trim()} ${lastName.trim()}`,
-            bio: bio.trim(),
-            phone_number: phoneNumber.trim(),
-            home_address: {
-              ...userData.home_address,
-              address: homeAddress.trim(),
-              city: homeCity.trim(),
-              state: homeState.trim(),
-              country: homeCountry.trim(),
-              zip_code: homeZipCode.trim(),
-            }
-          });
-        }
-        
-        setIsEditing(false);
+      const result = await response.json();
+      if (response.ok) {
         Alert.alert('Success', 'Profile updated successfully!');
+        setIsEditing(false);
+        // Update userData with new values
+        setUserData(prev => ({
+          ...prev,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          bio: formData.bio,
+          phone_number: formData.phoneNumber,
+        }));
       } else {
-        throw new Error(result.message || result.error || 'Failed to update profile');
+        throw new Error(result.message || 'Update failed');
       }
     } catch (error) {
-      console.error('Error updating profile:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update profile. Please check your connection and try again.';
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', error.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        ]);
-        return (
-          granted[PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE] === PermissionsAndroid.RESULTS.GRANTED &&
-          granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED
-        );
-      } catch (err) {
-        console.warn(err);
-        return false;
-      }
-    }
-    return true;
+  const handleImageUpload = () => {
+    Alert.alert('Update Picture', 'Choose option', [
+      { text: 'Camera', onPress: () => openCamera() },
+      { text: 'Gallery', onPress: () => openGallery() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
-  const handleImagePicker = () => {
-    Alert.alert(
-      'Update Profile Picture',
-      'Choose an option',
-      [
-        { text: 'Camera', onPress: () => openCamera() },
-        { text: 'Gallery', onPress: () => openGallery() },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+  const openCamera = () => {
+    launchCamera({ mediaType: 'photo', quality: 0.8 }, handleImageResponse);
   };
 
-  const openCamera = async () => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) {
-      Alert.alert('Permission Required', 'Camera permission is required to take photos.');
-      return;
-    }
-
-    const options = {
-      mediaType: 'photo' as MediaType,
-      includeBase64: false,
-      maxHeight: 400,
-      maxWidth: 400,
-      quality: 0.8 as PhotoQuality,
-    };
-
-    launchCamera(options, (response: ImagePickerResponse) => {
-      if (response.didCancel) {
-        return;
-      }
-      
-      if (response.errorMessage) {
-        Alert.alert('Error', response.errorMessage);
-        return;
-      }
-
-      if (response.assets && response.assets[0]) {
-        uploadProfilePicture(response.assets[0]);
-      }
-    });
+  const openGallery = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, handleImageResponse);
   };
 
-  const openGallery = async () => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) {
-      Alert.alert('Permission Required', 'Gallery permission is required to select photos.');
-      return;
-    }
-
-    const options = {
-      mediaType: 'photo' as MediaType,
-      includeBase64: false,
-      maxHeight: 400,
-      maxWidth: 400,
-      quality: 0.8 as PhotoQuality,
-    };
-
-    launchImageLibrary(options, (response: ImagePickerResponse) => {
-      if (response.didCancel) {
-        return;
-      }
-      
-      if (response.errorMessage) {
-        Alert.alert('Error', response.errorMessage);
-        return;
-      }
-
-      if (response.assets && response.assets[0]) {
-        uploadProfilePicture(response.assets[0]);
-      }
-    });
-  };
-
-  const uploadProfilePicture = async (image: any) => {
-    if (!token) return;
-
-    try {
-      setUploadingImage(true);
-      
+  const handleImageResponse = async (response) => {
+    if (response.assets?.[0] && token) {
       const formData = new FormData();
       formData.append('token', token);
       formData.append('profile_picture', {
-        uri: image.uri,
-        type: image.type || 'image/jpeg',
-        name: image.fileName || `profile_${Date.now()}.jpg`,
-      } as any);
-
-      const response = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
+        uri: response.assets[0].uri,
+        type: response.assets[0].type,
+        name: response.assets[0].fileName || 'profile.jpg',
       });
 
-      const result = await response.json();
-      
-      if (response.ok && (result.success || result.message === "Profile picture updated successfully")) {
-        // Update userData with new profile picture
-        if (userData && result.profile_picture_url) {
-          setUserData({
-            ...userData,
-            profile_picture: result.profile_picture_url
-          });
-        }
-        Alert.alert('Success', 'Profile picture updated successfully!');
-      } else {
-        throw new Error(result.message || 'Failed to upload profile picture');
-      }
-    } catch (error) {
-      console.error('Error uploading profile picture:', error);
-      Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleDocumentUpload = async () => {
-    Alert.alert(
-      'Upload Document',
-      'Choose document source',
-      [
-        { text: 'Gallery', onPress: () => openDocumentPicker() },
-        { text: 'Camera', onPress: () => openCameraForDocument() },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
-
-  const openDocumentPicker = () => {
-    const options = {
-      mediaType: 'mixed' as MediaType,
-      includeBase64: false,
-      maxHeight: 2000,
-      maxWidth: 2000,
-    };
-
-    launchImageLibrary(options, (response: ImagePickerResponse) => {
-      if (response.didCancel) {
-        return;
-      }
-      
-      if (response.errorMessage) {
-        Alert.alert('Error', response.errorMessage);
-        return;
-      }
-
-      if (response.assets && response.assets[0]) {
-        uploadDocument({
-          uri: response.assets[0].uri!,
-          type: response.assets[0].type!,
-          name: response.assets[0].fileName || `document_${Date.now()}.jpg`,
-          size: response.assets[0].fileSize || 0,
+      try {
+        const res = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'multipart/form-data' },
+          body: formData,
         });
-      }
-    });
-  };
-
-  const openCameraForDocument = () => {
-    const options = {
-      mediaType: 'photo' as MediaType,
-      includeBase64: false,
-      maxHeight: 2000,
-      maxWidth: 2000,
-    };
-
-    launchCamera(options, (response: ImagePickerResponse) => {
-      if (response.didCancel) {
-        return;
-      }
-      
-      if (response.errorMessage) {
-        Alert.alert('Error', response.errorMessage);
-        return;
-      }
-
-      if (response.assets && response.assets[0]) {
-        uploadDocument({
-          uri: response.assets[0].uri!,
-          type: response.assets[0].type!,
-          name: response.assets[0].fileName || `document_${Date.now()}.jpg`,
-          size: response.assets[0].fileSize || 0,
-        });
-      }
-    });
-  };
-
-  const uploadDocument = async (document: {uri: string, type: string, name: string, size: number}) => {
-    if (!token) return;
-
-    try {
-      setUploading(true);
-      
-      const formData = new FormData();
-      formData.append('token', token);
-      formData.append('document', {
-        uri: document.uri,
-        type: document.type,
-        name: document.name,
-      } as any);
-      formData.append('document_name', document.name || '');
-      formData.append('document_type', document.type || '');
-
-      const response = await fetch(`${BACKEND_URL}/core/uploadDocument`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-
-      const result = await response.json();
-      
-      if (response.ok && (result.success || result.message === "Document uploaded successfully")) {
-        // Add new document to the list
-        if (result.document) {
-          setDocuments(prev => [...prev, result.document]);
-        } else {
-          // Refresh documents list
-          fetchDocuments();
+        
+        const result = await res.json();
+        if (res.ok) {
+          setUserData(prev => ({ ...prev, profile_picture: result.profile_picture_url }));
+          Alert.alert('Success', 'Profile picture updated!');
         }
-        Alert.alert('Success', 'Document uploaded successfully!');
-      } else {
-        throw new Error(result.message || 'Failed to upload document');
+      } catch (error) {
+        Alert.alert('Error', 'Failed to upload image');
       }
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      Alert.alert('Error', 'Failed to upload document. Please try again.');
-    } finally {
-      setUploading(false);
     }
   };
 
-  const fetchDocuments = async () => {
-    if (!token) return;
-    
-    try {
-      const response = await fetch(`${BACKEND_URL}/core/getDocuments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
+  const showModal = (title, content, type = 'text') => {
+    setModalContent({ title, content, type });
+    setModalVisible(true);
+  };
 
-      const result = await response.json();
-      if (response.ok && result.documents) {
-        setDocuments(result.documents);
-      }
-    } catch (error) {
-      console.error('Error fetching documents:', error);
+  const renderIDCard = () => (
+    <View style={styles.idCard}>
+      <View style={styles.idCardHeader}>
+        <Text style={styles.companyName}>Company Name</Text>
+        <Text style={styles.idCardTitle}>Employee ID Card</Text>
+      </View>
+      
+      <View style={styles.idCardContent}>
+        <View style={styles.idCardLeft}>
+          {userData.profile_picture ? (
+            <Image source={{ uri: userData.profile_picture }} style={styles.idPhoto} />
+          ) : (
+            <View style={styles.idPhotoPlaceholder}>
+              <Text style={styles.idPhotoText}>
+                {userData.first_name?.charAt(0)}{userData.last_name?.charAt(0)}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.idCardRight}>
+          <Text style={styles.idName}>{userData.full_name}</Text>
+          <Text style={styles.idDesignation}>{userData.designation || userData.role}</Text>
+          <Text style={styles.idNumber}>ID: {userData.employee_id}</Text>
+          <Text style={styles.idEmail}>{userData.email}</Text>
+          <Text style={styles.idPhone}>{userData.phone_number}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.idCardFooter}>
+        <Text style={styles.validText}>Valid until: Dec 2024</Text>
+      </View>
+    </View>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'profile':
+        return renderProfileContent();
+      case 'idcard':
+        return renderIDCard();
+      case 'assets':
+        return renderAssets();
+      case 'payslips':
+        return renderPayslips();
+      case 'documents':
+        return renderDocuments();
+      default:
+        return renderProfileContent();
     }
   };
 
-  // Component definitions
-  const BackIcon = ({ color = colors.white, size = 24 }: { color?: string; size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.6,
-        height: size * 0.6,
-        borderLeftWidth: 2,
-        borderTopWidth: 2,
-        borderColor: color,
-        transform: [{ rotate: '-45deg' }],
-      }} />
-    </View>
-  );
-
-  const EditIcon = ({ color = colors.white, size = 18 }: { color?: string; size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.7,
-        height: size * 0.7,
-        borderWidth: 1.2,
-        borderColor: color,
-        borderRadius: 1,
-        position: 'relative',
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: -3,
-          right: -3,
-          width: size * 0.5,
-          height: size * 0.25,
-          backgroundColor: color,
-          borderRadius: 1,
-          transform: [{ rotate: '45deg' }],
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: -1,
-          right: -1,
-          width: 2,
-          height: 2,
-          backgroundColor: color,
-          borderRadius: 1,
-        }} />
+  const renderProfileContent = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Personal Information</Text>
+      <View style={styles.card}>
+        <View style={styles.inputRow}>
+          <FormInput
+            label="First Name"
+            value={formData.firstName}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
+            editable={isEditing}
+          />
+          <FormInput
+            label="Last Name"
+            value={formData.lastName}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
+            editable={isEditing}
+          />
+        </View>
+        
+        <FormInput
+          label="Email"
+          value={userData.email}
+          editable={false}
+        />
+        
+        <FormInput
+          label="Phone"
+          value={formData.phoneNumber}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, phoneNumber: text }))}
+          editable={isEditing}
+        />
+        
+        <FormInput
+          label="Bio"
+          value={formData.bio}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
+          multiline
+          editable={isEditing}
+        />
+        
+        <FormInput
+          label="Home Address"
+          value={formData.homeAddress}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, homeAddress: text }))}
+          editable={isEditing}
+        />
+        
+        <FormInput
+          label="Current Location"
+          value={formData.currentLocation}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, currentLocation: text }))}
+          editable={isEditing}
+          note="Update with manager approval for office travel"
+        />
       </View>
     </View>
   );
 
-  const CameraIcon = ({ color = colors.primary, size = 20 }: { color?: string; size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.85,
-        height: size * 0.65,
-        borderWidth: 1.5,
-        borderColor: color,
-        borderRadius: 3,
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: -4,
-          alignSelf: 'center',
-          width: size * 0.3,
-          height: size * 0.2,
-          backgroundColor: color,
-          borderTopLeftRadius: 2,
-          borderTopRightRadius: 2,
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: size * 0.4,
-          height: size * 0.4,
-          borderWidth: 1.5,
-          borderColor: color,
-          borderRadius: size * 0.2,
-          transform: [{ translateX: -size * 0.2 }, { translateY: -size * 0.2 }],
-        }} />
+  const renderAssets = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Assigned Assets</Text>
+      <View style={styles.card}>
+        {assets.length > 0 ? assets.map((asset, index) => (
+          <TouchableOpacity 
+            key={index} 
+            style={styles.listItem}
+            onPress={() => showModal('Asset Details', asset, 'asset')}
+          >
+            <View style={styles.assetIcon}>
+              <Text style={styles.assetIconText}>{asset.type?.[0]?.toUpperCase()}</Text>
+            </View>
+            <View style={styles.listItemContent}>
+              <Text style={styles.listItemTitle}>{asset.name}</Text>
+              <Text style={styles.listItemSubtitle}>{asset.type} • {asset.serial_number}</Text>
+            </View>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+        )) : (
+          <Text style={styles.emptyText}>No assets assigned</Text>
+        )}
       </View>
     </View>
   );
 
-  const InfoRow = ({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) => (
-    <View style={styles.infoRow}>
-      <View style={styles.infoRowHeader}>
-        {icon}
-        <Text style={styles.infoLabel}>{label}</Text>
+  const renderPayslips = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Payslips</Text>
+      <View style={styles.card}>
+        {payslips.length > 0 ? payslips.map((payslip, index) => (
+          <TouchableOpacity 
+            key={index} 
+            style={styles.listItem}
+            onPress={() => showModal('Payslip', payslip, 'payslip')}
+          >
+            <View style={styles.payslipIcon}>
+              <Text style={styles.payslipIconText}>₹</Text>
+            </View>
+            <View style={styles.listItemContent}>
+              <Text style={styles.listItemTitle}>{payslip.month} {payslip.year}</Text>
+              <Text style={styles.listItemSubtitle}>Net: ₹{payslip.net_salary}</Text>
+            </View>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+        )) : (
+          <Text style={styles.emptyText}>No payslips available</Text>
+        )}
       </View>
-      <Text style={styles.infoValue}>{value || 'Not provided'}</Text>
     </View>
   );
 
-  const FormInput = ({ 
-    label, 
-    value, 
-    onChangeText, 
-    placeholder, 
-    error, 
-    fieldName,
-    editable = true,
-    multiline = false,
-    keyboardType = 'default',
-    maxLength,
-    flex,
-    ...props 
-  }: any) => (
-    <View style={[styles.inputContainer, flex && { flex: 1 }]}>
-      <Text style={styles.inputLabel}>
-        {label}
-        {maxLength && ` (${value.length}/${maxLength})`}
-      </Text>
+  const renderDocuments = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Documents</Text>
+      <View style={styles.card}>
+        {documents.length > 0 ? documents.map((doc, index) => (
+          <TouchableOpacity 
+            key={index} 
+            style={styles.listItem}
+            onPress={() => showModal('Document', doc, 'document')}
+          >
+            <View style={styles.docIcon}>
+              <Text style={styles.docIconText}>📄</Text>
+            </View>
+            <View style={styles.listItemContent}>
+              <Text style={styles.listItemTitle}>{doc.document_name}</Text>
+              <Text style={styles.listItemSubtitle}>{doc.document_type}</Text>
+            </View>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+        )) : (
+          <Text style={styles.emptyText}>No documents uploaded</Text>
+        )}
+      </View>
+    </View>
+  );
+
+  const FormInput = ({ label, value, onChangeText, editable = true, multiline = false, note }) => (
+    <View style={[styles.inputContainer, multiline && { flex: 1 }]}>
+      <Text style={styles.inputLabel}>{label}</Text>
       <TextInput
-        style={[
-          styles.input,
-          multiline && styles.multilineInput,
-          error && styles.inputError,
-          !editable && styles.inputDisabled,
-          focusedField === fieldName && styles.inputFocused,
-        ]}
+        style={[styles.input, multiline && styles.multilineInput, !editable && styles.inputDisabled]}
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        onFocus={() => setFocusedField(fieldName)}
-        onBlur={() => setFocusedField(null)}
-        editable={editable && isEditing}
+        editable={editable}
         multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-        textAlignVertical={multiline ? 'top' : 'center'}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        {...props}
+        numberOfLines={multiline ? 3 : 1}
       />
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {note && <Text style={styles.noteText}>{note}</Text>}
     </View>
+  );
+
+  const TabButton = ({ title, isActive, onPress, icon }) => (
+    <TouchableOpacity 
+      style={[styles.tabButton, isActive && styles.activeTab]} 
+      onPress={onPress}
+    >
+      <Text style={styles.tabIcon}>{icon}</Text>
+      <Text style={[styles.tabText, isActive && styles.activeTabText]}>{title}</Text>
+    </TouchableOpacity>
   );
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
   }
 
-  if (error || !userData) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <Text style={styles.errorTitle}>Unable to load profile</Text>
-        <Text style={styles.errorSubtitle}>Please check your connection and try again</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={onBack}>
-          <Text style={styles.retryButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
+          <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         
-        {!isEditing ? (
-          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-            <EditIcon />
-            <Text style={styles.editButtonText}>Edit</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.editActions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+        {activeTab === 'profile' && (
+          !isEditing ? (
+            <TouchableOpacity style={styles.editButton} onPress={() => setIsEditing(true)}>
+              <Text style={styles.editIcon}>✎</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Text style={styles.saveButtonText}>Save</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={styles.editActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setIsEditing(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
+                {saving ? <ActivityIndicator size="small" color={colors.white} /> : 
+                  <Text style={styles.saveText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          )
         )}
       </View>
 
-      {/* Profile Content */}
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+      {/* Content */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            {uploadingImage ? (
-              <View style={styles.avatarPlaceholder}>
-                <ActivityIndicator size="large" color={colors.white} />
-              </View>
-            ) : userData.profile_picture ? (
+          <TouchableOpacity style={styles.avatarContainer} onPress={handleImageUpload}>
+            {userData.profile_picture ? (
               <Image source={{ uri: userData.profile_picture }} style={styles.avatar} />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitials}>
-                  {userData.first_name?.charAt(0)}{userData.last_name?.charAt(0)}
+                <Text style={styles.avatarText}>
+                  {userData.first_name?.[0]}{userData.last_name?.[0]}
                 </Text>
               </View>
             )}
-            <TouchableOpacity 
-              style={styles.cameraButton}
-              onPress={handleImagePicker}
-              disabled={uploadingImage}
-            >
-              <CameraIcon size={18} />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.cameraButton}>
+              <Text style={styles.cameraIcon}>📷</Text>
+            </View>
+          </TouchableOpacity>
           <Text style={styles.profileName}>{userData.full_name}</Text>
-          <Text style={styles.profileDesignation}>{userData.designation || userData.role}</Text>
-          <Text style={styles.employeeId}>ID: {userData.employee_id}</Text>
+          <Text style={styles.profileRole}>{userData.designation || userData.role}</Text>
         </View>
 
-        <View style={styles.sectionsContainer}>
-          {/* Personal Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-            <View style={styles.sectionContent}>
-              <View style={styles.inputRow}>
-                <FormInput
-                  label="First Name"
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  placeholder="First name"
-                  error={validationErrors.firstName}
-                  fieldName="firstName"
-                  flex={1}
-                />
-                <FormInput
-                  label="Last Name"
-                  value={lastName}
-                  onChangeText={setLastName}
-                  placeholder="Last name"
-                  error={validationErrors.lastName}
-                  fieldName="lastName"
-                  flex={1}
-                />
-              </View>
-              
-              <FormInput
-                label="Email Address"
-                value={userData.email}
-                onChangeText={() => {}}
-                placeholder="Email address"
-                fieldName="email"
-                editable={false}
-                keyboardType="email-address"
-              />
-              
-              <FormInput
-                label="Phone Number"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                placeholder="Phone number"
-                error={validationErrors.phoneNumber}
-                fieldName="phoneNumber"
-                keyboardType="phone-pad"
-              />
+        {/* Tabs */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.tabContainer}
+          contentContainerStyle={styles.tabContent}
+        >
+          <TabButton title="Profile" icon="👤" isActive={activeTab === 'profile'} onPress={() => setActiveTab('profile')} />
+          <TabButton title="ID Card" icon="🆔" isActive={activeTab === 'idcard'} onPress={() => setActiveTab('idcard')} />
+          <TabButton title="Assets" icon="💼" isActive={activeTab === 'assets'} onPress={() => setActiveTab('assets')} />
+          <TabButton title="Payslips" icon="💰" isActive={activeTab === 'payslips'} onPress={() => setActiveTab('payslips')} />
+          <TabButton title="Documents" icon="📄" isActive={activeTab === 'documents'} onPress={() => setActiveTab('documents')} />
+        </ScrollView>
 
-              <FormInput
-                label="Bio"
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell us about yourself..."
-                error={validationErrors.bio}
-                fieldName="bio"
-                multiline={true}
-                maxLength={500}
-              />
-            </View>
-          </View>
-
-          {/* Office Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Office Information</Text>
-            <View style={styles.sectionContent}>
-              <InfoRow 
-                label="Office Name" 
-                value={userData.office?.name || 'Not assigned'} 
-              />
-              {userData.office?.address && (
-                <InfoRow 
-                  label="Office Address" 
-                  value={`${userData.office.address.address}, ${userData.office.address.city}, ${userData.office.address.state}, ${userData.office.address.country} ${userData.office.address.zip_code}`}
-                />
-              )}
-            </View>
-          </View>
-
-          {/* Home Address */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Home Address</Text>
-            <View style={styles.sectionContent}>
-              <FormInput
-                label="Street Address"
-                value={homeAddress}
-                onChangeText={setHomeAddress}
-                placeholder="Street address"
-                fieldName="homeAddress"
-              />
-
-              <View style={styles.inputRow}>
-                <FormInput
-                  label="City"
-                  value={homeCity}
-                  onChangeText={setHomeCity}
-                  placeholder="City"
-                  fieldName="homeCity"
-                  flex={1}
-                />
-                <FormInput
-                  label="State"
-                  value={homeState}
-                  onChangeText={setHomeState}
-                  placeholder="State"
-                  fieldName="homeState"
-                  flex={1}
-                />
-              </View>
-
-              <View style={styles.inputRow}>
-                <FormInput
-                  label="Country"
-                  value={homeCountry}
-                  onChangeText={setHomeCountry}
-                  placeholder="Country"
-                  fieldName="homeCountry"
-                  flex={1}
-                />
-                <FormInput
-                  label="ZIP Code"
-                  value={homeZipCode}
-                  onChangeText={setHomeZipCode}
-                  placeholder="ZIP code"
-                  error={validationErrors.homeZipCode}
-                  fieldName="homeZipCode"
-                  keyboardType="numeric"
-                  flex={1}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Documents */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Documents</Text>
-              <TouchableOpacity 
-                style={styles.uploadButton}
-                onPress={handleDocumentUpload}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Text style={styles.uploadButtonText}>+ Upload</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.sectionContent}>
-              {documents.length > 0 ? (
-                documents.map((document, index) => (
-                  <TouchableOpacity key={index} style={styles.documentItem}>
-                    <View style={styles.documentInfo}>
-                      <Text style={styles.documentName}>{document.document_name}</Text>
-                      <Text style={styles.documentDate}>
-                        {new Date(document.uploaded_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </Text>
-                    </View>
-                    <Text style={styles.documentArrow}>→</Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No documents uploaded</Text>
-                  <TouchableOpacity 
-                    style={styles.emptyUploadButton}
-                    onPress={handleDocumentUpload}
-                    disabled={uploading}
-                  >
-                    {uploading ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <Text style={styles.emptyUploadButtonText}>Upload First Document</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
+        {/* Tab Content */}
+        {renderTabContent()}
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Modal */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{modalContent.title}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              <Text style={styles.modalText}>{JSON.stringify(modalContent.content, null, 2)}</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
 
-export default Profile;
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  loadingText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    marginTop: spacing.md,
-    fontWeight: '500',
-  },
-  errorTitle: {
-    color: colors.white,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  errorSubtitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retryButton: {
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  retryButtonText: {
-    color: colors.primary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary },
+  loadingText: { color: colors.white, marginTop: spacing.md },
   
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
     backgroundColor: colors.primary,
   },
-  backButton: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  headerTitle: {
-    color: colors.white,
-    fontSize: fontSize.xl,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: spacing.md,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-  },
-  editButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    marginLeft: spacing.xs,
-  },
-  editActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cancelButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginRight: spacing.sm,
-  },
-  cancelButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-  },
-  saveButton: {
-    backgroundColor: colors.success,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
+  backButton: { padding: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
+  backIcon: { color: colors.white, fontSize: 18, fontWeight: 'bold' },
+  headerTitle: { flex: 1, textAlign: 'center', color: colors.white, fontSize: fontSize.xl, fontWeight: '600' },
+  editButton: { padding: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
+  editIcon: { color: colors.white, fontSize: 16 },
+  editActions: { flexDirection: 'row', gap: spacing.sm },
+  cancelButton: { padding: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 15 },
+  cancelText: { color: colors.white, fontSize: 14 },
+  saveButton: { padding: spacing.sm, backgroundColor: colors.success, borderRadius: 15, minWidth: 50, alignItems: 'center' },
+  saveText: { color: colors.white, fontSize: 14, fontWeight: '600' },
 
-  // Content
-  content: {
-    flex: 1,
-  },
-  
   // Profile Header
   profileHeader: {
     backgroundColor: colors.primary,
     alignItems: 'center',
-    paddingBottom: spacing.xl,
-    borderBottomLeftRadius: borderRadius.xl,
-    borderBottomRightRadius: borderRadius.xl,
-    marginBottom: spacing.lg,
-  },
-  avatarContainer: {
-    position: 'relative',
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     marginBottom: spacing.md,
   },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: colors.white,
-  },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.white,
-  },
-  avatarInitials: {
-    color: colors.white,
-    fontSize: fontSize.xxxl,
-    fontWeight: '600',
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 32,
-    height: 32,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.md,
-  },
-  profileName: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.white,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  profileDesignation: {
-    fontSize: fontSize.md,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    fontWeight: '500',
-    marginBottom: spacing.xs,
-  },
-  employeeId: {
-    fontSize: fontSize.sm,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-  },
+  avatarContainer: { position: 'relative', marginBottom: spacing.md },
+  avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: colors.white },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: colors.white, fontSize: 24, fontWeight: 'bold' },
+  cameraButton: { position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, backgroundColor: colors.white, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  cameraIcon: { fontSize: 12 },
+  profileName: { color: colors.white, fontSize: fontSize.xl, fontWeight: 'bold', marginBottom: 4 },
+  profileRole: { color: 'rgba(255,255,255,0.8)', fontSize: fontSize.md },
 
-  // Sections
-  sectionsContainer: {
-    paddingHorizontal: spacing.lg,
-  },
-  section: {
-    marginBottom: spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  sectionContent: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.sm,
-  },
+  // Tabs
+  tabContainer: { backgroundColor: colors.white, marginBottom: spacing.md },
+  tabContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  tabButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, paddingVertical: 6, marginRight: spacing.sm, borderRadius: 12, backgroundColor: colors.backgroundSecondary, minHeight: 26 },
+  activeTab: { backgroundColor: colors.primary },
+  tabIcon: { fontSize: 12, marginRight: 4 },
+  tabText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
+  activeTabText: { color: colors.white, fontWeight: '600' },
 
-  // Form Inputs
-  inputContainer: {
-    marginBottom: spacing.md,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  inputLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.md,
-    color: colors.text,
-    backgroundColor: colors.white,
-    minHeight: 44,
-  },
-  multilineInput: {
-    height: 80,
-    textAlignVertical: 'top',
-    paddingTop: spacing.sm,
-  },
-  inputFocused: {
-    borderColor: colors.primary,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
-  inputDisabled: {
-    backgroundColor: colors.backgroundSecondary,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    fontSize: fontSize.xs,
-    color: colors.error,
-    marginTop: spacing.xs,
-    fontWeight: '500',
-  },
+  // Content
+  content: { flex: 1, paddingHorizontal: spacing.lg },
+  section: { marginBottom: spacing.xl },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  card: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.lg, ...shadows.sm },
 
-  // Info Rows
-  infoRow: {
-    marginBottom: spacing.md,
-  },
-  infoRowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginLeft: spacing.xs,
-  },
-  infoValue: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    lineHeight: 22,
-  },
+  // Form
+  inputContainer: { marginBottom: spacing.md },
+  inputRow: { flexDirection: 'row', gap: spacing.md },
+  inputLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: fontSize.md },
+  multilineInput: { height: 60, textAlignVertical: 'top' },
+  inputDisabled: { backgroundColor: colors.backgroundSecondary, color: colors.textSecondary },
+  noteText: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs, fontStyle: 'italic' },
 
-  // Upload Button
-  uploadButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  uploadButtonText: {
-    color: colors.primary,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
+  // ID Card
+  idCard: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.lg, ...shadows.md },
+  idCardHeader: { alignItems: 'center', marginBottom: spacing.lg, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: spacing.md },
+  companyName: { fontSize: fontSize.lg, fontWeight: 'bold', color: colors.primary },
+  idCardTitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.xs },
+  idCardContent: { flexDirection: 'row', marginBottom: spacing.lg },
+  idCardLeft: { marginRight: spacing.lg },
+  idPhoto: { width: 60, height: 60, borderRadius: 8 },
+  idPhotoPlaceholder: { width: 60, height: 60, borderRadius: 8, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  idPhotoText: { color: colors.white, fontSize: 18, fontWeight: 'bold' },
+  idCardRight: { flex: 1 },
+  idName: { fontSize: fontSize.lg, fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs },
+  idDesignation: { fontSize: fontSize.md, color: colors.textSecondary, marginBottom: spacing.xs },
+  idNumber: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs },
+  idEmail: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
+  idPhone: { fontSize: fontSize.sm, color: colors.text },
+  idCardFooter: { alignItems: 'center', borderTopWidth: 1, borderColor: colors.border, paddingTop: spacing.md },
+  validText: { fontSize: fontSize.xs, color: colors.textSecondary },
 
-  // Documents
-  documentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  documentInfo: {
-    flex: 1,
-  },
-  documentName: {
-    fontSize: fontSize.md,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  documentDate: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  documentArrow: {
-    fontSize: fontSize.lg,
-    color: colors.textSecondary,
-    fontWeight: '300',
-  },
+  // List Items
+  listItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border },
+  listItemContent: { flex: 1, marginLeft: spacing.md },
+  listItemTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  listItemSubtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
+  arrow: { fontSize: fontSize.lg, color: colors.textSecondary },
+  
+  // Icons
+  assetIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  assetIconText: { color: colors.white, fontSize: fontSize.lg, fontWeight: 'bold' },
+  payslipIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.success, justifyContent: 'center', alignItems: 'center' },
+  payslipIconText: { color: colors.white, fontSize: fontSize.lg, fontWeight: 'bold' },
+  docIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.warning, justifyContent: 'center', alignItems: 'center' },
+  docIconText: { fontSize: fontSize.lg },
 
   // Empty State
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  emptyStateText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-  },
-  emptyUploadButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  emptyUploadButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
+  emptyText: { textAlign: 'center', color: colors.textSecondary, fontSize: fontSize.md, paddingVertical: spacing.xl },
 
-  bottomSpacing: {
-    height: spacing.xxl,
-  },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: colors.white, borderRadius: borderRadius.lg, width: '90%', maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderColor: colors.border },
+  modalTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  closeButton: { fontSize: fontSize.xl, color: colors.textSecondary },
+  modalBody: { padding: spacing.lg },
+  modalText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+
+  bottomSpacing: { height: spacing.xl },
 });
+
+export default Profile;
