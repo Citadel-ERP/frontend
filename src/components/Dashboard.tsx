@@ -9,6 +9,7 @@ import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './Attendance';
 import Profile from './Profile';
+import { additional } from '../../../../ve/lib64/python3.10/site-packages/django/contrib/admin/static/admin/js/vendor/xregexp/xregexp';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -648,7 +649,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </View>
 
                 <TouchableOpacity style={styles.applyButton} activeOpacity={0.8} onPress={() => setShowAttendance(true)}>
-                  <Text style={styles.applyButtonText}>Apply Leave</Text>
+                  <Text style={styles.applyButtonText}>Mark Attendance</Text>
                 </TouchableOpacity>
               </View>
 

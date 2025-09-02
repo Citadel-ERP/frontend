@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,19 +19,18 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, fontSize, borderRadius, shadows, commonStyles } from '../styles/theme';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Constants for attendance tracking
 const TOKEN_2_KEY = 'token_2';
-const ATTENDANCE_COOKIE_KEY = 'attendance_marked_date';
-const ATTENDANCE_START_HOUR = 11; // 11 PM
-const ATTENDANCE_END_MINUTES = 30; // 11:30 PM
-const ATTENDANCE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
-const COOKIE_CLEAR_HOUR = 10; // 10:45 PM (45 minutes before 11:30)
-const COOKIE_CLEAR_MINUTES = 45;
 
 interface AttendanceProps {
   onBack: () => void;
@@ -70,13 +70,13 @@ interface AttendanceRecord {
 const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'attendance' | 'leave' | 'calendar' | 'reports'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'leave' | 'Holidays' | 'reports'>('attendance');
   const [loading, setLoading] = useState(false);
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
-  
+
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  
+
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     casual_leaves: 0,
     sick_leaves: 0,
@@ -89,9 +89,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     leaveType: 'casual',
     reason: ''
   });
-  
+
+  // Date picker states
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  
+
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
@@ -110,7 +116,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         console.error('Error getting token:', error);
       }
     };
-    
+
     getToken();
   }, []);
 
@@ -118,7 +124,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     if (token) {
       fetchInitialData();
       initializeLocationPermission();
-      setupAttendanceTracking();
     }
   }, [token]);
 
@@ -171,64 +176,42 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const isAttendanceMarkedToday = async (): Promise<boolean> => {
+  const fetchInitialData = async () => {
+    setLoading(true);
     try {
-      const markedDate = await AsyncStorage.getItem(ATTENDANCE_COOKIE_KEY);
-      if (!markedDate) return false;
-
-      const today = new Date().toDateString();
-      return markedDate === today;
+      await Promise.all([
+        fetchLeaveBalance(),
+        fetchHolidays(),
+        fetchAttendanceRecords()
+      ]);
     } catch (error) {
-      console.error('Error checking attendance cookie:', error);
-      return false;
+      console.error('Error fetching initial data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const setAttendanceMarkedCookie = async () => {
-    try {
-      const today = new Date().toDateString();
-      await AsyncStorage.setItem(ATTENDANCE_COOKIE_KEY, today);
-    } catch (error) {
-      console.error('Error setting attendance cookie:', error);
+  const markAttendance = async () => {
+    if (!token) {
+      Alert.alert('Error', 'Authentication token not found. Please login again.');
+      return;
     }
-  };
 
-  const clearPreviousDayCookie = async () => {
+    setLoading(true);
     try {
-      const markedDate = await AsyncStorage.getItem(ATTENDANCE_COOKIE_KEY);
-      if (markedDate) {
-        const today = new Date().toDateString();
-        if (markedDate !== today) {
-          await AsyncStorage.removeItem(ATTENDANCE_COOKIE_KEY);
-        }
-      }
-    } catch (error) {
-      console.error('Error clearing previous day cookie:', error);
-    }
-  };
-
-  const markAttendanceWithLocation = async (): Promise<boolean> => {
-    try {
-      if (!token) {
-        console.error('No token available');
-        return false;
-      }
-
-      // Check if attendance already marked today
-      const alreadyMarked = await isAttendanceMarkedToday();
-      if (alreadyMarked) {
-        console.log('Attendance already marked today');
-        return true;
-      }
-
-      // Get current location
       const location = await getCurrentLocation();
       if (!location) {
-        console.warn('Unable to get current location');
-        return false;
+        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+        setLoading(false);
+        return;
       }
 
-      // Call backend API
+      console.log('Marking attendance with:', {
+        token,
+        latitude: location.latitude.toString(),
+        longitude: location.longitude.toString(),
+      });
+
       const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
         method: 'POST',
         headers: {
@@ -241,241 +224,62 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         }),
       });
 
-      const data = await response.json();
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
 
-      if (response.ok) {
-        if (data.message === 'Mark attendance successful') {
-          await setAttendanceMarkedCookie();
-          await fetchTodayAttendance(); // Refresh today's attendance
-          console.log('Attendance marked successfully');
-          return true;
-        } else if (data.message === 'Attendance already marked') {
-          await setAttendanceMarkedCookie();
-          console.log('Attendance already marked on server');
-          return true;
-        }
-      } else {
-        console.warn('Attendance marking failed:', data.message);
-        return false;
-      }
+      // Check if response has content before parsing JSON
+      const responseText = await response.text();
+      console.log('Response text:', responseText);
 
-      return false;
-    } catch (error) {
-      console.error('Error marking attendance with location:', error);
-      return false;
-    }
-  };
-
-  const shouldStartAttendanceTracking = (): boolean => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentTime = currentHour * 60 + currentMinutes;
-    
-    const startTime = ATTENDANCE_START_HOUR * 60; // 10:00 AM in minutes
-    const endTime = ATTENDANCE_START_HOUR * 60 + ATTENDANCE_END_MINUTES; // 10:30 AM in minutes
-    
-    return currentTime >= startTime && currentTime <= endTime;
-  };
-
-  const getNextAttendanceAttemptTime = (): Date | null => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinutes = now.getMinutes();
-    
-    // If before 10 AM, schedule for 10 AM
-    if (currentHour < ATTENDANCE_START_HOUR) {
-      const nextAttempt = new Date();
-      nextAttempt.setHours(ATTENDANCE_START_HOUR, 0, 0, 0);
-      return nextAttempt;
-    }
-    
-    // If between 10:00 and 10:30, find next 5-minute interval
-    if (currentHour === ATTENDANCE_START_HOUR && currentMinutes <= ATTENDANCE_END_MINUTES) {
-      const nextMinute = Math.ceil(currentMinutes / 5) * 5;
-      if (nextMinute <= ATTENDANCE_END_MINUTES) {
-        const nextAttempt = new Date();
-        nextAttempt.setHours(ATTENDANCE_START_HOUR, nextMinute, 0, 0);
-        return nextAttempt;
-      }
-    }
-    
-    // If after 10:30, schedule for next day 10 AM
-    const nextAttempt = new Date();
-    nextAttempt.setDate(nextAttempt.getDate() + 1);
-    nextAttempt.setHours(ATTENDANCE_START_HOUR, 0, 0, 0);
-    return nextAttempt;
-  };
-
-  const scheduleNotification = async () => {
-    // TODO: Implement notification when backend endpoint is ready
-    // const response = await fetch(`${BACKEND_URL}/sendNotification`, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({ token }),
-    // });
-    console.log('Notification scheduled (backend endpoint not yet implemented)');
-  };
-
-  const setupAttendanceTracking = async () => {
-    try {
-      // Clear previous day cookie at 9:45 AM
-      const now = new Date();
-      if (now.getHours() === COOKIE_CLEAR_HOUR && now.getMinutes() >= COOKIE_CLEAR_MINUTES) {
-        await clearPreviousDayCookie();
-      }
-
-      // Check if we should start attendance tracking
-      if (!shouldStartAttendanceTracking()) {
-        const nextAttempt = getNextAttendanceAttemptTime();
-        if (nextAttempt) {
-          const timeUntilNext = nextAttempt.getTime() - now.getTime();
-          setTimeout(() => {
-            setupAttendanceTracking();
-          }, timeUntilNext);
-        }
-        return;
-      }
-
-      // Check if attendance already marked
-      const alreadyMarked = await isAttendanceMarkedToday();
-      if (alreadyMarked) {
-        console.log('Attendance already marked today, skipping automatic tracking');
-        return;
-      }
-
-      // Start periodic attendance attempts
-      let attemptCount = 0;
-      const maxAttempts = Math.floor(ATTENDANCE_END_MINUTES / 5) + 1; // 7 attempts (0, 5, 10, 15, 20, 25, 30)
-
-      const attemptAttendance = async () => {
-        if (attemptCount >= maxAttempts) {
-          // All attempts exhausted, schedule notification
-          await scheduleNotification();
-          return;
-        }
-
-        const success = await markAttendanceWithLocation();
-        if (success) {
-          // Attendance marked successfully, clear timer
-          if (attendanceTimer) {
-            clearInterval(attendanceTimer);
-            setAttendanceTimer(null);
-          }
-          return;
-        }
-
-        attemptCount++;
-        console.log(`Attendance attempt ${attemptCount} failed, will try again in 5 minutes`);
-      };
-
-      // Make first attempt immediately
-      await attemptAttendance();
-
-      // Set up timer for subsequent attempts
-      const timer = setInterval(attemptAttendance, ATTENDANCE_INTERVAL);
-      setAttendanceTimer(timer);
-
-      // Clear timer after final attempt time
-      setTimeout(() => {
-        if (timer) {
-          clearInterval(timer);
-          setAttendanceTimer(null);
-        }
-      }, (maxAttempts - 1) * ATTENDANCE_INTERVAL);
-
-    } catch (error) {
-      console.error('Error setting up attendance tracking:', error);
-    }
-  };
-
-  const fetchInitialData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchTodayAttendance(),
-        fetchLeaveBalance(),
-        fetchLeaveApplications(),
-        fetchHolidays(),
-        fetchAttendanceRecords()
-      ]);
-    } catch (error) {
-      console.error('Error fetching initial data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTodayAttendance = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/attendance/today`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTodayAttendance(data.attendance);
-      }
-    } catch (error) {
-      console.error('Error fetching today attendance:', error);
-    }
-  };
-
-  const markAttendance = async () => {
-    if (!token) return;
-    
-    setLoading(true);
-    try {
-      const location = await getCurrentLocation();
-      if (!location) {
-        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        Alert.alert('Error', 'Invalid response from server. Please try again.');
         setLoading(false);
         return;
       }
 
-      const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          token,
-          latitude: location.latitude.toString(),
-          longitude: location.longitude.toString(),
-        }),
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        if (data.message === 'Mark attendance successful') {
-          Alert.alert('Success', 'Attendance marked successfully!');
-          await setAttendanceMarkedCookie();
-          await fetchTodayAttendance();
-        } else if (data.message === 'Attendance already marked') {
-          Alert.alert('Info', 'Attendance already marked for today');
-          await setAttendanceMarkedCookie();
-        }
-      } else {
-        let errorMessage = 'Failed to mark attendance';
+      console.log('Parsed data:', data);
+
+      if (response.status === 200) {
+        // Success - attendance marked successfully
+        Alert.alert('Success', 'Attendance marked successfully!');
+
+        // Refresh attendance records
+        await fetchAttendanceRecords();
+
+        // Also refresh today's attendance status by fetching recent records
+        // The today's attendance should be updated in the UI
+
+      } else if (response.status === 400) {
+        // Handle specific 400 error cases
         if (data.message === 'Mark attendance failed, You are not in office') {
-          errorMessage = 'You are not in office location. Please ensure you are within the office premises.';
-        } else if (data.message === 'Mark attendance failed, Invalid Token') {
-          errorMessage = 'Invalid authentication. Please login again.';
-        } else if (data.message) {
-          errorMessage = data.message;
+          Alert.alert('Cannot Mark Attendance', 'You are not at the office location. Please ensure you are within the office premises to mark attendance.');
+        } else if (data.message === 'Attendance already marked') {
+          Alert.alert('Already Marked', 'You have already marked today\'s attendance.');
+        } else {
+          // Other 400 errors
+          Alert.alert('Error', data.message || 'Failed to mark attendance. Please try again.');
         }
-        Alert.alert('Error', errorMessage);
+      } else if (response.status === 401) {
+        // Unauthorized - invalid token
+        Alert.alert('Authentication Error', 'Invalid authentication. Please login again.');
+      } else {
+        // Other error status codes
+        Alert.alert('Error', data.message || `Server error (${response.status}). Please try again.`);
       }
+
     } catch (error) {
       console.error('Error marking attendance:', error);
-      Alert.alert('Error', 'Network error occurred. Please try again.');
+
+      // Check if it's a network error
+      if (error.message.includes('Network') || error.message.includes('fetch')) {
+        Alert.alert('Network Error', 'Please check your internet connection and try again.');
+      } else {
+        Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -484,39 +288,50 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   // ... (rest of the existing methods remain unchanged)
   const fetchLeaveBalance = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/leave/balance`, {
+      const response = await fetch(`${BACKEND_URL}/core/getLeaves`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ token }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        setLeaveBalance(data.balance);
+        console.log(data);
+
+        // Update leave balance from root level properties
+        setLeaveBalance({
+          casual_leaves: data.casual_leaves || 0,
+          sick_leaves: data.sick_leaves || 0,
+          earned_leaves: data.earned_leaves || 0
+        });
+
+        // Update leave applications from the leaves array
+        if (data.leaves && Array.isArray(data.leaves)) {
+          const formattedLeaveApplications = data.leaves.map(leave => ({
+            id: leave.id,
+            start_date: leave.start_date,
+            end_date: leave.end_date,
+            leave_type: leave.leave_type,
+            leave_reason: leave.reason, // Note: API uses 'reason', component expects 'leave_reason'
+            status: leave.status,
+            applied_date: leave.requested_at,
+            rejection_reason: leave.comment && leave.status === 'rejected' ? leave.comment : undefined
+          }));
+          setLeaveApplications(formattedLeaveApplications);
+        } else {
+          // Ensure leaveApplications is always an array
+          setLeaveApplications([]);
+        }
+      } else {
+        // Set default values on error response
+        setLeaveApplications([]);
       }
     } catch (error) {
       console.error('Error fetching leave balance:', error);
-    }
-  };
-
-  const fetchLeaveApplications = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/leave/applications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setLeaveApplications(data.applications);
-      }
-    } catch (error) {
-      console.error('Error fetching leave applications:', error);
+      // Set default values on network error
+      setLeaveApplications([]);
     }
   };
 
@@ -528,7 +343,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/leave/apply`, {
+      const response = await fetch(`${BACKEND_URL}/core/applyLeave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -541,12 +356,11 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           leave_reason: leaveForm.reason
         }),
       });
-      
+
       if (response.ok) {
         Alert.alert('Success', 'Leave application submitted successfully!');
         setIsLeaveModalVisible(false);
         setLeaveForm({ startDate: '', endDate: '', leaveType: 'casual', reason: '' });
-        await fetchLeaveApplications();
         await fetchLeaveBalance();
       } else {
         const error = await response.json();
@@ -562,14 +376,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const fetchHolidays = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/holidays`, {
-        method: 'POST',
+      const response = await fetch(`${BACKEND_URL}/core/getHolidays`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setHolidays(data.holidays);
@@ -581,47 +394,154 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const fetchAttendanceRecords = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/attendance/records`, {
+      const response = await fetch(`${BACKEND_URL}/core/getRecentRecords`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          token,
-          month: selectedMonth,
-          year: selectedYear
+        body: JSON.stringify({
+          token
         }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        setAttendanceRecords(data.records);
+        console.log('Attendance records data:', data);
+
+        if (data.attendances && Array.isArray(data.attendances)) {
+          // Map the attendance data to match your AttendanceRecord interface
+          const formattedRecords = data.attendances.map(attendance => ({
+            date: attendance.date,
+            status: attendance.day, // 'present' or 'absent'
+            check_in_time: attendance.check_in_time,
+            check_out_time: attendance.check_out_time
+          }));
+
+          setAttendanceRecords(formattedRecords);
+
+          // Check for today's attendance
+          const today = new Date();
+          const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+          const todaysRecord = data.attendances.find(attendance =>
+            attendance.date === todayString
+          );
+
+          if (todaysRecord) {
+
+            setTodayAttendance({
+              date: todaysRecord.date,
+              status: todaysRecord.day,
+              check_in_time: todaysRecord.check_in_time,
+              check_out_time: todaysRecord.check_out_time
+            });
+          } else {
+            // No attendance marked for today - show mark attendance button
+            setTodayAttendance(null);
+          }
+        } else {
+          setAttendanceRecords([]);
+          setTodayAttendance(null);
+        }
+      } else {
+        console.error('Failed to fetch attendance records:', response.status);
+        setAttendanceRecords([]);
+        setTodayAttendance(null);
       }
     } catch (error) {
       console.error('Error fetching attendance records:', error);
+      setAttendanceRecords([]);
+      setTodayAttendance(null);
     }
+  };
+
+  // Helper function to determine attendance status
+  const getAttendanceStatus = (attendance: any): 'present' | 'absent' | 'late' | 'half_day' => {
+    if (!attendance.check_in_time && !attendance.check_out_time) {
+      return 'absent';
+    }
+
+    if (attendance.check_in_time && attendance.check_out_time) {
+      // You can add logic here to determine if late or half_day based on times
+      // For now, assuming present if both times exist
+      return 'present';
+    }
+
+    return 'half_day'; // If only one time exists
   };
 
   const downloadAttendanceReport = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/attendance/report/download`, {
+      const response = await fetch(`${BACKEND_URL}/core/getAttendanceReport`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           token,
-          month: selectedMonth,
-          year: selectedYear,
-          format: 'pdf'
+          month: selectedMonth.toString().padStart(2, '0'), // Ensure 2-digit format
+          year: selectedYear.toString(),
         }),
       });
-      
+
       if (response.ok) {
-        Alert.alert('Success', 'Attendance report download started!');
+        // Get the PDF blob
+        const pdfBlob = await response.blob();
+
+        // Convert blob to base64 for React Native
+        const reader = new FileReader();
+        reader.readAsDataURL(pdfBlob);
+        reader.onloadend = async () => {
+          const base64data = reader.result.split(',')[1]; // Remove data:application/pdf;base64, prefix
+
+          // Generate filename
+          const monthName = new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' });
+          const filename = `attendance_report_${monthName}_${selectedYear}.pdf`;
+
+          // Define file path
+          const fileUri = FileSystem.documentDirectory + filename;
+
+          try {
+            // Save PDF to device
+            await FileSystem.writeAsStringAsync(fileUri, base64data, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+
+            // Show options to user
+            Alert.alert(
+              'Report Generated',
+              'Your attendance report has been generated successfully!',
+              [
+                {
+                  text: 'View PDF',
+                  onPress: () => openPDF(fileUri),
+                },
+                {
+                  text: 'Share/Download',
+                  onPress: () => sharePDF(fileUri, filename),
+                },
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+              ]
+            );
+
+          } catch (fileError) {
+            console.error('Error saving PDF:', fileError);
+            Alert.alert('Error', 'Failed to save PDF file');
+          }
+        };
+
+        reader.onerror = (error) => {
+          console.error('Error reading PDF blob:', error);
+          Alert.alert('Error', 'Failed to process PDF file');
+        };
+
       } else {
-        Alert.alert('Error', 'Failed to generate report');
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.message || 'Failed to generate report');
       }
     } catch (error) {
       console.error('Error downloading report:', error);
@@ -631,22 +551,106 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
+  // Function to open PDF in device's default PDF viewer
+  const openPDF = async (fileUri) => {
+    try {
+      if (Platform.OS === 'ios') {
+        // On iOS, use WebBrowser to open PDF
+        await WebBrowser.openBrowserAsync(fileUri, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        });
+      } else if (Platform.OS === 'android') {
+        // On Android, use IntentLauncher to open PDF with system apps
+        try {
+          const contentUri = await FileSystem.getContentUriAsync(fileUri);
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: contentUri,
+            flags: 1,
+            type: 'application/pdf',
+          });
+        } catch (intentError) {
+          console.log('Intent launcher failed, trying sharing:', intentError);
+          // Fallback to sharing if IntentLauncher fails
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Open PDF with...',
+          });
+        }
+      } else {
+        // Fallback for other platforms
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Open PDF with...',
+        });
+      }
+    } catch (error) {
+      console.error('Error opening PDF:', error);
+      // Ultimate fallback - just share the file
+      try {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Open PDF with...',
+        });
+      } catch (shareError) {
+        Alert.alert('Error', 'Could not open or share PDF file');
+      }
+    }
+  };
+
+  // Function to share/download PDF
+  const sharePDF = async (fileUri, filename) => {
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Save or Share Attendance Report',
+          UTI: 'com.adobe.pdf', // For iOS
+        });
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (error) {
+      console.error('Error sharing PDF:', error);
+      Alert.alert('Error', 'Failed to share PDF file');
+    }
+  };
+
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { 
-      day: '2-digit', 
-      month: 'short', 
-      year: 'numeric' 
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
     });
   };
 
   const formatTime = (timeString: string): string => {
     const time = new Date(timeString);
-    return time.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    return time.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
+  };
+
+  // Date picker handlers
+  const onStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setStartDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      setLeaveForm({ ...leaveForm, startDate: formattedDate });
+    }
+  };
+
+  const onEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      setLeaveForm({ ...leaveForm, endDate: formattedDate });
+    }
   };
 
   const BackIcon = () => (
@@ -670,8 +674,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       animationType="fade"
       onRequestClose={() => setShowMonthDropdown(false)}
     >
-      <TouchableOpacity 
-        style={styles.dropdownOverlay} 
+      <TouchableOpacity
+        style={styles.dropdownOverlay}
         onPress={() => setShowMonthDropdown(false)}
       >
         <View style={styles.dropdownContainer}>
@@ -710,8 +714,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       animationType="fade"
       onRequestClose={() => setShowYearDropdown(false)}
     >
-      <TouchableOpacity 
-        style={styles.dropdownOverlay} 
+      <TouchableOpacity
+        style={styles.dropdownOverlay}
         onPress={() => setShowYearDropdown(false)}
       >
         <View style={styles.dropdownContainer}>
@@ -750,95 +754,140 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       animationType="slide"
       onRequestClose={() => setIsLeaveModalVisible(false)}
     >
-      <KeyboardAvoidingView 
-        style={styles.modalOverlay} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>Apply for Leave</Text>
-          
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Start Date</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={leaveForm.startDate}
-                onChangeText={(text) => setLeaveForm({...leaveForm, startDate: text})}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textSecondary}
-              />
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Apply for Leave</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setIsLeaveModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
             </View>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>End Date</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={leaveForm.endDate}
-                onChangeText={(text) => setLeaveForm({...leaveForm, endDate: text})}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Leave Type</Text>
-              <View style={styles.leaveTypeContainer}>
-                {['casual', 'sick', 'earned'].map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.leaveTypeButton,
-                      leaveForm.leaveType === type && styles.leaveTypeButtonActive
-                    ]}
-                    onPress={() => setLeaveForm({...leaveForm, leaveType: type})}
-                  >
-                    <Text style={[
-                      styles.leaveTypeText,
-                      leaveForm.leaveType === type && styles.leaveTypeTextActive
-                    ]}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Start Date</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowStartDatePicker(true)}
+                >
+                  <Text style={[
+                    styles.datePickerText,
+                    !leaveForm.startDate && styles.datePickerPlaceholder
+                  ]}>
+                    {leaveForm.startDate || 'Select start date'}
+                  </Text>
+                  <Text style={styles.datePickerIcon}>📅</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Reason</Text>
-              <TextInput
-                style={styles.reasonInput}
-                value={leaveForm.reason}
-                onChangeText={(text) => setLeaveForm({...leaveForm, reason: text})}
-                placeholder="Enter reason for leave"
-                placeholderTextColor={colors.textSecondary}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
-          </ScrollView>
-          
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={styles.modalCancelButton}
-              onPress={() => setIsLeaveModalVisible(false)}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalSubmitButton}
-              onPress={submitLeaveApplication}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.modalSubmitText}>Submit</Text>
-              )}
-            </TouchableOpacity>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>End Date</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowEndDatePicker(true)}
+                >
+                  <Text style={[
+                    styles.datePickerText,
+                    !leaveForm.endDate && styles.datePickerPlaceholder
+                  ]}>
+                    {leaveForm.endDate || 'Select end date'}
+                  </Text>
+                  <Text style={styles.datePickerIcon}>📅</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Leave Type</Text>
+                <View style={styles.leaveTypeContainer}>
+                  {['casual', 'sick', 'earned'].map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.leaveTypeButton,
+                        leaveForm.leaveType === type && styles.leaveTypeButtonActive
+                      ]}
+                      onPress={() => setLeaveForm({ ...leaveForm, leaveType: type })}
+                    >
+                      <Text style={[
+                        styles.leaveTypeText,
+                        leaveForm.leaveType === type && styles.leaveTypeTextActive
+                      ]}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Reason</Text>
+                <TextInput
+                  style={styles.reasonInput}
+                  value={leaveForm.reason}
+                  onChangeText={(text) => setLeaveForm({ ...leaveForm, reason: text })}
+                  placeholder="Enter reason for leave"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setIsLeaveModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalSubmitButton}
+                  onPress={submitLeaveApplication}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Submit</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+
+        {/* Date Pickers */}
+        {showStartDatePicker && (
+          <DateTimePicker
+            value={startDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onStartDateChange}
+            minimumDate={new Date()}
+          />
+        )}
+
+        {showEndDatePicker && (
+          <DateTimePicker
+            value={endDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onEndDateChange}
+            minimumDate={startDate || new Date()}
+          />
+        )}
+      </View>
     </Modal>
   );
 
@@ -879,8 +928,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 <Text style={styles.noAttendanceIcon}>📅</Text>
               </View>
               <Text style={styles.noAttendanceText}>No attendance marked today</Text>
-              <TouchableOpacity 
-                style={styles.markAttendanceButton} 
+              <TouchableOpacity
+                style={styles.markAttendanceButton}
                 onPress={markAttendance}
                 disabled={loading}
               >
@@ -893,11 +942,11 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             </View>
           )}
         </View>
-        
+
         {/* Auto attendance status */}
         <View style={styles.autoAttendanceStatus}>
           <Text style={styles.autoAttendanceText}>
-            Auto attendance: {locationPermission ? 'Active (11:00-11:30 PM)' : 'Location permission required'}
+            Auto attendance: {locationPermission ? 'Active (10:00-10:30 AM)' : 'Location permission required'}
           </Text>
         </View>
       </View>
@@ -916,7 +965,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                   <Text style={styles.recordDate}>{formatDate(record.date)}</Text>
                 </View>
                 <Text style={[
-                  styles.recordStatus, 
+                  styles.recordStatus,
                   { color: getStatusColor(record.status) }
                 ]}>
                   {record.status.replace('_', ' ')}
@@ -954,8 +1003,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             <View style={[styles.balanceIndicator, { backgroundColor: colors.success }]} />
           </View>
         </View>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.applyLeaveButton}
           onPress={() => setIsLeaveModalVisible(true)}
         >
@@ -973,7 +1022,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                   {formatDate(application.start_date)} - {formatDate(application.end_date)}
                 </Text>
                 <View style={[
-                  styles.statusBadge, 
+                  styles.statusBadge,
                   { backgroundColor: getStatusBadgeColor(application.status) }
                 ]}>
                   <Text style={styles.statusBadgeText}>{application.status}</Text>
@@ -1029,7 +1078,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Attendance Report</Text>
-        
+
         <View style={styles.reportCard}>
           <View style={styles.reportFilters}>
             <View style={styles.filterGroup}>
@@ -1057,7 +1106,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               </TouchableOpacity>
             </View>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.downloadButton}
             onPress={downloadAttendanceReport}
             disabled={loading}
@@ -1095,7 +1144,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
@@ -1117,7 +1166,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             onPress={() => setActiveTab(tab.key as any)}
           >
             <Text style={[
-              styles.tabText, 
+              styles.tabText,
               activeTab === tab.key && styles.activeTabText
             ]}>
               {tab.label}
@@ -1144,6 +1193,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary,
+  },
+  autoAttendanceStatus: {
+    backgroundColor: colors.info + '20',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.info,
+  },
+  autoAttendanceText: {
+    fontSize: fontSize.sm,
+    color: colors.info,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
@@ -1226,7 +1287,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
-  
+
   attendanceCard: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -1312,7 +1373,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
   },
-  
+
   recordsContainer: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -1351,7 +1412,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
   },
-  
+
   leaveBalanceGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1469,7 +1530,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 18,
   },
-  
+
   holidayItem: {
     backgroundColor: colors.white,
     padding: spacing.lg,
@@ -1511,7 +1572,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textTransform: 'capitalize',
   },
-  
+
   reportCard: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -1601,7 +1662,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
   },
-  
+
   emptyState: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -1617,7 +1678,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

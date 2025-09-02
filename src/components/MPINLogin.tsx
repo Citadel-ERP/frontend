@@ -194,7 +194,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     try {
       const backend = getBackendUrl();
       console.log('Calling override login API...');
-
+      console.log(`${backend}/core/overrideLogin`)
       const response = await fetch(`${backend}/core/overrideLogin`, {
         method: 'POST',
         headers: {
