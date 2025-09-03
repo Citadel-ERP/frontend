@@ -9,7 +9,7 @@ import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './Attendance';
 import Profile from './Profile';
-import { additional } from '../../../../ve/lib64/python3.10/site-packages/django/contrib/admin/static/admin/js/vendor/xregexp/xregexp';
+import { AttendanceSettings } from './AttendanceSettings';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -69,6 +69,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [token, setToken] = useState<string | null>(null);
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAttendanceSettings, setShowAttendanceSettings] = useState(false);
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
@@ -176,6 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       help: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color },
       lock: { width: size * 0.6, height: size * 0.5, borderRadius: size * 0.05, borderWidth: 2, borderColor: color },
       info: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color },
+      settings: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.1, borderWidth: 2, borderColor: color },
     };
 
     return (
@@ -183,6 +185,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <View style={iconStyles[type]} />
         {type === 'help' && <Text style={{ color, fontSize: size * 0.6, fontWeight: 'bold', position: 'absolute' }}>?</Text>}
         {type === 'info' && <Text style={{ color, fontSize: size * 0.6, fontWeight: 'bold', position: 'absolute' }}>i</Text>}
+        {type === 'settings' && (
+          <View style={{ position: 'absolute' }}>
+            <View style={{ width: size * 0.3, height: size * 0.3, borderRadius: size * 0.15, backgroundColor: color }} />
+          </View>
+        )}
       </View>
     );
   };
@@ -442,6 +449,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const menuItems = [
     { title: 'Profile', icon: <Icon type="user" color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Profile' },
+    { title: 'Settings', icon: <Icon type="settings" color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Settings' },
     { title: 'Notifications', icon: <Icon type="notification" color={activeMenuItem === 'Notifications' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Notifications' },
     { title: 'Help & Support', icon: <Icon type="help" color={activeMenuItem === 'Help & Support' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Help & Support' },
     { title: 'Privacy Policy', icon: <Icon type="lock" color={activeMenuItem === 'Privacy Policy' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Privacy Policy' },
@@ -469,6 +477,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     closeMenu();
     if (item === 'Profile') {
       setShowProfile(true);
+    } else if (item === 'Settings') {
+      setShowAttendanceSettings(true);
     } else {
       Alert.alert('Coming Soon', `${item} feature will be available soon!`);
     }
@@ -493,6 +503,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleBackFromProfile = () => {
     setShowProfile(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromAttendanceSettings = () => {
+    setShowAttendanceSettings(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -593,6 +608,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </Modal>
   );
 
+  // Attendance Settings Modal
+  const AttendanceSettingsModal = () => (
+    <Modal
+      visible={showAttendanceSettings}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleBackFromAttendanceSettings}
+    >
+      <View style={dashboardStyles.modalContainer}>
+        <View style={dashboardStyles.modalHeader}>
+          <TouchableOpacity 
+            onPress={handleBackFromAttendanceSettings}
+            style={dashboardStyles.closeButton}
+          >
+            <Text style={dashboardStyles.closeButtonText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+        <AttendanceSettings />
+      </View>
+    </Modal>
+  );
+
   const displayModules = getDisplayModules();
 
   return (
@@ -651,6 +688,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <TouchableOpacity style={styles.applyButton} activeOpacity={0.8} onPress={() => setShowAttendance(true)}>
                   <Text style={styles.applyButtonText}>Mark Attendance</Text>
                 </TouchableOpacity>
+
               </View>
 
               {/* Upcoming Birthdays Section */}
@@ -720,6 +758,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </View>
 
           <HamburgerMenu />
+          <AttendanceSettingsModal />
         </View>
       )}
     </KeyboardAvoidingView>
@@ -727,6 +766,35 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 };
 
 export default Dashboard;
+
+// Additional styles for the new components
+const dashboardStyles = StyleSheet.create({
+  autoAttendanceButton: {
+    backgroundColor: '#FF9800', // Orange color to differentiate from regular attendance button
+    marginTop: spacing.sm,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  closeButton: {
+    padding: spacing.sm,
+  },
+  closeButtonText: {
+    fontSize: fontSize.md,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },

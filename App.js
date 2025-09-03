@@ -1,9 +1,13 @@
-import React from 'react';
+// Import background service at the very top to ensure TaskManager task is defined
+import './src/services/backgroundAttendance';
+
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text } from 'react-native';
+import { View, Text, AppState } from 'react-native';
+import { BackgroundAttendanceService } from './src/services/backgroundAttendance';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -36,6 +40,48 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Background service initialization component
+const BackgroundServiceInitializer = () => {
+  useEffect(() => {
+    const initializeBackgroundService = async () => {
+      try {
+        // Initialize background attendance service
+        const isAuthenticated = await BackgroundAttendanceService.isUserAuthenticated();
+        
+        if (isAuthenticated) {
+          const registered = await BackgroundAttendanceService.registerBackgroundTask();
+          console.log('Background attendance service initialized:', registered ? 'success' : 'failed');
+        } else {
+          console.log('User not authenticated, background service not initialized');
+        }
+      } catch (error) {
+        console.error('Failed to initialize background service:', error);
+      }
+    };
+
+    initializeBackgroundService();
+
+    // Handle app state changes
+    const handleAppStateChange = async (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Re-initialize background service when app becomes active
+        const isAuthenticated = await BackgroundAttendanceService.isUserAuthenticated();
+        if (isAuthenticated) {
+          await BackgroundAttendanceService.registerBackgroundTask();
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
+
+  return null;
+};
+
 export default function App() {
   try {
     return (
@@ -43,6 +89,7 @@ export default function App() {
         <AuthProvider>
           <NavigationContainer>
             <StatusBar style="dark" />
+            <BackgroundServiceInitializer />
             <AppNavigator />
           </NavigationContainer>
         </AuthProvider>

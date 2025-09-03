@@ -19,7 +19,11 @@
       "bundleIdentifier": "com.citadel.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
-        "NSCameraUsageDescription": "This app uses the camera for Face ID authentication."
+        "NSCameraUsageDescription": "This app uses the camera for Face ID authentication.",
+        "UIBackgroundModes": ["background-fetch", "location"],
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to mark attendance when you're at the office.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to automatically mark your attendance.",
+        "NSLocationAlwaysUsageDescription": "This app needs location access to automatically mark your attendance even when the app is not in use."
       }
     },
     "android": {
@@ -36,7 +40,13 @@
         "android.permission.FACE_LOCK",
         "android.permission.USE_FACE_RECOGNITION",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "plugins": [
@@ -46,6 +56,14 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "This app uses Face ID to authenticate users and protect your sensitive data."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Citadel to use your location for automatic attendance marking.",
+          "locationAlwaysPermission": "Allow Citadel to use your location for automatic attendance marking even when the app is closed.",
+          "locationWhenInUsePermission": "Allow Citadel to use your location for attendance marking."
         }
       ]
     ],

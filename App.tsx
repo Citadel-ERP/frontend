@@ -1,3 +1,6 @@
+// Add this import at the very top, before other imports
+import './src/services/backgroundAttendance';
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,6 +21,7 @@ import ResetPassword from './src/components/ResetPassword';
 import WelcomeScreen from './src/components/WelcomeScreen';
 import Dashboard from './src/components/Dashboard';
 import { colors } from './src/styles/theme';
+import { BackgroundAttendanceService } from './src/services/backgroundAttendance';
 
 type Screen =
   | 'splash'
@@ -91,8 +95,33 @@ function App(): React.JSX.Element {
     return () => subscription?.remove();
   }, []);
 
+  // Initialize background service when user becomes authenticated
+  useEffect(() => {
+    const initializeBackgroundService = async () => {
+      if (userData.isAuthenticated) {
+        try {
+          const registered = await BackgroundAttendanceService.registerBackgroundTask();
+          console.log('Background attendance service initialized for authenticated user:', registered ? 'success' : 'failed');
+        } catch (error) {
+          console.error('Failed to initialize background service:', error);
+        }
+      }
+    };
+
+    initializeBackgroundService();
+  }, [userData.isAuthenticated]);
+
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     setAppState(nextAppState);
+    
+    // Re-initialize background service when app becomes active and user is authenticated
+    if (nextAppState === 'active' && userData.isAuthenticated) {
+      try {
+        await BackgroundAttendanceService.registerBackgroundTask();
+      } catch (error) {
+        console.error('Failed to re-register background task:', error);
+      }
+    }
   };
 
   const loginAPI = async (email: string, password: string): Promise<LoginResponse> => {
@@ -321,6 +350,9 @@ function App(): React.JSX.Element {
         [TOKEN_1_KEY, token1],
         [MPIN_KEY, mpin]
       ]);
+      
+      // Update userData to authenticated state
+      setUserData(prev => ({ ...prev, isAuthenticated: true }));
       setCurrentScreen('welcome');
     } catch (error) {
       console.error('Error storing MPIN data:', error);
@@ -341,12 +373,14 @@ function App(): React.JSX.Element {
       try {
         const response = await mpinLoginAPI(storedToken, mpin);
         console.log('MPIN login response:', response);
+        
         // Update user data if we get fresh data from the API
         if (response.user) {
           setUserData(prev => ({
             ...prev,
             first_name: response.user?.first_name || prev.first_name,
-            last_name: response.user?.last_name || prev.last_name
+            last_name: response.user?.last_name || prev.last_name,
+            isAuthenticated: true
           }));
 
           setUser({
@@ -355,6 +389,9 @@ function App(): React.JSX.Element {
             first_name: response.user?.first_name,
             last_name: response.user?.last_name
           });
+        } else {
+          // If no user data from API, just mark as authenticated
+          setUserData(prev => ({ ...prev, isAuthenticated: true }));
         }
 
         setCurrentScreen('welcome');
@@ -364,6 +401,7 @@ function App(): React.JSX.Element {
         // Fallback to local MPIN verification
         const storedMPin = await AsyncStorage.getItem(MPIN_KEY);
         if (mpin === storedMPin) {
+          setUserData(prev => ({ ...prev, isAuthenticated: true }));
           setCurrentScreen('welcome');
         } else {
           Alert.alert(
@@ -456,6 +494,9 @@ function App(): React.JSX.Element {
 
   const handleLogout = async () => {
     try {
+      // Unregister background task before logout
+      await BackgroundAttendanceService.unregisterBackgroundTask();
+      
       // Clear all stored data including first_name and last_name
       await AsyncStorage.multiRemove([TOKEN_1_KEY, TOKEN_2_KEY, MPIN_KEY, 'user_email', 'user_first_name', 'user_last_name']);
       setUserData({});
