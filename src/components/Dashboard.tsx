@@ -9,7 +9,7 @@ import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './attendance/Attendance';
 import Profile from './Profile';
-import HR from './HR'; 
+import HR from './HR';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -80,6 +80,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [modules, setModules] = useState<any[]>([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -162,8 +163,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     return allModules.map(module => ({
       title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-      iconUrl: module.module_id === 'attendance' 
-        ? 'https://cdn-icons-png.flaticon.com/512/8847/8847444.png' 
+      iconUrl: module.module_id === 'attendance'
+        ? 'https://cdn-icons-png.flaticon.com/512/8847/8847444.png'
         : module.module_icon,
       module_id: module.module_id,
       is_generic: module.is_generic
@@ -491,6 +492,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleModulePress = (module: string, moduleId?: string) => {
     if (module.toLowerCase().includes('attendance') || moduleId === 'attendance') {
+      setAttendanceKey(prev => prev + 1); // ADD THIS LINE
       setShowAttendance(true);
     } else if (moduleId === 'hr') {
       setShowHR(true); // Show HR module instead of alert
@@ -511,7 +513,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setActiveMenuItem('Dashboard');
   };
 
-  
+
 
   // Add handler for HR back navigation
   const handleBackFromHR = () => {
@@ -620,7 +622,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </TouchableOpacity>
             ))}
           </ScrollView>
-          
+
           <View style={[styles.logoutSection, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.logoutDivider} />
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
@@ -641,7 +643,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {showAttendance ? (
-        <Attendance onBack={handleBackFromAttendance} />
+        <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
       ) : showProfile ? (
         <Profile onBack={handleBackFromProfile} userData={userData} />
       ) : showHR ? ( // Add HR component rendering
@@ -649,18 +651,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-          
+
           {/* Header Section */}
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <TouchableOpacity style={styles.menuIcon} onPress={openMenu}>
                 {[1, 2, 3].map(i => <View key={i} style={styles.menuLine} />)}
               </TouchableOpacity>
-              
+
               <View style={styles.logoContainer}>
                 <Image source={require('../assets/logo_back.png')} style={styles.logo} resizeMode="contain" />
               </View>
-              
+
               <View style={styles.headerSpacer} />
             </View>
 
@@ -693,7 +695,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.applyButton} activeOpacity={0.8} onPress={() => setShowAttendance(true)}>
+                <TouchableOpacity style={styles.applyButton} activeOpacity={0.8} onPress={() => {
+                  setAttendanceKey(prev => prev + 1);
+                  setShowAttendance(true);
+                }}>
                   <Text style={styles.applyButtonText}>Mark Attendance</Text>
                 </TouchableOpacity>
 
@@ -742,22 +747,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <HomeIcon color={activeNavItem === 'home' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'home' ? colors.primary : colors.textSecondary }]}>Home</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('message')}>
                 <MessageIcon color={activeNavItem === 'message' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'message' ? colors.primary : colors.textSecondary }]}>Messages</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('team')}>
                 <TeamIcon color={activeNavItem === 'team' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'team' ? colors.primary : colors.textSecondary }]}>Organisation</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('ai-bot')}>
                 <BotIcon color={activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary }]}>AI Bot</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('support')}>
                 <SupportIcon color={activeNavItem === 'support' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'support' ? colors.primary : colors.textSecondary }]}>Support</Text>
@@ -766,7 +771,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </View>
 
           <HamburgerMenu />
-         
+
         </View>
       )}
     </KeyboardAvoidingView>

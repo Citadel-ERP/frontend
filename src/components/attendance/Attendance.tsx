@@ -21,14 +21,14 @@ import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { BACKEND_URL } from '../../config/config';
 
 // Import types
-import { 
-  AttendanceProps, 
-  LeaveBalance, 
-  LeaveApplication, 
-  Holiday, 
-  AttendanceRecord, 
+import {
+  AttendanceProps,
+  LeaveBalance,
+  LeaveApplication,
+  Holiday,
+  AttendanceRecord,
   LeaveForm,
-  TabType 
+  TabType
 } from './types';
 
 // Import components
@@ -87,11 +87,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const initializeApp = async () => {
       try {
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-        setToken(storedToken);
+        console.log('Stored token:', storedToken); // Debug log
 
         if (storedToken) {
-          await fetchInitialData();
+          setToken(storedToken);
+          // Pass the storedToken directly to functions instead of relying on state
+          await fetchInitialData(storedToken);
           await initializeLocationPermission();
+        } else {
+          console.log('No token found in storage');
         }
       } catch (error) {
         console.error('Error initializing app:', error);
@@ -141,13 +145,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = async (token?: string) => {
     setLoading(true);
     try {
       await Promise.all([
-        fetchLeaveBalance(),
-        fetchHolidays(),
-        fetchAttendanceRecords()
+        fetchLeaveBalance(token),
+        fetchHolidays(token),
+        fetchAttendanceRecords(token)
       ]);
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -170,7 +174,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
         return;
       }
-
+      console.log(token);
+      console.log(location);
       const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,7 +211,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const fetchLeaveBalance = async () => {
+  const fetchLeaveBalance = async (token?: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/core/getLeaves`, {
         method: 'POST',
@@ -216,6 +221,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log(data)
         setLeaveBalance({
           casual_leaves: data.casual_leaves || 0,
           sick_leaves: data.sick_leaves || 0,
@@ -258,7 +264,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           start_date: leaveForm.startDate,
           end_date: leaveForm.endDate,
           leave_type: leaveForm.leaveType,
-          leave_reason: leaveForm.reason
+          reason: leaveForm.reason
         }),
       });
 
@@ -279,7 +285,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const fetchHolidays = async () => {
+  const fetchHolidays = async (token?: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/core/getHolidays`, {
         method: 'GET',
@@ -295,7 +301,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const fetchAttendanceRecords = async () => {
+  const fetchAttendanceRecords = async (token?: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/core/getRecentRecords`, {
         method: 'POST',
@@ -353,7 +359,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (response.ok) {
         const pdfBlob = await response.blob();
         const reader = new FileReader();
-        
+
         reader.onloadend = async () => {
           if (reader.result) {
             const base64data = (reader.result as string).split(',')[1];
@@ -371,8 +377,45 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               });
 
               Alert.alert('Report Generated', 'Your attendance report has been generated!', [
-                { text: 'View PDF', onPress: () => openPDF(fileUri) },
-                { text: 'Share/Download', onPress: () => sharePDF(fileUri, filename) },
+                {
+                  text: 'Open PDF',
+                  onPress: () => {
+                    // Try to share/open the PDF
+                    sharePDF(fileUri, filename);
+                  }
+                },
+                {
+                  text: 'Save to Downloads',
+                  onPress: async () => {
+                    try {
+                      // For Android, you might want to save to Downloads folder
+                      if (Platform.OS === 'android') {
+                        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+                        if (permissions.granted) {
+                          const base64Data = await FileSystem.readAsStringAsync(fileUri, {
+                            encoding: FileSystem.EncodingType.Base64,
+                          });
+
+                          await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, filename, 'application/pdf')
+                            .then(async (uri) => {
+                              await FileSystem.writeAsStringAsync(uri, base64Data, {
+                                encoding: FileSystem.EncodingType.Base64,
+                              });
+                              Alert.alert('Success', 'PDF saved to Downloads folder!');
+                            });
+                        } else {
+                          Alert.alert('Permission Denied', 'Cannot save to Downloads folder without permission.');
+                        }
+                      } else {
+                        // For iOS, the file is already in the app's document directory
+                        Alert.alert('Info', 'PDF is saved in the app directory and can be shared using the share option.');
+                      }
+                    } catch (error) {
+                      console.error('Error saving to downloads:', error);
+                      Alert.alert('Error', 'Could not save to Downloads folder.');
+                    }
+                  }
+                },
                 { text: 'Cancel', style: 'cancel' }
               ]);
             } catch (fileError) {
@@ -400,15 +443,65 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (Platform.OS === 'ios') {
         await WebBrowser.openBrowserAsync(fileUri);
       } else {
-        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-          data: fileUri,
-          flags: 1,
-          type: 'application/pdf',
-        });
+        // For Android, use Sharing.shareAsync which handles FileProvider internally
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Open PDF',
+            UTI: 'com.adobe.pdf'
+          });
+        } else {
+          // Fallback: try to open with WebBrowser
+          await WebBrowser.openBrowserAsync(fileUri);
+        }
       }
     } catch (error) {
       console.error('Error opening PDF:', error);
-      Alert.alert('Error', 'Could not open PDF file');
+      Alert.alert('Error', 'Could not open PDF file. You can try sharing it to a PDF viewer app instead.');
+    }
+  };
+
+  // Alternative solution: Create a separate function that copies the file to a shareable location
+  const openPDFAlternative = async (fileUri: string) => {
+    try {
+      if (Platform.OS === 'ios') {
+        await WebBrowser.openBrowserAsync(fileUri);
+      } else {
+        // For Android, copy file to cache directory which is more accessible
+        const filename = fileUri.split('/').pop() || 'attendance_report.pdf';
+        const cacheUri = FileSystem.cacheDirectory + filename;
+
+        // Copy file to cache directory
+        await FileSystem.copyAsync({
+          from: fileUri,
+          to: cacheUri
+        });
+
+        // Try to open with an intent
+        try {
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: cacheUri,
+            flags: 1,
+            type: 'application/pdf',
+          });
+        } catch (intentError) {
+          // If intent fails, use sharing
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            await Sharing.shareAsync(cacheUri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Open PDF with...',
+              UTI: 'com.adobe.pdf'
+            });
+          } else {
+            throw new Error('No PDF viewer available');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error opening PDF:', error);
+      Alert.alert('Error', 'Could not open PDF file. Please install a PDF viewer app or try the share option.');
     }
   };
 
@@ -437,7 +530,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       setStartDate(date);
       const formattedDate = date.toISOString().split('T')[0];
       setLeaveForm({ ...leaveForm, startDate: formattedDate });
-      
+
       // Reset end date if it's before the new start date
       if (endDate < date) {
         setEndDate(date);
@@ -531,7 +624,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>

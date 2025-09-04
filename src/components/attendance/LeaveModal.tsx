@@ -118,6 +118,19 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     return 0;
   };
 
+  // DatePicker theme configuration
+  const datePickerTheme = {
+    selectedItemColor: colors.primary || '#007AFF',
+    selectedRangeBackgroundColor: (colors.primary || '#007AFF') + '30',
+    selectedTextColor: colors.white || '#FFFFFF',
+    todayTextColor: colors.primary || '#007AFF',
+    calendarBackground: 'transparent',
+    dayTextColor: colors.text || '#000000',
+    monthTextColor: colors.text || '#000000',
+    yearTextColor: colors.text || '#000000',
+    headerButtonColor: colors.primary || '#007AFF',
+  };
+
   const renderContent = () => (
     <ScrollView 
       style={styles.modalContainer}
@@ -178,7 +191,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
           )}
         </View>
 
-        {/* Date Picker */}
+        {/* Date Picker - Multiple approaches for better compatibility */}
         <View style={styles.datePickerContainer}>
           <DateTimePicker
             mode="range"
@@ -186,13 +199,29 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
             endDate={dateRange.endDate}
             onChange={handleDateChange}
             minDate={new Date()}
-            selectedItemColor={colors.primary}
-            selectedTextStyle={styles.selectedDateText}
-            todayTextStyle={styles.todayText}
-            headerButtonStyle={styles.headerButton}
-            headerTextStyle={styles.headerText}
-            weekDaysTextStyle={styles.weekDaysText}
-            calendarTextStyle={styles.calendarText}
+            // Primary styling approach - using individual props
+            selectedItemColor={colors.primary || '#007AFF'}
+            selectedRangeBackgroundColor={(colors.primary || '#007AFF') + '30'}
+            headerButtonColor={colors.primary || '#007AFF'}
+            // Alternative: using theme object (comment out above if using this)
+            // theme={datePickerTheme}
+            // Text styling
+            weekDaysTextStyle={[styles.weekDaysText, { color: colors.textSecondary || '#666' }]}
+            calendarTextStyle={[styles.calendarText, { color: colors.text || '#000' }]}
+            headerTextStyle={[styles.headerText, { color: colors.text || '#000' }]}
+            selectedTextStyle={{ color: colors.white || '#FFFFFF', fontWeight: 'bold' }}
+            todayContainerStyle={[styles.todayContainer, { 
+              borderColor: colors.primary || '#007AFF',
+              borderWidth: 1 
+            }]}
+            // Navigation buttons
+            buttonPrevIcon={<Text style={styles.navButton}>‹</Text>}
+            buttonNextIcon={<Text style={styles.navButton}>›</Text>}
+            // Additional props for better styling
+            firstDayOfWeek={0} // Start from Sunday
+            displayFullDays={true}
+            // Custom styling container
+            containerStyle={styles.datePickerInner}
           />
         </View>
       </View>
@@ -318,7 +347,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
     width: '95%',
-    maxWidth: 450,
+    maxWidth: 500,
     maxHeight: '90%',
     ...shadows.lg,
   },
@@ -421,16 +450,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
+    padding: spacing.sm,
+  },
+  datePickerInner: {
+    backgroundColor: 'transparent',
   },
 
-  // Date Picker Styles
+  // Enhanced Date Picker Styles
   selectedDateText: {
-    color: colors.white,
-    fontWeight: '600',
+    color: colors.white || '#FFFFFF',
+    fontWeight: '700',
   },
   todayText: {
-    color: colors.primary,
+    color: colors.primary || '#007AFF',
     fontWeight: '600',
+  },
+  todayContainer: {
+    backgroundColor: 'transparent',
+    borderColor: colors.primary || '#007AFF',
+    borderWidth: 2,
+    borderRadius: borderRadius.sm,
   },
   headerButton: {
     backgroundColor: colors.backgroundSecondary,
@@ -439,16 +478,22 @@ const styles = StyleSheet.create({
   headerText: {
     fontSize: fontSize.lg,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.text || '#000000',
   },
   weekDaysText: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: colors.textSecondary || '#666666',
   },
   calendarText: {
     fontSize: fontSize.md,
-    color: colors.text,
+    color: colors.text || '#000000',
+  },
+  navButton: {
+    fontSize: fontSize.xl,
+    fontWeight: 'bold',
+    color: colors.primary || '#007AFF',
+    paddingHorizontal: spacing.sm,
   },
   
   // Form Input Styles
@@ -519,6 +564,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.lg,
     marginTop: spacing.xl,
+    marginBottom: 70
   },
   cancelButton: {
     flex: 1,
@@ -549,7 +595,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: fontSize.md,
     color: colors.white,
-    fontWeight: '700',
+    fontWeight: '700'
   },
   loadingContainer: {
     flexDirection: 'row',
