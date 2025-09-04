@@ -19,6 +19,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { BACKEND_URL } from '../../config/config';
+import LeaveInfoScreen from './LeaveInfoScreen';
 
 // Import types
 import {
@@ -81,6 +82,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
+
+  const [showLeaveInfo, setShowLeaveInfo] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState<LeaveApplication | null>(null);
 
   // Initialize token and location permission
   useEffect(() => {
@@ -234,10 +238,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             start_date: leave.start_date,
             end_date: leave.end_date,
             leave_type: leave.leave_type,
-            leave_reason: leave.reason,
+            reason: leave.reason,
             status: leave.status,
-            applied_date: leave.requested_at,
-            rejection_reason: leave.comment && leave.status === 'rejected' ? leave.comment : undefined
+            approved_by : leave.approved_by,
+            approved_at: leave.approved_at,
+            rejected_at: leave.rejected_at,
+            total_number_of_days: leave.total_number_of_days,
+            is_sandwich: leave.is_sandwich,
+            comment: leave.comment && leave.status === 'rejected' ? leave.comment : undefined
           }));
           setLeaveApplications(formattedLeaveApplications);
         }
@@ -580,6 +588,25 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const handleYearChange = (year: number) => {
     setSelectedYear(year);
   };
+  const handleLeavePress = (leave: LeaveApplication) => {
+    setSelectedLeave(leave);
+    setShowLeaveInfo(true);
+  };
+
+  const handleBackFromLeaveInfo = () => {
+    setShowLeaveInfo(false);
+    setSelectedLeave(null);
+  };
+
+  // If showing leave info screen, render it instead of main content
+  if (showLeaveInfo && selectedLeave) {
+    return (
+      <LeaveInfoScreen
+        leave={selectedLeave}
+        onBack={handleBackFromLeaveInfo}
+      />
+    );
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -599,6 +626,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             leaveBalance={leaveBalance}
             leaveApplications={leaveApplications}
             onApplyLeave={handleApplyLeave}
+            onLeavePress={handleLeavePress}
           />
         );
       case 'calendar':

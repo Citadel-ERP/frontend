@@ -49,3 +49,24 @@ export const getYearsList = (range = 10) => {
   const currentYear = getCurrentYear();
   return Array.from({ length: range }, (_, i) => currentYear - 5 + i);
 };
+
+export const formatDateTime = (dateTimeString: string): string => {
+  try {
+    const date = new Date(dateTimeString);
+    const dateOptions: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    };
+    const timeOptions: Intl.DateTimeFormatOptions = { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true
+    };
+    const formattedDate = date.toLocaleDateString('en-US', dateOptions);
+    const formattedTime = date.toLocaleTimeString('en-US', timeOptions);
+    return `${formattedDate} at ${formattedTime}`;
+  } catch (error) {
+    return dateTimeString;
+  }
+};

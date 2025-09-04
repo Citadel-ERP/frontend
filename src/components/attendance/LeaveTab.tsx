@@ -1,4 +1,4 @@
-// LeaveTab.tsx - Leave Management Component
+// LeaveTab.tsx - Leave Management Component (Updated with Navigation)
 import React from 'react';
 import {
   View,
@@ -16,6 +16,7 @@ interface LeaveTabProps {
   leaveBalance: LeaveBalance;
   leaveApplications: LeaveApplication[];
   onApplyLeave: () => void;
+  onLeavePress: (leave: LeaveApplication) => void;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -24,6 +25,7 @@ const LeaveTab: React.FC<LeaveTabProps> = ({
   leaveBalance,
   leaveApplications,
   onApplyLeave,
+  onLeavePress,
 }) => {
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -59,7 +61,12 @@ const LeaveTab: React.FC<LeaveTabProps> = ({
         <Text style={styles.sectionTitle}>Leave Applications</Text>
         {leaveApplications.length > 0 ? (
           leaveApplications.map((application) => (
-            <View key={application.id} style={styles.leaveItem}>
+            <TouchableOpacity
+              key={application.id}
+              style={styles.leaveItem}
+              onPress={() => onLeavePress(application)}
+              activeOpacity={0.7}
+            >
               <View style={styles.leaveHeader}>
                 <Text style={styles.leaveDateRange}>
                   {formatDate(application.start_date)} - {formatDate(application.end_date)}
@@ -71,19 +78,41 @@ const LeaveTab: React.FC<LeaveTabProps> = ({
                   <Text style={styles.statusBadgeText}>{application.status}</Text>
                 </View>
               </View>
-              <Text style={styles.leaveType}>{application.leave_type} Leave</Text>
-              <Text style={styles.leaveReason}>{application.leave_reason}</Text>
-              {application.rejection_reason && (
+              
+              <View style={styles.leaveContent}>
+                <Text style={styles.leaveType}>{application.leave_type} Leave</Text>
+                <Text style={styles.leaveReason} numberOfLines={2} ellipsizeMode="tail">
+                  {application.reason}
+                </Text>
+                
+                {application.total_number_of_days && (
+                  <Text style={styles.leaveDuration}>
+                    Duration: {application.total_number_of_days} days
+                  </Text>
+                )}
+              </View>
+
+              {application.comment && (
                 <View style={styles.rejectionContainer}>
                   <Text style={styles.rejectionLabel}>Rejection Reason:</Text>
-                  <Text style={styles.rejectionReason}>{application.rejection_reason}</Text>
+                  <Text style={styles.rejectionReason} numberOfLines={2} ellipsizeMode="tail">
+                    {application.comment}
+                  </Text>
                 </View>
               )}
-            </View>
+
+              <View style={styles.leaveFooter}>
+                <Text style={styles.viewDetailsText}>Tap to view details →</Text>
+              </View>
+            </TouchableOpacity>
           ))
         ) : (
           <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>📄</Text>
             <Text style={styles.emptyStateText}>No leave applications found</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Your leave applications will appear here once you submit them.
+            </Text>
           </View>
         )}
       </View>
@@ -163,6 +192,9 @@ const styles = StyleSheet.create({
     ...shadows.md,
     borderWidth: 1,
     borderColor: colors.border,
+    // Add subtle hover effect visual cues
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
   },
   leaveHeader: {
     flexDirection: 'row',
@@ -190,6 +222,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
   },
+  leaveContent: {
+    marginBottom: spacing.sm,
+  },
   leaveType: {
     fontSize: fontSize.sm,
     color: colors.primary,
@@ -201,9 +236,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
+    marginBottom: spacing.xs,
+  },
+  leaveDuration: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    backgroundColor: colors.backgroundSecondary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
   },
   rejectionContainer: {
-    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
     padding: spacing.sm,
     backgroundColor: colors.backgroundSecondary,
     borderRadius: borderRadius.sm,
@@ -223,6 +269,18 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 18,
   },
+  leaveFooter: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+    alignItems: 'flex-end',
+  },
+  viewDetailsText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
   emptyState: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -232,11 +290,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: spacing.md,
+  },
   emptyStateText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
     textAlign: 'center',
+    fontWeight: '500',
+    marginBottom: spacing.sm,
+  },
+  emptyStateSubtext: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
     fontStyle: 'italic',
+    lineHeight: 20,
   },
 });
 
