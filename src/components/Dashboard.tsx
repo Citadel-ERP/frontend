@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Attendance from './Attendance';
+import Attendance from './attendance/Attendance';
 import Profile from './Profile';
 import HR from './HR'; 
 
