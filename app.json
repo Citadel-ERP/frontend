@@ -15,17 +15,17 @@
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.citadel.app",
-      "infoPlist": {
-        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
-        "NSCameraUsageDescription": "This app uses the camera for Face ID authentication.",
-        "UIBackgroundModes": ["background-fetch", "location"],
-        "NSLocationWhenInUseUsageDescription": "This app needs location access to mark attendance when you're at the office.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to automatically mark your attendance.",
-        "NSLocationAlwaysUsageDescription": "This app needs location access to automatically mark your attendance even when the app is not in use."
-      }
-    },
+  "supportsTablet": true,
+  "bundleIdentifier": "com.citadel.app",
+  "infoPlist": {
+    "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
+    "NSCameraUsageDescription": "This app uses the camera for Face ID authentication.",
+    "UIBackgroundModes": ["fetch", "location"],
+    "NSLocationWhenInUseUsageDescription": "This app needs location access to mark attendance when you're at the office.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to automatically mark your attendance.",
+    "NSLocationAlwaysUsageDescription": "This app needs location access to automatically mark your attendance even when the app is not in use."
+  }
+},
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF"
@@ -65,7 +65,8 @@
           "locationAlwaysPermission": "Allow Citadel to use your location for automatic attendance marking even when the app is closed.",
           "locationWhenInUsePermission": "Allow Citadel to use your location for attendance marking."
         }
-      ]
+      ],
+      "expo-task-manager"
     ],
     "extra": {
       "eas": {

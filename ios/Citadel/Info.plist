@@ -87,5 +87,12 @@
     <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+
+    <!-- ✅ Added for background fetch + location -->
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>fetch</string>
+      <string>location</string>
+    </array>
   </dict>
 </plist>

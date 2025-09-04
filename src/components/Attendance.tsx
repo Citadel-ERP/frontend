@@ -29,7 +29,6 @@ import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Constants for attendance tracking
 const TOKEN_2_KEY = 'token_2';
 
 interface AttendanceProps {
@@ -1680,55 +1679,88 @@ const styles = StyleSheet.create({
   },
 
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  justifyContent: 'center',
+  alignItems: 'center',   // keeps it centered
+},
+
+modalContainer: {
+  backgroundColor: colors.white,
+  borderRadius: borderRadius.xl,
+  padding: spacing.lg,
+  width: '90%',                  // take 90% of screen width
+  maxWidth: 600,                 // increased from 400 → wider
+  maxHeight: screenHeight * 0.85,
+  ...shadows.lg,
+},
+
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: screenHeight * 0.8,
-    ...shadows.lg,
+    marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '600',
+    fontSize: fontSize.lg,
+    fontWeight: '700',
     color: colors.text,
+    flex: 1,
     textAlign: 'center',
-    marginBottom: spacing.xl,
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    left: spacing.sm,
+    top: spacing.sm,
+    padding: spacing.sm,
+  },
+  modalCloseText: {
+    fontSize: fontSize.lg,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
   formGroup: {
     marginBottom: spacing.lg,
   },
   label: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
     fontWeight: '500',
   },
-  dateInput: {
+  datePickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  datePickerText: {
     fontSize: fontSize.md,
     color: colors.text,
-    backgroundColor: colors.backgroundSecondary,
+    flex: 1,
+  },
+  datePickerPlaceholder: {
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  datePickerIcon: {
+    fontSize: fontSize.md,
+    marginLeft: spacing.sm,
   },
   leaveTypeContainer: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
   },
   leaveTypeButton: {
     flex: 1,
+    marginHorizontal: spacing.xs,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
@@ -1752,20 +1784,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    padding: spacing.md,
     fontSize: fontSize.md,
     color: colors.text,
-    height: 100,
+    minHeight: 100,
     backgroundColor: colors.backgroundSecondary,
+    textAlignVertical: 'top',
   },
   modalButtons: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
   },
   modalCancelButton: {
     flex: 1,
+    marginRight: spacing.sm,
     paddingVertical: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1780,6 +1813,7 @@ const styles = StyleSheet.create({
   },
   modalSubmitButton: {
     flex: 1,
+    marginLeft: spacing.sm,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
@@ -1790,6 +1824,16 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.text,
+    backgroundColor: colors.backgroundSecondary,
   },
 });
 

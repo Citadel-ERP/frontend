@@ -9,7 +9,7 @@ import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './Attendance';
 import Profile from './Profile';
-import { AttendanceSettings } from './AttendanceSettings';
+import HR from './HR'; 
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -69,7 +69,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [token, setToken] = useState<string | null>(null);
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showAttendanceSettings, setShowAttendanceSettings] = useState(false);
+
+  const [showHR, setShowHR] = useState(false); // Add state for HR module
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
@@ -170,7 +171,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   // Professional Icon Components
-  const Icon = ({ type, color = colors.textSecondary, size = 20 }) => {
+  interface IconProps {
+    type: 'user' | 'notification' | 'help' | 'lock' | 'info' | 'settings';
+    color?: string;
+    size?: number;
+  }
+
+  const Icon: React.FC<IconProps> = ({ type, color = colors.textSecondary, size = 20 }) => {
     const iconStyles = {
       user: { width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3, borderWidth: 2, borderColor: color },
       notification: { width: size * 0.7, height: size * 0.8, borderRadius: size * 0.1, borderWidth: 2, borderColor: color },
@@ -195,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   // Professional Bottom Navigation Icons
-  const HomeIcon = ({ color, size = 24 }) => (
+  const HomeIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
         width: size * 0.75,
@@ -246,7 +253,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const MessageIcon = ({ color, size = 24 }) => (
+  const MessageIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
         width: size * 0.8,
@@ -289,7 +296,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const TeamIcon = ({ color, size = 24 }) => (
+  const TeamIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <View style={{
@@ -331,7 +338,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const BotIcon = ({ color, size = 24 }) => (
+  const BotIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
         width: size * 0.7,
@@ -392,7 +399,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const SupportIcon = ({ color, size = 24 }) => (
+  const SupportIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
         width: size * 0.8,
@@ -477,8 +484,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     closeMenu();
     if (item === 'Profile') {
       setShowProfile(true);
-    } else if (item === 'Settings') {
-      setShowAttendanceSettings(true);
     } else {
       Alert.alert('Coming Soon', `${item} feature will be available soon!`);
     }
@@ -488,7 +493,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     if (module.toLowerCase().includes('attendance') || moduleId === 'attendance') {
       setShowAttendance(true);
     } else if (moduleId === 'hr') {
-      Alert.alert('HR Module', 'HR features will be available soon!');
+      setShowHR(true); // Show HR module instead of alert
     } else if (moduleId === 'mediclaim') {
       Alert.alert('Mediclaim Module', 'Mediclaim features will be available soon!');
     } else {
@@ -506,8 +511,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setActiveMenuItem('Dashboard');
   };
 
-  const handleBackFromAttendanceSettings = () => {
-    setShowAttendanceSettings(false);
+  
+
+  // Add handler for HR back navigation
+  const handleBackFromHR = () => {
+    setShowHR(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -540,14 +548,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     );
   }
 
-  const AttendanceCard = ({ value, label }) => (
+  interface AttendanceCardProps {
+    value: string;
+    label: string;
+  }
+
+  const AttendanceCard: React.FC<AttendanceCardProps> = ({ value, label }) => (
     <View style={styles.card}>
       <Text style={styles.cardValue}>{value}</Text>
       <Text style={styles.cardLabel}>{label}</Text>
     </View>
   );
 
-  const EventAvatar = ({ name, date, initials }) => (
+  interface EventAvatarProps {
+    name: string;
+    date: string;
+    initials: string;
+  }
+
+  const EventAvatar: React.FC<EventAvatarProps> = ({ name, date, initials }) => (
     <View style={styles.eventContainer}>
       <View style={styles.avatarContainer}>
         <View style={styles.avatar}>
@@ -561,7 +580,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const ModuleItem = ({ title, iconUrl, onPress }) => (
+  interface ModuleItemProps {
+    title: string;
+    iconUrl: string;
+    onPress: () => void;
+  }
+
+  const ModuleItem: React.FC<ModuleItemProps> = ({ title, iconUrl, onPress }) => (
     <TouchableOpacity style={styles.moduleItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.moduleIconContainer}>
         <Image source={{ uri: iconUrl }} style={styles.moduleIconImage} resizeMode="contain" />
@@ -609,26 +634,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   );
 
   // Attendance Settings Modal
-  const AttendanceSettingsModal = () => (
-    <Modal
-      visible={showAttendanceSettings}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleBackFromAttendanceSettings}
-    >
-      <View style={dashboardStyles.modalContainer}>
-        <View style={dashboardStyles.modalHeader}>
-          <TouchableOpacity 
-            onPress={handleBackFromAttendanceSettings}
-            style={dashboardStyles.closeButton}
-          >
-            <Text style={dashboardStyles.closeButtonText}>← Back</Text>
-          </TouchableOpacity>
-        </View>
-        <AttendanceSettings />
-      </View>
-    </Modal>
-  );
+
 
   const displayModules = getDisplayModules();
 
@@ -638,6 +644,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <Attendance onBack={handleBackFromAttendance} />
       ) : showProfile ? (
         <Profile onBack={handleBackFromProfile} userData={userData} />
+      ) : showHR ? ( // Add HR component rendering
+        <HR onBack={handleBackFromHR} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
@@ -758,7 +766,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </View>
 
           <HamburgerMenu />
-          <AttendanceSettingsModal />
+         
         </View>
       )}
     </KeyboardAvoidingView>
