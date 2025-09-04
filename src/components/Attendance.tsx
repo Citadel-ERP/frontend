@@ -1688,37 +1688,37 @@ const styles = StyleSheet.create({
 modalContainer: {
   backgroundColor: colors.white,
   borderRadius: borderRadius.xl,
-  padding: spacing.lg,
-  width: '90%',                  // take 90% of screen width
+  padding: spacing.xl,
+  width: '150%',                  // take 90% of screen width
   maxWidth: 600,                 // increased from 400 → wider
   maxHeight: screenHeight * 0.85,
   ...shadows.lg,
 },
 
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    left: spacing.sm,
-    top: spacing.sm,
-    padding: spacing.sm,
-  },
-  modalCloseText: {
-    fontSize: fontSize.lg,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
+  flexDirection: 'row',
+  justifyContent: 'center', // Center the title
+  alignItems: 'center',
+  marginBottom: spacing.lg,
+  position: 'relative', // Allow absolute positioning of close button
+},
+modalTitle: {
+  fontSize: fontSize.lg,
+  fontWeight: '700',
+  color: colors.text,
+  textAlign: 'center',
+},
+modalCloseButton: {
+  position: 'absolute',
+  right: 0, // Changed from left to right
+  top: 0,   // Changed from spacing.sm to 0 for better alignment
+  padding: spacing.sm,
+},
+modalCloseText: {
+  fontSize: fontSize.lg,
+  color: colors.textSecondary,
+  fontWeight: '600',
+},
   formGroup: {
     marginBottom: spacing.lg,
   },
