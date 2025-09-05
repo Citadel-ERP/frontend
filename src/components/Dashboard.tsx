@@ -38,6 +38,8 @@ interface UserData {
   approved_by_admin_at: string | null;
   is_archived: boolean;
   created_at: string;
+  birth_date: string;
+  joining_date: string;
   updated_at: string;
   earned_leaves: number;
   sick_leaves: number;
@@ -708,16 +710,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.blueBar} />
-                  <Text style={styles.sectionTitle}>Upcoming Birthdays</Text>
+                  <Text style={styles.sectionTitle}>Upcoming Birthdays & Anniversaries</Text>
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventsScroll} contentContainerStyle={styles.eventsScrollContent}>
                   {upcomingBirthdays.length > 0 ? (
                     upcomingBirthdays.map((person, index) => (
-                      <EventAvatar key={index} name={person.full_name} date={formatDate(person.created_at)} initials={getInitials(person.full_name)} />
+                      <EventAvatar key={index} name={person.full_name} date={formatDate(person.birth_date)} initials={getInitials(person.full_name)} />
                     ))
                   ) : (
-                    <Text style={styles.noBirthdaysText}>No upcoming birthdays</Text>
+                    <Text style={styles.noBirthdaysText}>No upcoming birthdays and Anniversaries</Text>
                   )}
                 </ScrollView>
               </View>
