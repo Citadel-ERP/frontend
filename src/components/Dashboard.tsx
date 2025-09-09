@@ -30,7 +30,7 @@ interface UserData {
   home_address: any;
   office: any;
   phone_number: string;
-  profile_picture: string | null;
+  profile_picture: string | undefined;
   current_location: any;
   is_approved_by_hr: boolean;
   is_approved_by_admin: boolean;
@@ -59,20 +59,20 @@ interface ApiResponse {
     module_name: string;
     is_generic: boolean;
     module_id: string;
+    module_unique_name: string;
     module_icon: string;
     created_at: string;
     updated_at: string;
   }>;
-  user: UserData;
-  upcoming_birthdays: UserData[];
+  user: any;
+  upcoming_birthdays: any[];
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [token, setToken] = useState<string | null>(null);
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-
-  const [showHR, setShowHR] = useState(false); // Add state for HR module
+  const [showHR, setShowHR] = useState(false);
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
@@ -80,7 +80,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [activeNavItem, setActiveNavItem] = useState('home');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [modules, setModules] = useState<any[]>([]);
-  const [upcomingBirthdays, setUpcomingBirthdays] = useState<UserData[]>([]);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const data: ApiResponse = await response.json();
 
         if (data.message === "Get modules successful") {
-          setUserData(data.user);
+          const transformedUserData: UserData = {
+            ...data.user,
+            profile_picture: data.user.profile_picture || undefined
+          };
+          setUserData(transformedUserData);
           setModules(data.modules);
           setUpcomingBirthdays(data.upcoming_birthdays || []);
         } else {
@@ -141,39 +145,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const getDisplayModules = () => {
-    // Add HR and Mediclaim modules to the existing modules
-    const additionalModules = [
-      {
-        module_name: 'hr',
-        module_id: 'hr',
-        module_icon: 'https://cdn-icons-png.flaticon.com/512/681/681494.png',
-        is_generic: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        module_name: 'mediclaim',
-        module_id: 'mediclaim',
-        module_icon: 'https://cdn-icons-png.flaticon.com/512/2382/2382533.png',
-        is_generic: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    ];
-
-    const allModules = [...modules, ...additionalModules];
-
-    return allModules.map(module => ({
+    return modules.map(module => ({
       title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-      iconUrl: module.module_id === 'attendance'
+      iconUrl: module.module_unique_name === 'attendance'
         ? 'https://cdn-icons-png.flaticon.com/512/8847/8847444.png'
         : module.module_icon,
-      module_id: module.module_id,
+      module_unique_name: module.module_unique_name,
       is_generic: module.is_generic
     }));
   };
 
-  // Professional Icon Components
   interface IconProps {
     type: 'user' | 'notification' | 'help' | 'lock' | 'info' | 'settings';
     color?: string;
@@ -204,7 +185,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     );
   };
 
-  // Professional Bottom Navigation Icons
   const HomeIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -492,14 +472,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }
   };
 
-  const handleModulePress = (module: string, moduleId?: string) => {
-    if (module.toLowerCase().includes('attendance') || moduleId === 'attendance') {
-      setAttendanceKey(prev => prev + 1); // ADD THIS LINE
+  const handleModulePress = (module: string, moduleUniqueName?: string) => {
+    if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
+      setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
-    } else if (moduleId === 'hr') {
-      setShowHR(true); // Show HR module instead of alert
-    } else if (moduleId === 'mediclaim') {
-      Alert.alert('Mediclaim Module', 'Mediclaim features will be available soon!');
+    } else if (moduleUniqueName === 'hr' || module.toLowerCase().includes('hr')) {
+      setShowHR(true);
     } else {
       Alert.alert('Coming Soon', `${module} module will be available soon!`);
     }
@@ -515,9 +493,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setActiveMenuItem('Dashboard');
   };
 
-
-
-  // Add handler for HR back navigation
   const handleBackFromHR = () => {
     setShowHR(false);
     setActiveMenuItem('Dashboard');
@@ -637,9 +612,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </Modal>
   );
 
-  // Attendance Settings Modal
-
-
   const displayModules = getDisplayModules();
 
   return (
@@ -648,13 +620,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
       ) : showProfile ? (
         <Profile onBack={handleBackFromProfile} userData={userData} />
-      ) : showHR ? ( // Add HR component rendering
+      ) : showHR ? (
         <HR onBack={handleBackFromHR} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
 
-          {/* Header Section */}
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <TouchableOpacity style={styles.menuIcon} onPress={openMenu}>
@@ -676,10 +647,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             </View>
           </View>
 
-          {/* Main Content */}
           <View style={styles.mainContent}>
             <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-              {/* Attendance Section */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.blueBar} />
@@ -706,7 +675,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
               </View>
 
-              {/* Upcoming Birthdays Section */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.blueBar} />
@@ -724,7 +692,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </ScrollView>
               </View>
 
-              {/* Modules Section */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.blueBar} />
@@ -734,7 +701,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <View style={styles.modulesGrid}>
                   {displayModules.length > 0 ? (
                     displayModules.map((module, index) => (
-                      <ModuleItem key={index} title={module.title} iconUrl={module.iconUrl} onPress={() => handleModulePress(module.title, module.module_id)} />
+                      <ModuleItem key={index} title={module.title} iconUrl={module.iconUrl} onPress={() => handleModulePress(module.title, module.module_unique_name)} />
                     ))
                   ) : (
                     <Text style={styles.noModulesText}>No modules available</Text>
@@ -743,7 +710,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </View>
             </ScrollView>
 
-            {/* Bottom Navigation */}
             <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('home')}>
                 <HomeIcon color={activeNavItem === 'home' ? colors.primary : colors.textSecondary} />
@@ -781,35 +747,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 };
 
 export default Dashboard;
-
-// Additional styles for the new components
-const dashboardStyles = StyleSheet.create({
-  autoAttendanceButton: {
-    backgroundColor: '#FF9800', // Orange color to differentiate from regular attendance button
-    marginTop: spacing.sm,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  closeButton: {
-    padding: spacing.sm,
-  },
-  closeButtonText: {
-    fontSize: fontSize.md,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
@@ -883,4 +820,14 @@ const styles = StyleSheet.create({
   logoutButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: '#FEF2F2', marginHorizontal: spacing.lg, borderRadius: borderRadius.sm, borderLeftWidth: 3, borderLeftColor: colors.error },
   logoutIconContainer: { width: 30, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   logoutButtonText: { fontSize: fontSize.md, color: colors.error, fontWeight: '600', flex: 1 },
+  autoAttendanceButton: {
+    backgroundColor: '#FF9800', marginTop: spacing.sm,},
+  modalContainer: {
+    flex: 1,backgroundColor: '#fff',},
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white,},
+  closeButton: {
+    padding: spacing.sm,},
+  closeButtonText: {
+    fontSize: fontSize.md, color: colors.primary, fontWeight: '600',},
 });
