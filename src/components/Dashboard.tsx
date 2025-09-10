@@ -10,6 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Attendance from './attendance/Attendance';
 import Profile from './Profile';
 import HR from './HR';
+import Cab from './Cab';
+import Driver from './Driver';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -74,6 +76,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
   const insets = useSafeAreaInsets();
+  const [showCab, setShowCab] = useState(false);
+  const [showDriver, setShowDriver] = useState(false);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
@@ -321,6 +325,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
+  const handleBackFromCab = () => {
+  setShowCab(false);
+  setActiveMenuItem('Dashboard');
+};
+
+  const handleBackFromDriver = () => {
+  setShowDriver(false);
+  setActiveMenuItem('Dashboard');
+};
+
   const BotIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -473,15 +487,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const handleModulePress = (module: string, moduleUniqueName?: string) => {
-    if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
-      setAttendanceKey(prev => prev + 1);
-      setShowAttendance(true);
-    } else if (moduleUniqueName === 'hr' || module.toLowerCase().includes('hr')) {
-      setShowHR(true);
-    } else {
-      Alert.alert('Coming Soon', `${module} module will be available soon!`);
-    }
-  };
+  if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
+    setAttendanceKey(prev => prev + 1);
+    setShowAttendance(true);
+  } else if (moduleUniqueName === 'hr' || module.toLowerCase().includes('hr')) {
+    setShowHR(true);
+  } else if (moduleUniqueName === 'cab' || module.toLowerCase().includes('cab')) {
+    setShowCab(true);
+  } else if (moduleUniqueName === 'driver' || module.toLowerCase().includes('driver')) {
+    setShowDriver(true);
+  } else {
+    Alert.alert('Coming Soon', `${module} module will be available soon!`);
+  }
+};
 
   const handleBackFromAttendance = () => {
     setShowAttendance(false);
@@ -617,12 +635,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {showAttendance ? (
-        <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
-      ) : showProfile ? (
-        <Profile onBack={handleBackFromProfile} userData={userData} />
-      ) : showHR ? (
-        <HR onBack={handleBackFromHR} />
-      ) : (
+    <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
+        ) : showProfile ? (
+          <Profile onBack={handleBackFromProfile} userData={userData} />
+        ) : showHR ? (
+          <HR onBack={handleBackFromHR} />
+        ) : showCab ? (
+          <Cab onBack={handleBackFromCab} />
+        ) : showDriver ? (
+          <Driver onBack={handleBackFromDriver} />
+        ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
 

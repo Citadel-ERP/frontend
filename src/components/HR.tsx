@@ -1,19 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  StatusBar,
-  Alert,
-  Modal,
-  ActivityIndicator,
-  TextInput,
-  Platform,
-  Dimensions,
-  KeyboardAvoidingView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
+  StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
+  Dimensions, KeyboardAvoidingView, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,56 +12,41 @@ import { BACKEND_URL } from '../config/config';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
 
-interface HRProps {
-  onBack: () => void;
-}
-
-interface RequestNature {
-  id: string;
-  name: string;
-  description?: string;
-}
-
+interface HRProps { onBack: () => void; }
+interface RequestNature { id: string; name: string; description?: string; }
 interface Comment {
-  id: string;
-  comment: string;
-  created_by: string;
-  created_by_name: string;
-  created_at: string;
-  is_hr_comment: boolean;
+  id: string; comment: string; created_by: string; created_by_name: string;
+  created_at: string; is_hr_comment: boolean;
 }
-
 interface Item {
-  id: string;
-  nature: string;
-  description: string;
+  id: string; nature: string; description: string;
   status: 'pending' | 'in_progress' | 'resolved' | 'rejected';
-  created_at: string;
-  updated_at: string;
-  comments: Comment[];
+  created_at: string; updated_at: string; comments: Comment[];
 }
+type TabType = 'requests' | 'grievances';
 
 const HR: React.FC<HRProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'requests' | 'grievances'>('requests');
+  const [activeTab, setActiveTab] = useState<TabType>('requests');
   const [loading, setLoading] = useState(false);
   const [isNewItemModalVisible, setIsNewItemModalVisible] = useState(false);
   const [isItemDetailModalVisible, setIsItemDetailModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-
-  // Form states
+  const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [requestNatures, setRequestNatures] = useState<RequestNature[]>([]);
   const [grievanceNatures, setGrievanceNatures] = useState<RequestNature[]>([]);
-  const [newItemForm, setNewItemForm] = useState({ nature: '', description: '' });
+  const [newItemForm, setNewItemForm] = useState({ nature: '', natureName: '', description: '' });
   const [newComment, setNewComment] = useState('');
-
-  // Data states
   const [requests, setRequests] = useState<Item[]>([]);
   const [grievances, setGrievances] = useState<Item[]>([]);
 
   const currentNatures = activeTab === 'requests' ? requestNatures : grievanceNatures;
   const currentItems = activeTab === 'requests' ? requests : grievances;
+  const filteredNatures = currentNatures.filter(nature => 
+    nature.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     const getToken = async () => {
@@ -87,9 +61,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (token) {
-      fetchInitialData();
-    }
+    if (token) fetchInitialData();
   }, [token, activeTab]);
 
   const fetchInitialData = async () => {
@@ -105,54 +77,73 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   const fetchNatures = async () => {
     try {
-      const endpoint = activeTab === 'requests' ? 'getRequestNatures' : 'getGrievanceNatures';
-      const response = await fetch(`${BACKEND_URL}/hr/${endpoint}`, {
-        method: 'GET',
+      const endpoint = activeTab === 'requests' ? 'getCommonRequests' : 'getCommonGrievances';
+      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+        method: 'GET', 
         headers: { 'Content-Type': 'application/json' },
       });
 
       if (response.ok) {
         const data = await response.json();
+        const backendNatures = activeTab === 'requests' 
+          ? data.common_requests || [] 
+          : data.common_grievances || [];
+        
+        const transformedNatures = backendNatures.map((item: any) => ({
+          id: item.id.toString(),
+          name: activeTab === 'requests' ? item.common_request : item.common_grievance,
+          description: activeTab === 'requests' ? item.common_request : item.common_grievance
+        }));
+
         const natures = [
-          ...data.natures,
-          { id: 'other', name: 'Other', description: 'Any other request not listed above' }
+          ...transformedNatures,
+          { 
+            id: 'other', 
+            name: 'Other', 
+            description: 'Any other ' + (activeTab === 'requests' ? 'request' : 'grievance') + ' not listed above'
+          }
         ];
         
-        if (activeTab === 'requests') {
-          setRequestNatures(natures);
-        } else {
-          setGrievanceNatures(natures);
-        }
+        if (activeTab === 'requests') setRequestNatures(natures);
+        else setGrievanceNatures(natures);
+      } else {
+        // Set default natures if API fails
+        setDefaultNatures();
       }
     } catch (error) {
       console.error(`Error fetching ${activeTab} natures:`, error);
-      const defaultNatures = activeTab === 'requests' 
-        ? [
-            { id: 'leave_extension', name: 'Leave Extension' },
-            { id: 'salary_certificate', name: 'Salary Certificate' },
-            { id: 'experience_letter', name: 'Experience Letter' },
-            { id: 'other', name: 'Other' }
-          ]
-        : [
-            { id: 'workplace_harassment', name: 'Workplace Harassment' },
-            { id: 'unfair_treatment', name: 'Unfair Treatment' },
-            { id: 'policy_violation', name: 'Policy Violation' },
-            { id: 'other', name: 'Other' }
-          ];
-      
-      if (activeTab === 'requests') {
-        setRequestNatures(defaultNatures);
-      } else {
-        setGrievanceNatures(defaultNatures);
-      }
+      setDefaultNatures();
     }
+  };
+
+  const setDefaultNatures = () => {
+    const defaultNatures = activeTab === 'requests' 
+      ? [
+          { id: 'leave_extension', name: 'Leave Extension', description: 'Request for leave extension' },
+          { id: 'salary_certificate', name: 'Salary Certificate', description: 'Request for salary certificate' },
+          { id: 'experience_letter', name: 'Experience Letter', description: 'Request for experience letter' },
+          { id: 'transfer_request', name: 'Transfer Request', description: 'Request for transfer to another location' },
+          { id: 'other', name: 'Other', description: 'Any other request not listed above' }
+        ]
+      : [
+          { id: 'workplace_harassment', name: 'Workplace Harassment', description: 'Issues related to workplace harassment' },
+          { id: 'unfair_treatment', name: 'Unfair Treatment', description: 'Issues related to unfair treatment' },
+          { id: 'policy_violation', name: 'Policy Violation', description: 'Issues related to policy violations' },
+          { id: 'discrimination', name: 'Discrimination', description: 'Issues related to discrimination' },
+          { id: 'other', name: 'Other', description: 'Any other grievance not listed above' }
+        ];
+    
+    if (activeTab === 'requests') setRequestNatures(defaultNatures);
+    else setGrievanceNatures(defaultNatures);
   };
 
   const fetchItems = async () => {
     try {
-      const endpoint = activeTab === 'requests' ? 'getRequests' : 'getGrievances';
-      const response = await fetch(`${BACKEND_URL}/hr/${endpoint}`, {
-        method: 'POST',
+      // This endpoint seems to be incorrect in the original code
+      // You might need to update this with the correct endpoint for fetching user's requests/grievances
+      const endpoint = activeTab === 'requests' ? 'getUserRequests' : 'getUserGrievances';
+      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+        method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
@@ -161,25 +152,16 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         const data = await response.json();
         const items = data[activeTab] || [];
         
-        if (activeTab === 'requests') {
-          setRequests(items);
-        } else {
-          setGrievances(items);
-        }
+        if (activeTab === 'requests') setRequests(items);
+        else setGrievances(items);
       } else {
-        if (activeTab === 'requests') {
-          setRequests([]);
-        } else {
-          setGrievances([]);
-        }
+        if (activeTab === 'requests') setRequests([]);
+        else setGrievances([]);
       }
     } catch (error) {
       console.error(`Error fetching ${activeTab}:`, error);
-      if (activeTab === 'requests') {
-        setRequests([]);
-      } else {
-        setGrievances([]);
-      }
+      if (activeTab === 'requests') setRequests([]);
+      else setGrievances([]);
     }
   };
 
@@ -191,22 +173,31 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
+      // Use the correct endpoints provided in your document
       const endpoint = activeTab === 'requests' ? 'createRequest' : 'createGrievance';
-      const response = await fetch(`${BACKEND_URL}/hr/${endpoint}`, {
-        method: 'POST',
+      const requestBody = activeTab === 'requests' 
+        ? {
+            token,
+            nature: newItemForm.natureName,
+            description: newItemForm.description
+          }
+        : {
+            token,
+            nature: newItemForm.natureName,
+            issue: newItemForm.description
+          };
+      
+      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+        method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          nature: newItemForm.nature,
-          description: newItemForm.description
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
+        const result = await response.json();
         Alert.alert('Success', `${activeTab.slice(0, -1)} submitted successfully!`);
-        setIsNewItemModalVisible(false);
-        setNewItemForm({ nature: '', description: '' });
-        await fetchItems();
+        closeNewItemModal();
+        await fetchItems(); // Refresh the list
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || `Failed to submit ${activeTab.slice(0, -1)}`);
@@ -230,8 +221,8 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       const endpoint = activeTab === 'requests' ? 'addRequestComment' : 'addGrievanceComment';
       const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
       
-      const response = await fetch(`${BACKEND_URL}/hr/${endpoint}`, {
-        method: 'POST',
+      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+        method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
@@ -245,9 +236,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         await fetchItems();
         const updatedItems = activeTab === 'requests' ? requests : grievances;
         const updatedItem = updatedItems.find(item => item.id === selectedItem.id);
-        if (updatedItem) {
-          setSelectedItem(updatedItem);
-        }
+        if (updatedItem) setSelectedItem(updatedItem);
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || 'Failed to add comment');
@@ -260,23 +249,28 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     }
   };
 
+  const selectNature = (nature: RequestNature) => {
+    setNewItemForm({ ...newItemForm, nature: nature.id, natureName: nature.name });
+    setIsDropdownVisible(false);
+    setSearchQuery('');
+  };
+
+  const closeNewItemModal = () => {
+    setIsNewItemModalVisible(false);
+    setIsDropdownVisible(false);
+    setSearchQuery('');
+    setNewItemForm({ nature: '', natureName: '', description: '' });
+  };
+
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   const formatDateTime = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   };
 
@@ -296,12 +290,74 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     </View>
   );
 
+  const DropdownModal = () => (
+    <Modal
+      visible={isDropdownVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        setIsDropdownVisible(false);
+        setSearchQuery('');
+      }}
+    >
+      <TouchableOpacity
+        style={styles.dropdownOverlay}
+        activeOpacity={1}
+        onPress={() => {
+          setIsDropdownVisible(false);
+          setSearchQuery('');
+        }}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.dropdownContainer}>
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={`Search ${activeTab === 'requests' ? 'requests' : 'grievances'}...`}
+                placeholderTextColor={colors.textSecondary}
+                autoFocus={false}
+              />
+            </View>
+            <FlatList
+              data={filteredNatures}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              style={styles.dropdownList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => selectNature(item)}
+                >
+                  <Text style={styles.dropdownItemText}>{item.name}</Text>
+                  {item.description && (
+                    <Text style={styles.dropdownItemDescription} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyDropdown}>
+                  <Text style={styles.emptyDropdownText}>
+                    No {activeTab} found matching "{searchQuery}"
+                  </Text>
+                </View>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const NewItemModal = () => (
     <Modal
       visible={isNewItemModalVisible}
       transparent
       animationType="slide"
-      onRequestClose={() => setIsNewItemModalVisible(false)}
+      onRequestClose={closeNewItemModal}
     >
       <View style={styles.modalOverlay}>
         <KeyboardAvoidingView
@@ -315,7 +371,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
               </Text>
               <TouchableOpacity
                 style={styles.modalCloseButton}
-                onPress={() => setIsNewItemModalVisible(false)}
+                onPress={closeNewItemModal}
               >
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
@@ -330,25 +386,18 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
                 <Text style={styles.label}>
                   Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
                 </Text>
-                <View style={styles.natureContainer}>
-                  {currentNatures.map((nature) => (
-                    <TouchableOpacity
-                      key={nature.id}
-                      style={[
-                        styles.natureButton,
-                        newItemForm.nature === nature.id && styles.natureButtonActive
-                      ]}
-                      onPress={() => setNewItemForm({ ...newItemForm, nature: nature.id })}
-                    >
-                      <Text style={[
-                        styles.natureText,
-                        newItemForm.nature === nature.id && styles.natureTextActive
-                      ]}>
-                        {nature.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setIsDropdownVisible(true)}
+                >
+                  <Text style={[
+                    styles.dropdownButtonText,
+                    !newItemForm.natureName && styles.dropdownPlaceholder
+                  ]}>
+                    {newItemForm.natureName || `Select ${activeTab === 'requests' ? 'request' : 'grievance'} type`}
+                  </Text>
+                  <Text style={styles.dropdownArrow}>▼</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.formGroup}>
@@ -368,21 +417,26 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
-                  onPress={() => setIsNewItemModalVisible(false)}
+                  onPress={closeNewItemModal}
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.modalSubmitButton}
+                  style={[
+                    styles.modalSubmitButton,
+                    (!newItemForm.nature || !newItemForm.description.trim()) && styles.modalSubmitButtonDisabled
+                  ]}
                   onPress={submitNewItem}
-                  disabled={loading}
+                  disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
                 >
                   {loading ? (
                     <ActivityIndicator color={colors.white} size="small" />
                   ) : (
-                    <Text style={styles.modalSubmitText}>
-                      Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
-                    </Text>
+                    <View style={styles.submitButtonContent}>
+                      <Text style={styles.modalSubmitText}>
+                        Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
+                      </Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -390,6 +444,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
           </View>
         </KeyboardAvoidingView>
       </View>
+      {isDropdownVisible && <DropdownModal />}
     </Modal>
   );
 
@@ -487,7 +542,10 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
                         textAlignVertical="top"
                       />
                       <TouchableOpacity
-                        style={styles.addCommentButton}
+                        style={[
+                          styles.addCommentButton,
+                          (!newComment.trim()) && styles.addCommentButtonDisabled
+                        ]}
                         onPress={addComment}
                         disabled={loading || !newComment.trim()}
                       >
@@ -596,13 +654,13 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
       <View style={styles.tabNavigation}>
         {[
-          { key: 'requests', label: 'Requests' },
-          { key: 'grievances', label: 'Grievances' }
+          { key: 'requests' as const, label: 'Requests' },
+          { key: 'grievances' as const, label: 'Grievances' }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key as any)}
+            onPress={() => setActiveTab(tab.key)}
           >
             <Text style={[
               styles.tabText,
@@ -625,475 +683,241 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.primary,
-  },
+  container: { flex: 1, backgroundColor: colors.primary },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md, backgroundColor: colors.primary,
   },
-  backButton: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-  },
-  backIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
+  backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: colors.white,
-    transform: [{ rotate: '-45deg' }],
+    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
+    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
   },
   headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '600',
-    color: colors.white,
-    flex: 1,
-    textAlign: 'center',
+    fontSize: fontSize.xl, fontWeight: '600', color: colors.white,
+    flex: 1, textAlign: 'center',
   },
-  headerSpacer: {
-    width: 40,
-  },
+  headerSpacer: { width: 40 },
   tabNavigation: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingHorizontal: spacing.xs,
+    flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1,
+    borderBottomColor: colors.border, paddingHorizontal: spacing.xs,
   },
   tab: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderRadius: borderRadius.sm,
-    marginHorizontal: spacing.xs,
+    flex: 1, paddingVertical: spacing.md, alignItems: 'center',
+    borderRadius: borderRadius.sm, marginHorizontal: spacing.xs,
   },
   activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: colors.primary,
+    borderBottomWidth: 3, borderBottomColor: colors.primary,
     backgroundColor: colors.backgroundSecondary,
   },
-  tabText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  tabContent: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-  },
-  section: {
-    marginBottom: spacing.xl,
-  },
+  tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
+  activeTabText: { color: colors.primary, fontWeight: '600' },
+  contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  section: { marginBottom: spacing.xl },
   sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
+    fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
   },
   sectionHeaderWithButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: spacing.md,
   },
   newItemButton: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.xl,
+    ...shadows.md, borderWidth: 1, borderColor: colors.border, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', elevation: 3,
   },
   newItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
+    width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center', marginRight: spacing.md,
   },
-  newItemIconText: {
-    color: colors.white,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-  },
-  newItemText: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-  },
+  newItemIconText: { color: colors.white, fontSize: fontSize.lg, fontWeight: '600' },
+  newItemText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   itemCard: {
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
+    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2,
   },
   itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: spacing.sm,
   },
-  itemInfo: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
+  itemInfo: { flex: 1, marginRight: spacing.sm },
   itemNature: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
   },
-  itemDate: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
+  itemDate: { fontSize: fontSize.sm, color: colors.textSecondary },
   itemStatusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    minWidth: 80,
-    alignItems: 'center',
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full,
+    minWidth: 80, alignItems: 'center',
   },
   itemStatusText: {
-    color: colors.white,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    color: colors.white, fontSize: fontSize.xs, fontWeight: '600', textTransform: 'capitalize',
   },
   itemDescriptionText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.sm,
+    fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 20, marginBottom: spacing.sm,
   },
   itemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
   },
-  commentsCount: {
-    fontSize: fontSize.xs,
-    color: colors.info,
-    fontWeight: '500',
-  },
-  tapToView: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-  },
+  commentsCount: { fontSize: fontSize.xs, color: colors.info, fontWeight: '500' },
+  tapToView: { fontSize: fontSize.xs, color: colors.textSecondary, fontStyle: 'italic' },
   emptyState: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.xl,
+    alignItems: 'center', ...shadows.md, borderWidth: 1, borderColor: colors.border,
   },
   emptyStateText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
+    fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs,
   },
   emptyStateSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    fontStyle: 'italic',
+    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic',
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center',
   },
   keyboardAvoidingView: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
+    flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%',
   },
   modalContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    width: '90%',
-    maxWidth: 600,
-    maxHeight: screenHeight * 0.85,
-    ...shadows.lg,
-  },
-  modalSubmitText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
+    backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.lg,
+    width: '92%', maxWidth: 600, maxHeight: screenHeight * 0.85, ...shadows.lg, elevation: 10,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    marginBottom: spacing.lg, position: 'relative',
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
-  },
+  modalTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, textAlign: 'center' },
   modalCloseButton: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    padding: spacing.sm,
-    zIndex: 1,
+    position: 'absolute', right: 0, top: -4, padding: spacing.sm, borderRadius: borderRadius.full,
+    backgroundColor: colors.backgroundSecondary, width: 32, height: 32,
+    alignItems: 'center', justifyContent: 'center',
   },
-  modalCloseText: {
-    fontSize: fontSize.lg,
-    color: colors.textSecondary,
-    fontWeight: '600',
+  modalCloseText: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '600' },
+  modalScrollContent: { paddingBottom: spacing.lg },
+  formGroup: { marginBottom: spacing.lg },
+  label: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.sm, fontWeight: '600' },
+  dropdownButton: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md + 2, backgroundColor: colors.white,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 52,
+    elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, shadowRadius: 2,
   },
-  modalScrollContent: {
-    paddingBottom: spacing.lg,
+  dropdownButtonText: { fontSize: fontSize.md, color: colors.primary, flex: 1 },
+  dropdownPlaceholder: { color: colors.textSecondary, fontStyle: 'italic' },
+  dropdownArrow: { fontSize: fontSize.sm, color: colors.textSecondary, marginLeft: spacing.sm },
+  dropdownOverlay: {
+    flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  formGroup: {
-    marginBottom: spacing.lg,
+  dropdownContainer: {
+    backgroundColor: colors.white, borderRadius: borderRadius.xl,
+    maxHeight: screenHeight * 0.6, ...shadows.md, elevation: 8,
   },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    fontWeight: '500',
+  searchContainer: {
+    padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  natureContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+  searchInput: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2,
+    fontSize: fontSize.md, color: colors.primary, backgroundColor: colors.background,
   },
-  natureButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.backgroundSecondary,
-    marginBottom: spacing.xs,
+  dropdownList: { maxHeight: screenHeight * 0.4 },
+  dropdownItem: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md + 2,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  natureButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  dropdownItemText: {
+    fontSize: fontSize.md, fontWeight: '600', color: colors.primary, marginBottom: spacing.xs,
   },
-  natureText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  natureTextActive: {
-    color: colors.white,
-  },
-  addCommentSection: {
-    marginTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.lg,
-  },
-  addCommentLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    fontWeight: '500',
-  },
-  addCommentButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addCommentText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  commentInput: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    minHeight: 80,
-    marginBottom: spacing.md,
-  },
-  modalCancelText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-  },
-  commentAuthor: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  hrCommentAuthor: {
-    color: colors.primary,
-  },
-  hrCommentItem: {
-    backgroundColor: colors.backgroundSecondary,
-  },
-  commentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  commentDate: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  commentText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
-  commentItem: {
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  noCommentsText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    padding: spacing.md,
-  },
-  commentsTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
+  dropdownItemDescription: { fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 18 },
+  emptyDropdown: { padding: spacing.xl, alignItems: 'center' },
+  emptyDropdownText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center' },
   descriptionInput: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  itemDetailContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-  },
-  commentsSection: {
-    marginTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.lg,
-  },
-  descriptionLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '500',
-    marginBottom: spacing.xs,
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md,
+    backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, minHeight: 120,
+    textAlignVertical: 'top', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, shadowRadius: 2,
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  itemDetailHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'flex-start' as const,
-    marginBottom: spacing.md,
-  },
-  itemDetailInfo: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  itemNatureText: {
-    fontSize: fontSize.lg,
-    fontWeight: '600' as const,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  itemDateText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  statusBadgeText: {
-    color: colors.white,
-    fontSize: fontSize.xs,
-    fontWeight: '600' as const,
-    textTransform: 'capitalize' as const,
-  },
-  itemDescription: {
-    marginBottom: spacing.md,
+    flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xl, gap: spacing.md,
   },
   modalCancelButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundSecondary,
+    flex: 1, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.backgroundSecondary, alignItems: 'center', elevation: 1,
   },
+  modalCancelText: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '600' },
   modalSubmitButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
-    minWidth: 120,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    flex: 1, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg, backgroundColor: colors.primary, alignItems: 'center', elevation: 3,
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
   },
+  modalSubmitButtonDisabled: { backgroundColor: colors.textSecondary, elevation: 1, shadowOpacity: 0.1 },
+  submitButtonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  modalSubmitText: { fontSize: fontSize.md, color: colors.white, fontWeight: '600' },
+  itemDetailContainer: { flex: 1 },
+  itemDetailHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: spacing.lg,
+  },
+  itemDetailInfo: { flex: 1, marginRight: spacing.sm },
+  itemNatureText: {
+    fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
+  },
+  itemDateText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  statusBadge: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full, alignItems: 'center', minWidth: 90,
+  },
+  statusBadgeText: {
+    color: colors.white, fontSize: fontSize.xs, fontWeight: '600', textTransform: 'capitalize',
+  },
+  itemDescription: {
+    marginBottom: spacing.lg, padding: spacing.md,
+    backgroundColor: colors.backgroundSecondary, borderRadius: borderRadius.md,
+  },
+  descriptionLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  commentsSection: { flex: 1 },
+  commentsTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  commentItem: {
+    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
+    borderRadius: borderRadius.md, marginBottom: spacing.sm,
+  },
+  hrCommentItem: {
+    backgroundColor: colors.primary + '10', borderLeftWidth: 3, borderLeftColor: colors.primary,
+  },
+  commentHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: spacing.xs,
+  },
+  commentAuthor: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, flex: 1 },
+  hrCommentAuthor: { color: colors.primary },
+  commentDate: { fontSize: fontSize.xs, color: colors.textSecondary },
+  commentText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  noCommentsText: {
+    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center',
+    fontStyle: 'italic', paddingVertical: spacing.lg,
+  },
+  addCommentSection: {
+    marginTop: spacing.md, paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  addCommentLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  commentInput: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md,
+    backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, minHeight: 80,
+    marginBottom: spacing.md, textAlignVertical: 'top', elevation: 1, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2,
+  },
+  addCommentButton: {
+    backgroundColor: colors.primary, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg, alignItems: 'center', elevation: 3, shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
+  },
+  addCommentButtonDisabled: { backgroundColor: colors.textSecondary, elevation: 1, shadowOpacity: 0.1 },
+  addCommentText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
 });
 
 export default HR;
