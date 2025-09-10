@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 
@@ -81,7 +82,266 @@ interface Booking {
   end_location: string;
 }
 
+interface BookingModalProps {
+  visible: boolean;
+  onClose: () => void;
+  selectedVehicle: Vehicle | null;
+  searchForm: any;
+  bookingForm: any;
+  setBookingForm: any;
+  loading: boolean;
+  onBookVehicle: () => void;
+  formatDateForDisplay: (dateString: string) => string;
+  formatTimeForDisplay: (timeString: string) => string;
+  colors: any;
+}
+
+interface CancelModalProps {
+  visible: boolean;
+  onClose: () => void;
+  booking: Booking;
+  onCancelBooking: () => void;
+  formatDateForDisplay: (dateString: string) => string;
+  formatTimeForDisplay: (timeString: string) => string;
+  colors: any;
+  loading: boolean;
+  selectedBooking: Booking;
+  formatDate: (dateString: string) => string; 
+  cancelReason: string;
+  setCancelReason: (reason: string) => void;
+}
+
 type TabType = 'search' | 'my-bookings';
+
+// Helper components moved outside to prevent recreation
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+  </View>
+);
+
+// BookingModal as separate component to prevent recreation
+const BookingModal: React.FC<BookingModalProps> = ({
+  visible,
+  onClose,
+  selectedVehicle,
+  searchForm,
+  bookingForm,
+  setBookingForm,
+  loading,
+  onBookVehicle,
+  formatDateForDisplay,
+  formatTimeForDisplay,
+  colors
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Book Vehicle</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {selectedVehicle && (
+                <View style={styles.vehicleInfo}>
+                  <Text style={styles.vehicleInfoTitle}>
+                    {selectedVehicle.make} {selectedVehicle.model}
+                  </Text>
+                  <Text style={styles.vehicleInfoText}>
+                    {selectedVehicle.license_plate} • {selectedVehicle.seating_capacity} seats
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Purpose of Trip *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={bookingForm.purpose}
+                  onChangeText={(text) => setBookingForm((prev:any)  => ({ ...prev, purpose: text }))}
+                  placeholder="Enter the purpose of your trip"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Start Location *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={bookingForm.start_location}
+                  onChangeText={(text) => setBookingForm((prev:any) => ({ ...prev, start_location: text }))}
+                  placeholder="Enter pickup location"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>End Location *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={bookingForm.end_location}
+                  onChangeText={(text) => setBookingForm((prev:any) => ({ ...prev, end_location: text }))}
+                  placeholder="Enter drop-off location"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.dateInfo}>
+                <Text style={styles.dateInfoTitle}>Booking Period</Text>
+                <Text style={styles.dateInfoText}>
+                  From: {formatDateForDisplay(searchForm.startDate)} at {formatTimeForDisplay(searchForm.startTime)}
+                </Text>
+                <Text style={styles.dateInfoText}>
+                  To: {formatDateForDisplay(searchForm.endDate)} at {formatTimeForDisplay(searchForm.endTime)}
+                </Text>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={onClose}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitButton,
+                    (!bookingForm.purpose || !bookingForm.start_location || !bookingForm.end_location) && styles.modalSubmitButtonDisabled
+                  ]}
+                  onPress={onBookVehicle}
+                  disabled={loading || !bookingForm.purpose || !bookingForm.start_location || !bookingForm.end_location}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Book Vehicle</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
+
+const CancelModal: React.FC<CancelModalProps> = ({ 
+  visible, 
+  onClose, 
+  selectedBooking, 
+  cancelReason,
+  setCancelReason,
+  loading, 
+  onCancelBooking,
+  formatDate,
+  colors 
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Cancel Booking</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {selectedBooking && (
+                <View style={styles.vehicleInfo}>
+                  <Text style={styles.vehicleInfoTitle}>
+                    {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
+                  </Text>
+                  <Text style={styles.vehicleInfoText}>
+                    {selectedBooking.vehicle.license_plate}
+                  </Text>
+                  <Text style={styles.vehicleInfoText}>
+                    {formatDate(selectedBooking.start_time)} - {formatDate(selectedBooking.end_time)}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Reason for Cancellation *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={cancelReason}
+                  onChangeText={setCancelReason}
+                  placeholder="Please provide a reason for cancelling this booking"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={onClose}
+                >
+                  <Text style={styles.modalCancelText}>Keep Booking</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitButton,
+                    { backgroundColor: colors.error },
+                    !cancelReason.trim() && styles.modalSubmitButtonDisabled
+                  ]}
+                  onPress={onCancelBooking}
+                  disabled={loading || !cancelReason.trim()}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Cancel Booking</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
 
 const Cab: React.FC<CabProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
@@ -92,30 +352,39 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  
+
   // Modal states
   const [isVehicleDetailModalVisible, setIsVehicleDetailModalVisible] = useState(false);
   const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
-  
-  // Search form states
+
+  // Date/Time picker states
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
+  // Search form states with Date objects for better handling
   const [searchForm, setSearchForm] = useState({
     city: 'Hyderabad',
-    start_date: '',
-    end_date: '',
-    start_time: '08:00',
-    end_time: '18:00'
+    startDate: new Date(),
+    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+    startTime: new Date(new Date().setHours(8, 0, 0, 0)), // 8:00 AM
+    endTime: new Date(new Date().setHours(18, 0, 0, 0)) // 6:00 PM
   });
-  
-  // Booking form states
+
+  // Booking form states - keeping your original structure
   const [bookingForm, setBookingForm] = useState({
     purpose: '',
     start_location: '',
     end_location: ''
   });
-  
+
   // Cancel form state
   const [cancelReason, setCancelReason] = useState('');
+
+  // Flag to track if bookings have been fetched
+  const [hasSearchedVehicles, setHasSearchedVehicles] = useState(false);
 
   useEffect(() => {
     const getToken = async () => {
@@ -129,33 +398,29 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     getToken();
   }, []);
 
-  useEffect(() => {
-    if (token) {
-      fetchMyBookings();
-      // Set default dates
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      setSearchForm(prev => ({
-        ...prev,
-        start_date: today.toISOString().split('T')[0],
-        end_date: tomorrow.toISOString().split('T')[0]
-      }));
+  // Handle tab change and fetch bookings only when "my-bookings" tab is pressed
+  const handleTabChange = async (tabKey: TabType) => {
+    setActiveTab(tabKey);
+
+    if (tabKey === 'my-bookings' && token && myBookings.length === 0) {
+      await fetchMyBookings();
     }
-  }, [token]);
+  };
 
   const searchVehicles = async () => {
-    if (!searchForm.city || !searchForm.start_date || !searchForm.end_date) {
-      Alert.alert('Error', 'Please fill all search fields');
+    if (!searchForm.city) {
+      Alert.alert('Error', 'Please fill city field');
       return;
     }
 
     setLoading(true);
+    setHasSearchedVehicles(true);
+
     try {
-      const startDateTime = `${searchForm.start_date}T${searchForm.start_time}:00`;
-      const endDateTime = `${searchForm.end_date}T${searchForm.end_time}:00`;
-      
+      // Format dates and times for API
+      const startDateTime = `${searchForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.startTime)}:00`;
+      const endDateTime = `${searchForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.endTime)}:00`;
+
       const response = await fetch(
         `${BACKEND_URL}/core/getAvailableVehicles?city=${encodeURIComponent(searchForm.city)}&start_date=${encodeURIComponent(startDateTime)}&end_date=${encodeURIComponent(endDateTime)}`,
         {
@@ -183,6 +448,9 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   };
 
   const fetchMyBookings = async () => {
+    if (!token) return;
+    console.log("yes")
+    setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getMyBookings`, {
         method: 'POST',
@@ -198,6 +466,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -215,8 +485,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         body: JSON.stringify({
           token,
           vehicle_id: selectedVehicle.id,
-          start_time: searchForm.start_date,
-          end_time: searchForm.end_date,
+          start_time: searchForm.startDate.toISOString().split('T')[0],
+          end_time: searchForm.endDate.toISOString().split('T')[0],
           purpose: bookingForm.purpose,
           start_location: bookingForm.start_location,
           end_location: bookingForm.end_location
@@ -226,9 +496,18 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       if (response.ok) {
         Alert.alert('Success', 'Vehicle booked successfully!');
         closeBookingModal();
-        searchVehicles(); // Refresh available vehicles
-        fetchMyBookings(); // Refresh bookings
-        setActiveTab('my-bookings'); // Switch to bookings tab
+
+        // set active tab as my-bookings if not
+        if (activeTab !== 'my-bookings') {
+          setActiveTab('my-bookings');
+        }
+
+        // If we're on my-bookings tab or have bookings loaded, refresh them
+        if (activeTab === 'my-bookings' || myBookings.length > 0) {
+          fetchMyBookings();
+        }
+
+        setActiveTab('my-bookings');
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || 'Failed to book vehicle');
@@ -309,6 +588,29 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     setCancelReason('');
   };
 
+  // Helper function to format time for API (24-hour format)
+  const formatTimeForAPI = (date: Date): string => {
+    return date.toTimeString().slice(0, 5); // Returns HH:MM format
+  };
+
+  // Helper function to format time for display (12-hour format with AM/PM)
+  const formatTimeForDisplay = (date: Date): string => {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Helper function to format date for display
+  const formatDateForDisplay = (date: Date): string => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit'
+    });
+  };
+
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -316,7 +618,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const formatDateTime = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { 
+    return date.toLocaleDateString('en-GB', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
@@ -333,11 +635,34 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     }
   };
 
-  const BackIcon = () => (
-    <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
-    </View>
-  );
+  // Date/Time picker handlers
+  const onStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setSearchForm(prev => ({ ...prev, startDate: selectedDate }));
+    }
+  };
+
+  const onEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setSearchForm(prev => ({ ...prev, endDate: selectedDate }));
+    }
+  };
+
+  const onStartTimeChange = (event: any, selectedTime?: Date) => {
+    setShowStartTimePicker(false);
+    if (selectedTime) {
+      setSearchForm(prev => ({ ...prev, startTime: selectedTime }));
+    }
+  };
+
+  const onEndTimeChange = (event: any, selectedTime?: Date) => {
+    setShowEndTimePicker(false);
+    if (selectedTime) {
+      setSearchForm(prev => ({ ...prev, endTime: selectedTime }));
+    }
+  };
 
   const VehicleDetailModal = () => (
     <Modal
@@ -441,200 +766,11 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     </Modal>
   );
 
-  const BookingModal = () => (
-    <Modal
-      visible={isBookingModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={closeBookingModal}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Book Vehicle</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeBookingModal}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {selectedVehicle && (
-                <View style={styles.vehicleInfo}>
-                  <Text style={styles.vehicleInfoTitle}>
-                    {selectedVehicle.make} {selectedVehicle.model}
-                  </Text>
-                  <Text style={styles.vehicleInfoText}>
-                    {selectedVehicle.license_plate} • {selectedVehicle.seating_capacity} seats
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Purpose of Trip *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={bookingForm.purpose}
-                  onChangeText={(text) => setBookingForm({ ...bookingForm, purpose: text })}
-                  placeholder="Enter the purpose of your trip"
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Start Location *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={bookingForm.start_location}
-                  onChangeText={(text) => setBookingForm({ ...bookingForm, start_location: text })}
-                  placeholder="Enter pickup location"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>End Location *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={bookingForm.end_location}
-                  onChangeText={(text) => setBookingForm({ ...bookingForm, end_location: text })}
-                  placeholder="Enter drop-off location"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.dateInfo}>
-                <Text style={styles.dateInfoTitle}>Booking Period</Text>
-                <Text style={styles.dateInfoText}>
-                  From: {searchForm.start_date} at {searchForm.start_time}
-                </Text>
-                <Text style={styles.dateInfoText}>
-                  To: {searchForm.end_date} at {searchForm.end_time}
-                </Text>
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={closeBookingModal}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalSubmitButton,
-                    (!bookingForm.purpose || !bookingForm.start_location || !bookingForm.end_location) && styles.modalSubmitButtonDisabled
-                  ]}
-                  onPress={bookVehicle}
-                  disabled={loading || !bookingForm.purpose || !bookingForm.start_location || !bookingForm.end_location}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.modalSubmitText}>Book Vehicle</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-
-  const CancelModal = () => (
-    <Modal
-      visible={isCancelModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={closeCancelModal}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Cancel Booking</Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={closeCancelModal}
-            >
-              <Text style={styles.modalCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.modalScrollContent}>
-            {selectedBooking && (
-              <View style={styles.bookingInfo}>
-                <Text style={styles.bookingInfoTitle}>
-                  {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
-                </Text>
-                <Text style={styles.bookingInfoText}>
-                  {selectedBooking.vehicle.license_plate}
-                </Text>
-                <Text style={styles.bookingInfoText}>
-                  {formatDate(selectedBooking.start_time)} - {formatDate(selectedBooking.end_time)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Reason for Cancellation *</Text>
-              <TextInput
-                style={styles.descriptionInput}
-                value={cancelReason}
-                onChangeText={setCancelReason}
-                placeholder="Please provide a reason for cancelling this booking"
-                placeholderTextColor={colors.textSecondary}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={closeCancelModal}
-              >
-                <Text style={styles.modalCancelText}>Keep Booking</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalSubmitButton,
-                  { backgroundColor: colors.error },
-                  !cancelReason.trim() && styles.modalSubmitButtonDisabled
-                ]}
-                onPress={cancelBooking}
-                disabled={loading || !cancelReason.trim()}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.modalSubmitText}>Cancel Booking</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   const renderSearchTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Search Vehicles</Text>
-        
+
         <View style={styles.searchForm}>
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1 }]}>
@@ -652,46 +788,50 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
               <Text style={styles.label}>Start Date</Text>
-              <TextInput
-                style={styles.textInput}
-                value={searchForm.start_date}
-                onChangeText={(text) => setSearchForm({ ...searchForm, start_date: text })}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textSecondary}
-              />
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowStartDatePicker(true)}
+              >
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateForDisplay(searchForm.startDate)}
+                </Text>
+              </TouchableOpacity>
             </View>
             <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
               <Text style={styles.label}>End Date</Text>
-              <TextInput
-                style={styles.textInput}
-                value={searchForm.end_date}
-                onChangeText={(text) => setSearchForm({ ...searchForm, end_date: text })}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textSecondary}
-              />
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowEndDatePicker(true)}
+              >
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateForDisplay(searchForm.endDate)}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
               <Text style={styles.label}>Start Time</Text>
-              <TextInput
-                style={styles.textInput}
-                value={searchForm.start_time}
-                onChangeText={(text) => setSearchForm({ ...searchForm, start_time: text })}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.textSecondary}
-              />
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowStartTimePicker(true)}
+              >
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeForDisplay(searchForm.startTime)}
+                </Text>
+              </TouchableOpacity>
             </View>
             <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
               <Text style={styles.label}>End Time</Text>
-              <TextInput
-                style={styles.textInput}
-                value={searchForm.end_time}
-                onChangeText={(text) => setSearchForm({ ...searchForm, end_time: text })}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.textSecondary}
-              />
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowEndTimePicker(true)}
+              >
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeForDisplay(searchForm.endTime)}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -735,20 +875,20 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                   <Text style={styles.vehicleStatusText}>{vehicle.status}</Text>
                 </View>
               </View>
-              
+
               <View style={styles.vehicleDetails}>
                 <Text style={styles.vehicleLocation}>
                   📍 {vehicle.current_location.city}, {vehicle.current_location.state}
                 </Text>
                 <Text style={styles.vehicleCapacity}>👥 {vehicle.seating_capacity} seats</Text>
               </View>
-              
+
               <View style={styles.driverSection}>
                 <Text style={styles.driverText}>
                   Driver: {vehicle.assigned_to.full_name}
                 </Text>
               </View>
-              
+
               <View style={styles.vehicleFooter}>
                 <Text style={styles.tapToView}>Tap to view details and book</Text>
               </View>
@@ -763,6 +903,47 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           </View>
         )}
       </View>
+
+      {/* Date/Time Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={searchForm.startDate}
+          mode="date"
+          display="default"
+          onChange={onStartDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={searchForm.endDate}
+          mode="date"
+          display="default"
+          onChange={onEndDateChange}
+          minimumDate={searchForm.startDate}
+        />
+      )}
+
+      {showStartTimePicker && (
+        <DateTimePicker
+          value={searchForm.startTime}
+          mode="time"
+          display="default"
+          onChange={onStartTimeChange}
+          is24Hour={false}
+        />
+      )}
+
+      {showEndTimePicker && (
+        <DateTimePicker
+          value={searchForm.endTime}
+          mode="time"
+          display="default"
+          onChange={onEndTimeChange}
+          is24Hour={false}
+        />
+      )}
     </ScrollView>
   );
 
@@ -770,7 +951,12 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>My Bookings</Text>
-        {myBookings.length > 0 ? (
+        {loading && myBookings.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color={colors.primary} size="large" />
+            <Text style={styles.loadingText}>Loading your bookings...</Text>
+          </View>
+        ) : myBookings.length > 0 ? (
           myBookings.map((booking) => (
             <View key={booking.id} style={styles.bookingCard}>
               <View style={styles.bookingHeader}>
@@ -787,7 +973,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                   <Text style={styles.bookingStatusText}>{booking.status}</Text>
                 </View>
               </View>
-              
+
               <View style={styles.bookingDetails}>
                 <Text style={styles.bookingDetail}>
                   <Text style={styles.bookingLabel}>Purpose:</Text> {booking.purpose}
@@ -807,7 +993,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                   </Text>
                 )}
               </View>
-              
+
               {booking.status === 'booked' && (
                 <View style={styles.bookingActions}>
                   <TouchableOpacity
@@ -863,7 +1049,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           <TouchableOpacity
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key)}
+            onPress={() => handleTabChange(tab.key)}
           >
             <Text style={[
               styles.tabText,
@@ -880,11 +1066,34 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       </View>
 
       <VehicleDetailModal />
-      <BookingModal />
-      <CancelModal />
+      <BookingModal
+        visible={isBookingModalVisible}
+        onClose={closeBookingModal}
+        selectedVehicle={selectedVehicle}
+        searchForm={searchForm}
+        bookingForm={bookingForm}
+        setBookingForm={setBookingForm}
+        loading={loading}
+        onBookVehicle={bookVehicle}
+        formatDateForDisplay={formatDateForDisplay}
+        formatTimeForDisplay={formatTimeForDisplay}
+        colors={colors}
+      />
+      <CancelModal
+        visible={isCancelModalVisible}
+        onClose={closeCancelModal}
+        selectedBooking={selectedBooking}
+        cancelReason={cancelReason}
+        setCancelReason={setCancelReason}
+        loading={loading}
+        onCancelBooking={cancelBooking}
+        formatDate={formatDate}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
@@ -901,6 +1110,29 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: fontSize.xl, fontWeight: '600', color: colors.white,
     flex: 1, textAlign: 'center',
+  },
+  dateTimeButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  dateTimeButtonText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  loadingText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
   },
   headerSpacer: { width: 40 },
   tabNavigation: {
@@ -923,7 +1155,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
   },
-  
+
   // Search Form Styles
   searchForm: {
     backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
@@ -937,7 +1169,8 @@ const styles = StyleSheet.create({
   textInput: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
     padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 48,
+    backgroundColor: colors.white, minHeight: 150,
+    alignItems:'flex-start', textAlignVertical: 'top',
   },
   descriptionInput: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
@@ -965,7 +1198,7 @@ const styles = StyleSheet.create({
   vehicleModel: {
     fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
   },
-  vehiclePlate: { 
+  vehiclePlate: {
     fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs,
   },
   vehicleType: { fontSize: fontSize.xs, color: colors.textSecondary },
@@ -1013,7 +1246,7 @@ const styles = StyleSheet.create({
   bookingVehicle: {
     fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
   },
-  bookingPlate: { 
+  bookingPlate: {
     fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
   },
   bookingStatusBadge: {
