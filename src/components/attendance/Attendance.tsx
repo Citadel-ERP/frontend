@@ -1,4 +1,3 @@
-// Attendance.tsx - Main Attendance Component (Complete)
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,6 +8,9 @@ import {
   StatusBar,
   Alert,
   Platform,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,7 +23,6 @@ import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { BACKEND_URL } from '../../config/config';
 import LeaveInfoScreen from './LeaveInfoScreen';
 
-// Import types
 import {
   AttendanceProps,
   LeaveBalance,
@@ -32,7 +33,6 @@ import {
   TabType
 } from './types';
 
-// Import components
 import AttendanceTab from './AttendanceTab';
 import LeaveTab from './LeaveTab';
 import CalendarTab from './CalendarTab';
@@ -45,17 +45,14 @@ const TOKEN_2_KEY = 'token_2';
 const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
 
-  // State variables
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('attendance');
   const [loading, setLoading] = useState(false);
 
-  // Attendance states
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
 
-  // Leave states
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     casual_leaves: 0,
@@ -70,13 +67,11 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     reason: ''
   });
 
-  // Date picker states
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
 
-  // Holiday and report states
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -86,16 +81,17 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [showLeaveInfo, setShowLeaveInfo] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveApplication | null>(null);
 
-  // Initialize token and location permission
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [attendanceDescription, setAttendanceDescription] = useState('');
+
   useEffect(() => {
     const initializeApp = async () => {
       try {
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-        console.log('Stored token:', storedToken); // Debug log
+        console.log('Stored token:', storedToken);
 
         if (storedToken) {
           setToken(storedToken);
-          // Pass the storedToken directly to functions instead of relying on state
           await fetchInitialData(storedToken);
           await initializeLocationPermission();
         } else {
@@ -164,56 +160,107 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  // API Functions
-  const markAttendance = async () => {
-    if (!token) {
-      Alert.alert('Error', 'Authentication token not found. Please login again.');
+  const markAttendance = async (description) => {
+  if (!token) {
+    Alert.alert('Error', 'Authentication token not found. Please login again.');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const location = await getCurrentLocation(10000);
+    if (!location) {
+      Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+      setLoading(false);
       return;
     }
-
-    setLoading(true);
-    try {
-      const location = await getCurrentLocation(10000);
-      if (!location) {
-        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
-        return;
-      }
-      console.log(token);
-      console.log(location);
-      const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          latitude: location.latitude.toString(),
-          longitude: location.longitude.toString(),
-        }),
-      });
-
-      const responseText = await response.text();
-      const data = responseText ? JSON.parse(responseText) : {};
-
-      if (response.status === 200) {
-        Alert.alert('Success', 'Attendance marked successfully!');
-        await fetchAttendanceRecords();
-      } else if (response.status === 400) {
-        if (data.message === 'Mark attendance failed, You are not in office') {
-          Alert.alert('Cannot Mark Attendance', 'You are not at the office location.');
-        } else if (data.message === 'Attendance already marked') {
-          Alert.alert('Already Marked', 'You have already marked today\'s attendance.');
-        } else {
-          Alert.alert('Error', data.message || 'Failed to mark attendance.');
-        }
-      } else {
-        Alert.alert('Error', data.message || `Server error (${response.status}).`);
-      }
-    } catch (error) {
-      console.error('Error marking attendance:', error);
-      Alert.alert('Error', 'Network error occurred. Please try again.');
-    } finally {
-      setLoading(false);
+    
+    console.log('Token:', token);
+    console.log('Location:', location);
+    
+    // Create request body - only include description if it's provided and is a string
+    const requestBody = {
+      token,
+      latitude: location.latitude.toString(),
+      longitude: location.longitude.toString(),
+    };
+    
+    // Only add description if it's a valid string (not an event object)
+    if (description && typeof description === 'string' && description.trim()) {
+      requestBody.description = description.trim();
     }
-  };
+    
+    console.log('Request body:', requestBody);
+    
+    const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+    const data = responseText ? JSON.parse(responseText) : {};
+
+    if (response.status === 200) {
+      Alert.alert('Success', 'Attendance marked successfully!');
+      setShowDescriptionModal(false);
+      setAttendanceDescription('');
+      
+      // Real-time update: immediately update today's attendance
+      const today = new Date().toISOString().split('T')[0];
+      const currentTime = new Date().toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+      });
+      
+      // Update today's attendance record immediately
+      const newTodayAttendance = {
+        date: today,
+        status: 'Present',
+        check_in_time: currentTime,
+        check_out_time: null
+      };
+      
+      setTodayAttendance(newTodayAttendance);
+      
+      // Update attendance records array
+      setAttendanceRecords(prevRecords => {
+        const updatedRecords = prevRecords.filter(record => record.date !== today);
+        return [newTodayAttendance, ...updatedRecords];
+      });
+      
+      // Still fetch from server to ensure data consistency
+      await fetchAttendanceRecords();
+      setLoading(false);
+    } else if (response.status === 400) {
+      if (data.message === 'Mark attendance failed, You are not in office' || 
+          data.message === 'description is required if you are not at office') {
+        // Only show modal if this is the first attempt (no description provided)
+        if (!description || typeof description !== 'string') {
+          setShowDescriptionModal(true);
+          setLoading(false);
+          return;
+        } else {
+          // This is the second attempt with description but still failed
+          Alert.alert('Error', 'Failed to mark remote attendance. Please try again.');
+        }
+      } else if (data.message === 'Attendance already marked') {
+        Alert.alert('Already Marked', 'You have already marked today\'s attendance.');
+      } else {
+        Alert.alert('Error', data.message || 'Failed to mark attendance.');
+      }
+    } else {
+      Alert.alert('Error', data.message || `Server error (${response.status}).`);
+    }
+  } catch (error) {
+    console.error('Error marking attendance:', error);
+    Alert.alert('Error', 'Network error occurred. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchLeaveBalance = async (token?: string) => {
     try {
@@ -388,7 +435,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 {
                   text: 'Open PDF',
                   onPress: () => {
-                    // Try to share/open the PDF
                     sharePDF(fileUri, filename);
                   }
                 },
@@ -396,7 +442,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                   text: 'Save to Downloads',
                   onPress: async () => {
                     try {
-                      // For Android, you might want to save to Downloads folder
                       if (Platform.OS === 'android') {
                         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
                         if (permissions.granted) {
@@ -415,7 +460,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                           Alert.alert('Permission Denied', 'Cannot save to Downloads folder without permission.');
                         }
                       } else {
-                        // For iOS, the file is already in the app's document directory
                         Alert.alert('Info', 'PDF is saved in the app directory and can be shared using the share option.');
                       }
                     } catch (error) {
@@ -451,7 +495,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (Platform.OS === 'ios') {
         await WebBrowser.openBrowserAsync(fileUri);
       } else {
-        // For Android, use Sharing.shareAsync which handles FileProvider internally
         const isAvailable = await Sharing.isAvailableAsync();
         if (isAvailable) {
           await Sharing.shareAsync(fileUri, {
@@ -460,7 +503,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             UTI: 'com.adobe.pdf'
           });
         } else {
-          // Fallback: try to open with WebBrowser
           await WebBrowser.openBrowserAsync(fileUri);
         }
       }
@@ -470,23 +512,19 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  // Alternative solution: Create a separate function that copies the file to a shareable location
   const openPDFAlternative = async (fileUri: string) => {
     try {
       if (Platform.OS === 'ios') {
         await WebBrowser.openBrowserAsync(fileUri);
       } else {
-        // For Android, copy file to cache directory which is more accessible
         const filename = fileUri.split('/').pop() || 'attendance_report.pdf';
         const cacheUri = FileSystem.cacheDirectory + filename;
 
-        // Copy file to cache directory
         await FileSystem.copyAsync({
           from: fileUri,
           to: cacheUri
         });
 
-        // Try to open with an intent
         try {
           await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
             data: cacheUri,
@@ -494,7 +532,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             type: 'application/pdf',
           });
         } catch (intentError) {
-          // If intent fails, use sharing
           const isAvailable = await Sharing.isAvailableAsync();
           if (isAvailable) {
             await Sharing.shareAsync(cacheUri, {
@@ -531,29 +568,27 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  // Date picker handlers
-  const onStartDateChange = (event: any, date?: Date) => {
+  const onStartDateChange = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || startDate;
     setShowStartDatePicker(false);
-    if (date) {
-      setStartDate(date);
-      const formattedDate = date.toISOString().split('T')[0];
-      setLeaveForm({ ...leaveForm, startDate: formattedDate });
+    setStartDate(currentDate);
+    
+    const formattedDate = currentDate.toISOString().split('T')[0];
+    setLeaveForm(prev => ({ ...prev, startDate: formattedDate }));
 
-      // Reset end date if it's before the new start date
-      if (endDate < date) {
-        setEndDate(date);
-        setLeaveForm({ ...leaveForm, startDate: formattedDate, endDate: formattedDate });
-      }
+    if (endDate < currentDate) {
+      setEndDate(currentDate);
+      setLeaveForm(prev => ({ ...prev, startDate: formattedDate, endDate: formattedDate }));
     }
   };
 
-  const onEndDateChange = (event: any, date?: Date) => {
+  const onEndDateChange = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || endDate;
     setShowEndDatePicker(false);
-    if (date) {
-      setEndDate(date);
-      const formattedDate = date.toISOString().split('T')[0];
-      setLeaveForm({ ...leaveForm, endDate: formattedDate });
-    }
+    setEndDate(currentDate);
+    
+    const formattedDate = currentDate.toISOString().split('T')[0];
+    setLeaveForm(prev => ({ ...prev, endDate: formattedDate }));
   };
 
   const handleStartDatePress = () => {
@@ -588,6 +623,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const handleYearChange = (year: number) => {
     setSelectedYear(year);
   };
+  
   const handleLeavePress = (leave: LeaveApplication) => {
     setSelectedLeave(leave);
     setShowLeaveInfo(true);
@@ -598,7 +634,23 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     setSelectedLeave(null);
   };
 
-  // If showing leave info screen, render it instead of main content
+  // Fixed remote attendance submit handler
+const handleRemoteAttendanceSubmit = () => {
+  if (!attendanceDescription.trim()) {
+    Alert.alert('Error', 'Please enter a description for remote attendance.');
+    return;
+  }
+  // Pass the actual description string, not an event
+  markAttendance(attendanceDescription.trim());
+};
+
+// Fixed close modal handler
+const handleCloseDescriptionModal = () => {
+  setShowDescriptionModal(false);
+  setAttendanceDescription('');
+  setLoading(false);
+};
+
   if (showLeaveInfo && selectedLeave) {
     return (
       <LeaveInfoScreen
@@ -653,7 +705,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>←</Text>
@@ -662,7 +713,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         {[
           { key: 'attendance', label: 'Attendance' },
@@ -688,12 +738,10 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         ))}
       </View>
 
-      {/* Tab Content */}
       <View style={styles.contentContainer}>
         {renderTabContent()}
       </View>
 
-      {/* Leave Modal */}
       <LeaveModal
         visible={isLeaveModalVisible}
         onClose={handleCloseLeaveModal}
@@ -711,7 +759,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         onEndDateChange={onEndDateChange}
       />
 
-      {/* Month Dropdown */}
       <MonthDropdown
         visible={showMonthDropdown}
         selectedMonth={selectedMonth}
@@ -719,13 +766,59 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         onSelect={handleMonthChange}
       />
 
-      {/* Year Dropdown */}
       <YearDropdown
         visible={showYearDropdown}
         selectedYear={selectedYear}
         onClose={() => setShowYearDropdown(false)}
         onSelect={handleYearChange}
       />
+
+      <Modal
+        visible={showDescriptionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleCloseDescriptionModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.descriptionModal}>
+            <Text style={styles.modalTitle}>Remote Attendance</Text>
+            <Text style={styles.modalSubtitle}>
+              You're not at the office location. Please provide a description for remote attendance:
+            </Text>
+            
+            <TextInput
+              style={styles.descriptionInput}
+              placeholder="Enter description (e.g., Working from home, Client meeting, etc.)"
+              value={attendanceDescription}
+              onChangeText={setAttendanceDescription}
+              multiline
+              numberOfLines={3}
+              maxLength={200}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCloseDescriptionModal}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleRemoteAttendanceSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -788,6 +881,374 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  descriptionModal: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  descriptionInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.text,
+    textAlignVertical: 'top',
+    marginBottom: spacing.lg,
+    minHeight: 80,
+    backgroundColor: colors.white,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  cancelButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  submitButton: {
+    backgroundColor: colors.primary,
+  },
+  cancelButtonText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  submitButtonText: {
+    fontSize: fontSize.md,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  // Loading overlay styles
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  // Error state styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  errorText: {
+    fontSize: fontSize.md,
+    color: colors.error || colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: fontSize.md,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  // Empty state styles
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Additional utility styles
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  spaceBetween: {
+    justifyContent: 'space-between',
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  // Form styles (if needed by child components)
+  formContainer: {
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    margin: spacing.md,
+    borderRadius: borderRadius.lg,
+  },
+  formRow: {
+    marginBottom: spacing.lg,
+  },
+  label: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.text,
+    backgroundColor: colors.white,
+  },
+  inputError: {
+    borderColor: colors.error || '#FF6B6B',
+  },
+  errorMessage: {
+    fontSize: fontSize.sm,
+    color: colors.error || '#FF6B6B',
+    marginTop: spacing.xs,
+  },
+  // Button variants
+  primaryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    backgroundColor: colors.disabled || '#E0E0E0',
+    borderColor: colors.disabled || '#E0E0E0',
+  },
+  primaryButtonText: {
+    fontSize: fontSize.md,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  secondaryButtonText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  outlineButtonText: {
+    fontSize: fontSize.md,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  disabledButtonText: {
+    color: colors.textSecondary,
+  },
+  // Card styles (for various content containers)
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cardHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
+  },
+  cardTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  cardSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  // List item styles
+  listItem: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  listItemContent: {
+    flex: 1,
+  },
+  listItemTitle: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  listItemSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  listItemAction: {
+    marginLeft: spacing.md,
+  },
+  // Badge/Status styles
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  badgeSuccess: {
+    backgroundColor: '#E8F5E8',
+    borderColor: '#4CAF50',
+  },
+  badgeWarning: {
+    backgroundColor: '#FFF3CD',
+    borderColor: '#FFC107',
+  },
+  badgeError: {
+    backgroundColor: '#FFEBEE',
+    borderColor: '#F44336',
+  },
+  badgeInfo: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#2196F3',
+  },
+  badgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+  },
+  badgeTextSuccess: {
+    color: '#2E7D32',
+  },
+  badgeTextWarning: {
+    color: '#F57C00',
+  },
+  badgeTextError: {
+    color: '#C62828',
+  },
+  badgeTextInfo: {
+    color: '#1565C0',
+  },
+  // Divider styles
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  verticalDivider: {
+    width: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.md,
+  },
+  // Section styles
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
+  },
+  sectionTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  sectionContent: {
+    backgroundColor: colors.white,
   },
 });
 
