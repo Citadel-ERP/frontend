@@ -161,106 +161,106 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const markAttendance = async (description) => {
-  if (!token) {
-    Alert.alert('Error', 'Authentication token not found. Please login again.');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const location = await getCurrentLocation(10000);
-    if (!location) {
-      Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
-      setLoading(false);
+    if (!token) {
+      Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
     }
-    
-    console.log('Token:', token);
-    console.log('Location:', location);
-    
-    // Create request body - only include description if it's provided and is a string
-    const requestBody = {
-      token,
-      latitude: location.latitude.toString(),
-      longitude: location.longitude.toString(),
-    };
-    
-    // Only add description if it's a valid string (not an event object)
-    if (description && typeof description === 'string' && description.trim()) {
-      requestBody.description = description.trim();
-    }
-    
-    console.log('Request body:', requestBody);
-    
-    const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
 
-    const responseText = await response.text();
-    const data = responseText ? JSON.parse(responseText) : {};
-
-    if (response.status === 200) {
-      Alert.alert('Success', 'Attendance marked successfully!');
-      setShowDescriptionModal(false);
-      setAttendanceDescription('');
-      
-      // Real-time update: immediately update today's attendance
-      const today = new Date().toISOString().split('T')[0];
-      const currentTime = new Date().toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit' 
-      });
-      
-      // Update today's attendance record immediately
-      const newTodayAttendance = {
-        date: today,
-        status: 'Present',
-        check_in_time: currentTime,
-        check_out_time: null
-      };
-      
-      setTodayAttendance(newTodayAttendance);
-      
-      // Update attendance records array
-      setAttendanceRecords(prevRecords => {
-        const updatedRecords = prevRecords.filter(record => record.date !== today);
-        return [newTodayAttendance, ...updatedRecords];
-      });
-      
-      // Still fetch from server to ensure data consistency
-      await fetchAttendanceRecords();
-      setLoading(false);
-    } else if (response.status === 400) {
-      if (data.message === 'Mark attendance failed, You are not in office' || 
-          data.message === 'description is required if you are not at office') {
-        // Only show modal if this is the first attempt (no description provided)
-        if (!description || typeof description !== 'string') {
-          setShowDescriptionModal(true);
-          setLoading(false);
-          return;
-        } else {
-          // This is the second attempt with description but still failed
-          Alert.alert('Error', 'Failed to mark remote attendance. Please try again.');
-        }
-      } else if (data.message === 'Attendance already marked') {
-        Alert.alert('Already Marked', 'You have already marked today\'s attendance.');
-      } else {
-        Alert.alert('Error', data.message || 'Failed to mark attendance.');
+    setLoading(true);
+    try {
+      const location = await getCurrentLocation(10000);
+      if (!location) {
+        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+        setLoading(false);
+        return;
       }
-    } else {
-      Alert.alert('Error', data.message || `Server error (${response.status}).`);
+
+      console.log('Token:', token);
+      console.log('Location:', location);
+
+      // Create request body - only include description if it's provided and is a string
+      const requestBody = {
+        token,
+        latitude: location.latitude.toString(),
+        longitude: location.longitude.toString(),
+      };
+
+      // Only add description if it's a valid string (not an event object)
+      if (description && typeof description === 'string' && description.trim()) {
+        requestBody.description = description.trim();
+      }
+
+      console.log('Request body:', requestBody);
+
+      const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseText = await response.text();
+      const data = responseText ? JSON.parse(responseText) : {};
+
+      if (response.status === 200) {
+        Alert.alert('Success', 'Attendance marked successfully!');
+        setShowDescriptionModal(false);
+        setAttendanceDescription('');
+
+        // Real-time update: immediately update today's attendance
+        const today = new Date().toISOString().split('T')[0];
+        const currentTime = new Date().toLocaleTimeString('en-US', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+
+        // Update today's attendance record immediately
+        const newTodayAttendance = {
+          date: today,
+          status: 'Present',
+          check_in_time: currentTime,
+          check_out_time: null
+        };
+
+        setTodayAttendance(newTodayAttendance);
+
+        // Update attendance records array
+        setAttendanceRecords(prevRecords => {
+          const updatedRecords = prevRecords.filter(record => record.date !== today);
+          return [newTodayAttendance, ...updatedRecords];
+        });
+
+        // Still fetch from server to ensure data consistency
+        await fetchAttendanceRecords();
+        setLoading(false);
+      } else if (response.status === 400) {
+        if (data.message === 'Mark attendance failed, You are not in office' ||
+          data.message === 'description is required if you are not at office') {
+          // Only show modal if this is the first attempt (no description provided)
+          if (!description || typeof description !== 'string') {
+            setShowDescriptionModal(true);
+            setLoading(false);
+            return;
+          } else {
+            // This is the second attempt with description but still failed
+            Alert.alert('Error', 'Failed to mark remote attendance. Please try again.');
+          }
+        } else if (data.message === 'Attendance already marked') {
+          Alert.alert('Already Marked', 'You have already marked today\'s attendance.');
+        } else {
+          Alert.alert('Error', data.message || 'Failed to mark attendance.');
+        }
+      } else {
+        Alert.alert('Error', data.message || `Server error (${response.status}).`);
+      }
+    } catch (error) {
+      console.error('Error marking attendance:', error);
+      Alert.alert('Error', 'Network error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error marking attendance:', error);
-    Alert.alert('Error', 'Network error occurred. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchLeaveBalance = async (token?: string) => {
     try {
@@ -287,7 +287,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             leave_type: leave.leave_type,
             reason: leave.reason,
             status: leave.status,
-            approved_by : leave.approved_by,
+            approved_by: leave.approved_by,
             approved_at: leave.approved_at,
             rejected_at: leave.rejected_at,
             total_number_of_days: leave.total_number_of_days,
@@ -340,16 +340,21 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const fetchHolidays = async (token?: string) => {
+  const fetchHolidays = async (token?: string, city?: string) => {
     try {
-      const response = await fetch(`${BACKEND_URL}/core/getHolidays`, {
+      let url = `${BACKEND_URL}/core/getHolidays`;
+      if (city) {
+        url += `?city=${encodeURIComponent(city)}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
 
       if (response.ok) {
         const data = await response.json();
-        setHolidays(data.holidays);
+        setHolidays(data.holidays || []);
       }
     } catch (error) {
       console.error('Error fetching holidays:', error);
@@ -572,7 +577,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const currentDate = selectedDate || startDate;
     setShowStartDatePicker(false);
     setStartDate(currentDate);
-    
+
     const formattedDate = currentDate.toISOString().split('T')[0];
     setLeaveForm(prev => ({ ...prev, startDate: formattedDate }));
 
@@ -586,7 +591,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const currentDate = selectedDate || endDate;
     setShowEndDatePicker(false);
     setEndDate(currentDate);
-    
+
     const formattedDate = currentDate.toISOString().split('T')[0];
     setLeaveForm(prev => ({ ...prev, endDate: formattedDate }));
   };
@@ -623,7 +628,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const handleYearChange = (year: number) => {
     setSelectedYear(year);
   };
-  
+
   const handleLeavePress = (leave: LeaveApplication) => {
     setSelectedLeave(leave);
     setShowLeaveInfo(true);
@@ -633,23 +638,25 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     setShowLeaveInfo(false);
     setSelectedLeave(null);
   };
-
+  const handleHolidaysUpdate = (updatedHolidays: Holiday[]) => {
+    setHolidays(updatedHolidays);
+  };
   // Fixed remote attendance submit handler
-const handleRemoteAttendanceSubmit = () => {
-  if (!attendanceDescription.trim()) {
-    Alert.alert('Error', 'Please enter a description for remote attendance.');
-    return;
-  }
-  // Pass the actual description string, not an event
-  markAttendance(attendanceDescription.trim());
-};
+  const handleRemoteAttendanceSubmit = () => {
+    if (!attendanceDescription.trim()) {
+      Alert.alert('Error', 'Please enter a description for remote attendance.');
+      return;
+    }
+    // Pass the actual description string, not an event
+    markAttendance(attendanceDescription.trim());
+  };
 
-// Fixed close modal handler
-const handleCloseDescriptionModal = () => {
-  setShowDescriptionModal(false);
-  setAttendanceDescription('');
-  setLoading(false);
-};
+  // Fixed close modal handler
+  const handleCloseDescriptionModal = () => {
+    setShowDescriptionModal(false);
+    setAttendanceDescription('');
+    setLoading(false);
+  };
 
   if (showLeaveInfo && selectedLeave) {
     return (
@@ -683,7 +690,11 @@ const handleCloseDescriptionModal = () => {
         );
       case 'calendar':
         return (
-          <CalendarTab holidays={holidays} />
+          <CalendarTab
+            holidays={holidays}
+            token={token}
+            onHolidaysUpdate={handleHolidaysUpdate}
+          />
         );
       case 'reports':
         return (
@@ -785,7 +796,7 @@ const handleCloseDescriptionModal = () => {
             <Text style={styles.modalSubtitle}>
               You're not at the office location. Please provide a description for remote attendance:
             </Text>
-            
+
             <TextInput
               style={styles.descriptionInput}
               placeholder="Enter description (e.g., Working from home, Client meeting, etc.)"
@@ -795,7 +806,7 @@ const handleCloseDescriptionModal = () => {
               numberOfLines={3}
               maxLength={200}
             />
-            
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -803,7 +814,7 @@ const handleCloseDescriptionModal = () => {
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
                 onPress={handleRemoteAttendanceSubmit}

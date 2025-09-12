@@ -19,17 +19,396 @@ interface Comment {
   created_at: string; is_hr_comment: boolean;
 }
 interface Item {
-  id: string; nature: string; description: string;
+  id: string; nature: string; description: string; issue?: string;
   status: 'pending' | 'in_progress' | 'resolved' | 'rejected';
   created_at: string; updated_at: string; comments: Comment[];
 }
 type TabType = 'requests' | 'grievances';
+
+// Static "Other" option as fallback
+const OTHER_OPTION: RequestNature = {
+  id: 'other',
+  name: 'Other',
+  description: 'Any other option not listed above'
+};
+
+// Dropdown Modal Component - moved outside main component
+interface DropdownModalProps {
+  visible: boolean;
+  onClose: () => void;
+  natures: RequestNature[];
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  onSelectNature: (nature: RequestNature) => void;
+  activeTab: TabType;
+}
+
+const DropdownModal: React.FC<DropdownModalProps> = ({
+  visible,
+  onClose,
+  natures,
+  searchQuery,
+  onSearchChange,
+  onSelectNature,
+  activeTab
+}) => {
+  const filteredNatures = natures.filter(nature => 
+    nature.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.dropdownOverlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.dropdownContainer}>
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={onSearchChange}
+                placeholder={`Search ${activeTab === 'requests' ? 'requests' : 'grievances'}...`}
+                placeholderTextColor={colors.textSecondary}
+                autoFocus={false}
+              />
+            </View>
+            <FlatList
+              data={filteredNatures}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              style={styles.dropdownList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => onSelectNature(item)}
+                >
+                  <Text style={styles.dropdownItemText}>{item.name}</Text>
+                  {item.description && (
+                    <Text style={styles.dropdownItemDescription} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyDropdown}>
+                  <Text style={styles.emptyDropdownText}>
+                    No {activeTab} found matching "{searchQuery}"
+                  </Text>
+                </View>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+// New Item Modal Component - moved outside main component
+interface NewItemModalProps {
+  visible: boolean;
+  onClose: () => void;
+  activeTab: TabType;
+  newItemForm: { nature: string; natureName: string; description: string };
+  onFormChange: (form: { nature: string; natureName: string; description: string }) => void;
+  onSubmit: () => void;
+  loading: boolean;
+  onOpenDropdown: () => void;
+}
+
+const NewItemModal: React.FC<NewItemModalProps> = ({
+  visible,
+  onClose,
+  activeTab,
+  newItemForm,
+  onFormChange,
+  onSubmit,
+  loading,
+  onOpenDropdown
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Raise New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
+                </Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={onOpenDropdown}
+                >
+                  <Text style={[
+                    styles.dropdownButtonText,
+                    !newItemForm.natureName && styles.dropdownPlaceholder
+                  ]}>
+                    {newItemForm.natureName || `Select ${activeTab === 'requests' ? 'request' : 'grievance'} type`}
+                  </Text>
+                  <Text style={styles.dropdownArrow}>▼</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Description *</Text>
+                <TextInput
+                  style={styles.descriptionInput}
+                  value={newItemForm.description}
+                  onChangeText={(text) => onFormChange({ ...newItemForm, description: text })}
+                  placeholder={`Please provide detailed description of your ${activeTab.slice(0, -1)}`}
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={onClose}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitButton,
+                    (!newItemForm.nature || !newItemForm.description.trim()) && styles.modalSubmitButtonDisabled
+                  ]}
+                  onPress={onSubmit}
+                  disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <View style={styles.submitButtonContent}>
+                      <Text style={styles.modalSubmitText}>
+                        Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
+
+// Item Detail Modal Component - moved outside main component
+interface ItemDetailModalProps {
+  visible: boolean;
+  onClose: () => void;
+  selectedItem: Item | null;
+  activeTab: TabType;
+  newComment: string;
+  onCommentChange: (comment: string) => void;
+  onAddComment: () => void;
+  loading: boolean;
+  loadingDetails: boolean;
+}
+
+const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
+  visible,
+  onClose,
+  selectedItem,
+  activeTab,
+  newComment,
+  onCommentChange,
+  onAddComment,
+  loading,
+  loadingDetails
+}) => {
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const formatDateTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const getStatusBadgeColor = (status: string): string => {
+    switch (status) {
+      case 'resolved': return colors.success;
+      case 'rejected': return colors.error;
+      case 'in_progress': return colors.info;
+      case 'pending': return colors.warning;
+      default: return colors.textSecondary;
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={[styles.modalContainer, { maxHeight: screenHeight * 0.9 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingDetails ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Loading details...</Text>
+              </View>
+            ) : selectedItem ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.modalScrollContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.itemDetailContainer}>
+                  <View style={styles.itemDetailHeader}>
+                    <View style={styles.itemDetailInfo}>
+                      <Text style={styles.itemNatureText}>{selectedItem.nature}</Text>
+                      <Text style={styles.itemDateText}>
+                        Created: {formatDate(selectedItem.created_at)}
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusBadgeColor(selectedItem.status) }
+                    ]}>
+                      <Text style={styles.statusBadgeText}>
+                        {selectedItem.status.replace('_', ' ')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.itemDescription}>
+                    <Text style={styles.descriptionLabel}>Description:</Text>
+                    <Text style={styles.itemDescriptionText}>
+                      {selectedItem.description || selectedItem.issue}
+                    </Text>
+                  </View>
+
+                  <View style={styles.commentsSection}>
+                    <Text style={styles.commentsTitle}>Comments</Text>
+                    
+                    {selectedItem.comments && selectedItem.comments.length > 0 ? (
+                      selectedItem.comments.map((comment) => (
+                        <View key={comment.id} style={[
+                          styles.commentItem,
+                          comment.is_hr_comment && styles.hrCommentItem
+                        ]}>
+                          <View style={styles.commentHeader}>
+                            <Text style={[
+                              styles.commentAuthor,
+                              comment.is_hr_comment && styles.hrCommentAuthor
+                            ]}>
+                              {comment.created_by_name} {comment.is_hr_comment && '(HR Team)'}
+                            </Text>
+                            <Text style={styles.commentDate}>
+                              {formatDateTime(comment.created_at)}
+                            </Text>
+                          </View>
+                          <Text style={styles.commentText}>{comment.comment}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.noCommentsText}>No comments yet</Text>
+                    )}
+
+                    <View style={styles.addCommentSection}>
+                      <Text style={styles.addCommentLabel}>Add Comment:</Text>
+                      <TextInput
+                        style={styles.commentInput}
+                        value={newComment}
+                        onChangeText={onCommentChange}
+                        placeholder="Type your comment here..."
+                        placeholderTextColor={colors.textSecondary}
+                        multiline
+                        numberOfLines={3}
+                        textAlignVertical="top"
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.addCommentButton,
+                          (!newComment.trim()) && styles.addCommentButtonDisabled
+                        ]}
+                        onPress={onAddComment}
+                        disabled={loading || !newComment.trim()}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color={colors.white} size="small" />
+                        ) : (
+                          <Text style={styles.addCommentText}>Add Comment</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
 
 const HR: React.FC<HRProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('requests');
   const [loading, setLoading] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [isNewItemModalVisible, setIsNewItemModalVisible] = useState(false);
   const [isItemDetailModalVisible, setIsItemDetailModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
@@ -44,9 +423,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   const currentNatures = activeTab === 'requests' ? requestNatures : grievanceNatures;
   const currentItems = activeTab === 'requests' ? requests : grievances;
-  const filteredNatures = currentNatures.filter(nature => 
-    nature.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   useEffect(() => {
     const getToken = async () => {
@@ -61,13 +437,76 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (token) fetchInitialData();
+    if (token) {
+      fetchInitialData();
+      fetchNatureData();
+    }
   }, [token, activeTab]);
+
+  const fetchNatureData = async () => {
+    try {
+      if (activeTab === 'requests') {
+        const response = await fetch(`${BACKEND_URL}/core/getCommonRequests`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const commonRequests = data.common_requests || [];
+          
+          // Transform backend data to RequestNature format
+          const transformedRequests: RequestNature[] = commonRequests.map((request: any) => ({
+            id: request.id.toString(),
+            name: request.common_request,
+            description: request.common_request
+          }));
+          
+          // Add "Other" option at the end
+          setRequestNatures([...transformedRequests, OTHER_OPTION]);
+        } else {
+          // Fallback to only "Other" option if API fails
+          setRequestNatures([OTHER_OPTION]);
+        }
+      } else {
+        const response = await fetch(`${BACKEND_URL}/core/getCommonGrievances`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const commonGrievances = data.common_grievances || [];
+          
+          // Transform backend data to RequestNature format
+          const transformedGrievances: RequestNature[] = commonGrievances.map((grievance: any) => ({
+            id: grievance.id.toString(),
+            name: grievance.common_grievance,
+            description: grievance.common_grievance
+          }));
+          
+          // Add "Other" option at the end
+          setGrievanceNatures([...transformedGrievances, OTHER_OPTION]);
+        } else {
+          // Fallback to only "Other" option if API fails
+          setGrievanceNatures([OTHER_OPTION]);
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching ${activeTab} nature data:`, error);
+      // Fallback to only "Other" option if network error
+      if (activeTab === 'requests') {
+        setRequestNatures([OTHER_OPTION]);
+      } else {
+        setGrievanceNatures([OTHER_OPTION]);
+      }
+    }
+  };
 
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchNatures(), fetchItems()]);
+      await fetchItems();
     } catch (error) {
       console.error('Error fetching initial data:', error);
     } finally {
@@ -75,93 +514,128 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     }
   };
 
-  const fetchNatures = async () => {
-    try {
-      const endpoint = activeTab === 'requests' ? 'getCommonRequests' : 'getCommonGrievances';
-      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
-        method: 'GET', 
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const backendNatures = activeTab === 'requests' 
-          ? data.common_requests || [] 
-          : data.common_grievances || [];
-        
-        const transformedNatures = backendNatures.map((item: any) => ({
-          id: item.id.toString(),
-          name: activeTab === 'requests' ? item.common_request : item.common_grievance,
-          description: activeTab === 'requests' ? item.common_request : item.common_grievance
-        }));
-
-        const natures = [
-          ...transformedNatures,
-          { 
-            id: 'other', 
-            name: 'Other', 
-            description: 'Any other ' + (activeTab === 'requests' ? 'request' : 'grievance') + ' not listed above'
-          }
-        ];
-        
-        if (activeTab === 'requests') setRequestNatures(natures);
-        else setGrievanceNatures(natures);
-      } else {
-        // Set default natures if API fails
-        setDefaultNatures();
-      }
-    } catch (error) {
-      console.error(`Error fetching ${activeTab} natures:`, error);
-      setDefaultNatures();
-    }
-  };
-
-  const setDefaultNatures = () => {
-    const defaultNatures = activeTab === 'requests' 
-      ? [
-          { id: 'leave_extension', name: 'Leave Extension', description: 'Request for leave extension' },
-          { id: 'salary_certificate', name: 'Salary Certificate', description: 'Request for salary certificate' },
-          { id: 'experience_letter', name: 'Experience Letter', description: 'Request for experience letter' },
-          { id: 'transfer_request', name: 'Transfer Request', description: 'Request for transfer to another location' },
-          { id: 'other', name: 'Other', description: 'Any other request not listed above' }
-        ]
-      : [
-          { id: 'workplace_harassment', name: 'Workplace Harassment', description: 'Issues related to workplace harassment' },
-          { id: 'unfair_treatment', name: 'Unfair Treatment', description: 'Issues related to unfair treatment' },
-          { id: 'policy_violation', name: 'Policy Violation', description: 'Issues related to policy violations' },
-          { id: 'discrimination', name: 'Discrimination', description: 'Issues related to discrimination' },
-          { id: 'other', name: 'Other', description: 'Any other grievance not listed above' }
-        ];
-    
-    if (activeTab === 'requests') setRequestNatures(defaultNatures);
-    else setGrievanceNatures(defaultNatures);
-  };
-
   const fetchItems = async () => {
     try {
-      // This endpoint seems to be incorrect in the original code
-      // You might need to update this with the correct endpoint for fetching user's requests/grievances
-      const endpoint = activeTab === 'requests' ? 'getUserRequests' : 'getUserGrievances';
-      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
+      // Use the correct endpoint for grievances, for requests we'll keep the old logic for now
+      if (activeTab === 'grievances') {
+        const response = await fetch(`${BACKEND_URL}/core/getGrievances`, {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        const items = data[activeTab] || [];
-        
-        if (activeTab === 'requests') setRequests(items);
-        else setGrievances(items);
+        if (response.ok) {
+          const data = await response.json();
+          const grievancesData = data.grievances || [];
+          
+          // Transform grievances data to match our interface
+          const transformedGrievances = grievancesData.map((grievance: any) => ({
+            id: grievance.id.toString(),
+            nature: grievance.nature,
+            description: grievance.issue, // grievances use 'issue' instead of 'description'
+            issue: grievance.issue,
+            status: grievance.status,
+            created_at: grievance.created_at,
+            updated_at: grievance.updated_at,
+            comments: [] // Will be populated when we implement comments endpoint
+          }));
+          
+          setGrievances(transformedGrievances);
+        } else {
+          setGrievances([]);
+        }
       } else {
-        if (activeTab === 'requests') setRequests([]);
-        else setGrievances([]);
+        // For requests, keep the existing logic for now
+        const endpoint = 'getRequests';
+        const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const items = data.requests || [];
+          setRequests(items);
+        } else {
+          setRequests([]);
+        }
       }
     } catch (error) {
       console.error(`Error fetching ${activeTab}:`, error);
       if (activeTab === 'requests') setRequests([]);
       else setGrievances([]);
+    }
+  };
+
+  // New function to fetch detailed item with comments
+  const fetchItemDetails = async (itemId: string) => {
+    if (!token) return null;
+    
+    setLoadingDetails(true);
+    try {
+      const endpoint = activeTab === 'requests' ? 'getRequest' : 'getGrievance';
+      const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
+      
+      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          [idField]: parseInt(itemId)
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const itemData = activeTab === 'requests' ? data.request : data.grievance;
+        
+        // Transform the detailed item data
+        const transformedComments = itemData.comments?.map((commentWrapper: any) => {
+          const comment = commentWrapper.comment;
+          return {
+            id: comment.id.toString(),
+            comment: comment.content,
+            created_by: comment.user.employee_id,
+            created_by_name: comment.user.full_name,
+            created_at: comment.created_at,
+            is_hr_comment: comment.user.role === 'hr' // Assuming HR comments are identified by role
+          };
+        }) || [];
+
+        const detailedItem: Item = {
+          id: itemData.id.toString(),
+          nature: itemData.nature,
+          description: activeTab === 'requests' ? itemData.description : itemData.issue,
+          issue: itemData.issue,
+          status: itemData.status,
+          created_at: itemData.created_at,
+          updated_at: itemData.updated_at,
+          comments: transformedComments
+        };
+
+        return detailedItem;
+      } else {
+        console.error('Failed to fetch item details');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching item details:', error);
+      return null;
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  // Modified function to handle item selection
+  const handleItemPress = async (item: Item) => {
+    setSelectedItem(item); // Set basic item first
+    setIsItemDetailModalVisible(true);
+    
+    // Fetch detailed item with comments
+    const detailedItem = await fetchItemDetails(item.id);
+    if (detailedItem) {
+      setSelectedItem(detailedItem);
     }
   };
 
@@ -197,7 +671,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         const result = await response.json();
         Alert.alert('Success', `${activeTab.slice(0, -1)} submitted successfully!`);
         closeNewItemModal();
-        await fetchItems(); // Refresh the list
+        await fetchItems(); 
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || `Failed to submit ${activeTab.slice(0, -1)}`);
@@ -218,7 +692,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
-      const endpoint = activeTab === 'requests' ? 'addRequestComment' : 'addGrievanceComment';
+      const endpoint = activeTab === 'requests' ? 'addCommentToRequest' : 'addCommentToGrievance';
       const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
       
       const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
@@ -227,16 +701,21 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         body: JSON.stringify({
           token,
           [idField]: selectedItem.id,
-          comment: newComment
+          content: newComment
         }),
       });
 
       if (response.ok) {
         setNewComment('');
+        
+        // Refresh the detailed item to get updated comments
+        const updatedItem = await fetchItemDetails(selectedItem.id);
+        if (updatedItem) {
+          setSelectedItem(updatedItem);
+        }
+        
+        // Also refresh the main list
         await fetchItems();
-        const updatedItems = activeTab === 'requests' ? requests : grievances;
-        const updatedItem = updatedItems.find(item => item.id === selectedItem.id);
-        if (updatedItem) setSelectedItem(updatedItem);
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || 'Failed to add comment');
@@ -267,13 +746,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const formatDateTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-  };
-
   const getStatusBadgeColor = (status: string): string => {
     switch (status) {
       case 'resolved': return colors.success;
@@ -288,282 +760,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     <View style={styles.backIcon}>
       <View style={styles.backArrow} />
     </View>
-  );
-
-  const DropdownModal = () => (
-    <Modal
-      visible={isDropdownVisible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => {
-        setIsDropdownVisible(false);
-        setSearchQuery('');
-      }}
-    >
-      <TouchableOpacity
-        style={styles.dropdownOverlay}
-        activeOpacity={1}
-        onPress={() => {
-          setIsDropdownVisible(false);
-          setSearchQuery('');
-        }}
-      >
-        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.dropdownContainer}>
-            <View style={styles.searchContainer}>
-              <TextInput
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder={`Search ${activeTab === 'requests' ? 'requests' : 'grievances'}...`}
-                placeholderTextColor={colors.textSecondary}
-                autoFocus={false}
-              />
-            </View>
-            <FlatList
-              data={filteredNatures}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              style={styles.dropdownList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => selectNature(item)}
-                >
-                  <Text style={styles.dropdownItemText}>{item.name}</Text>
-                  {item.description && (
-                    <Text style={styles.dropdownItemDescription} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={() => (
-                <View style={styles.emptyDropdown}>
-                  <Text style={styles.emptyDropdownText}>
-                    No {activeTab} found matching "{searchQuery}"
-                  </Text>
-                </View>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  );
-
-  const NewItemModal = () => (
-    <Modal
-      visible={isNewItemModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={closeNewItemModal}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Raise New {activeTab === 'requests' ? 'Request' : 'Grievance'}
-              </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeNewItemModal}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
-                </Text>
-                <TouchableOpacity
-                  style={styles.dropdownButton}
-                  onPress={() => setIsDropdownVisible(true)}
-                >
-                  <Text style={[
-                    styles.dropdownButtonText,
-                    !newItemForm.natureName && styles.dropdownPlaceholder
-                  ]}>
-                    {newItemForm.natureName || `Select ${activeTab === 'requests' ? 'request' : 'grievance'} type`}
-                  </Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Description *</Text>
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={newItemForm.description}
-                  onChangeText={(text) => setNewItemForm({ ...newItemForm, description: text })}
-                  placeholder={`Please provide detailed description of your ${activeTab.slice(0, -1)}`}
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={closeNewItemModal}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalSubmitButton,
-                    (!newItemForm.nature || !newItemForm.description.trim()) && styles.modalSubmitButtonDisabled
-                  ]}
-                  onPress={submitNewItem}
-                  disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <View style={styles.submitButtonContent}>
-                      <Text style={styles.modalSubmitText}>
-                        Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-      {isDropdownVisible && <DropdownModal />}
-    </Modal>
-  );
-
-  const ItemDetailModal = () => (
-    <Modal
-      visible={isItemDetailModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setIsItemDetailModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={[styles.modalContainer, { maxHeight: screenHeight * 0.9 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
-              </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setIsItemDetailModalVisible(false)}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            {selectedItem && (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.modalScrollContent}
-                keyboardShouldPersistTaps="handled"
-              >
-                <View style={styles.itemDetailContainer}>
-                  <View style={styles.itemDetailHeader}>
-                    <View style={styles.itemDetailInfo}>
-                      <Text style={styles.itemNatureText}>{selectedItem.nature}</Text>
-                      <Text style={styles.itemDateText}>
-                        Created: {formatDate(selectedItem.created_at)}
-                      </Text>
-                    </View>
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusBadgeColor(selectedItem.status) }
-                    ]}>
-                      <Text style={styles.statusBadgeText}>
-                        {selectedItem.status.replace('_', ' ')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.itemDescription}>
-                    <Text style={styles.descriptionLabel}>Description:</Text>
-                    <Text style={styles.itemDescriptionText}>{selectedItem.description}</Text>
-                  </View>
-
-                  <View style={styles.commentsSection}>
-                    <Text style={styles.commentsTitle}>Comments</Text>
-                    
-                    {selectedItem.comments && selectedItem.comments.length > 0 ? (
-                      selectedItem.comments.map((comment) => (
-                        <View key={comment.id} style={[
-                          styles.commentItem,
-                          comment.is_hr_comment && styles.hrCommentItem
-                        ]}>
-                          <View style={styles.commentHeader}>
-                            <Text style={[
-                              styles.commentAuthor,
-                              comment.is_hr_comment && styles.hrCommentAuthor
-                            ]}>
-                              {comment.created_by_name} {comment.is_hr_comment && '(HR Team)'}
-                            </Text>
-                            <Text style={styles.commentDate}>
-                              {formatDateTime(comment.created_at)}
-                            </Text>
-                          </View>
-                          <Text style={styles.commentText}>{comment.comment}</Text>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.noCommentsText}>No comments yet</Text>
-                    )}
-
-                    <View style={styles.addCommentSection}>
-                      <Text style={styles.addCommentLabel}>Add Comment:</Text>
-                      <TextInput
-                        style={styles.commentInput}
-                        value={newComment}
-                        onChangeText={setNewComment}
-                        placeholder="Type your comment here..."
-                        placeholderTextColor={colors.textSecondary}
-                        multiline
-                        numberOfLines={3}
-                        textAlignVertical="top"
-                      />
-                      <TouchableOpacity
-                        style={[
-                          styles.addCommentButton,
-                          (!newComment.trim()) && styles.addCommentButtonDisabled
-                        ]}
-                        onPress={addComment}
-                        disabled={loading || !newComment.trim()}
-                      >
-                        {loading ? (
-                          <ActivityIndicator color={colors.white} size="small" />
-                        ) : (
-                          <Text style={styles.addCommentText}>Add Comment</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
   );
 
   const renderContent = () => (
@@ -596,10 +792,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             <TouchableOpacity
               key={item.id}
               style={styles.itemCard}
-              onPress={() => {
-                setSelectedItem(item);
-                setIsItemDetailModalVisible(true);
-              }}
+              onPress={() => handleItemPress(item)}
             >
               <View style={styles.itemHeader}>
                 <View style={styles.itemInfo}>
@@ -616,7 +809,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
                 </View>
               </View>
               <Text style={styles.itemDescriptionText} numberOfLines={2}>
-                {item.description}
+                {item.description || item.issue}
               </Text>
               <View style={styles.itemFooter}>
                 <Text style={styles.commentsCount}>
@@ -676,13 +869,58 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         {renderContent()}
       </View>
 
-      <NewItemModal />
-      <ItemDetailModal />
+      <NewItemModal
+        visible={isNewItemModalVisible}
+        onClose={closeNewItemModal}
+        activeTab={activeTab}
+        newItemForm={newItemForm}
+        onFormChange={setNewItemForm}
+        onSubmit={submitNewItem}
+        loading={loading}
+        onOpenDropdown={() => setIsDropdownVisible(true)}
+      />
+
+      <ItemDetailModal
+        visible={isItemDetailModalVisible}
+        onClose={() => setIsItemDetailModalVisible(false)}
+        selectedItem={selectedItem}
+        activeTab={activeTab}
+        newComment={newComment}
+        onCommentChange={setNewComment}
+        onAddComment={addComment}
+        loading={loading}
+        loadingDetails={loadingDetails}
+      />
+
+      <DropdownModal
+        visible={isDropdownVisible}
+        onClose={() => {
+          setIsDropdownVisible(false);
+          setSearchQuery('');
+        }}
+        natures={currentNatures}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSelectNature={selectNature}
+        activeTab={activeTab}
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
   container: { flex: 1, backgroundColor: colors.primary },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
