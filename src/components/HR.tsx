@@ -24,6 +24,7 @@ interface Item {
   created_at: string; updated_at: string; comments: Comment[];
 }
 type TabType = 'requests' | 'grievances';
+type ViewMode = 'main' | 'itemDetail';
 
 // Static "Other" option as fallback
 const OTHER_OPTION: RequestNature = {
@@ -113,7 +114,7 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
   );
 };
 
-// New Item Modal Component - moved outside main component
+// New Item Modal Component - kept as modal per requirements
 interface NewItemModalProps {
   visible: boolean;
   onClose: () => void;
@@ -231,30 +232,30 @@ const NewItemModal: React.FC<NewItemModalProps> = ({
   );
 };
 
-// Item Detail Modal Component - moved outside main component
-interface ItemDetailModalProps {
-  visible: boolean;
-  onClose: () => void;
-  selectedItem: Item | null;
+// Item Detail Page Component - converted from modal to full page
+interface ItemDetailPageProps {
+  item: Item | null;
   activeTab: TabType;
   newComment: string;
   onCommentChange: (comment: string) => void;
   onAddComment: () => void;
+  onBack: () => void;
   loading: boolean;
   loadingDetails: boolean;
 }
 
-const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
-  visible,
-  onClose,
-  selectedItem,
+const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
+  item,
   activeTab,
   newComment,
   onCommentChange,
   onAddComment,
+  onBack,
   loading,
   loadingDetails
 }) => {
+  const insets = useSafeAreaInsets();
+
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -277,129 +278,124 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     }
   };
 
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={[styles.modalContainer, { maxHeight: screenHeight * 0.9 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
-              </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={onClose}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
-            {loadingDetails ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading details...</Text>
-              </View>
-            ) : selectedItem ? (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.modalScrollContent}
-                keyboardShouldPersistTaps="handled"
-              >
-                <View style={styles.itemDetailContainer}>
-                  <View style={styles.itemDetailHeader}>
-                    <View style={styles.itemDetailInfo}>
-                      <Text style={styles.itemNatureText}>{selectedItem.nature}</Text>
-                      <Text style={styles.itemDateText}>
-                        Created: {formatDate(selectedItem.created_at)}
-                      </Text>
-                    </View>
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusBadgeColor(selectedItem.status) }
-                    ]}>
-                      <Text style={styles.statusBadgeText}>
-                        {selectedItem.status.replace('_', ' ')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.itemDescription}>
-                    <Text style={styles.descriptionLabel}>Description:</Text>
-                    <Text style={styles.itemDescriptionText}>
-                      {selectedItem.description || selectedItem.issue}
-                    </Text>
-                  </View>
-
-                  <View style={styles.commentsSection}>
-                    <Text style={styles.commentsTitle}>Comments</Text>
-                    
-                    {selectedItem.comments && selectedItem.comments.length > 0 ? (
-                      selectedItem.comments.map((comment) => (
-                        <View key={comment.id} style={[
-                          styles.commentItem,
-                          comment.is_hr_comment && styles.hrCommentItem
-                        ]}>
-                          <View style={styles.commentHeader}>
-                            <Text style={[
-                              styles.commentAuthor,
-                              comment.is_hr_comment && styles.hrCommentAuthor
-                            ]}>
-                              {comment.created_by_name} {comment.is_hr_comment && '(HR Team)'}
-                            </Text>
-                            <Text style={styles.commentDate}>
-                              {formatDateTime(comment.created_at)}
-                            </Text>
-                          </View>
-                          <Text style={styles.commentText}>{comment.comment}</Text>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.noCommentsText}>No comments yet</Text>
-                    )}
-
-                    <View style={styles.addCommentSection}>
-                      <Text style={styles.addCommentLabel}>Add Comment:</Text>
-                      <TextInput
-                        style={styles.commentInput}
-                        value={newComment}
-                        onChangeText={onCommentChange}
-                        placeholder="Type your comment here..."
-                        placeholderTextColor={colors.textSecondary}
-                        multiline
-                        numberOfLines={3}
-                        textAlignVertical="top"
-                      />
-                      <TouchableOpacity
-                        style={[
-                          styles.addCommentButton,
-                          (!newComment.trim()) && styles.addCommentButtonDisabled
-                        ]}
-                        onPress={onAddComment}
-                        disabled={loading || !newComment.trim()}
-                      >
-                        {loading ? (
-                          <ActivityIndicator color={colors.white} size="small" />
-                        ) : (
-                          <Text style={styles.addCommentText}>Add Comment</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </ScrollView>
-            ) : null}
-          </View>
-        </KeyboardAvoidingView>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <BackIcon />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
+        </Text>
+        <View style={styles.headerSpacer} />
       </View>
-    </Modal>
+
+      <View style={styles.contentContainer}>
+        {loadingDetails ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading details...</Text>
+          </View>
+        ) : item ? (
+          <ScrollView
+            style={styles.detailPageContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.detailPageScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.itemDetailContainer}>
+              <View style={styles.itemDetailHeader}>
+                <View style={styles.itemDetailInfo}>
+                  <Text style={styles.itemNatureText}>{item.nature}</Text>
+                  <Text style={styles.itemDateText}>
+                    Created: {formatDate(item.created_at)}
+                  </Text>
+                </View>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: getStatusBadgeColor(item.status) }
+                ]}>
+                  <Text style={styles.statusBadgeText}>
+                    {item.status.replace('_', ' ')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.itemDescription}>
+                <Text style={styles.descriptionLabel}>Description:</Text>
+                <Text style={styles.itemDescriptionText}>
+                  {item.description || item.issue}
+                </Text>
+              </View>
+
+              <View style={styles.commentsSection}>
+                <Text style={styles.commentsTitle}>Comments</Text>
+                
+                {item.comments && item.comments.length > 0 ? (
+                  item.comments.map((comment) => (
+                    <View key={comment.id} style={[
+                      styles.commentItem,
+                      comment.is_hr_comment && styles.hrCommentItem
+                    ]}>
+                      <View style={styles.commentHeader}>
+                        <Text style={[
+                          styles.commentAuthor,
+                          comment.is_hr_comment && styles.hrCommentAuthor
+                        ]}>
+                          {comment.created_by_name} {comment.is_hr_comment && '(HR Team)'}
+                        </Text>
+                        <Text style={styles.commentDate}>
+                          {formatDateTime(comment.created_at)}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentText}>{comment.comment}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noCommentsText}>No comments yet</Text>
+                )}
+
+                <View style={styles.addCommentSection}>
+                  <Text style={styles.addCommentLabel}>Add Comment:</Text>
+                  <TextInput
+                    style={styles.commentInput}
+                    value={newComment}
+                    onChangeText={onCommentChange}
+                    placeholder="Type your comment here..."
+                    placeholderTextColor={colors.textSecondary}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.addCommentButton,
+                      (!newComment.trim()) && styles.addCommentButtonDisabled
+                    ]}
+                    onPress={onAddComment}
+                    disabled={loading || !newComment.trim()}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={colors.white} size="small" />
+                    ) : (
+                      <Text style={styles.addCommentText}>Add Comment</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        ) : null}
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -410,7 +406,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isNewItemModalVisible, setIsNewItemModalVisible] = useState(false);
-  const [isItemDetailModalVisible, setIsItemDetailModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -420,6 +415,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   const [newComment, setNewComment] = useState('');
   const [requests, setRequests] = useState<Item[]>([]);
   const [grievances, setGrievances] = useState<Item[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('main');
 
   const currentNatures = activeTab === 'requests' ? requestNatures : grievanceNatures;
   const currentItems = activeTab === 'requests' ? requests : grievances;
@@ -437,11 +433,11 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (token) {
+    if (token && viewMode === 'main') {
       fetchInitialData();
       fetchNatureData();
     }
-  }, [token, activeTab]);
+  }, [token, activeTab, viewMode]);
 
   const fetchNatureData = async () => {
     try {
@@ -627,15 +623,26 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     }
   };
 
-  // Modified function to handle item selection
+  // Modified function to handle item selection - navigate to detail page
   const handleItemPress = async (item: Item) => {
     setSelectedItem(item); // Set basic item first
-    setIsItemDetailModalVisible(true);
+    setViewMode('itemDetail'); // Switch to detail page
     
     // Fetch detailed item with comments
     const detailedItem = await fetchItemDetails(item.id);
     if (detailedItem) {
       setSelectedItem(detailedItem);
+    }
+  };
+
+  // Handle back from item detail page
+  const handleBackFromDetail = () => {
+    setViewMode('main');
+    setSelectedItem(null);
+    setNewComment('');
+    // Refresh main list to show any updates
+    if (token) {
+      fetchItems();
     }
   };
 
@@ -713,9 +720,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         if (updatedItem) {
           setSelectedItem(updatedItem);
         }
-        
-        // Also refresh the main list
-        await fetchItems();
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || 'Failed to add comment');
@@ -761,6 +765,22 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       <View style={styles.backArrow} />
     </View>
   );
+
+  // If we're viewing item details, show the detail page
+  if (viewMode === 'itemDetail') {
+    return (
+      <ItemDetailPage
+        item={selectedItem}
+        activeTab={activeTab}
+        newComment={newComment}
+        onCommentChange={setNewComment}
+        onAddComment={addComment}
+        onBack={handleBackFromDetail}
+        loading={loading}
+        loadingDetails={loadingDetails}
+      />
+    );
+  }
 
   const renderContent = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -880,18 +900,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         onOpenDropdown={() => setIsDropdownVisible(true)}
       />
 
-      <ItemDetailModal
-        visible={isItemDetailModalVisible}
-        onClose={() => setIsItemDetailModalVisible(false)}
-        selectedItem={selectedItem}
-        activeTab={activeTab}
-        newComment={newComment}
-        onCommentChange={setNewComment}
-        onAddComment={addComment}
-        loading={loading}
-        loadingDetails={loadingDetails}
-      />
-
       <DropdownModal
         visible={isDropdownVisible}
         onClose={() => {
@@ -921,6 +929,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
+  
   container: { flex: 1, backgroundColor: colors.primary },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
@@ -953,6 +962,18 @@ const styles = StyleSheet.create({
   activeTabText: { color: colors.primary, fontWeight: '600' },
   contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
   tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  
+  // Detail Page Styles
+  detailPageContent: { 
+    flex: 1, 
+    backgroundColor: colors.backgroundSecondary 
+  },
+  detailPageScrollContent: { 
+    paddingHorizontal: spacing.lg, 
+    paddingTop: spacing.lg, 
+    paddingBottom: spacing.xl 
+  },
+
   section: { marginBottom: spacing.xl },
   sectionTitle: {
     fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
@@ -1114,14 +1135,16 @@ const styles = StyleSheet.create({
   },
   itemDescription: {
     marginBottom: spacing.lg, padding: spacing.md,
-    backgroundColor: colors.backgroundSecondary, borderRadius: borderRadius.md,
+    backgroundColor: colors.white, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border, ...shadows.sm, elevation: 1,
   },
   descriptionLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
   commentsSection: { flex: 1 },
   commentsTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
   commentItem: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
+    backgroundColor: colors.white, padding: spacing.md,
     borderRadius: borderRadius.md, marginBottom: spacing.sm,
+    borderWidth: 1, borderColor: colors.border, ...shadows.sm, elevation: 1,
   },
   hrCommentItem: {
     backgroundColor: colors.primary + '10', borderLeftWidth: 3, borderLeftColor: colors.primary,
