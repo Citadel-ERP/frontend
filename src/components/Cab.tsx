@@ -91,24 +91,21 @@ interface BookingModalProps {
   setBookingForm: any;
   loading: boolean;
   onBookVehicle: () => void;
-  formatDateForDisplay: (dateString: string) => string;
-  formatTimeForDisplay: (timeString: string) => string;
+  formatDateForDisplay: (date: Date) => string;  // Changed from dateString to date
+  formatTimeForDisplay: (date: Date) => string;  // Changed from timeString to date
   colors: any;
 }
 
 interface CancelModalProps {
   visible: boolean;
   onClose: () => void;
-  booking: Booking;
-  onCancelBooking: () => void;
-  formatDateForDisplay: (dateString: string) => string;
-  formatTimeForDisplay: (timeString: string) => string;
-  colors: any;
-  loading: boolean;
-  selectedBooking: Booking;
-  formatDate: (dateString: string) => string; 
+  selectedBooking: Booking | null;
   cancelReason: string;
   setCancelReason: (reason: string) => void;
+  loading: boolean;
+  onCancelBooking: () => void;
+  formatDate: (dateString: string) => string;
+  colors: any;
 }
 
 type TabType = 'search' | 'my-bookings';

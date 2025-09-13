@@ -6,14 +6,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
 
-interface DriverProps { 
-  onBack: () => void; 
+interface DriverProps {
+  onBack: () => void;
 }
 
 interface Address {
@@ -79,6 +80,8 @@ interface Booking {
   reason_of_cancellation: string | null;
   start_location: string;
   end_location: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface MaintenanceRecord {
@@ -102,26 +105,482 @@ interface FuelLog {
   odometer_reading: string;
 }
 
-type TabType = 'vehicles' | 'bookings' | 'maintenance' | 'fuel';
+// Add these interfaces near the top of your file with the other interfaces
+
+interface MaintenanceModalProps {
+  isVisible: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  form: {
+    cost: string;
+    description: string;
+    start_date: string;
+    end_date: string;
+  };
+  setForm: React.Dispatch<React.SetStateAction<{
+    cost: string;
+    description: string;
+    start_date: string;
+    end_date: string;
+  }>>;
+  loading: boolean;
+}
+
+interface FuelLogModalProps {
+  isVisible: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  form: {
+    quantity: string;
+    cost: string;
+    odometer_reading: string;
+  };
+  setForm: React.Dispatch<React.SetStateAction<{
+    quantity: string;
+    cost: string;
+    odometer_reading: string;
+  }>>;
+  loading: boolean;
+}
+
+interface MaintenanceLogsModalProps {
+  isVisible: boolean;
+  onClose: () => void;
+  logs: MaintenanceRecord[];
+  formatDate: (dateString: string) => string;
+}
+
+interface FuelLogsModalProps {
+  isVisible: boolean;
+  onClose: () => void;
+  logs: FuelLog[];
+  formatDateTime: (dateString: string) => string;
+}
+
+type ViewType = 'main' | 'vehicle-detail' | 'booking-detail';
+
+// External Maintenance Modal Component
+const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
+  isVisible,
+  onClose,
+  onSubmit,
+  form,
+  setForm,
+  loading
+}) => {
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+
+  const formatDateForDisplay = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setStartDate(selectedDate);
+      setForm(prev => ({ ...prev, start_date: formatDateForDisplay(selectedDate) }));
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
+      setForm(prev => ({ ...prev, end_date: formatDateForDisplay(selectedDate) }));
+    }
+  };
+
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Log Maintenance</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Cost (₹) *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={form.cost}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, cost: text }))}
+                  placeholder="Enter maintenance cost"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Description *</Text>
+                <TextInput
+                  style={styles.descriptionInput}
+                  value={form.description}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, description: text }))}
+                  placeholder="Describe the maintenance work"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Start Date *</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowStartDatePicker(true)}
+                >
+                  <Text style={[
+                    styles.dateButtonText,
+                    !form.start_date && styles.dateButtonPlaceholder
+                  ]}>
+                    {form.start_date || 'Select start date'}
+                  </Text>
+                </TouchableOpacity>
+                {showStartDatePicker && (
+                  <DateTimePicker
+                    value={startDate}
+                    mode="date"
+                    display="default"
+                    onChange={handleStartDateChange}
+                  />
+                )}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>End Date *</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowEndDatePicker(true)}
+                >
+                  <Text style={[
+                    styles.dateButtonText,
+                    !form.end_date && styles.dateButtonPlaceholder
+                  ]}>
+                    {form.end_date || 'Select end date'}
+                  </Text>
+                </TouchableOpacity>
+                {showEndDatePicker && (
+                  <DateTimePicker
+                    value={endDate}
+                    mode="date"
+                    display="default"
+                    onChange={handleEndDateChange}
+                  />
+                )}
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={onClose}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitButton,
+                    (!form.cost || !form.description || !form.start_date || !form.end_date) && styles.modalSubmitButtonDisabled
+                  ]}
+                  onPress={onSubmit}
+                  disabled={loading || !form.cost || !form.description || !form.start_date || !form.end_date}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Log Maintenance</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
+
+// External Fuel Log Modal Component
+const FuelLogModal: React.FC<FuelLogModalProps> = ({
+  isVisible,
+  onClose,
+  onSubmit,
+  form,
+  setForm,
+  loading
+}) => {
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Fuel Log</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Quantity (Liters) *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={form.quantity}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, quantity: text }))}
+                  placeholder="Enter fuel quantity"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Cost (₹) *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={form.cost}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, cost: text }))}
+                  placeholder="Enter fuel cost"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Odometer Reading (KM) *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={form.odometer_reading}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, odometer_reading: text }))}
+                  placeholder="Enter current odometer reading"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={onClose}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitButton,
+                    (!form.quantity || !form.cost || !form.odometer_reading) && styles.modalSubmitButtonDisabled
+                  ]}
+                  onPress={onSubmit}
+                  disabled={loading || !form.quantity || !form.cost || !form.odometer_reading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Add Fuel Log</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
+
+// External Maintenance Logs Modal Component
+const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
+  isVisible,
+  onClose,
+  logs,
+  formatDate
+}) => {
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Maintenance Logs</Text>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={onClose}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            {logs.length > 0 ? (
+              logs.map((log) => (
+                <View key={log.id} style={styles.logCard}>
+                  <View style={styles.logHeader}>
+                    <Text style={styles.logCost}>₹{log.cost}</Text>
+                  </View>
+                  <Text style={styles.logDescription}>{log.description}</Text>
+                  <View style={styles.logDetails}>
+                    <Text style={styles.logDetail}>
+                      <Text style={styles.logLabel}>Maintenance Date:</Text> {formatDate(log.maintenance_date)}
+                    </Text>
+                    <Text style={styles.logDetail}>
+                      <Text style={styles.logLabel}>Period:</Text> {formatDate(log.start_date)} - {formatDate(log.end_date)}
+                    </Text>
+                    <Text style={styles.logDetail}>
+                      <Text style={styles.logLabel}>Logged by:</Text> {log.logged_by.full_name}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No maintenance records</Text>
+                <Text style={styles.emptyStateSubtext}>Maintenance history will appear here</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// External Fuel Logs Modal Component
+const FuelLogsModal: React.FC<FuelLogsModalProps> = ({
+  isVisible,
+  onClose,
+  logs,
+  formatDateTime
+}) => {
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Fuel Logs</Text>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={onClose}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            {logs.length > 0 ? (
+              logs.map((log) => (
+                <View key={log.id} style={styles.logCard}>
+                  <View style={styles.logHeader}>
+                    <Text style={styles.logCost}>₹{log.cost}</Text>
+                  </View>
+                  <View style={styles.fuelDetails}>
+                    <View style={styles.fuelDetailItem}>
+                      <Text style={styles.fuelDetailLabel}>Quantity</Text>
+                      <Text style={styles.fuelDetailValue}>{log.quantity}L</Text>
+                    </View>
+                    <View style={styles.fuelDetailItem}>
+                      <Text style={styles.fuelDetailLabel}>Odometer</Text>
+                      <Text style={styles.fuelDetailValue}>{log.odometer_reading} km</Text>
+                    </View>
+                  </View>
+                  <View style={styles.logDetails}>
+                    <Text style={styles.logDetail}>
+                      <Text style={styles.logLabel}>Date:</Text> {formatDateTime(log.fuel_date)}
+                    </Text>
+                    <Text style={styles.logDetail}>
+                      <Text style={styles.logLabel}>Logged by:</Text> {log.logged_by.full_name}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No fuel logs</Text>
+                <Text style={styles.emptyStateSubtext}>Fuel consumption history will appear here</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('vehicles');
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'bookings'>('vehicles');
+  const [currentView, setCurrentView] = useState<ViewType>('main');
   const [loading, setLoading] = useState(false);
+
+  // Data states
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceRecord[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
+
+  // Selection states
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  
+
   // Modal states
-  const [isVehicleDetailModalVisible, setIsVehicleDetailModalVisible] = useState(false);
   const [isMaintenanceModalVisible, setIsMaintenanceModalVisible] = useState(false);
   const [isFuelLogModalVisible, setIsFuelLogModalVisible] = useState(false);
-  const [isBookingUpdateModalVisible, setIsBookingUpdateModalVisible] = useState(false);
-  
+  const [isMaintenanceLogsModalVisible, setIsMaintenanceLogsModalVisible] = useState(false);
+  const [isFuelLogsModalVisible, setIsFuelLogsModalVisible] = useState(false);
+
   // Form states
   const [maintenanceForm, setMaintenanceForm] = useState({
     cost: '',
@@ -129,7 +588,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     start_date: '',
     end_date: ''
   });
-  
+
   const [fuelLogForm, setFuelLogForm] = useState({
     quantity: '',
     cost: '',
@@ -138,6 +597,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
   const [vehicleStatus, setVehicleStatus] = useState('available');
   const [bookingStatus, setBookingStatus] = useState('booked');
+  const [cancellationReason, setCancellationReason] = useState('');
 
   useEffect(() => {
     const getToken = async () => {
@@ -155,8 +615,6 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     if (token) {
       fetchVehicles();
       fetchBookings();
-      fetchMaintenanceLogs();
-      fetchFuelLogs();
     }
   }, [token]);
 
@@ -203,41 +661,57 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     }
   };
 
-  const fetchMaintenanceLogs = async () => {
+  const fetchMaintenanceLogs = async (vehicleId: number) => {
+    setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getVehicleMaintainanceLogs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({
+          token,
+          vehicle_id: vehicleId
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
         setMaintenanceLogs(data.maintainance_logs || []);
+        setIsMaintenanceLogsModalVisible(true);
       } else {
-        console.error('Failed to fetch maintenance logs');
+        Alert.alert('Error', 'Failed to fetch maintenance logs');
       }
     } catch (error) {
       console.error('Error fetching maintenance logs:', error);
+      Alert.alert('Error', 'Network error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchFuelLogs = async () => {
+  const fetchFuelLogs = async (vehicleId: number) => {
+    setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getVehicleFuelLogs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({
+          token,
+          vehicle_id: vehicleId
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
         setFuelLogs(data.fuel_logs || []);
+        setIsFuelLogsModalVisible(true);
       } else {
-        console.error('Failed to fetch fuel logs');
+        Alert.alert('Error', 'Failed to fetch fuel logs');
       }
     } catch (error) {
       console.error('Error fetching fuel logs:', error);
+      Alert.alert('Error', 'Network error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -258,7 +732,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
       if (response.ok) {
         Alert.alert('Success', 'Vehicle status updated successfully!');
-        setIsVehicleDetailModalVisible(false);
+        setCurrentView('main');
         fetchVehicles();
       } else {
         const error = await response.json();
@@ -275,21 +749,33 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const updateBookingStatus = async () => {
     if (!selectedBooking) return;
 
+    if (bookingStatus === 'cancelled' && !cancellationReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for cancellation');
+      return;
+    }
+
     setLoading(true);
     try {
+      const requestBody: any = {
+        token,
+        booking_id: selectedBooking.id,
+        status: bookingStatus
+      };
+
+      if (bookingStatus === 'cancelled') {
+        requestBody.reason_of_cancellation = cancellationReason;
+      }
+
       const response = await fetch(`${BACKEND_URL}/employee/updateCarBookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          booking_id: selectedBooking.id,
-          status: bookingStatus
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
         Alert.alert('Success', 'Booking status updated successfully!');
-        setIsBookingUpdateModalVisible(false);
+        setCurrentView('main');
+        setCancellationReason('');
         fetchBookings();
       } else {
         const error = await response.json();
@@ -304,8 +790,8 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   };
 
   const submitMaintenance = async () => {
-    if (!selectedVehicle || !maintenanceForm.cost || !maintenanceForm.description || 
-        !maintenanceForm.start_date || !maintenanceForm.end_date) {
+    if (!selectedVehicle || !maintenanceForm.cost || !maintenanceForm.description ||
+      !maintenanceForm.start_date || !maintenanceForm.end_date) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
@@ -327,9 +813,9 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
       if (response.ok) {
         Alert.alert('Success', 'Maintenance record created successfully!');
-        closeMaintenanceModal();
+        setIsMaintenanceModalVisible(false);
+        setMaintenanceForm({ cost: '', description: '', start_date: '', end_date: '' });
         fetchVehicles();
-        fetchMaintenanceLogs();
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || 'Failed to create maintenance record');
@@ -364,9 +850,9 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
       if (response.ok) {
         Alert.alert('Success', 'Fuel log added successfully!');
-        closeFuelLogModal();
+        setIsFuelLogModalVisible(false);
+        setFuelLogForm({ quantity: '', cost: '', odometer_reading: '' });
         fetchVehicles();
-        fetchFuelLogs();
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || 'Failed to add fuel log');
@@ -379,16 +865,6 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     }
   };
 
-  const closeMaintenanceModal = () => {
-    setIsMaintenanceModalVisible(false);
-    setMaintenanceForm({ cost: '', description: '', start_date: '', end_date: '' });
-  };
-
-  const closeFuelLogModal = () => {
-    setIsFuelLogModalVisible(false);
-    setFuelLogForm({ quantity: '', cost: '', odometer_reading: '' });
-  };
-
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -396,7 +872,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
   const formatDateTime = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { 
+    return date.toLocaleDateString('en-GB', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
@@ -411,6 +887,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       case 'booked': return colors.primary;
       case 'completed': return colors.success;
       case 'cancelled': return colors.error;
+      case 'in-progress': return colors.warning;
       default: return colors.textSecondary;
     }
   };
@@ -421,423 +898,233 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     </View>
   );
 
-  const BookingUpdateModal = () => (
-    <Modal
-      visible={isBookingUpdateModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setIsBookingUpdateModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Update Booking Status</Text>
+  const renderVehicleDetailPage = () => (
+    <ScrollView style={styles.pageContainer} showsVerticalScrollIndicator={false}>
+      {selectedVehicle && (
+        <View style={styles.detailPageContent}>
+          <View style={styles.vehicleDetailHeader}>
+            <View style={styles.vehicleDetailInfo}>
+              <Text style={styles.vehicleModelText}>
+                {selectedVehicle.make} {selectedVehicle.model}
+              </Text>
+              <Text style={styles.vehiclePlateText}>{selectedVehicle.license_plate}</Text>
+            </View>
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(selectedVehicle.status) }
+            ]}>
+              <Text style={styles.statusBadgeText}>{selectedVehicle.status}</Text>
+            </View>
+          </View>
+
+          <View style={styles.vehicleInfoGrid}>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Type</Text>
+              <Text style={styles.infoValue}>{selectedVehicle.color}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Fuel Type</Text>
+              <Text style={styles.infoValue}>{selectedVehicle.fuel_type}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Year</Text>
+              <Text style={styles.infoValue}>{selectedVehicle.year}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Seating</Text>
+              <Text style={styles.infoValue}>{selectedVehicle.seating_capacity} seats</Text>
+            </View>
+          </View>
+
+          <View style={styles.locationSection}>
+            <Text style={styles.sectionTitle}>Current Location</Text>
+            <Text style={styles.locationText}>
+              {selectedVehicle.current_location.address}, {selectedVehicle.current_location.city}, {selectedVehicle.current_location.state} - {selectedVehicle.current_location.zip_code}
+            </Text>
+          </View>
+
+          <View style={styles.statusUpdateSection}>
+            <Text style={styles.sectionTitle}>Update Vehicle Status</Text>
+            <View style={styles.statusOptions}>
+              {['available', 'booked', 'in_maintenance'].map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.statusOption,
+                    vehicleStatus === status && styles.statusOptionSelected
+                  ]}
+                  onPress={() => setVehicleStatus(status)}
+                >
+                  <Text style={[
+                    styles.statusOptionText,
+                    vehicleStatus === status && styles.statusOptionTextSelected
+                  ]}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setIsBookingUpdateModalVisible(false)}
+              style={styles.primaryButton}
+              onPress={updateVehicleStatus}
+              disabled={loading}
             >
-              <Text style={styles.modalCloseText}>✕</Text>
+              {loading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Update Status</Text>
+              )}
             </TouchableOpacity>
           </View>
 
-          <View style={styles.modalScrollContent}>
-            {selectedBooking && (
-              <View style={styles.bookingInfo}>
-                <Text style={styles.bookingInfoTitle}>
-                  {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
-                </Text>
-                <Text style={styles.bookingInfoText}>
-                  Plate: {selectedBooking.vehicle.license_plate}
-                </Text>
-                <Text style={styles.bookingInfoText}>
-                  Purpose: {selectedBooking.purpose}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Booking Status</Text>
-              <View style={styles.statusOptions}>
-                {['booked', 'in-progress', 'completed', 'cancelled'].map((status) => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.statusOption,
-                      bookingStatus === status && styles.statusOptionSelected
-                    ]}
-                    onPress={() => setBookingStatus(status)}
-                  >
-                    <Text style={[
-                      styles.statusOptionText,
-                      bookingStatus === status && styles.statusOptionTextSelected
-                    ]}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
+          <View style={styles.buttonGroupsContainer}>
+            <View style={styles.buttonGroup}>
+              <Text style={styles.buttonGroupTitle}>Maintenance</Text>
               <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setIsBookingUpdateModalVisible(false)}
+                style={styles.secondaryButton}
+                onPress={() => setIsMaintenanceModalVisible(true)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>Log Maintenance</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalSubmitButton}
-                onPress={updateBookingStatus}
-                disabled={loading}
+                style={styles.outlineButton}
+                onPress={() => fetchMaintenanceLogs(selectedVehicle.id)}
               >
-                {loading ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.modalSubmitText}>Update Status</Text>
-                )}
+                <Text style={styles.outlineButtonText}>View Maintenance Logs</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.buttonGroup}>
+              <Text style={styles.buttonGroupTitle}>Fuel</Text>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setIsFuelLogModalVisible(true)}
+              >
+                <Text style={styles.secondaryButtonText}>Add Fuel Log</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.outlineButton}
+                onPress={() => fetchFuelLogs(selectedVehicle.id)}
+              >
+                <Text style={styles.outlineButtonText}>View Fuel Logs</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      )}
+    </ScrollView>
   );
 
-  const VehicleDetailModal = () => (
-    <Modal
-      visible={isVehicleDetailModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setIsVehicleDetailModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={[styles.modalContainer, { maxHeight: screenHeight * 0.9 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Vehicle Details</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setIsVehicleDetailModalVisible(false)}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
+  const renderBookingDetailPage = () => (
+    <ScrollView style={styles.pageContainer} showsVerticalScrollIndicator={false}>
+      {selectedBooking && (
+        <View style={styles.detailPageContent}>
+          <View style={styles.bookingDetailHeader}>
+            <View style={styles.bookingDetailInfo}>
+              <Text style={styles.bookingTitleText}>
+                {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
+              </Text>
+              <Text style={styles.bookingPlateText}>{selectedBooking.vehicle.license_plate}</Text>
             </View>
-
-            {selectedVehicle && (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <View style={styles.vehicleDetailContainer}>
-                  <View style={styles.vehicleDetailHeader}>
-                    <View style={styles.vehicleDetailInfo}>
-                      <Text style={styles.vehicleModelText}>
-                        {selectedVehicle.make} {selectedVehicle.model}
-                      </Text>
-                      <Text style={styles.vehiclePlateText}>{selectedVehicle.license_plate}</Text>
-                    </View>
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(selectedVehicle.status) }
-                    ]}>
-                      <Text style={styles.statusBadgeText}>{selectedVehicle.status}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.vehicleInfoGrid}>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Type</Text>
-                      <Text style={styles.infoValue}>{selectedVehicle.vehicle_type}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Color</Text>
-                      <Text style={styles.infoValue}>{selectedVehicle.color}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Fuel Type</Text>
-                      <Text style={styles.infoValue}>{selectedVehicle.fuel_type}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Year</Text>
-                      <Text style={styles.infoValue}>{selectedVehicle.year}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Seating</Text>
-                      <Text style={styles.infoValue}>{selectedVehicle.seating_capacity} seats</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.locationSection}>
-                    <Text style={styles.sectionTitle}>Current Location</Text>
-                    <Text style={styles.locationText}>
-                      {selectedVehicle.current_location.address}, {selectedVehicle.current_location.city}, {selectedVehicle.current_location.state} - {selectedVehicle.current_location.zip_code}
-                    </Text>
-                  </View>
-
-                  <View style={styles.statusUpdateSection}>
-                    <Text style={styles.sectionTitle}>Update Vehicle Status</Text>
-                    <View style={styles.statusOptions}>
-                      {['available', 'maintenance', 'inactive'].map((status) => (
-                        <TouchableOpacity
-                          key={status}
-                          style={[
-                            styles.statusOption,
-                            vehicleStatus === status && styles.statusOptionSelected
-                          ]}
-                          onPress={() => setVehicleStatus(status)}
-                        >
-                          <Text style={[
-                            styles.statusOptionText,
-                            vehicleStatus === status && styles.statusOptionTextSelected
-                          ]}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.updateStatusButton}
-                      onPress={updateVehicleStatus}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color={colors.white} size="small" />
-                      ) : (
-                        <Text style={styles.updateStatusButtonText}>Update Status</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => {
-                        setIsMaintenanceModalVisible(true);
-                        setIsVehicleDetailModalVisible(false);
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>Log Maintenance</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => {
-                        setIsFuelLogModalVisible(true);
-                        setIsVehicleDetailModalVisible(false);
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>Add Fuel Log</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </ScrollView>
-            )}
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(selectedBooking.status) }
+            ]}>
+              <Text style={styles.statusBadgeText}>{selectedBooking.status}</Text>
+            </View>
           </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
 
-  const MaintenanceModal = () => (
-    <Modal
-      visible={isMaintenanceModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={closeMaintenanceModal}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Log Maintenance</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeMaintenanceModal}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
+          <View style={styles.bookingInfoSection}>
+            <Text style={styles.sectionTitle}>Booking Information</Text>
+            <View style={styles.bookingInfoGrid}>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Booked By</Text>
+                <Text style={styles.infoValue}>{selectedBooking.booked_by.full_name}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Employee ID</Text>
+                <Text style={styles.infoValue}>{selectedBooking.booked_by.employee_id}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Purpose</Text>
+                <Text style={styles.infoValue}>{selectedBooking.purpose}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Start Location</Text>
+                <Text style={styles.infoValue}>{selectedBooking.start_location}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>End Location</Text>
+                <Text style={styles.infoValue}>{selectedBooking.end_location}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Start Date & Time</Text>
+                <Text style={styles.infoValue}>{formatDateTime(selectedBooking.start_time)}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>End Date & Time</Text>
+                <Text style={styles.infoValue}>{formatDateTime(selectedBooking.end_time)}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Booking Created</Text>
+                <Text style={styles.infoValue}>{formatDateTime(selectedBooking.created_at)}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statusUpdateSection}>
+            <Text style={styles.sectionTitle}>Update Booking Status</Text>
+            <View style={styles.statusOptions}>
+              {['booked', 'in-progress', 'completed', 'cancelled'].map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.statusOption,
+                    bookingStatus === status && styles.statusOptionSelected
+                  ]}
+                  onPress={() => setBookingStatus(status)}
+                >
+                  <Text style={[
+                    styles.statusOptionText,
+                    bookingStatus === status && styles.statusOptionTextSelected
+                  ]}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
+            {bookingStatus === 'cancelled' && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Cost (₹) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={maintenanceForm.cost}
-                  onChangeText={(text) => setMaintenanceForm({ ...maintenanceForm, cost: text })}
-                  placeholder="Enter maintenance cost"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Description *</Text>
+                <Text style={styles.label}>Reason for Cancellation *</Text>
                 <TextInput
                   style={styles.descriptionInput}
-                  value={maintenanceForm.description}
-                  onChangeText={(text) => setMaintenanceForm({ ...maintenanceForm, description: text })}
-                  placeholder="Describe the maintenance work"
+                  value={cancellationReason}
+                  onChangeText={setCancellationReason}
+                  placeholder="Please provide the reason for cancellation"
                   placeholderTextColor={colors.textSecondary}
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={3}
                   textAlignVertical="top"
                 />
               </View>
+            )}
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Start Date *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={maintenanceForm.start_date}
-                  onChangeText={(text) => setMaintenanceForm({ ...maintenanceForm, start_date: text })}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>End Date *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={maintenanceForm.end_date}
-                  onChangeText={(text) => setMaintenanceForm({ ...maintenanceForm, end_date: text })}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={closeMaintenanceModal}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalSubmitButton,
-                    (!maintenanceForm.cost || !maintenanceForm.description || 
-                     !maintenanceForm.start_date || !maintenanceForm.end_date) && styles.modalSubmitButtonDisabled
-                  ]}
-                  onPress={submitMaintenance}
-                  disabled={loading || !maintenanceForm.cost || !maintenanceForm.description || 
-                           !maintenanceForm.start_date || !maintenanceForm.end_date}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.modalSubmitText}>Log Maintenance</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-
-  const FuelLogModal = () => (
-    <Modal
-      visible={isFuelLogModalVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={closeFuelLogModal}
-    >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Fuel Log</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeFuelLogModal}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={updateBookingStatus}
+              disabled={loading}
             >
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Quantity (Liters) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={fuelLogForm.quantity}
-                  onChangeText={(text) => setFuelLogForm({ ...fuelLogForm, quantity: text })}
-                  placeholder="Enter fuel quantity"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Cost (₹) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={fuelLogForm.cost}
-                  onChangeText={(text) => setFuelLogForm({ ...fuelLogForm, cost: text })}
-                  placeholder="Enter fuel cost"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Odometer Reading (KM) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={fuelLogForm.odometer_reading}
-                  onChangeText={(text) => setFuelLogForm({ ...fuelLogForm, odometer_reading: text })}
-                  placeholder="Enter current odometer reading"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={closeFuelLogModal}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalSubmitButton,
-                    (!fuelLogForm.quantity || !fuelLogForm.cost || !fuelLogForm.odometer_reading) && styles.modalSubmitButtonDisabled
-                  ]}
-                  onPress={submitFuelLog}
-                  disabled={loading || !fuelLogForm.quantity || !fuelLogForm.cost || !fuelLogForm.odometer_reading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.modalSubmitText}>Add Fuel Log</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+              {loading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Update Status</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+        </View>
+      )}
+    </ScrollView>
   );
 
   const renderVehiclesTab = () => (
@@ -852,7 +1139,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
               onPress={() => {
                 setSelectedVehicle(vehicle);
                 setVehicleStatus(vehicle.status);
-                setIsVehicleDetailModalVisible(true);
+                setCurrentView('vehicle-detail');
               }}
             >
               <View style={styles.vehicleHeader}>
@@ -872,14 +1159,14 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                   <Text style={styles.vehicleStatusText}>{vehicle.status}</Text>
                 </View>
               </View>
-              
+
               <View style={styles.vehicleDetails}>
                 <Text style={styles.vehicleLocation}>
                   📍 {vehicle.current_location.city}, {vehicle.current_location.state}
                 </Text>
                 <Text style={styles.vehicleCapacity}>👥 {vehicle.seating_capacity} seats</Text>
               </View>
-              
+
               <View style={styles.vehicleFooter}>
                 <Text style={styles.tapToView}>Tap to view details and manage</Text>
               </View>
@@ -909,7 +1196,8 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
               onPress={() => {
                 setSelectedBooking(booking);
                 setBookingStatus(booking.status);
-                setIsBookingUpdateModalVisible(true);
+                setCancellationReason('');
+                setCurrentView('booking-detail');
               }}
             >
               <View style={styles.bookingHeader}>
@@ -926,7 +1214,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                   <Text style={styles.bookingStatusText}>{booking.status}</Text>
                 </View>
               </View>
-              
+
               <View style={styles.bookingDetails}>
                 <Text style={styles.bookingDetail}>
                   <Text style={styles.bookingLabel}>Booked by:</Text> {booking.booked_by.full_name}
@@ -941,9 +1229,9 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                   <Text style={styles.bookingLabel}>Duration:</Text> {formatDate(booking.start_time)} - {formatDate(booking.end_time)}
                 </Text>
               </View>
-              
+
               <View style={styles.bookingFooter}>
-                <Text style={styles.tapToUpdate}>Tap to update status</Text>
+                <Text style={styles.tapToUpdate}>Tap to view details and update status</Text>
               </View>
             </TouchableOpacity>
           ))
@@ -957,164 +1245,12 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     </ScrollView>
   );
 
-  const renderMaintenanceTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Maintenance Records</Text>
-        {maintenanceLogs.length > 0 ? (
-          maintenanceLogs.map((log) => (
-            <View key={log.id} style={styles.logCard}>
-              <View style={styles.logHeader}>
-                <View style={styles.logInfo}>
-                  <Text style={styles.logVehicle}>
-                    {log.vehicle.make} {log.vehicle.model}
-                  </Text>
-                  <Text style={styles.logPlate}>{log.vehicle.license_plate}</Text>
-                </View>
-                <Text style={styles.logCost}>₹{log.cost}</Text>
-              </View>
-              
-              <Text style={styles.logDescription}>{log.description}</Text>
-              
-              <View style={styles.logDetails}>
-                <Text style={styles.logDetail}>
-                  <Text style={styles.logLabel}>Maintenance Date:</Text> {formatDate(log.maintenance_date)}
-                </Text>
-                <Text style={styles.logDetail}>
-                  <Text style={styles.logLabel}>Period:</Text> {formatDate(log.start_date)} - {formatDate(log.end_date)}
-                </Text>
-                <Text style={styles.logDetail}>
-                  <Text style={styles.logLabel}>Logged by:</Text> {log.logged_by.full_name}
-                </Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No maintenance records</Text>
-            <Text style={styles.emptyStateSubtext}>Maintenance history will appear here</Text>
-          </View>
-        )}
-        
-        {vehicles.length > 0 && (
-          <View style={styles.quickActions}>
-            <Text style={styles.quickActionsTitle}>Quick Actions</Text>
-            {vehicles.map((vehicle) => (
-              <TouchableOpacity
-                key={vehicle.id}
-                style={styles.quickActionCard}
-                onPress={() => {
-                  setSelectedVehicle(vehicle);
-                  setIsMaintenanceModalVisible(true);
-                }}
-              >
-                <Text style={styles.quickActionText}>
-                  Log Maintenance for {vehicle.license_plate}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-    </ScrollView>
-  );
-
-  const renderFuelTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Fuel Logs</Text>
-        {fuelLogs.length > 0 ? (
-          fuelLogs.map((log) => (
-            <View key={log.id} style={styles.logCard}>
-              <View style={styles.logHeader}>
-                <View style={styles.logInfo}>
-                  <Text style={styles.logVehicle}>
-                    {log.vehicle.make} {log.vehicle.model}
-                  </Text>
-                  <Text style={styles.logPlate}>{log.vehicle.license_plate}</Text>
-                </View>
-                <Text style={styles.logCost}>₹{log.cost}</Text>
-              </View>
-              
-              <View style={styles.fuelDetails}>
-                <View style={styles.fuelDetailItem}>
-                  <Text style={styles.fuelDetailLabel}>Quantity</Text>
-                  <Text style={styles.fuelDetailValue}>{log.quantity}L</Text>
-                </View>
-                <View style={styles.fuelDetailItem}>
-                  <Text style={styles.fuelDetailLabel}>Odometer</Text>
-                  <Text style={styles.fuelDetailValue}>{log.odometer_reading} km</Text>
-                </View>
-              </View>
-              
-              <View style={styles.logDetails}>
-                <Text style={styles.logDetail}>
-                  <Text style={styles.logLabel}>Date:</Text> {formatDateTime(log.fuel_date)}
-                </Text>
-                <Text style={styles.logDetail}>
-                  <Text style={styles.logLabel}>Logged by:</Text> {log.logged_by.full_name}
-                </Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No fuel logs</Text>
-            <Text style={styles.emptyStateSubtext}>Fuel consumption history will appear here</Text>
-          </View>
-        )}
-        
-        {vehicles.length > 0 && (
-          <View style={styles.quickActions}>
-            <Text style={styles.quickActionsTitle}>Quick Actions</Text>
-            {vehicles.map((vehicle) => (
-              <TouchableOpacity
-                key={vehicle.id}
-                style={styles.quickActionCard}
-                onPress={() => {
-                  setSelectedVehicle(vehicle);
-                  setIsFuelLogModalVisible(true);
-                }}
-              >
-                <Text style={styles.quickActionText}>
-                  Add Fuel Log for {vehicle.license_plate}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-    </ScrollView>
-  );
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'vehicles': return renderVehiclesTab();
-      case 'bookings': return renderBookingsTab();
-      case 'maintenance': return renderMaintenanceTab();
-      case 'fuel': return renderFuelTab();
-      default: return renderVehiclesTab();
-    }
-  };
-
-  return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Driver Module</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
+  const renderMainView = () => (
+    <>
       <View style={styles.tabNavigation}>
         {[
           { key: 'vehicles' as const, label: 'Vehicles' },
-          { key: 'bookings' as const, label: 'Bookings' },
-          { key: 'maintenance' as const, label: 'Maintenance' },
-          { key: 'fuel' as const, label: 'Fuel Logs' }
+          { key: 'bookings' as const, label: 'Bookings' }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -1138,19 +1274,109 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         ) : (
-          renderContent()
+          activeTab === 'vehicles' ? renderVehiclesTab() : renderBookingsTab()
         )}
       </View>
+    </>
+  );
 
-      <BookingUpdateModal />
-      <VehicleDetailModal />
-      <MaintenanceModal />
-      <FuelLogModal />
+  const getPageTitle = () => {
+    switch (currentView) {
+      case 'vehicle-detail':
+        return selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'Vehicle Details';
+      case 'booking-detail':
+        return 'Booking Details';
+      default:
+        return 'Driver Module';
+    }
+  };
+
+  const handleBackPress = () => {
+    if (currentView !== 'main') {
+      setCurrentView('main');
+    } else {
+      onBack();
+    }
+  };
+
+  const renderContent = () => {
+    switch (currentView) {
+      case 'vehicle-detail':
+        return renderVehicleDetailPage();
+      case 'booking-detail':
+        return renderBookingDetailPage();
+      default:
+        return renderMainView();
+    }
+  };
+
+  return (
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+          <BackIcon />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{getPageTitle()}</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      {renderContent()}
+
+      <MaintenanceModal
+        isVisible={isMaintenanceModalVisible}
+        onClose={() => setIsMaintenanceModalVisible(false)}
+        onSubmit={submitMaintenance}
+        form={maintenanceForm}
+        setForm={setMaintenanceForm}
+        loading={loading}
+      />
+
+      <FuelLogModal
+        isVisible={isFuelLogModalVisible}
+        onClose={() => setIsFuelLogModalVisible(false)}
+        onSubmit={submitFuelLog}
+        form={fuelLogForm}
+        setForm={setFuelLogForm}
+        loading={loading}
+      />
+
+      <MaintenanceLogsModal
+        isVisible={isMaintenanceLogsModalVisible}
+        onClose={() => setIsMaintenanceLogsModalVisible(false)}
+        logs={maintenanceLogs}
+        formatDate={formatDate}
+      />
+
+      <FuelLogsModal
+        isVisible={isFuelLogsModalVisible}
+        onClose={() => setIsFuelLogsModalVisible(false)}
+        logs={fuelLogs}
+        formatDateTime={formatDateTime}
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  dateButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  dateButtonText: {
+    fontSize: fontSize.md,
+    color: colors.black,
+  },
+  dateButtonPlaceholder: {
+    color: colors.textSecondary,
+  },
   container: { flex: 1, backgroundColor: colors.primary },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
@@ -1167,6 +1393,8 @@ const styles = StyleSheet.create({
     flex: 1, textAlign: 'center',
   },
   headerSpacer: { width: 40 },
+
+  // Tab Navigation
   tabNavigation: {
     flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1,
     borderBottomColor: colors.border, paddingHorizontal: spacing.xs,
@@ -1179,21 +1407,39 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3, borderBottomColor: colors.primary,
     backgroundColor: colors.backgroundSecondary,
   },
-  tabText: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '500' },
+  tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
   activeTabText: { color: colors.primary, fontWeight: '600' },
+
+  // Content Container
   contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
   tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+
+  // Page Container for detail views
+  pageContainer: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg
+  },
+  detailPageContent: {
+    paddingBottom: spacing.xl,
+  },
+
+  // Sections
   section: { marginBottom: spacing.xl },
   sectionTitle: {
     fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
   },
+
+  // Loading
   loadingContainer: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
   },
   loadingText: {
     fontSize: fontSize.md, color: colors.textSecondary, marginTop: spacing.md,
   },
-  // Vehicle Card Styles
+
+  // Vehicle Cards
   vehicleCard: {
     backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
     marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2,
@@ -1206,7 +1452,7 @@ const styles = StyleSheet.create({
   vehicleModel: {
     fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
   },
-  vehiclePlate: { 
+  vehiclePlate: {
     fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs,
   },
   vehicleType: { fontSize: fontSize.xs, color: colors.textSecondary },
@@ -1234,7 +1480,8 @@ const styles = StyleSheet.create({
   tapToView: {
     fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic',
   },
-  // Booking Card Styles
+
+  // Booking Cards
   bookingCard: {
     backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
     marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border,
@@ -1247,7 +1494,7 @@ const styles = StyleSheet.create({
   bookingVehicle: {
     fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
   },
-  bookingPlate: { 
+  bookingPlate: {
     fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
   },
   bookingStatusBadge: {
@@ -1269,75 +1516,83 @@ const styles = StyleSheet.create({
   tapToUpdate: {
     fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic',
   },
-  // Log Card Styles
-  logCard: {
+
+  // Detail Page Headers
+  vehicleDetailHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg,
+    borderRadius: borderRadius.lg, ...shadows.md,
+  },
+  vehicleDetailInfo: {
+    flex: 1, marginRight: spacing.md,
+  },
+  vehicleModelText: {
+    fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs,
+  },
+  vehiclePlateText: {
+    fontSize: fontSize.lg, color: colors.primary, fontWeight: '600',
+  },
+
+  bookingDetailHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg,
+    borderRadius: borderRadius.lg, ...shadows.md,
+  },
+  bookingDetailInfo: {
+    flex: 1, marginRight: spacing.md,
+  },
+  bookingTitleText: {
+    fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs,
+  },
+  bookingPlateText: {
+    fontSize: fontSize.lg, color: colors.primary, fontWeight: '600',
+  },
+
+  // Status Badge
+  statusBadge: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full,
+    minWidth: 90, alignItems: 'center', justifyContent: 'center',
+  },
+  statusBadgeText: {
+    fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
+  },
+
+  // Info Grid
+  vehicleInfoGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg,
+    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md,
+  },
+  bookingInfoSection: {
     backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border,
+    marginBottom: spacing.lg, ...shadows.md,
   },
-  logHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: spacing.md,
+  bookingInfoGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
   },
-  logInfo: { flex: 1, marginRight: spacing.sm },
-  logVehicle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
+  infoItem: {
+    width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm,
   },
-  logPlate: { 
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
-  },
-  logCost: {
-    fontSize: fontSize.lg, color: colors.success, fontWeight: '700',
-  },
-  logDescription: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md,
-    lineHeight: 20,
-  },
-  logDetails: { },
-  logDetail: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
-  logLabel: { fontWeight: '600' },
-  fuelDetails: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.md,
-  },
-  fuelDetailItem: { alignItems: 'center' },
-  fuelDetailLabel: {
+  infoLabel: {
     fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600',
     textTransform: 'uppercase', marginBottom: spacing.xs,
   },
-  fuelDetailValue: {
-    fontSize: fontSize.md, color: colors.text, fontWeight: '600',
-  },
-  emptyState: {
-    backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg,
-    alignItems: 'center', marginTop: spacing.lg,
-  },
-  emptyStateText: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  emptyStateSubtext: {
-    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center',
-  },
-  quickActions: {
-    marginTop: spacing.xl,
-  },
-  quickActionsTitle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
-  },
-  quickActionCard: {
-    backgroundColor: colors.white, padding: spacing.md, borderRadius: borderRadius.md,
-    marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border,
-    borderLeftWidth: 4, borderLeftColor: colors.primary,
-  },
-  quickActionText: {
+  infoValue: {
     fontSize: fontSize.sm, color: colors.text, fontWeight: '500',
   },
+
+  // Location Section
+  locationSection: {
+    backgroundColor: colors.white, padding: spacing.lg,
+    borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md,
+  },
+  locationText: {
+    fontSize: fontSize.sm, color: colors.text, lineHeight: 20,
+  },
+
   // Status Update Section
   statusUpdateSection: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.lg,
+    backgroundColor: colors.white, padding: spacing.lg,
+    borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md,
   },
   statusOptions: {
     flexDirection: 'row', flexWrap: 'wrap', marginVertical: spacing.md,
@@ -1345,7 +1600,7 @@ const styles = StyleSheet.create({
   statusOption: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border,
-    marginRight: spacing.sm, marginBottom: spacing.sm, backgroundColor: colors.white,
+    marginRight: spacing.sm, marginBottom: spacing.sm, backgroundColor: colors.backgroundSecondary,
   },
   statusOptionSelected: {
     backgroundColor: colors.primary, borderColor: colors.primary,
@@ -1356,25 +1611,58 @@ const styles = StyleSheet.create({
   statusOptionTextSelected: {
     color: colors.white, fontWeight: '600',
   },
-  updateStatusButton: {
-    backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center',
+
+  // Button Groups
+  buttonGroupsContainer: {
+    flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md,
   },
-  updateStatusButtonText: {
+  buttonGroup: {
+    flex: 1, backgroundColor: colors.white, padding: spacing.lg,
+    borderRadius: borderRadius.lg, ...shadows.md,
+  },
+  buttonGroupTitle: {
+    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+
+  // Buttons
+  primaryButton: {
+    backgroundColor: colors.primary, padding: spacing.md,
+    borderRadius: borderRadius.md, alignItems: 'center', minHeight: 48,
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
     fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
   },
-  // Booking Info in Modal
-  bookingInfo: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.lg,
+  secondaryButton: {
+    backgroundColor: colors.primary, padding: spacing.md,
+    borderRadius: borderRadius.md, alignItems: 'center', marginBottom: spacing.sm,
   },
-  bookingInfoTitle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
+  secondaryButtonText: {
+    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
   },
-  bookingInfoText: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
+  outlineButton: {
+    backgroundColor: 'transparent', padding: spacing.md,
+    borderRadius: borderRadius.md, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.primary,
   },
-  // Modal Styles (keeping existing ones)
+  outlineButtonText: {
+    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
+  },
+
+  // Empty State
+  emptyState: {
+    backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg,
+    alignItems: 'center', marginTop: spacing.lg,
+  },
+  emptyStateText: {
+    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
+  },
+  emptyStateSubtext: {
+    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center',
+  },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end',
   },
@@ -1403,60 +1691,42 @@ const styles = StyleSheet.create({
   modalScrollContent: {
     padding: spacing.lg, paddingBottom: spacing.xl,
   },
-  // Vehicle Detail Modal Styles
-  vehicleDetailContainer: {
-    paddingBottom: spacing.lg,
+
+  // Log Cards in Modals
+  logCard: {
+    backgroundColor: colors.backgroundSecondary, padding: spacing.lg, borderRadius: borderRadius.lg,
+    marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
-  vehicleDetailHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: spacing.lg,
+  logHeader: {
+    flexDirection: 'row', justifyContent: 'flex-end',
+    alignItems: 'flex-start', marginBottom: spacing.md,
   },
-  vehicleDetailInfo: {
-    flex: 1, marginRight: spacing.md,
+  logCost: {
+    fontSize: fontSize.lg, color: colors.success, fontWeight: '700',
   },
-  vehicleModelText: {
-    fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs,
+  logDescription: {
+    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md,
+    lineHeight: 20,
   },
-  vehiclePlateText: {
-    fontSize: fontSize.lg, color: colors.primary, fontWeight: '600',
+  logDetails: {},
+  logDetail: {
+    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
   },
-  statusBadge: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full,
-    minWidth: 90, alignItems: 'center', justifyContent: 'center',
+  logLabel: { fontWeight: '600' },
+  fuelDetails: {
+    flexDirection: 'row', justifyContent: 'space-around',
+    backgroundColor: colors.white, padding: spacing.md,
+    borderRadius: borderRadius.md, marginBottom: spacing.md,
   },
-  statusBadgeText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
-  vehicleInfoGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg,
-  },
-  infoItem: {
-    width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm,
-  },
-  infoLabel: {
+  fuelDetailItem: { alignItems: 'center' },
+  fuelDetailLabel: {
     fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600',
     textTransform: 'uppercase', marginBottom: spacing.xs,
   },
-  infoValue: {
-    fontSize: fontSize.sm, color: colors.text, fontWeight: '500',
+  fuelDetailValue: {
+    fontSize: fontSize.md, color: colors.text, fontWeight: '600',
   },
-  locationSection: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.lg,
-  },
-  locationText: {
-    fontSize: fontSize.sm, color: colors.text, lineHeight: 20,
-  },
-  actionButtons: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md,
-  },
-  actionButton: {
-    flex: 1, backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginHorizontal: spacing.xs,
-  },
-  actionButtonText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
-  },
+
   // Form Styles
   formGroup: {
     marginBottom: spacing.lg,
@@ -1498,4 +1768,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
   },
 });
+
 export default Driver;
