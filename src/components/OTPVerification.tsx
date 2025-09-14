@@ -1,4 +1,3 @@
-// src/components/OTPVerification.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -7,8 +6,20 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Image,
+  Dimensions,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { colors, commonStyles } from '../styles/theme';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+const isTablet = screenWidth >= 768;
+const isSmallDevice = screenHeight < 700;
+const containerPadding = isTablet ? 48 : 24;
+const logoSize = isTablet ? 120 : 100;
 
 interface OTPVerificationProps {
   email: string;
@@ -29,10 +40,16 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
   const [error, setError] = useState('');
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(0);
   const inputRefs = useRef<Array<TextInput | null>>([]);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    inputRefs.current[0]?.focus();
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -48,25 +65,56 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
   }, [timer]);
 
   const handleOTPChange = (value: string, index: number) => {
-    if (!/^\d*$/.test(value)) return;
+    if (!value || value === '') {
+      const newOTP = [...otp];
+      newOTP[index] = '';
+      setOTP(newOTP);
+      setError('');
+      return;
+    }
+
+    const lastChar = value.charAt(value.length - 1);
+    
+    if (!/^[0-9]$/.test(lastChar)) {
+      return;
+    }
 
     const newOTP = [...otp];
-    newOTP[index] = value;
+    newOTP[index] = lastChar;
+    
     setOTP(newOTP);
     setError('');
 
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+    if (index < 5) {
+      setTimeout(() => {
+        inputRefs.current[index + 1]?.focus();
+        setFocusedIndex(index + 1);
+      }, 10);
     }
 
-    if (index === 5 && value && newOTP.every((digit) => digit !== '')) {
-      handleVerifyOTP(newOTP.join(''));
+    if (index === 5 && newOTP.every((digit) => digit !== '')) {
+      setTimeout(() => {
+        handleVerifyOTP(newOTP.join(''));
+      }, 100);
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    if (e.nativeEvent.key === 'Backspace') {
+      if (otp[index]) {
+        const newOTP = [...otp];
+        newOTP[index] = '';
+        setOTP(newOTP);
+        setError('');
+      } else if (index > 0) {
+        const newOTP = [...otp];
+        newOTP[index - 1] = '';
+        setOTP(newOTP);
+        setTimeout(() => {
+          inputRefs.current[index - 1]?.focus();
+          setFocusedIndex(index - 1);
+        }, 10);
+      }
     }
   };
 
@@ -89,7 +137,10 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
   const clearOTP = () => {
     setOTP(['', '', '', '', '', '']);
     setError('');
-    inputRefs.current[0]?.focus();
+    setTimeout(() => {
+      inputRefs.current[0]?.focus();
+      setFocusedIndex(0);
+    }, 100);
   };
 
   const handleResend = () => {
@@ -105,208 +156,370 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>CITADEL</Text>
+  const handleInputFocus = (index: number) => {
+    setFocusedIndex(index);
+    setTimeout(() => {
+      if (scrollViewRef.current) {
+        const scrollY = isSmallDevice ? 180 : 220;
+        scrollViewRef.current.scrollTo({
+          y: scrollY,
+          animated: true,
+        });
+      }
+    }, 150);
+  };
+
+  const renderContent = () => (
+    <View style={styles.contentContainer}>
+      <View style={styles.headerContainer}>
+        <Image
+          source={require('../assets/logo.png')}
+          style={[styles.logo, { width: logoSize, height: logoSize }]}
+          resizeMode="contain"
+        />
+      </View>
+
+      <View style={styles.mainContent}>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>Verify OTP</Text>
+          <Text style={styles.subtitle}>
+            We've sent a 6-digit verification code to{'\n'}
+            <Text style={styles.emailText}>{email}</Text>
+          </Text>
+        </View>
+
+        <View style={styles.formContainer}>
+          <View style={styles.otpContainer}>
+            <Text style={styles.label}>Enter Verification Code</Text>
+            <View style={styles.otpInputContainer}>
+              {otp.map((digit, index) => (
+                <TextInput
+                  key={`otp-${index}`}
+                  ref={(ref) => { inputRefs.current[index] = ref; }}
+                  style={[
+                    styles.otpInput,
+                    error ? styles.otpInputError : null,
+                    digit ? styles.otpInputFilled : null,
+                    focusedIndex === index ? styles.otpInputFocused : null
+                  ]}
+                  value={digit}
+                  onChangeText={(value) => handleOTPChange(value, index)}
+                  onKeyPress={(e) => handleKeyPress(e, index)}
+                  onFocus={() => handleInputFocus(index)}
+                  onBlur={() => setFocusedIndex(-1)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  textAlign="center"
+                  editable={!isLoading}
+                  autoCorrect={false}
+                  spellCheck={false}
+                  contextMenuHidden={true}
+                  selection={digit ? { start: 1, end: 1 } : undefined}
+                />
+              ))}
+            </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          </View>
+
+          <View style={styles.timerContainer}>
+            {canResend ? (
+              <TouchableOpacity 
+                onPress={handleResend}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.resendText}>
+                  Didn't receive the code? Resend OTP
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.timerText}>
+                Resend OTP in {formatTimer(timer)}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={clearOTP}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>Clear</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                styles.primaryButton,
+                (isLoading || otp.join('').length !== 6) ? styles.primaryButtonDisabled : null,
+              ]}
+              onPress={() => handleVerifyOTP()}
+              disabled={isLoading || otp.join('').length !== 6}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Verify OTP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.backButtonContainer}
+            onPress={onBack}
+            disabled={isLoading}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.backButtonText}>← Back to Login</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      <Text style={styles.title}>Verify OTP</Text>
-      <Text style={styles.subtitle}>
-        We've sent a 6-digit verification code to{'\n'}
-        <Text style={styles.emailText}>{email}</Text>
-      </Text>
-
-      <View style={styles.formContainer}>
-        <View style={styles.otpContainer}>
-          <Text style={styles.label}>Enter Verification Code</Text>
-          <View style={styles.otpInputContainer}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => (inputRefs.current[index] = ref)}
-                style={[styles.otpInput, error ? styles.otpInputError : null]}
-                value={digit}
-                onChangeText={(value) => handleOTPChange(value, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="numeric"
-                maxLength={1}
-                selectTextOnFocus
-                textAlign="center"
-              />
-            ))}
-          </View>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      <View style={styles.footerContainer}>
+        <View style={styles.footerContent}>
+          <Text style={styles.footerText}>
+            Check your email inbox and spam folder for the verification code. The code will expire in 10 minutes.
+          </Text>
         </View>
-
-        <View style={styles.timerContainer}>
-          {canResend ? (
-            <TouchableOpacity onPress={handleResend}>
-              <Text style={styles.resendText}>Resend OTP</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={styles.timerText}>
-              Resend OTP in {formatTimer(timer)}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.clearButton} onPress={clearOTP}>
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.verifyButton,
-              isLoading ? styles.verifyButtonDisabled : null,
-            ]}
-            onPress={() => handleVerifyOTP()}
-            disabled={isLoading || otp.join('').length !== 6}>
-            {isLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.verifyButtonText}>Verify</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back to Login</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
-};
 
-export default OTPVerification;
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        scrollEnabled={true}
+      >
+        {renderContent()}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 20,
-    justifyContent: 'center',
   },
-  logoContainer: {
+  scrollContainer: {
+    flexGrow: 1,
+    minHeight: screenHeight,
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: containerPadding,
+    paddingVertical: isSmallDevice ? 20 : 30,
+  },
+  headerContainer: {
     alignItems: 'center',
-    marginBottom: 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 20,
   },
   logo: {
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 10,
+    marginBottom: isTablet ? 20 : 16,
   },
-  logoText: {
-    color: colors.white,
-    fontSize: 20,
-    fontWeight: 'bold',
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  titleContainer: {
+    marginBottom: isSmallDevice ? 32 : 40,
+    alignItems: 'center',
   },
   title: {
-    ...commonStyles.title,
+    fontSize: isTablet ? 32 : isSmallDevice ? 28 : 30,
+    fontWeight: '700',
+    color: colors.text,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    ...commonStyles.subtitle,
-    textAlign: 'center',
-    marginBottom: 25,
+    fontSize: isTablet ? 18 : isSmallDevice ? 16 : 17,
     color: colors.textSecondary,
+    textAlign: 'center',
+    fontWeight: '400',
+    lineHeight: isTablet ? 28 : 24,
   },
   emailText: {
-    color: colors.primaryDark,
-    fontWeight: 'bold',
+    color: colors.primary,
+    fontWeight: '600',
   },
   formContainer: {
-    marginTop: 20,
+    width: '100%',
+    maxWidth: isTablet ? 400 : '100%',
+    alignSelf: 'center',
   },
   otpContainer: {
-    marginBottom: 15,
+    marginBottom: 32,
   },
   label: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 15,
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: 8,
-    fontWeight: '500',
+    marginBottom: 16,
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
   otpInputContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: isTablet ? 20 : 8,
   },
   otpInput: {
-    width: 45,
-    height: 50,
-    borderWidth: 1,
-    borderColor: colors.primaryLight,
-    borderRadius: 8,
-    fontSize: 20,
+    width: isTablet ? 56 : 48,
+    height: isTablet ? 64 : 56,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    fontSize: isTablet ? 24 : 20,
+    fontWeight: '600',
     color: colors.text,
+    backgroundColor: colors.white,
+    textAlign: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
   otpInputError: {
-    borderColor: 'red',
+    borderColor: colors.error,
+    backgroundColor: '#FFF5F5',
+  },
+  otpInputFilled: {
+    borderColor: colors.primary,
+    backgroundColor: '#F0F9FF',
+  },
+  otpInputFocused: {
+    borderColor: colors.primary,
+    borderWidth: 2,
   },
   errorText: {
-    color: 'red',
-    marginTop: 6,
-    fontSize: 13,
+    color: colors.error,
+    fontSize: isTablet ? 14 : 13,
+    marginTop: 12,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   timerContainer: {
     alignItems: 'center',
-    marginVertical: 15,
+    marginBottom: 32,
   },
   timerText: {
-    fontSize: 14,
+    fontSize: isTablet ? 15 : 14,
     color: colors.textSecondary,
-  },
-  resendText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  clearButton: {
-    flex: 1,
-    marginRight: 8,
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: colors.backgroundSecondary,
-    alignItems: 'center',
-  },
-  clearButtonText: {
-    color: colors.text,
-    fontSize: 14,
     fontWeight: '500',
   },
-  verifyButton: {
-    flex: 1,
-    marginLeft: 8,
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+  resendText: {
+    fontSize: isTablet ? 15 : 14,
+    fontWeight: '600',
+    color: colors.primary,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
+  },
+  buttonContainer: {
+    flexDirection: isTablet ? 'row' : 'column',
+    gap: isTablet ? 16 : 12,
+    marginBottom: 24,
+  },
+  button: {
+    flex: isTablet ? 1 : 0,
+    height: isTablet ? 56 : 52,
+    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
-  verifyButtonDisabled: {
-    backgroundColor: colors.disabled,
+  primaryButton: {
+    backgroundColor: colors.primary,
   },
-  verifyButtonText: {
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  primaryButtonText: {
     color: colors.white,
-    fontSize: 14,
+    fontSize: isTablet ? 17 : 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  secondaryButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  secondaryButtonText: {
+    color: colors.text,
+    fontSize: isTablet ? 17 : 16,
     fontWeight: '600',
   },
-  backButton: {
-    marginTop: 20,
+  backButtonContainer: {
     alignItems: 'center',
+    paddingVertical: 12,
   },
   backButtonText: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: isTablet ? 15 : 14,
     fontWeight: '500',
   },
+  footerContainer: {
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingTop: 20,
+  },
+  footerContent: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 12,
+    padding: isTablet ? 20 : 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  footerText: {
+    fontSize: isTablet ? 15 : 14,
+    color: '#4A5568',
+    lineHeight: isTablet ? 22 : 20,
+    textAlign: 'center',
+    fontWeight: '400',
+  },
 });
+
+export default OTPVerification;

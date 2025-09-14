@@ -14,6 +14,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { colors, commonStyles } from '../styles/theme';
+import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -36,8 +37,18 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  const getBackendUrl = () => {
+    const backendUrl = BACKEND_URL;
+    if (!backendUrl) {
+      console.error('BACKEND_URL not found in environment variables');
+      throw new Error('Backend URL not configured. Please check your environment setup.');
+    }
+    return backendUrl;
+  };
 
   const validateEmail = () => {
     if (!email.trim()) {
@@ -54,12 +65,42 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
     return true;
   };
 
+  const forgotPasswordAPI = async (emailAddress: string) => {
+    try {
+      const backend = getBackendUrl();
+      console.log('Calling forgot password API...');
+      
+      const response = await fetch(`${backend}/core/forgotPassword`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: emailAddress }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send OTP');
+      }
+
+      return {
+        success: true,
+        message: data.message || 'OTP sent successfully',
+      };
+    } catch (error: any) {
+      console.error('Forgot password API error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
+
   const handleSendOTP = async () => {
     if (!validateEmail()) return;
 
+    setIsSubmitting(true);
     try {
-      // Here you would call your forgot password API
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+      console.log('Sending OTP to:', email);
+      const result = await forgotPasswordAPI(email.trim());
       
       Alert.alert(
         'OTP Sent',
@@ -67,12 +108,24 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
         [
           {
             text: 'OK',
-            onPress: () => onOTPSent(email),
+            onPress: () => onOTPSent(email.trim()),
           },
         ]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send OTP');
+      console.error('Handle send OTP error:', error);
+      
+      let errorMessage = 'Failed to send OTP. Please try again.';
+      
+      if (error.message.includes('Invalid Email')) {
+        errorMessage = 'Invalid email address. Please check and try again.';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -123,7 +176,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!isLoading}
+            editable={!isLoading && !isSubmitting}
             returnKeyType="done"
             onSubmitEditing={handleSendOTP}
           />
@@ -134,7 +187,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={onBack}
-            disabled={isLoading}
+            disabled={isLoading || isSubmitting}
             activeOpacity={0.7}
           >
             <Text style={styles.secondaryButtonText}>Back</Text>
@@ -144,13 +197,13 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({
             style={[
               styles.button,
               styles.primaryButton,
-              isLoading ? styles.primaryButtonDisabled : null,
+              (isLoading || isSubmitting) ? styles.primaryButtonDisabled : null,
             ]}
             onPress={handleSendOTP}
-            disabled={isLoading}
+            disabled={isLoading || isSubmitting}
             activeOpacity={0.8}
           >
-            {isLoading ? (
+            {(isLoading || isSubmitting) ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
               <Text style={styles.primaryButtonText}>Send OTP</Text>
