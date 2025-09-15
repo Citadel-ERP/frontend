@@ -24,7 +24,7 @@ interface Item {
   created_at: string; updated_at: string; comments: Comment[];
 }
 type TabType = 'requests' | 'grievances';
-type ViewMode = 'main' | 'itemDetail';
+type ViewMode = 'main' | 'itemDetail' | 'newItem';
 
 // Static "Other" option as fallback
 const OTHER_OPTION: RequestNature = {
@@ -33,7 +33,7 @@ const OTHER_OPTION: RequestNature = {
   description: 'Any other option not listed above'
 };
 
-// Dropdown Modal Component - moved outside main component
+// Dropdown Modal Component - kept as modal
 interface DropdownModalProps {
   visible: boolean;
   onClose: () => void;
@@ -114,58 +114,65 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
   );
 };
 
-// New Item Modal Component - kept as modal per requirements
-interface NewItemModalProps {
-  visible: boolean;
-  onClose: () => void;
+// New Item Page Component - converted from modal to full page
+interface NewItemPageProps {
   activeTab: TabType;
   newItemForm: { nature: string; natureName: string; description: string };
   onFormChange: (form: { nature: string; natureName: string; description: string }) => void;
   onSubmit: () => void;
+  onBack: () => void;
   loading: boolean;
   onOpenDropdown: () => void;
 }
 
-const NewItemModal: React.FC<NewItemModalProps> = ({
-  visible,
-  onClose,
+const NewItemPage: React.FC<NewItemPageProps> = ({
   activeTab,
   newItemForm,
   onFormChange,
   onSubmit,
+  onBack,
   loading,
   onOpenDropdown
 }) => {
+  const insets = useSafeAreaInsets();
+
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <BackIcon />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+        </Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <View style={styles.contentContainer}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
+          style={styles.newItemPageContainer}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Raise New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+          <ScrollView
+            style={styles.newItemPageContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.newItemPageScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.newItemFormContainer}>
+              <Text style={styles.pageDescription}>
+                Please provide the details for your {activeTab === 'requests' ? 'request' : 'grievance'}. 
+                All fields marked with * are required.
               </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={onClose}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
                   Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
@@ -182,6 +189,9 @@ const NewItemModal: React.FC<NewItemModalProps> = ({
                   </Text>
                   <Text style={styles.dropdownArrow}>▼</Text>
                 </TouchableOpacity>
+                <Text style={styles.fieldHint}>
+                  Choose the category that best describes your {activeTab.slice(0, -1)}
+                </Text>
               </View>
 
               <View style={styles.formGroup}>
@@ -193,46 +203,38 @@ const NewItemModal: React.FC<NewItemModalProps> = ({
                   placeholder={`Please provide detailed description of your ${activeTab.slice(0, -1)}`}
                   placeholderTextColor={colors.textSecondary}
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={6}
                   textAlignVertical="top"
                 />
+                <Text style={styles.fieldHint}>
+                  Provide as much detail as possible to help us understand and address your {activeTab.slice(0, -1)}
+                </Text>
               </View>
+            </View>
+          </ScrollView>
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={onClose}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalSubmitButton,
-                    (!newItemForm.nature || !newItemForm.description.trim()) && styles.modalSubmitButtonDisabled
-                  ]}
-                  onPress={onSubmit}
-                  disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <View style={styles.submitButtonContent}>
-                      <Text style={styles.modalSubmitText}>
-                        Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+          <View style={styles.newItemPageFooter}>
+            <TouchableOpacity
+              style={styles.pageSubmitButton}
+              onPress={onSubmit}
+              disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.pageSubmitText}>
+                  Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </View>
-    </Modal>
+    </SafeAreaView>
   );
 };
 
-// Item Detail Page Component - converted from modal to full page
+// Item Detail Page Component - unchanged
 interface ItemDetailPageProps {
   item: Item | null;
   activeTab: TabType;
@@ -405,7 +407,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<TabType>('requests');
   const [loading, setLoading] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [isNewItemModalVisible, setIsNewItemModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -646,6 +647,23 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     }
   };
 
+  // Handle navigation to new item page
+  const handleNewItemPress = () => {
+    setViewMode('newItem');
+    // Fetch nature data for the new item page if not already loaded
+    if (currentNatures.length === 0) {
+      fetchNatureData();
+    }
+  };
+
+  // Handle back from new item page
+  const handleBackFromNewItem = () => {
+    setViewMode('main');
+    setIsDropdownVisible(false);
+    setSearchQuery('');
+    setNewItemForm({ nature: '', natureName: '', description: '' });
+  };
+
   const submitNewItem = async () => {
     if (!newItemForm.nature || !newItemForm.description.trim()) {
       Alert.alert('Error', 'Please fill all required fields');
@@ -677,7 +695,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       if (response.ok) {
         const result = await response.json();
         Alert.alert('Success', `${activeTab.slice(0, -1)} submitted successfully!`);
-        closeNewItemModal();
+        handleBackFromNewItem();
         await fetchItems(); 
       } else {
         const error = await response.json();
@@ -738,13 +756,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     setSearchQuery('');
   };
 
-  const closeNewItemModal = () => {
-    setIsNewItemModalVisible(false);
-    setIsDropdownVisible(false);
-    setSearchQuery('');
-    setNewItemForm({ nature: '', natureName: '', description: '' });
-  };
-
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -782,6 +793,35 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     );
   }
 
+  // If we're creating a new item, show the new item page
+  if (viewMode === 'newItem') {
+    return (
+      <>
+        <NewItemPage
+          activeTab={activeTab}
+          newItemForm={newItemForm}
+          onFormChange={setNewItemForm}
+          onSubmit={submitNewItem}
+          onBack={handleBackFromNewItem}
+          loading={loading}
+          onOpenDropdown={() => setIsDropdownVisible(true)}
+        />
+        <DropdownModal
+          visible={isDropdownVisible}
+          onClose={() => {
+            setIsDropdownVisible(false);
+            setSearchQuery('');
+          }}
+          natures={currentNatures}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSelectNature={selectNature}
+          activeTab={activeTab}
+        />
+      </>
+    );
+  }
+
   const renderContent = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
@@ -792,7 +832,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         </View>
         <TouchableOpacity
           style={styles.newItemButton}
-          onPress={() => setIsNewItemModalVisible(true)}
+          onPress={handleNewItemPress}
         >
           <View style={styles.newItemIcon}>
             <Text style={styles.newItemIconText}>+</Text>
@@ -888,30 +928,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       <View style={styles.contentContainer}>
         {renderContent()}
       </View>
-
-      <NewItemModal
-        visible={isNewItemModalVisible}
-        onClose={closeNewItemModal}
-        activeTab={activeTab}
-        newItemForm={newItemForm}
-        onFormChange={setNewItemForm}
-        onSubmit={submitNewItem}
-        loading={loading}
-        onOpenDropdown={() => setIsDropdownVisible(true)}
-      />
-
-      <DropdownModal
-        visible={isDropdownVisible}
-        onClose={() => {
-          setIsDropdownVisible(false);
-          setSearchQuery('');
-        }}
-        natures={currentNatures}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSelectNature={selectNature}
-        activeTab={activeTab}
-      />
     </SafeAreaView>
   );
 };
@@ -962,6 +978,68 @@ const styles = StyleSheet.create({
   activeTabText: { color: colors.primary, fontWeight: '600' },
   contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
   tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  
+  // New Item Page Styles
+  newItemPageContainer: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  newItemPageContent: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+  },
+  newItemPageScrollContent: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  newItemFormContainer: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    ...shadows.md,
+    elevation: 3,
+  },
+  pageDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.xl,
+    textAlign: 'center',
+  },
+  fieldHint: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+  newItemPageFooter: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    ...shadows.md,
+    elevation: 5,
+  },
+  pageSubmitButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  pageSubmitText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
   
   // Detail Page Styles
   detailPageContent: { 
@@ -1095,7 +1173,7 @@ const styles = StyleSheet.create({
   emptyDropdownText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center' },
   descriptionInput: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md,
-    backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, minHeight: 120,
+    backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, minHeight: 150,
     textAlignVertical: 'top', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1, shadowRadius: 2,
   },
