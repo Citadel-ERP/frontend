@@ -91,8 +91,8 @@ interface BookingModalProps {
   setBookingForm: any;
   loading: boolean;
   onBookVehicle: () => void;
-  formatDateForDisplay: (date: Date) => string;  // Changed from dateString to date
-  formatTimeForDisplay: (date: Date) => string;  // Changed from timeString to date
+  formatDateForDisplay: (date: Date) => string;
+  formatTimeForDisplay: (date: Date) => string;
   colors: any;
 }
 
@@ -109,6 +109,7 @@ interface CancelModalProps {
 }
 
 type TabType = 'search' | 'my-bookings';
+type PickerType = 'startDate' | 'endDate' | 'startTime' | 'endTime';
 
 // Helper components moved outside to prevent recreation
 const BackIcon = () => (
@@ -116,6 +117,66 @@ const BackIcon = () => (
     <View style={styles.backArrow} />
   </View>
 );
+
+// Dropdown arrow component - fixed alignment
+const DropdownArrow = () => (
+  <View style={styles.dropdownArrow}>
+    <View style={styles.arrow} />
+  </View>
+);
+
+// Custom Dropdown Picker Modal
+const CustomDateTimePicker = ({ 
+  visible, 
+  onClose, 
+  value, 
+  mode, 
+  onChange, 
+  minimumDate 
+}: {
+  visible: boolean;
+  onClose: () => void;
+  value: Date;
+  mode: 'date' | 'time';
+  onChange: (event: any, selectedDate?: Date) => void;
+  minimumDate?: Date;
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.pickerModalOverlay}>
+        <View style={styles.pickerModalContainer}>
+          <View style={styles.pickerModalHeader}>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.pickerModalButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.pickerModalTitle}>
+              {mode === 'date' ? 'Select Date' : 'Select Time'}
+            </Text>
+            <TouchableOpacity onPress={() => onChange(null, value)}>
+              <Text style={[styles.pickerModalButton, { color: colors.primary }]}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.pickerContainer}>
+            <DateTimePicker
+              value={value}
+              mode={mode}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onChange}
+              minimumDate={minimumDate}
+              is24Hour={false}
+              style={styles.dateTimePicker}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 // BookingModal as separate component to prevent recreation
 const BookingModal: React.FC<BookingModalProps> = ({
@@ -173,12 +234,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Purpose of Trip *</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={styles.textInputMultiline}
                   value={bookingForm.purpose}
-                  onChangeText={(text) => setBookingForm((prev:any)  => ({ ...prev, purpose: text }))}
+                  onChangeText={(text) => setBookingForm((prev: any) => ({ ...prev, purpose: text }))}
                   placeholder="Enter the purpose of your trip"
                   placeholderTextColor={colors.textSecondary}
                   multiline
+                  numberOfLines={3}
                 />
               </View>
 
@@ -187,7 +249,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 <TextInput
                   style={styles.textInput}
                   value={bookingForm.start_location}
-                  onChangeText={(text) => setBookingForm((prev:any) => ({ ...prev, start_location: text }))}
+                  onChangeText={(text) => setBookingForm((prev: any) => ({ ...prev, start_location: text }))}
                   placeholder="Enter pickup location"
                   placeholderTextColor={colors.textSecondary}
                 />
@@ -198,7 +260,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 <TextInput
                   style={styles.textInput}
                   value={bookingForm.end_location}
-                  onChangeText={(text) => setBookingForm((prev:any) => ({ ...prev, end_location: text }))}
+                  onChangeText={(text) => setBookingForm((prev: any) => ({ ...prev, end_location: text }))}
                   placeholder="Enter drop-off location"
                   placeholderTextColor={colors.textSecondary}
                 />
@@ -244,16 +306,16 @@ const BookingModal: React.FC<BookingModalProps> = ({
   );
 };
 
-const CancelModal: React.FC<CancelModalProps> = ({ 
-  visible, 
-  onClose, 
-  selectedBooking, 
+const CancelModal: React.FC<CancelModalProps> = ({
+  visible,
+  onClose,
+  selectedBooking,
   cancelReason,
   setCancelReason,
-  loading, 
+  loading,
   onCancelBooking,
   formatDate,
-  colors 
+  colors
 }) => {
   return (
     <Modal
@@ -300,12 +362,13 @@ const CancelModal: React.FC<CancelModalProps> = ({
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Reason for Cancellation *</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={styles.textInputMultiline}
                   value={cancelReason}
                   onChangeText={setCancelReason}
                   placeholder="Please provide a reason for cancelling this booking"
                   placeholderTextColor={colors.textSecondary}
                   multiline
+                  numberOfLines={3}
                 />
               </View>
 
@@ -355,22 +418,19 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
 
-  // Date/Time picker states
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  // Fixed: Use a single picker type state instead of individual boolean states
+  const [activePickerType, setActivePickerType] = useState<PickerType | null>(null);
 
   // Search form states with Date objects for better handling
   const [searchForm, setSearchForm] = useState({
-    city: 'Hyderabad',
+    city: '', // Changed from 'Hyderabad' to empty string
     startDate: new Date(),
     endDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
     startTime: new Date(new Date().setHours(8, 0, 0, 0)), // 8:00 AM
     endTime: new Date(new Date().setHours(18, 0, 0, 0)) // 6:00 PM
   });
 
-  // Booking form states - keeping your original structure
+  // Booking form states
   const [bookingForm, setBookingForm] = useState({
     purpose: '',
     start_location: '',
@@ -405,8 +465,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   };
 
   const searchVehicles = async () => {
-    if (!searchForm.city) {
-      Alert.alert('Error', 'Please fill city field');
+    if (!searchForm.city.trim()) {
+      Alert.alert('Error', 'Please enter a city');
       return;
     }
 
@@ -446,7 +506,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const fetchMyBookings = async () => {
     if (!token) return;
-    console.log("yes")
+    
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getMyBookings`, {
@@ -476,14 +536,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
+      const startDateTime = `${searchForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.startTime)}:00`;
+      const endDateTime = `${searchForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.endTime)}:00`;
+
       const response = await fetch(`${BACKEND_URL}/core/bookVehicle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
           vehicle_id: selectedVehicle.id,
-          start_time: searchForm.startDate.toISOString().split('T')[0],
-          end_time: searchForm.endDate.toISOString().split('T')[0],
+          start_time: startDateTime,
+          end_time: endDateTime,
           purpose: bookingForm.purpose,
           start_location: bookingForm.start_location,
           end_location: bookingForm.end_location
@@ -632,33 +695,49 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     }
   };
 
-  // Date/Time picker handlers
-  const onStartDateChange = (event: any, selectedDate?: Date) => {
-    setShowStartDatePicker(false);
-    if (selectedDate) {
-      setSearchForm(prev => ({ ...prev, startDate: selectedDate }));
+  // Fixed: Simplified date/time picker handlers
+  const handlePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setActivePickerType(null);
+    }
+    
+    if (selectedDate && activePickerType) {
+      switch (activePickerType) {
+        case 'startDate':
+          setSearchForm(prev => ({ 
+            ...prev, 
+            startDate: selectedDate,
+            // Ensure end date is not before start date
+            endDate: selectedDate > prev.endDate ? selectedDate : prev.endDate
+          }));
+          break;
+        case 'endDate':
+          if (selectedDate >= searchForm.startDate) {
+            setSearchForm(prev => ({ ...prev, endDate: selectedDate }));
+          } else {
+            Alert.alert('Invalid Date', 'End date cannot be before start date');
+          }
+          break;
+        case 'startTime':
+          setSearchForm(prev => ({ ...prev, startTime: selectedDate }));
+          break;
+        case 'endTime':
+          setSearchForm(prev => ({ ...prev, endTime: selectedDate }));
+          break;
+      }
+    }
+    
+    if (Platform.OS === 'ios' && event.type === 'set') {
+      setActivePickerType(null);
     }
   };
 
-  const onEndDateChange = (event: any, selectedDate?: Date) => {
-    setShowEndDatePicker(false);
-    if (selectedDate) {
-      setSearchForm(prev => ({ ...prev, endDate: selectedDate }));
-    }
+  const openPicker = (type: PickerType) => {
+    setActivePickerType(type);
   };
 
-  const onStartTimeChange = (event: any, selectedTime?: Date) => {
-    setShowStartTimePicker(false);
-    if (selectedTime) {
-      setSearchForm(prev => ({ ...prev, startTime: selectedTime }));
-    }
-  };
-
-  const onEndTimeChange = (event: any, selectedTime?: Date) => {
-    setShowEndTimePicker(false);
-    if (selectedTime) {
-      setSearchForm(prev => ({ ...prev, endTime: selectedTime }));
-    }
+  const closePicker = () => {
+    setActivePickerType(null);
   };
 
   const VehicleDetailModal = () => (
@@ -773,10 +852,10 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
             <View style={[styles.formGroup, { flex: 1 }]}>
               <Text style={styles.label}>City</Text>
               <TextInput
-                style={styles.textInput}
+                style={styles.textInputCity}
                 value={searchForm.city}
                 onChangeText={(text) => setSearchForm({ ...searchForm, city: text })}
-                placeholder="Enter city"
+                placeholder="Enter city (e.g., Hyderabad, Mumbai, Delhi)"
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
@@ -787,22 +866,24 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               <Text style={styles.label}>Start Date</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
-                onPress={() => setShowStartDatePicker(true)}
+                onPress={() => openPicker('startDate')}
               >
                 <Text style={styles.dateTimeButtonText}>
                   {formatDateForDisplay(searchForm.startDate)}
                 </Text>
+                <DropdownArrow />
               </TouchableOpacity>
             </View>
             <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
               <Text style={styles.label}>End Date</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
-                onPress={() => setShowEndDatePicker(true)}
+                onPress={() => openPicker('endDate')}
               >
                 <Text style={styles.dateTimeButtonText}>
                   {formatDateForDisplay(searchForm.endDate)}
                 </Text>
+                <DropdownArrow />
               </TouchableOpacity>
             </View>
           </View>
@@ -812,22 +893,24 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               <Text style={styles.label}>Start Time</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
-                onPress={() => setShowStartTimePicker(true)}
+                onPress={() => openPicker('startTime')}
               >
                 <Text style={styles.dateTimeButtonText}>
                   {formatTimeForDisplay(searchForm.startTime)}
                 </Text>
+                <DropdownArrow />
               </TouchableOpacity>
             </View>
             <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
               <Text style={styles.label}>End Time</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
-                onPress={() => setShowEndTimePicker(true)}
+                onPress={() => openPicker('endTime')}
               >
                 <Text style={styles.dateTimeButtonText}>
                   {formatTimeForDisplay(searchForm.endTime)}
                 </Text>
+                <DropdownArrow />
               </TouchableOpacity>
             </View>
           </View>
@@ -891,54 +974,41 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               </View>
             </TouchableOpacity>
           ))
-        ) : (
+        ) : hasSearchedVehicles ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No vehicles found</Text>
             <Text style={styles.emptyStateSubtext}>
               Try adjusting your search criteria
             </Text>
           </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Enter your details and search</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Available vehicles will appear here
+            </Text>
+          </View>
         )}
       </View>
 
-      {/* Date/Time Pickers */}
-      {showStartDatePicker && (
-        <DateTimePicker
-          value={searchForm.startDate}
-          mode="date"
-          display="default"
-          onChange={onStartDateChange}
-          minimumDate={new Date()}
-        />
-      )}
-
-      {showEndDatePicker && (
-        <DateTimePicker
-          value={searchForm.endDate}
-          mode="date"
-          display="default"
-          onChange={onEndDateChange}
-          minimumDate={searchForm.startDate}
-        />
-      )}
-
-      {showStartTimePicker && (
-        <DateTimePicker
-          value={searchForm.startTime}
-          mode="time"
-          display="default"
-          onChange={onStartTimeChange}
-          is24Hour={false}
-        />
-      )}
-
-      {showEndTimePicker && (
-        <DateTimePicker
-          value={searchForm.endTime}
-          mode="time"
-          display="default"
-          onChange={onEndTimeChange}
-          is24Hour={false}
+      {/* Custom Date/Time Picker Modal */}
+      {activePickerType && (
+        <CustomDateTimePicker
+          visible={true}
+          onClose={closePicker}
+          value={
+            activePickerType === 'startDate' ? searchForm.startDate :
+            activePickerType === 'endDate' ? searchForm.endDate :
+            activePickerType === 'startTime' ? searchForm.startTime :
+            searchForm.endTime
+          }
+          mode={activePickerType.includes('Date') ? 'date' : 'time'}
+          onChange={handlePickerChange}
+          minimumDate={
+            activePickerType === 'startDate' ? new Date() :
+            activePickerType === 'endDate' ? searchForm.startDate :
+            undefined
+          }
         />
       )}
     </ScrollView>
@@ -1091,7 +1161,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   );
 };
 
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
   header: {
@@ -1108,30 +1177,28 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl, fontWeight: '600', color: colors.white,
     flex: 1, textAlign: 'center',
   },
-  dateTimeButton: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 48,
+  headerSpacer: { width: 40 },
+
+  // Fixed: Dropdown arrow styles - centered alignment
+  dropdownArrow: {
+    position: 'absolute',
+    right: 12,
+    top: '50%',
+    transform: [{ translateY: -4 }], // Better centering
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  dateTimeButtonText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
+  arrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: colors.textSecondary,
   },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  loadingText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
-  headerSpacer: { width: 40 },
+
   tabNavigation: {
     flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1,
     borderBottomColor: colors.border, paddingHorizontal: spacing.xs,
@@ -1166,13 +1233,85 @@ const styles = StyleSheet.create({
   textInput: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
     padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 150,
-    alignItems:'flex-start', textAlignVertical: 'top',
+    backgroundColor: colors.white, minHeight: 48,
   },
-  descriptionInput: {
+  textInputCity: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
     padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 100, textAlignVertical: 'top',
+    backgroundColor: colors.white, minHeight: 44, // Reduced height for city input
+  },
+  textInputMultiline: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
+    padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
+    backgroundColor: colors.white, minHeight: 80, textAlignVertical: 'top',
+  },
+  dateTimeButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  dateTimeButtonText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    paddingRight: 24, // Make space for dropdown arrow
+  },
+  
+  // Fixed: Custom Picker Modal Styles
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerModalContainer: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    width: screenWidth * 0.9,
+    maxHeight: screenHeight * 0.5,
+    ...shadows.lg,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickerModalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  pickerModalButton: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  pickerContainer: {
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  dateTimePicker: {
+    width: '100%',
+    height: 200,
+  },
+
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  loadingText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
   },
   searchButton: {
     backgroundColor: colors.primary, padding: spacing.md,
@@ -1240,6 +1379,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'flex-start', marginBottom: spacing.md,
   },
+  bookingInfo: { flex: 1, marginRight: spacing.sm },
   bookingVehicle: {
     fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
   },
@@ -1383,16 +1523,6 @@ const styles = StyleSheet.create({
   dateInfoText: {
     fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
   },
-  bookingInfo: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.lg,
-  },
-  bookingInfoTitle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
-  },
-  bookingInfoText: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
   modalButtons: {
     flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg,
     paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border,
@@ -1418,4 +1548,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Cab;
+export default Cab
