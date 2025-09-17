@@ -13,6 +13,12 @@ import { BACKEND_URL } from '../config/config';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
 
+const CITIES = [
+  { label: 'Hyderabad', value: 'hyderabad' },
+  { label: 'Mumbai', value: 'mumbai' },
+  { label: 'Delhi', value: 'delhi' }
+];
+
 interface CabProps {
   onBack: () => void;
 }
@@ -111,28 +117,80 @@ interface CancelModalProps {
 type TabType = 'search' | 'my-bookings';
 type PickerType = 'startDate' | 'endDate' | 'startTime' | 'endTime';
 
-// Helper components moved outside to prevent recreation
 const BackIcon = () => (
   <View style={styles.backIcon}>
     <View style={styles.backArrow} />
   </View>
 );
 
-// Dropdown arrow component - fixed alignment
 const DropdownArrow = () => (
   <View style={styles.dropdownArrow}>
     <View style={styles.arrow} />
   </View>
 );
 
-// Custom Dropdown Picker Modal
+const CityDropdown = ({ 
+  visible, 
+  onClose, 
+  selectedCity, 
+  onSelectCity 
+}: {
+  visible: boolean;
+  onClose: () => void;
+  selectedCity: string;
+  onSelectCity: (city: string) => void;
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity style={styles.cityModalOverlay} onPress={onClose}>
+        <View style={styles.cityModalContainer}>
+          <View style={styles.cityModalHeader}>
+            <Text style={styles.cityModalTitle}>Select City</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.cityModalClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.cityOptions}>
+            {CITIES.map((city) => (
+              <TouchableOpacity
+                key={city.value}
+                style={[
+                  styles.cityOption,
+                  selectedCity === city.value && styles.selectedCityOption
+                ]}
+                onPress={() => {
+                  onSelectCity(city.value);
+                  onClose();
+                }}
+              >
+                <Text style={[
+                  styles.cityOptionText,
+                  selectedCity === city.value && styles.selectedCityOptionText
+                ]}>
+                  {city.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
 const CustomDateTimePicker = ({ 
   visible, 
   onClose, 
   value, 
   mode, 
   onChange, 
-  minimumDate 
+  minimumDate,
+  onDone
 }: {
   visible: boolean;
   onClose: () => void;
@@ -140,7 +198,21 @@ const CustomDateTimePicker = ({
   mode: 'date' | 'time';
   onChange: (event: any, selectedDate?: Date) => void;
   minimumDate?: Date;
+  onDone: () => void;
 }) => {
+  const [tempValue, setTempValue] = useState(value);
+
+  const handleChange = (event: any, selectedDate?: Date) => {
+    if (selectedDate) {
+      setTempValue(selectedDate);
+    }
+  };
+
+  const handleDone = () => {
+    onChange({ type: 'set' }, tempValue);
+    onDone();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -157,16 +229,16 @@ const CustomDateTimePicker = ({
             <Text style={styles.pickerModalTitle}>
               {mode === 'date' ? 'Select Date' : 'Select Time'}
             </Text>
-            <TouchableOpacity onPress={() => onChange(null, value)}>
+            <TouchableOpacity onPress={handleDone}>
               <Text style={[styles.pickerModalButton, { color: colors.primary }]}>Done</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.pickerContainer}>
             <DateTimePicker
-              value={value}
+              value={tempValue}
               mode={mode}
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onChange}
+              onChange={handleChange}
               minimumDate={minimumDate}
               is24Hour={false}
               style={styles.dateTimePicker}
@@ -178,7 +250,6 @@ const CustomDateTimePicker = ({
   );
 };
 
-// BookingModal as separate component to prevent recreation
 const BookingModal: React.FC<BookingModalProps> = ({
   visible,
   onClose,
@@ -413,34 +484,28 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
-  // Modal states
   const [isVehicleDetailModalVisible, setIsVehicleDetailModalVisible] = useState(false);
   const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+  const [isCityDropdownVisible, setIsCityDropdownVisible] = useState(false);
 
-  // Fixed: Use a single picker type state instead of individual boolean states
   const [activePickerType, setActivePickerType] = useState<PickerType | null>(null);
 
-  // Search form states with Date objects for better handling
   const [searchForm, setSearchForm] = useState({
-    city: '', // Changed from 'Hyderabad' to empty string
+    city: 'hyderabad',
     startDate: new Date(),
-    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-    startTime: new Date(new Date().setHours(8, 0, 0, 0)), // 8:00 AM
-    endTime: new Date(new Date().setHours(18, 0, 0, 0)) // 6:00 PM
+    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    startTime: new Date(new Date().setHours(8, 0, 0, 0)),
+    endTime: new Date(new Date().setHours(18, 0, 0, 0))
   });
 
-  // Booking form states
   const [bookingForm, setBookingForm] = useState({
     purpose: '',
     start_location: '',
     end_location: ''
   });
 
-  // Cancel form state
   const [cancelReason, setCancelReason] = useState('');
-
-  // Flag to track if bookings have been fetched
   const [hasSearchedVehicles, setHasSearchedVehicles] = useState(false);
 
   useEffect(() => {
@@ -455,10 +520,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     getToken();
   }, []);
 
-  // Handle tab change and fetch bookings only when "my-bookings" tab is pressed
   const handleTabChange = async (tabKey: TabType) => {
     setActiveTab(tabKey);
-
     if (tabKey === 'my-bookings' && token && myBookings.length === 0) {
       await fetchMyBookings();
     }
@@ -466,7 +529,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const searchVehicles = async () => {
     if (!searchForm.city.trim()) {
-      Alert.alert('Error', 'Please enter a city');
+      Alert.alert('Error', 'Please select a city');
       return;
     }
 
@@ -474,7 +537,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     setHasSearchedVehicles(true);
 
     try {
-      // Format dates and times for API
       const startDateTime = `${searchForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.startTime)}:00`;
       const endDateTime = `${searchForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.endTime)}:00`;
 
@@ -557,12 +619,10 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         Alert.alert('Success', 'Vehicle booked successfully!');
         closeBookingModal();
 
-        // set active tab as my-bookings if not
         if (activeTab !== 'my-bookings') {
           setActiveTab('my-bookings');
         }
 
-        // If we're on my-bookings tab or have bookings loaded, refresh them
         if (activeTab === 'my-bookings' || myBookings.length > 0) {
           fetchMyBookings();
         }
@@ -648,12 +708,10 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     setCancelReason('');
   };
 
-  // Helper function to format time for API (24-hour format)
   const formatTimeForAPI = (date: Date): string => {
-    return date.toTimeString().slice(0, 5); // Returns HH:MM format
+    return date.toTimeString().slice(0, 5);
   };
 
-  // Helper function to format time for display (12-hour format with AM/PM)
   const formatTimeForDisplay = (date: Date): string => {
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -662,7 +720,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     });
   };
 
-  // Helper function to format date for display
   const formatDateForDisplay = (date: Date): string => {
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -695,19 +752,13 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     }
   };
 
-  // Fixed: Simplified date/time picker handlers
   const handlePickerChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setActivePickerType(null);
-    }
-    
     if (selectedDate && activePickerType) {
       switch (activePickerType) {
         case 'startDate':
           setSearchForm(prev => ({ 
             ...prev, 
             startDate: selectedDate,
-            // Ensure end date is not before start date
             endDate: selectedDate > prev.endDate ? selectedDate : prev.endDate
           }));
           break;
@@ -726,10 +777,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           break;
       }
     }
-    
-    if (Platform.OS === 'ios' && event.type === 'set') {
-      setActivePickerType(null);
-    }
   };
 
   const openPicker = (type: PickerType) => {
@@ -738,6 +785,11 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const closePicker = () => {
     setActivePickerType(null);
+  };
+
+  const getSelectedCityLabel = () => {
+    const city = CITIES.find(c => c.value === searchForm.city);
+    return city ? city.label : 'Select City';
   };
 
   const VehicleDetailModal = () => (
@@ -851,13 +903,15 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1 }]}>
               <Text style={styles.label}>City</Text>
-              <TextInput
-                style={styles.textInputCity}
-                value={searchForm.city}
-                onChangeText={(text) => setSearchForm({ ...searchForm, city: text })}
-                placeholder="Enter city (e.g., Hyderabad, Mumbai, Delhi)"
-                placeholderTextColor={colors.textSecondary}
-              />
+              <TouchableOpacity
+                style={styles.cityButton}
+                onPress={() => setIsCityDropdownVisible(true)}
+              >
+                <Text style={styles.cityButtonText}>
+                  {getSelectedCityLabel()}
+                </Text>
+                <DropdownArrow />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -991,7 +1045,13 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         )}
       </View>
 
-      {/* Custom Date/Time Picker Modal */}
+      <CityDropdown
+        visible={isCityDropdownVisible}
+        onClose={() => setIsCityDropdownVisible(false)}
+        selectedCity={searchForm.city}
+        onSelectCity={(city) => setSearchForm(prev => ({ ...prev, city }))}
+      />
+
       {activePickerType && (
         <CustomDateTimePicker
           visible={true}
@@ -1004,6 +1064,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           }
           mode={activePickerType.includes('Date') ? 'date' : 'time'}
           onChange={handlePickerChange}
+          onDone={closePicker}
           minimumDate={
             activePickerType === 'startDate' ? new Date() :
             activePickerType === 'endDate' ? searchForm.startDate :
@@ -1163,389 +1224,120 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md, backgroundColor: colors.primary,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary },
   backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
   backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  backArrow: {
-    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
-  },
-  headerTitle: {
-    fontSize: fontSize.xl, fontWeight: '600', color: colors.white,
-    flex: 1, textAlign: 'center',
-  },
+  backArrow: { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
+  headerTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center' },
   headerSpacer: { width: 40 },
-
-  // Fixed: Dropdown arrow styles - centered alignment
-  dropdownArrow: {
-    position: 'absolute',
-    right: 12,
-    top: '50%',
-    transform: [{ translateY: -4 }], // Better centering
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.textSecondary,
-  },
-
-  tabNavigation: {
-    flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1,
-    borderBottomColor: colors.border, paddingHorizontal: spacing.xs,
-  },
-  tab: {
-    flex: 1, paddingVertical: spacing.md, alignItems: 'center',
-    borderRadius: borderRadius.sm, marginHorizontal: 2,
-  },
-  activeTab: {
-    borderBottomWidth: 3, borderBottomColor: colors.primary,
-    backgroundColor: colors.backgroundSecondary,
-  },
+  dropdownArrow: { position: 'absolute', right: 12, top: '50%', transform: [{ translateY: -4 }], alignItems: 'center', justifyContent: 'center' },
+  arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.textSecondary },
+  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs },
+  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2 },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: colors.primary, backgroundColor: colors.backgroundSecondary },
   tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
   activeTabText: { color: colors.primary, fontWeight: '600' },
   contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
   tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   section: { marginBottom: spacing.xl },
-  sectionTitle: {
-    fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
-  },
-
-  // Search Form Styles
-  searchForm: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border,
-  },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  searchForm: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border },
   formRow: { flexDirection: 'row', marginBottom: spacing.md },
   formGroup: { marginBottom: spacing.md },
-  label: {
-    fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
-  },
-  textInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
-    padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 48,
-  },
-  textInputCity: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
-    padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 44, // Reduced height for city input
-  },
-  textInputMultiline: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
-    padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 80, textAlignVertical: 'top',
-  },
-  dateTimeButton: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 44,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  dateTimeButtonText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    paddingRight: 24, // Make space for dropdown arrow
-  },
-  
-  // Fixed: Custom Picker Modal Styles
-  pickerModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pickerModalContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    width: screenWidth * 0.9,
-    maxHeight: screenHeight * 0.5,
-    ...shadows.lg,
-  },
-  pickerModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  pickerModalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  pickerModalButton: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  pickerContainer: {
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  dateTimePicker: {
-    width: '100%',
-    height: 200,
-  },
-
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  loadingText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
-  searchButton: {
-    backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginTop: spacing.sm,
-  },
-  searchButtonText: {
-    fontSize: fontSize.md, color: colors.white, fontWeight: '600',
-  },
-
-  // Vehicle Card Styles
-  vehicleCard: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2,
-  },
-  vehicleHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: spacing.sm,
-  },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  textInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fontSize.sm, color: colors.text, backgroundColor: colors.white, minHeight: 48 },
+  textInputMultiline: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fontSize.sm, color: colors.text, backgroundColor: colors.white, minHeight: 80, textAlignVertical: 'top' },
+  cityButton: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center', position: 'relative' },
+  cityButtonText: { fontSize: fontSize.sm, color: colors.text, paddingRight: 24 },
+  dateTimeButton: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center', position: 'relative' },
+  dateTimeButtonText: { fontSize: fontSize.sm, color: colors.text, paddingRight: 24 },
+  cityModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  cityModalContainer: { backgroundColor: colors.white, borderRadius: borderRadius.lg, width: screenWidth * 0.8, maxHeight: screenHeight * 0.5, ...shadows.lg },
+  cityModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  cityModalTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  cityModalClose: { fontSize: fontSize.lg, color: colors.textSecondary, fontWeight: '600' },
+  cityOptions: { maxHeight: 200 },
+  cityOption: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  selectedCityOption: { backgroundColor: colors.backgroundSecondary },
+  cityOptionText: { fontSize: fontSize.md, color: colors.text },
+  selectedCityOptionText: { color: colors.primary, fontWeight: '600' },
+  pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  pickerModalContainer: { backgroundColor: colors.white, borderRadius: borderRadius.lg, width: screenWidth * 0.9, maxHeight: screenHeight * 0.5, ...shadows.lg },
+  pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  pickerModalTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  pickerModalButton: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500' },
+  pickerContainer: { padding: spacing.md, alignItems: 'center' },
+  dateTimePicker: { width: '100%', height: 200 },
+  loadingContainer: { alignItems: 'center', paddingVertical: spacing.xl },
+  loadingText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.sm },
+  searchButton: { backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginTop: spacing.sm },
+  searchButtonText: { fontSize: fontSize.md, color: colors.white, fontWeight: '600' },
+  vehicleCard: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2 },
+  vehicleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
   vehicleInfo: { flex: 1, marginRight: spacing.sm },
-  vehicleModel: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  vehiclePlate: {
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs,
-  },
+  vehicleModel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  vehiclePlate: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs },
   vehicleType: { fontSize: fontSize.xs, color: colors.textSecondary },
-  vehicleStatusBadge: {
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full,
-    minWidth: 80, alignItems: 'center', justifyContent: 'center',
-  },
-  vehicleStatusText: {
-    fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
-  vehicleDetails: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginVertical: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-  },
-  vehicleLocation: {
-    fontSize: fontSize.xs, color: colors.textSecondary, flex: 1, marginRight: spacing.sm,
-  },
-  vehicleCapacity: {
-    fontSize: fontSize.xs, color: colors.textSecondary,
-  },
-  driverSection: {
-    paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-    marginTop: spacing.sm,
-  },
-  driverText: {
-    fontSize: fontSize.xs, color: colors.info, fontWeight: '500',
-  },
-  vehicleFooter: {
-    marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-    alignItems: 'center',
-  },
-  tapToView: {
-    fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic',
-  },
-
-  // Booking Card Styles
-  bookingCard: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border,
-  },
-  bookingHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: spacing.md,
-  },
+  vehicleStatusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
+  vehicleStatusText: { fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
+  vehicleDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  vehicleLocation: { fontSize: fontSize.xs, color: colors.textSecondary, flex: 1, marginRight: spacing.sm },
+  vehicleCapacity: { fontSize: fontSize.xs, color: colors.textSecondary },
+  driverSection: { paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.sm },
+  driverText: { fontSize: fontSize.xs, color: colors.info, fontWeight: '500' },
+  vehicleFooter: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center' },
+  tapToView: { fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic' },
+  bookingCard: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border },
+  bookingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
   bookingInfo: { flex: 1, marginRight: spacing.sm },
-  bookingVehicle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  bookingPlate: {
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
-  },
-  bookingStatusBadge: {
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full,
-    minWidth: 80, alignItems: 'center', justifyContent: 'center',
-  },
-  bookingStatusText: {
-    fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
+  bookingVehicle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  bookingPlate: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
+  bookingStatusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
+  bookingStatusText: { fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
   bookingDetails: { marginBottom: spacing.md },
-  bookingDetail: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
+  bookingDetail: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
   bookingLabel: { fontWeight: '600' },
-  bookingActions: {
-    paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: colors.error, paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm, borderRadius: borderRadius.md,
-  },
-  cancelButtonText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
-  },
-
-  emptyState: {
-    backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg,
-    alignItems: 'center', marginTop: spacing.lg,
-  },
-  emptyStateText: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  emptyStateSubtext: {
-    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center',
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end',
-  },
-  keyboardAvoidingView: {
-    flex: 1, justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl, maxHeight: screenHeight * 0.85,
-    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: fontSize.lg, fontWeight: '600', color: colors.text,
-  },
-  modalCloseButton: {
-    width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.backgroundSecondary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  modalCloseText: {
-    fontSize: fontSize.lg, color: colors.textSecondary, fontWeight: '600',
-  },
-  modalScrollContent: {
-    padding: spacing.lg, paddingBottom: spacing.xl,
-  },
-
-  // Vehicle Detail Modal Styles
-  vehicleDetailContainer: {
-    paddingBottom: spacing.lg,
-  },
-  vehicleDetailHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-  },
-  vehicleDetailInfo: {
-    flex: 1, marginRight: spacing.md,
-  },
-  vehicleModelText: {
-    fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs,
-  },
-  vehiclePlateText: {
-    fontSize: fontSize.lg, color: colors.primary, fontWeight: '600',
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full,
-    minWidth: 90, alignItems: 'center', justifyContent: 'center',
-  },
-  statusBadgeText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
-  vehicleInfoGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg,
-  },
-  infoItem: {
-    width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm,
-  },
-  infoLabel: {
-    fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600',
-    textTransform: 'uppercase', marginBottom: spacing.xs,
-  },
-  infoValue: {
-    fontSize: fontSize.sm, color: colors.text, fontWeight: '500',
-  },
-  locationSection: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.lg,
-  },
-  locationText: {
-    fontSize: fontSize.sm, color: colors.text, lineHeight: 20,
-  },
-  driverInfo: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
-  bookButton: {
-    backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center',
-  },
-  bookButtonText: {
-    fontSize: fontSize.md, color: colors.white, fontWeight: '600',
-  },
-
-  // Form Styles in Modals
-  vehicleInfoTitle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
-  },
-  vehicleInfoText: {
-    fontSize: fontSize.sm, color: colors.textSecondary,
-  },
-  dateInfo: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.lg,
-  },
-  dateInfoTitle: {
-    fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
-  },
-  dateInfoText: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
-  modalButtons: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg,
-    paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border,
-  },
-  modalCancelButton: {
-    flex: 1, backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginRight: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  modalCancelText: {
-    fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600',
-  },
-  modalSubmitButton: {
-    flex: 1, backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginLeft: spacing.sm,
-    minHeight: 48, justifyContent: 'center',
-  },
-  modalSubmitButtonDisabled: {
-    backgroundColor: colors.textSecondary, opacity: 0.6,
-  },
-  modalSubmitText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
-  },
+  bookingActions: { paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center' },
+  cancelButton: { backgroundColor: colors.error, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: borderRadius.md },
+  cancelButtonText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
+  emptyState: { backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg, alignItems: 'center', marginTop: spacing.lg },
+  emptyStateText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  emptyStateSubtext: { fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  keyboardAvoidingView: { flex: 1, justifyContent: 'flex-end' },
+  modalContainer: { backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, maxHeight: screenHeight * 0.85, paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  modalCloseButton: { width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  modalCloseText: { fontSize: fontSize.lg, color: colors.textSecondary, fontWeight: '600' },
+  modalScrollContent: { padding: spacing.lg, paddingBottom: spacing.xl },
+  vehicleDetailContainer: { paddingBottom: spacing.lg },
+  vehicleDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg },
+  vehicleDetailInfo: { flex: 1, marginRight: spacing.md },
+  vehicleModelText: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
+  vehiclePlateText: { fontSize: fontSize.lg, color: colors.primary, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, minWidth: 90, alignItems: 'center', justifyContent: 'center' },
+  statusBadgeText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
+  vehicleInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg },
+  infoItem: { width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm },
+  infoLabel: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: spacing.xs },
+  infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  locationSection: { backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.lg },
+  locationText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  driverInfo: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
+  bookButton: { backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center' },
+  bookButtonText: { fontSize: fontSize.md, color: colors.white, fontWeight: '600' },
+  vehicleInfoTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  vehicleInfoText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  dateInfo: { backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.lg },
+  dateInfoTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  dateInfoText: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
+  modalCancelButton: { flex: 1, backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  modalCancelText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600' },
+  modalSubmitButton: { flex: 1, backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginLeft: spacing.sm, minHeight: 48, justifyContent: 'center' },
+  modalSubmitButtonDisabled: { backgroundColor: colors.textSecondary, opacity: 0.6 },
+  modalSubmitText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
 });
 
-export default Cab
+export default Cab;
