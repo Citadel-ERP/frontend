@@ -12,6 +12,7 @@ import Profile from './Profile';
 import HR from './HR';
 import Cab from './Cab';
 import Driver from './Driver';
+import BDT from './BDT';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -75,9 +76,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
-  const insets = useSafeAreaInsets();
   const [showCab, setShowCab] = useState(false);
   const [showDriver, setShowDriver] = useState(false);
+  const [showBDT, setShowBDT] = useState(false);
+  const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
@@ -192,49 +194,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const HomeIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
-        width: size * 0.75,
-        height: size * 0.65,
-        borderWidth: 2,
-        borderColor: color,
-        borderBottomWidth: 3,
-        borderTopColor: 'transparent',
-        position: 'relative',
+        width: size * 0.75, height: size * 0.65, borderWidth: 2, borderColor: color, borderBottomWidth: 3, borderTopColor: 'transparent', position: 'relative',
       }}>
         <View style={{
-          position: 'absolute',
-          top: -size * 0.25,
-          left: -size * 0.125,
-          right: -size * 0.125,
-          height: size * 0.35,
-          borderTopWidth: 2,
-          borderLeftWidth: 2,
-          borderRightWidth: 2,
-          borderColor: color,
-          transform: [{ rotate: '0deg' }],
+          position: 'absolute', top: -size * 0.25, left: -size * 0.125, right: -size * 0.125, height: size * 0.35, borderTopWidth: 2, borderLeftWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: '0deg' }],
         }}>
           <View style={{
-            position: 'absolute',
-            top: -2,
-            left: '50%',
-            width: 0,
-            height: 0,
-            borderLeftWidth: size * 0.2,
-            borderRightWidth: size * 0.2,
-            borderBottomWidth: size * 0.15,
-            borderLeftColor: 'transparent',
-            borderRightColor: 'transparent',
-            borderBottomColor: color,
-            transform: [{ translateX: -size * 0.2 }],
+            position: 'absolute', top: -2, left: '50%', width: 0, height: 0, borderLeftWidth: size * 0.2, borderRightWidth: size * 0.2, borderBottomWidth: size * 0.15, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: color, transform: [{ translateX: -size * 0.2 }],
           }} />
         </View>
         <View style={{
-          position: 'absolute',
-          bottom: size * 0.05,
-          left: '50%',
-          width: size * 0.15,
-          height: size * 0.25,
-          backgroundColor: color,
-          transform: [{ translateX: -size * 0.075 }],
+          position: 'absolute', bottom: size * 0.05, left: '50%', width: size * 0.15, height: size * 0.25, backgroundColor: color, transform: [{ translateX: -size * 0.075 }],
         }} />
       </View>
     </View>
@@ -242,42 +212,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const MessageIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.8,
-        height: size * 0.6,
-        borderWidth: 2,
-        borderColor: color,
-        borderRadius: size * 0.12,
-        position: 'relative',
-      }}>
+      <View style={{ width: size * 0.8, height: size * 0.6, borderWidth: 2, borderColor: color, borderRadius: size * 0.12, position: 'relative' }}>
+        <View style={{ position: 'absolute', top: size * 0.12, left: size * 0.12, right: size * 0.12, height: 2, backgroundColor: color }} />
+        <View style={{ position: 'absolute', top: size * 0.22, left: size * 0.12, width: size * 0.35, height: 2, backgroundColor: color }} />
         <View style={{
-          position: 'absolute',
-          top: size * 0.12,
-          left: size * 0.12,
-          right: size * 0.12,
-          height: 2,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: size * 0.22,
-          left: size * 0.12,
-          width: size * 0.35,
-          height: 2,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          bottom: -size * 0.08,
-          left: size * 0.2,
-          width: 0,
-          height: 0,
-          borderTopWidth: size * 0.12,
-          borderLeftWidth: size * 0.08,
-          borderRightWidth: size * 0.08,
-          borderTopColor: color,
-          borderLeftColor: 'transparent',
-          borderRightColor: 'transparent',
+          position: 'absolute', bottom: -size * 0.08, left: size * 0.2, width: 0, height: 0, borderTopWidth: size * 0.12, borderLeftWidth: size * 0.08, borderRightWidth: size * 0.08, borderTopColor: color, borderLeftColor: 'transparent', borderRightColor: 'transparent',
         }} />
       </View>
     </View>
@@ -286,156 +225,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const TeamIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{
-          width: size * 0.25,
-          height: size * 0.25,
-          borderRadius: size * 0.125,
-          borderWidth: 2,
-          borderColor: color,
-          marginRight: -size * 0.05,
-        }} />
-        <View style={{
-          width: size * 0.35,
-          height: size * 0.35,
-          borderRadius: size * 0.175,
-          borderWidth: 2,
-          borderColor: color,
-          zIndex: 1,
-          backgroundColor: 'white',
-        }} />
-        <View style={{
-          width: size * 0.25,
-          height: size * 0.25,
-          borderRadius: size * 0.125,
-          borderWidth: 2,
-          borderColor: color,
-          marginLeft: -size * 0.05,
-        }} />
+        <View style={{ width: size * 0.25, height: size * 0.25, borderRadius: size * 0.125, borderWidth: 2, borderColor: color, marginRight: -size * 0.05 }} />
+        <View style={{ width: size * 0.35, height: size * 0.35, borderRadius: size * 0.175, borderWidth: 2, borderColor: color, zIndex: 1, backgroundColor: 'white' }} />
+        <View style={{ width: size * 0.25, height: size * 0.25, borderRadius: size * 0.125, borderWidth: 2, borderColor: color, marginLeft: -size * 0.05 }} />
       </View>
-      <View style={{
-        position: 'absolute',
-        bottom: size * 0.1,
-        width: size * 0.8,
-        height: size * 0.25,
-        borderWidth: 2,
-        borderColor: color,
-        borderRadius: size * 0.125,
-        borderTopColor: 'transparent',
-      }} />
+      <View style={{ position: 'absolute', bottom: size * 0.1, width: size * 0.8, height: size * 0.25, borderWidth: 2, borderColor: color, borderRadius: size * 0.125, borderTopColor: 'transparent' }} />
     </View>
   );
 
-  const handleBackFromCab = () => {
-  setShowCab(false);
-  setActiveMenuItem('Dashboard');
-};
-
-  const handleBackFromDriver = () => {
-  setShowDriver(false);
-  setActiveMenuItem('Dashboard');
-};
-
   const BotIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.7,
-        height: size * 0.6,
-        borderWidth: 2,
-        borderColor: color,
-        borderRadius: size * 0.15,
-        position: 'relative',
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: size * 0.12,
-          left: size * 0.12,
-          width: size * 0.1,
-          height: size * 0.1,
-          borderRadius: size * 0.05,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: size * 0.12,
-          right: size * 0.12,
-          width: size * 0.1,
-          height: size * 0.1,
-          borderRadius: size * 0.05,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          bottom: size * 0.1,
-          left: '50%',
-          width: size * 0.2,
-          height: 2,
-          backgroundColor: color,
-          transform: [{ translateX: -size * 0.1 }],
-        }} />
+      <View style={{ width: size * 0.7, height: size * 0.6, borderWidth: 2, borderColor: color, borderRadius: size * 0.15, position: 'relative' }}>
+        <View style={{ position: 'absolute', top: size * 0.12, left: size * 0.12, width: size * 0.1, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: color }} />
+        <View style={{ position: 'absolute', top: size * 0.12, right: size * 0.12, width: size * 0.1, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: color }} />
+        <View style={{ position: 'absolute', bottom: size * 0.1, left: '50%', width: size * 0.2, height: 2, backgroundColor: color, transform: [{ translateX: -size * 0.1 }] }} />
       </View>
-      <View style={{
-        position: 'absolute',
-        top: size * 0.05,
-        left: '50%',
-        width: 2,
-        height: size * 0.15,
-        backgroundColor: color,
-        transform: [{ translateX: -1 }],
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: -size * 0.04,
-          left: '50%',
-          width: size * 0.06,
-          height: size * 0.06,
-          borderRadius: size * 0.03,
-          backgroundColor: color,
-          transform: [{ translateX: -size * 0.03 }],
-        }} />
+      <View style={{ position: 'absolute', top: size * 0.05, left: '50%', width: 2, height: size * 0.15, backgroundColor: color, transform: [{ translateX: -1 }] }}>
+        <View style={{ position: 'absolute', top: -size * 0.04, left: '50%', width: size * 0.06, height: size * 0.06, borderRadius: size * 0.03, backgroundColor: color, transform: [{ translateX: -size * 0.03 }] }} />
       </View>
     </View>
   );
 
   const SupportIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.8,
-        height: size * 0.8,
-        borderRadius: size * 0.4,
-        borderWidth: 2,
-        borderColor: color,
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-      }}>
-        <View style={{
-          position: 'absolute',
-          top: size * 0.15,
-          width: size * 0.25,
-          height: size * 0.25,
-          borderTopWidth: 2,
-          borderLeftWidth: 2,
-          borderRightWidth: 2,
-          borderColor: color,
-          borderTopLeftRadius: size * 0.2,
-          borderTopRightRadius: size * 0.2,
-        }} />
-        <View style={{
-          position: 'absolute',
-          top: size * 0.38,
-          width: size * 0.12,
-          height: size * 0.12,
-          borderRadius: size * 0.06,
-          backgroundColor: color,
-        }} />
-        <View style={{
-          position: 'absolute',
-          bottom: size * 0.12,
-          width: size * 0.06,
-          height: size * 0.12,
-          backgroundColor: color,
-          borderRadius: size * 0.03,
-        }} />
+      <View style={{ width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+        <View style={{ position: 'absolute', top: size * 0.15, width: size * 0.25, height: size * 0.25, borderTopWidth: 2, borderLeftWidth: 2, borderRightWidth: 2, borderColor: color, borderTopLeftRadius: size * 0.2, borderTopRightRadius: size * 0.2 }} />
+        <View style={{ position: 'absolute', top: size * 0.38, width: size * 0.12, height: size * 0.12, borderRadius: size * 0.06, backgroundColor: color }} />
+        <View style={{ position: 'absolute', bottom: size * 0.12, width: size * 0.06, height: size * 0.12, backgroundColor: color, borderRadius: size * 0.03 }} />
       </View>
     </View>
   );
@@ -487,19 +303,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const handleModulePress = (module: string, moduleUniqueName?: string) => {
-  if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
-    setAttendanceKey(prev => prev + 1);
-    setShowAttendance(true);
-  } else if (moduleUniqueName === 'hr' || module.toLowerCase().includes('hr')) {
-    setShowHR(true);
-  } else if (moduleUniqueName === 'cab' || module.toLowerCase().includes('cab')) {
-    setShowCab(true);
-  } else if (moduleUniqueName === 'driver' || module.toLowerCase().includes('driver')) {
-    setShowDriver(true);
-  } else {
-    Alert.alert('Coming Soon', `${module} module will be available soon!`);
-  }
-};
+    if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
+      setAttendanceKey(prev => prev + 1);
+      setShowAttendance(true);
+    } else if (moduleUniqueName === 'hr' || module.toLowerCase().includes('hr')) {
+      setShowHR(true);
+    } else if (moduleUniqueName === 'cab' || module.toLowerCase().includes('cab')) {
+      setShowCab(true);
+    } else if (moduleUniqueName === 'driver' || module.toLowerCase().includes('driver')) {
+      setShowDriver(true);
+    } else if (moduleUniqueName === 'bdt' || module.toLowerCase().includes('bdt')) {
+      setShowBDT(true);
+    } else {
+      Alert.alert('Coming Soon', `${module} module will be available soon!`);
+    }
+  };
 
   const handleBackFromAttendance = () => {
     setShowAttendance(false);
@@ -513,6 +331,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleBackFromHR = () => {
     setShowHR(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromCab = () => {
+    setShowCab(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromDriver = () => {
+    setShowDriver(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromBDT = () => {
+    setShowBDT(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -635,16 +468,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {showAttendance ? (
-    <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
-        ) : showProfile ? (
-          <Profile onBack={handleBackFromProfile} userData={userData} />
-        ) : showHR ? (
-          <HR onBack={handleBackFromHR} />
-        ) : showCab ? (
-          <Cab onBack={handleBackFromCab} />
-        ) : showDriver ? (
-          <Driver onBack={handleBackFromDriver} />
-        ) : (
+        <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
+      ) : showProfile ? (
+        <Profile onBack={handleBackFromProfile} userData={userData} />
+      ) : showHR ? (
+        <HR onBack={handleBackFromHR} />
+      ) : showCab ? (
+        <Cab onBack={handleBackFromCab} />
+      ) : showDriver ? (
+        <Driver onBack={handleBackFromDriver} />
+      ) : showBDT ? (
+        <BDT onBack={handleBackFromBDT} />
+      ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
 
@@ -694,7 +529,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 }}>
                   <Text style={styles.applyButtonText}>Mark Attendance</Text>
                 </TouchableOpacity>
-
               </View>
 
               <View style={styles.section}>
@@ -761,7 +595,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </View>
 
           <HamburgerMenu />
-
         </View>
       )}
     </KeyboardAvoidingView>
@@ -842,14 +675,4 @@ const styles = StyleSheet.create({
   logoutButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: '#FEF2F2', marginHorizontal: spacing.lg, borderRadius: borderRadius.sm, borderLeftWidth: 3, borderLeftColor: colors.error },
   logoutIconContainer: { width: 30, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   logoutButtonText: { fontSize: fontSize.md, color: colors.error, fontWeight: '600', flex: 1 },
-  autoAttendanceButton: {
-    backgroundColor: '#FF9800', marginTop: spacing.sm,},
-  modalContainer: {
-    flex: 1,backgroundColor: '#fff',},
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white,},
-  closeButton: {
-    padding: spacing.sm,},
-  closeButtonText: {
-    fontSize: fontSize.md, color: colors.primary, fontWeight: '600',},
 });
