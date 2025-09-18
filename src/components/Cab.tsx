@@ -13,7 +13,8 @@ import { BACKEND_URL } from '../config/config';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
 
-const CITIES = [
+// Default cities as fallback
+const DEFAULT_CITIES = [
   { label: 'Hyderabad', value: 'hyderabad' },
   { label: 'Mumbai', value: 'mumbai' },
   { label: 'Delhi', value: 'delhi' }
@@ -88,6 +89,11 @@ interface Booking {
   end_location: string;
 }
 
+interface City {
+  label: string;
+  value: string;
+}
+
 interface BookingModalProps {
   visible: boolean;
   onClose: () => void;
@@ -129,16 +135,18 @@ const DropdownArrow = () => (
   </View>
 );
 
-const CityDropdown = ({ 
-  visible, 
-  onClose, 
-  selectedCity, 
-  onSelectCity 
+const CityDropdown = ({
+  visible,
+  onClose,
+  selectedCity,
+  onSelectCity,
+  cities
 }: {
   visible: boolean;
   onClose: () => void;
   selectedCity: string;
   onSelectCity: (city: string) => void;
+  cities: City[];
 }) => {
   return (
     <Modal
@@ -156,7 +164,7 @@ const CityDropdown = ({
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.cityOptions}>
-            {CITIES.map((city) => (
+            {cities.map((city) => (
               <TouchableOpacity
                 key={city.value}
                 style={[
@@ -183,12 +191,12 @@ const CityDropdown = ({
   );
 };
 
-const CustomDateTimePicker = ({ 
-  visible, 
-  onClose, 
-  value, 
-  mode, 
-  onChange, 
+const CustomDateTimePicker = ({
+  visible,
+  onClose,
+  value,
+  mode,
+  onChange,
   minimumDate,
   onDone
 }: {
@@ -203,16 +211,46 @@ const CustomDateTimePicker = ({
   const [tempValue, setTempValue] = useState(value);
 
   const handleChange = (event: any, selectedDate?: Date) => {
-    if (selectedDate) {
-      setTempValue(selectedDate);
+    if (Platform.OS === 'android') {
+      // On Android, handle the selection immediately and close
+      if (event.type === 'set' && selectedDate) {
+        onChange(event, selectedDate);
+      }
+      onDone(); // Close the picker
+    } else {
+      // On iOS, just update the temp value
+      if (selectedDate) {
+        setTempValue(selectedDate);
+      }
     }
   };
 
   const handleDone = () => {
+    // Only used on iOS
     onChange({ type: 'set' }, tempValue);
     onDone();
   };
 
+  // Don't render anything if not visible
+  if (!visible) {
+    return null;
+  }
+
+  if (Platform.OS === 'android') {
+    // On Android, render the picker directly without modal wrapper
+    return (
+      <DateTimePicker
+        value={value}
+        mode={mode}
+        display="default"
+        onChange={handleChange}
+        minimumDate={minimumDate}
+        is24Hour={false}
+      />
+    );
+  }
+
+  // iOS version with modal
   return (
     <Modal
       visible={visible}
@@ -237,7 +275,7 @@ const CustomDateTimePicker = ({
             <DateTimePicker
               value={tempValue}
               mode={mode}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              display="spinner"
               onChange={handleChange}
               minimumDate={minimumDate}
               is24Hour={false}
@@ -483,6 +521,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [cities, setCities] = useState<City[]>(DEFAULT_CITIES);
+  const [citiesLoading, setCitiesLoading] = useState(false);
 
   const [isVehicleDetailModalVisible, setIsVehicleDetailModalVisible] = useState(false);
   const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
@@ -508,6 +548,42 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   const [cancelReason, setCancelReason] = useState('');
   const [hasSearchedVehicles, setHasSearchedVehicles] = useState(false);
 
+  // Fetch cities from backend
+  const fetchCities = async () => {
+    setCitiesLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/getVehicleCities`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.cities && Array.isArray(data.cities)) {
+          const formattedCities = data.cities.map((city: string) => ({
+            label: city,
+            value: city.toLowerCase()
+          }));
+          setCities(formattedCities);
+
+          // Update default city if current one is not in the new list
+          const currentCityExists = formattedCities.some(city => city.value === searchForm.city);
+          if (!currentCityExists && formattedCities.length > 0) {
+            setSearchForm(prev => ({ ...prev, city: formattedCities[0].value }));
+          }
+        }
+      } else {
+        console.error('Failed to fetch cities, using default cities');
+        // Keep using default cities on error
+      }
+    } catch (error) {
+      console.error('Error fetching cities:', error);
+      // Keep using default cities on error
+    } finally {
+      setCitiesLoading(false);
+    }
+  };
+
   useEffect(() => {
     const getToken = async () => {
       try {
@@ -518,6 +594,9 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       }
     };
     getToken();
+
+    // Fetch cities when component mounts
+    fetchCities();
   }, []);
 
   const handleTabChange = async (tabKey: TabType) => {
@@ -568,7 +647,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const fetchMyBookings = async () => {
     if (!token) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getMyBookings`, {
@@ -756,8 +835,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     if (selectedDate && activePickerType) {
       switch (activePickerType) {
         case 'startDate':
-          setSearchForm(prev => ({ 
-            ...prev, 
+          setSearchForm(prev => ({
+            ...prev,
             startDate: selectedDate,
             endDate: selectedDate > prev.endDate ? selectedDate : prev.endDate
           }));
@@ -788,7 +867,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   };
 
   const getSelectedCityLabel = () => {
-    const city = CITIES.find(c => c.value === searchForm.city);
+    const city = cities.find(c => c.value === searchForm.city);
     return city ? city.label : 'Select City';
   };
 
@@ -906,11 +985,16 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               <TouchableOpacity
                 style={styles.cityButton}
                 onPress={() => setIsCityDropdownVisible(true)}
+                disabled={citiesLoading}
               >
                 <Text style={styles.cityButtonText}>
-                  {getSelectedCityLabel()}
+                  {citiesLoading ? 'Loading cities...' : getSelectedCityLabel()}
                 </Text>
-                <DropdownArrow />
+                {citiesLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <DropdownArrow />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1050,6 +1134,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         onClose={() => setIsCityDropdownVisible(false)}
         selectedCity={searchForm.city}
         onSelectCity={(city) => setSearchForm(prev => ({ ...prev, city }))}
+        cities={cities}
       />
 
       {activePickerType && (
@@ -1058,17 +1143,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           onClose={closePicker}
           value={
             activePickerType === 'startDate' ? searchForm.startDate :
-            activePickerType === 'endDate' ? searchForm.endDate :
-            activePickerType === 'startTime' ? searchForm.startTime :
-            searchForm.endTime
+              activePickerType === 'endDate' ? searchForm.endDate :
+                activePickerType === 'startTime' ? searchForm.startTime :
+                  searchForm.endTime
           }
           mode={activePickerType.includes('Date') ? 'date' : 'time'}
           onChange={handlePickerChange}
           onDone={closePicker}
           minimumDate={
             activePickerType === 'startDate' ? new Date() :
-            activePickerType === 'endDate' ? searchForm.startDate :
-            undefined
+              activePickerType === 'endDate' ? searchForm.startDate :
+                undefined
           }
         />
       )}
@@ -1230,8 +1315,14 @@ const styles = StyleSheet.create({
   backArrow: { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
   headerTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center' },
   headerSpacer: { width: 40 },
-  dropdownArrow: { position: 'absolute', right: 12, top: '50%', transform: [{ translateY: -4 }], alignItems: 'center', justifyContent: 'center' },
-  arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.textSecondary },
+  dropdownArrow: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center'
+  }, arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.textSecondary },
   tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs },
   tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2 },
   activeTab: { borderBottomWidth: 3, borderBottomColor: colors.primary, backgroundColor: colors.backgroundSecondary },

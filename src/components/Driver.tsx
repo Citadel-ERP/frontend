@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as DocumentPicker from 'expo-document-picker';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 
@@ -105,8 +106,6 @@ interface FuelLog {
   odometer_reading: string;
 }
 
-// Add these interfaces near the top of your file with the other interfaces
-
 interface MaintenanceModalProps {
   isVisible: boolean;
   onClose: () => void;
@@ -116,12 +115,14 @@ interface MaintenanceModalProps {
     description: string;
     start_date: string;
     end_date: string;
+    document: any;
   };
   setForm: React.Dispatch<React.SetStateAction<{
     cost: string;
     description: string;
     start_date: string;
     end_date: string;
+    document: any;
   }>>;
   loading: boolean;
 }
@@ -159,14 +160,8 @@ interface FuelLogsModalProps {
 
 type ViewType = 'main' | 'vehicle-detail' | 'booking-detail';
 
-// External Maintenance Modal Component
 const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
-  isVisible,
-  onClose,
-  onSubmit,
-  form,
-  setForm,
-  loading
+  isVisible, onClose, onSubmit, form, setForm, loading
 }) => {
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -193,34 +188,44 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
     }
   };
 
+  const handleDocumentPick = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const document = result.assets[0];
+        setForm(prev => ({ 
+          ...prev, 
+          document: {
+            name: document.name,
+            uri: document.uri,
+            type: document.mimeType,
+            size: document.size,
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error picking document:', error);
+      Alert.alert('Error', 'Failed to pick document');
+    }
+  };
+
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={isVisible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Log Maintenance</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={onClose}
-              >
+              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Cost (₹) *</Text>
                 <TextInput
@@ -249,55 +254,52 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Start Date *</Text>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowStartDatePicker(true)}
-                >
-                  <Text style={[
-                    styles.dateButtonText,
-                    !form.start_date && styles.dateButtonPlaceholder
-                  ]}>
+                <TouchableOpacity style={styles.dateButton} onPress={() => setShowStartDatePicker(true)}>
+                  <Text style={[styles.dateButtonText, !form.start_date && styles.dateButtonPlaceholder]}>
                     {form.start_date || 'Select start date'}
                   </Text>
                 </TouchableOpacity>
                 {showStartDatePicker && (
-                  <DateTimePicker
-                    value={startDate}
-                    mode="date"
-                    display="default"
-                    onChange={handleStartDateChange}
-                  />
+                  <DateTimePicker value={startDate} mode="date" display="default" onChange={handleStartDateChange} />
                 )}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>End Date *</Text>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowEndDatePicker(true)}
-                >
-                  <Text style={[
-                    styles.dateButtonText,
-                    !form.end_date && styles.dateButtonPlaceholder
-                  ]}>
+                <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndDatePicker(true)}>
+                  <Text style={[styles.dateButtonText, !form.end_date && styles.dateButtonPlaceholder]}>
                     {form.end_date || 'Select end date'}
                   </Text>
                 </TouchableOpacity>
                 {showEndDatePicker && (
-                  <DateTimePicker
-                    value={endDate}
-                    mode="date"
-                    display="default"
-                    onChange={handleEndDateChange}
-                  />
+                  <DateTimePicker value={endDate} mode="date" display="default" onChange={handleEndDateChange} />
+                )}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Attach Document (Optional)</Text>
+                <TouchableOpacity style={styles.documentButton} onPress={handleDocumentPick}>
+                  <Text style={styles.documentButtonText}>
+                    {form.document ? form.document.name || 'Document Selected' : 'Select Document'}
+                  </Text>
+                </TouchableOpacity>
+                {form.document && (
+                  <View style={styles.documentInfo}>
+                    <Text style={styles.documentName} numberOfLines={1}>
+                      📄 {form.document.name}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.removeDocumentButton} 
+                      onPress={() => setForm(prev => ({ ...prev, document: null }))}
+                    >
+                      <Text style={styles.removeDocumentText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={onClose}
-                >
+                <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -323,43 +325,22 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
   );
 };
 
-// External Fuel Log Modal Component
 const FuelLogModal: React.FC<FuelLogModalProps> = ({
-  isVisible,
-  onClose,
-  onSubmit,
-  form,
-  setForm,
-  loading
+  isVisible, onClose, onSubmit, form, setForm, loading
 }) => {
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={isVisible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Fuel Log</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={onClose}
-              >
+              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Quantity (Liters) *</Text>
                 <TextInput
@@ -397,10 +378,7 @@ const FuelLogModal: React.FC<FuelLogModalProps> = ({
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={onClose}
-                >
+                <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -426,36 +404,21 @@ const FuelLogModal: React.FC<FuelLogModalProps> = ({
   );
 };
 
-// External Maintenance Logs Modal Component
 const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
-  isVisible,
-  onClose,
-  logs,
-  formatDate
+  isVisible, onClose, logs, formatDate
 }) => {
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={isVisible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Maintenance Logs</Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={onClose}
-            >
+            <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
               <Text style={styles.modalCloseText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalScrollContent}
-          >
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
             {logs.length > 0 ? (
               logs.map((log) => (
                 <View key={log.id} style={styles.logCard}>
@@ -489,36 +452,21 @@ const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
   );
 };
 
-// External Fuel Logs Modal Component
 const FuelLogsModal: React.FC<FuelLogsModalProps> = ({
-  isVisible,
-  onClose,
-  logs,
-  formatDateTime
+  isVisible, onClose, logs, formatDateTime
 }) => {
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={isVisible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Fuel Logs</Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={onClose}
-            >
+            <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
               <Text style={styles.modalCloseText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalScrollContent}
-          >
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
             {logs.length > 0 ? (
               logs.map((log) => (
                 <View key={log.id} style={styles.logCard}>
@@ -565,28 +513,25 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const [currentView, setCurrentView] = useState<ViewType>('main');
   const [loading, setLoading] = useState(false);
 
-  // Data states
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceRecord[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
 
-  // Selection states
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
-  // Modal states
   const [isMaintenanceModalVisible, setIsMaintenanceModalVisible] = useState(false);
   const [isFuelLogModalVisible, setIsFuelLogModalVisible] = useState(false);
   const [isMaintenanceLogsModalVisible, setIsMaintenanceLogsModalVisible] = useState(false);
   const [isFuelLogsModalVisible, setIsFuelLogsModalVisible] = useState(false);
 
-  // Form states
   const [maintenanceForm, setMaintenanceForm] = useState({
     cost: '',
     description: '',
     start_date: '',
-    end_date: ''
+    end_date: '',
+    document: null
   });
 
   const [fuelLogForm, setFuelLogForm] = useState({
@@ -667,10 +612,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       const response = await fetch(`${BACKEND_URL}/employee/getVehicleMaintainanceLogs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          vehicle_id: vehicleId
-        }),
+        body: JSON.stringify({ token, vehicle_id: vehicleId }),
       });
 
       if (response.ok) {
@@ -694,10 +636,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       const response = await fetch(`${BACKEND_URL}/employee/getVehicleFuelLogs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          vehicle_id: vehicleId
-        }),
+        body: JSON.stringify({ token, vehicle_id: vehicleId }),
       });
 
       if (response.ok) {
@@ -798,23 +737,36 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('token', token);
+      formData.append('vehicle_id', selectedVehicle.id.toString());
+      formData.append('cost', maintenanceForm.cost);
+      formData.append('description', maintenanceForm.description);
+      formData.append('start_date', maintenanceForm.start_date);
+      formData.append('end_date', maintenanceForm.end_date);
+
+      // Add document if exists
+      if (maintenanceForm.document) {
+        formData.append('document', {
+          uri: maintenanceForm.document.uri,
+          name: maintenanceForm.document.name,
+          type: maintenanceForm.document.type,
+        } as any);
+      }
+
       const response = await fetch(`${BACKEND_URL}/employee/createMaintainance`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          vehicle_id: selectedVehicle.id,
-          cost: maintenanceForm.cost,
-          description: maintenanceForm.description,
-          start_date: maintenanceForm.start_date,
-          end_date: maintenanceForm.end_date
-        }),
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
       });
 
       if (response.ok) {
         Alert.alert('Success', 'Maintenance record created successfully!');
         setIsMaintenanceModalVisible(false);
-        setMaintenanceForm({ cost: '', description: '', start_date: '', end_date: '' });
+        setMaintenanceForm({ cost: '', description: '', start_date: '', end_date: '', document: null });
         fetchVehicles();
       } else {
         const error = await response.json();
@@ -884,6 +836,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       case 'maintenance': return colors.warning;
       case 'inactive': return colors.error;
       case 'available': return colors.info;
+      case 'not_available': return colors.error;
       case 'booked': return colors.primary;
       case 'completed': return colors.success;
       case 'cancelled': return colors.error;
@@ -909,10 +862,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
               </Text>
               <Text style={styles.vehiclePlateText}>{selectedVehicle.license_plate}</Text>
             </View>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(selectedVehicle.status) }
-            ]}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVehicle.status) }]}>
               <Text style={styles.statusBadgeText}>{selectedVehicle.status}</Text>
             </View>
           </View>
@@ -946,29 +896,19 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
           <View style={styles.statusUpdateSection}>
             <Text style={styles.sectionTitle}>Update Vehicle Status</Text>
             <View style={styles.statusOptions}>
-              {['available', 'booked', 'in_maintenance'].map((status) => (
+              {['available', 'booked', 'in_maintenance', 'not_available'].map((status) => (
                 <TouchableOpacity
                   key={status}
-                  style={[
-                    styles.statusOption,
-                    vehicleStatus === status && styles.statusOptionSelected
-                  ]}
+                  style={[styles.statusOption, vehicleStatus === status && styles.statusOptionSelected]}
                   onPress={() => setVehicleStatus(status)}
                 >
-                  <Text style={[
-                    styles.statusOptionText,
-                    vehicleStatus === status && styles.statusOptionTextSelected
-                  ]}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  <Text style={[styles.statusOptionText, vehicleStatus === status && styles.statusOptionTextSelected]}>
+                    {status.replace('_', ' ').charAt(0).toUpperCase() + status.replace('_', ' ').slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={updateVehicleStatus}
-              disabled={loading}
-            >
+            <TouchableOpacity style={styles.primaryButton} onPress={updateVehicleStatus} disabled={loading}>
               {loading ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
@@ -980,32 +920,20 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
           <View style={styles.buttonGroupsContainer}>
             <View style={styles.buttonGroup}>
               <Text style={styles.buttonGroupTitle}>Maintenance</Text>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setIsMaintenanceModalVisible(true)}
-              >
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => setIsMaintenanceModalVisible(true)}>
                 <Text style={styles.secondaryButtonText}>Log Maintenance</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.outlineButton}
-                onPress={() => fetchMaintenanceLogs(selectedVehicle.id)}
-              >
+              <TouchableOpacity style={styles.outlineButton} onPress={() => fetchMaintenanceLogs(selectedVehicle.id)}>
                 <Text style={styles.outlineButtonText}>View Maintenance Logs</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.buttonGroup}>
               <Text style={styles.buttonGroupTitle}>Fuel</Text>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setIsFuelLogModalVisible(true)}
-              >
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => setIsFuelLogModalVisible(true)}>
                 <Text style={styles.secondaryButtonText}>Add Fuel Log</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.outlineButton}
-                onPress={() => fetchFuelLogs(selectedVehicle.id)}
-              >
+              <TouchableOpacity style={styles.outlineButton} onPress={() => fetchFuelLogs(selectedVehicle.id)}>
                 <Text style={styles.outlineButtonText}>View Fuel Logs</Text>
               </TouchableOpacity>
             </View>
@@ -1026,10 +954,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
               </Text>
               <Text style={styles.bookingPlateText}>{selectedBooking.vehicle.license_plate}</Text>
             </View>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(selectedBooking.status) }
-            ]}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedBooking.status) }]}>
               <Text style={styles.statusBadgeText}>{selectedBooking.status}</Text>
             </View>
           </View>
@@ -1078,16 +1003,10 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
               {['booked', 'in-progress', 'completed', 'cancelled'].map((status) => (
                 <TouchableOpacity
                   key={status}
-                  style={[
-                    styles.statusOption,
-                    bookingStatus === status && styles.statusOptionSelected
-                  ]}
+                  style={[styles.statusOption, bookingStatus === status && styles.statusOptionSelected]}
                   onPress={() => setBookingStatus(status)}
                 >
-                  <Text style={[
-                    styles.statusOptionText,
-                    bookingStatus === status && styles.statusOptionTextSelected
-                  ]}>
+                  <Text style={[styles.statusOptionText, bookingStatus === status && styles.statusOptionTextSelected]}>
                     {status.charAt(0).toUpperCase() + status.slice(1)}
                   </Text>
                 </TouchableOpacity>
@@ -1110,11 +1029,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
               </View>
             )}
 
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={updateBookingStatus}
-              disabled={loading}
-            >
+            <TouchableOpacity style={styles.primaryButton} onPress={updateBookingStatus} disabled={loading}>
               {loading ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
@@ -1152,10 +1067,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                     {vehicle.vehicle_type} • {vehicle.fuel_type} • {vehicle.year}
                   </Text>
                 </View>
-                <View style={[
-                  styles.vehicleStatusBadge,
-                  { backgroundColor: getStatusColor(vehicle.status) }
-                ]}>
+                <View style={[styles.vehicleStatusBadge, { backgroundColor: getStatusColor(vehicle.status) }]}>
                   <Text style={styles.vehicleStatusText}>{vehicle.status}</Text>
                 </View>
               </View>
@@ -1207,10 +1119,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                   </Text>
                   <Text style={styles.bookingPlate}>{booking.vehicle.license_plate}</Text>
                 </View>
-                <View style={[
-                  styles.bookingStatusBadge,
-                  { backgroundColor: getStatusColor(booking.status) }
-                ]}>
+                <View style={[styles.bookingStatusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
                   <Text style={styles.bookingStatusText}>{booking.status}</Text>
                 </View>
               </View>
@@ -1257,10 +1166,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
             onPress={() => setActiveTab(tab.key)}
           >
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.key && styles.activeTabText
-            ]}>
+            <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
               {tab.label}
             </Text>
           </TouchableOpacity>
@@ -1359,414 +1265,139 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   );
 };
 
+
 const styles = StyleSheet.create({
-  dateButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
+  dateButton: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, minHeight: 48, justifyContent: 'center' },
+  dateButtonText: { fontSize: fontSize.md, color: colors.black },
+  documentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    padding: spacing.sm,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
-    minHeight: 48,
-    justifyContent: 'center',
+    marginTop: spacing.sm,
   },
-  dateButtonText: {
-    fontSize: fontSize.md,
-    color: colors.black,
+  documentName: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    marginRight: spacing.sm,
   },
-  dateButtonPlaceholder: {
-    color: colors.textSecondary,
-  },
+  dateButtonPlaceholder: { color: colors.textSecondary },
+  documentButton: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.backgroundSecondary, minHeight: 48, justifyContent: 'center' },
+  documentButtonText: { fontSize: fontSize.md, color: colors.text },
+  removeDocumentButton: { marginTop: spacing.sm, paddingVertical: spacing.xs, alignItems: 'center' },
+  removeDocumentText: { fontSize: fontSize.sm, color: colors.error },
+  buttonGroupsContainer: { marginTop: spacing.lg },
   container: { flex: 1, backgroundColor: colors.primary },
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md, backgroundColor: colors.primary,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary },
   backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
   backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  backArrow: {
-    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
-  },
-  headerTitle: {
-    fontSize: fontSize.xl, fontWeight: '600', color: colors.white,
-    flex: 1, textAlign: 'center',
-  },
+  backArrow: { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
+  headerTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center' },
   headerSpacer: { width: 40 },
-
-  // Tab Navigation
-  tabNavigation: {
-    flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1,
-    borderBottomColor: colors.border, paddingHorizontal: spacing.xs,
-  },
-  tab: {
-    flex: 1, paddingVertical: spacing.md, alignItems: 'center',
-    borderRadius: borderRadius.sm, marginHorizontal: 2,
-  },
-  activeTab: {
-    borderBottomWidth: 3, borderBottomColor: colors.primary,
-    backgroundColor: colors.backgroundSecondary,
-  },
+  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs },
+  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2 },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: colors.primary, backgroundColor: colors.backgroundSecondary },
   tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
   activeTabText: { color: colors.primary, fontWeight: '600' },
-
-  // Content Container
   contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
   tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-
-  // Page Container for detail views
-  pageContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg
-  },
-  detailPageContent: {
-    paddingBottom: spacing.xl,
-  },
-
-  // Sections
+  pageContainer: { flex: 1, backgroundColor: colors.backgroundSecondary, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  detailPageContent: { paddingBottom: spacing.xl },
   section: { marginBottom: spacing.xl },
-  sectionTitle: {
-    fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
-  },
-
-  // Loading
-  loadingContainer: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: fontSize.md, color: colors.textSecondary, marginTop: spacing.md,
-  },
-
-  // Vehicle Cards
-  vehicleCard: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2,
-  },
-  vehicleHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: spacing.sm,
-  },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontSize: fontSize.md, color: colors.textSecondary, marginTop: spacing.md },
+  vehicleCard: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2 },
+  vehicleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
   vehicleInfo: { flex: 1, marginRight: spacing.sm },
-  vehicleModel: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  vehiclePlate: {
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs,
-  },
+  vehicleModel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  vehiclePlate: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs },
   vehicleType: { fontSize: fontSize.xs, color: colors.textSecondary },
-  vehicleStatusBadge: {
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full,
-    minWidth: 80, alignItems: 'center', justifyContent: 'center',
-  },
-  vehicleStatusText: {
-    fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
-  vehicleDetails: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginVertical: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-  },
-  vehicleLocation: {
-    fontSize: fontSize.xs, color: colors.textSecondary, flex: 1, marginRight: spacing.sm,
-  },
-  vehicleCapacity: {
-    fontSize: fontSize.xs, color: colors.textSecondary,
-  },
-  vehicleFooter: {
-    marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-    alignItems: 'center',
-  },
-  tapToView: {
-    fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic',
-  },
-
-  // Booking Cards
-  bookingCard: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border,
-  },
-  bookingHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: spacing.md,
-  },
+  vehicleStatusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
+  vehicleStatusText: { fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
+  vehicleDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  vehicleLocation: { fontSize: fontSize.xs, color: colors.textSecondary, flex: 1, marginRight: spacing.sm },
+  vehicleCapacity: { fontSize: fontSize.xs, color: colors.textSecondary },
+  vehicleFooter: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center' },
+  tapToView: { fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic' },
+  bookingCard: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border },
+  bookingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
   bookingInfo: { flex: 1, marginRight: spacing.sm },
-  bookingVehicle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  bookingPlate: {
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
-  },
-  bookingStatusBadge: {
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full,
-    minWidth: 80, alignItems: 'center', justifyContent: 'center',
-  },
-  bookingStatusText: {
-    fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
+  bookingVehicle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  bookingPlate: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
+  bookingStatusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
+  bookingStatusText: { fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
   bookingDetails: { marginBottom: spacing.md },
-  bookingDetail: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
+  bookingDetail: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
   bookingLabel: { fontWeight: '600' },
-  bookingFooter: {
-    paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
-    alignItems: 'center',
-  },
-  tapToUpdate: {
-    fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic',
-  },
-
-  // Detail Page Headers
-  vehicleDetailHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg,
-    borderRadius: borderRadius.lg, ...shadows.md,
-  },
-  vehicleDetailInfo: {
-    flex: 1, marginRight: spacing.md,
-  },
-  vehicleModelText: {
-    fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs,
-  },
-  vehiclePlateText: {
-    fontSize: fontSize.lg, color: colors.primary, fontWeight: '600',
-  },
-
-  bookingDetailHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg,
-    borderRadius: borderRadius.lg, ...shadows.md,
-  },
-  bookingDetailInfo: {
-    flex: 1, marginRight: spacing.md,
-  },
-  bookingTitleText: {
-    fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs,
-  },
-  bookingPlateText: {
-    fontSize: fontSize.lg, color: colors.primary, fontWeight: '600',
-  },
-
-  // Status Badge
-  statusBadge: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full,
-    minWidth: 90, alignItems: 'center', justifyContent: 'center',
-  },
-  statusBadgeText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase',
-  },
-
-  // Info Grid
-  vehicleInfoGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg,
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md,
-  },
-  bookingInfoSection: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg, ...shadows.md,
-  },
-  bookingInfoGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-  },
-  infoItem: {
-    width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm,
-  },
-  infoLabel: {
-    fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600',
-    textTransform: 'uppercase', marginBottom: spacing.xs,
-  },
-  infoValue: {
-    fontSize: fontSize.sm, color: colors.text, fontWeight: '500',
-  },
-
-  // Location Section
-  locationSection: {
-    backgroundColor: colors.white, padding: spacing.lg,
-    borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md,
-  },
-  locationText: {
-    fontSize: fontSize.sm, color: colors.text, lineHeight: 20,
-  },
-
-  // Status Update Section
-  statusUpdateSection: {
-    backgroundColor: colors.white, padding: spacing.lg,
-    borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md,
-  },
-  statusOptions: {
-    flexDirection: 'row', flexWrap: 'wrap', marginVertical: spacing.md,
-  },
-  statusOption: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border,
-    marginRight: spacing.sm, marginBottom: spacing.sm, backgroundColor: colors.backgroundSecondary,
-  },
-  statusOptionSelected: {
-    backgroundColor: colors.primary, borderColor: colors.primary,
-  },
-  statusOptionText: {
-    fontSize: fontSize.sm, color: colors.text, fontWeight: '500',
-  },
-  statusOptionTextSelected: {
-    color: colors.white, fontWeight: '600',
-  },
-
-  // Button Groups
-  buttonGroupsContainer: {
-    flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md,
-  },
-  buttonGroup: {
-    flex: 1, backgroundColor: colors.white, padding: spacing.lg,
-    borderRadius: borderRadius.lg, ...shadows.md,
-  },
-  buttonGroupTitle: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-
-  // Buttons
-  primaryButton: {
-    backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', minHeight: 48,
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
-  },
-  secondaryButton: {
-    backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginBottom: spacing.sm,
-  },
-  secondaryButtonText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
-  },
-  outlineButton: {
-    backgroundColor: 'transparent', padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.primary,
-  },
-  outlineButtonText: {
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: '600',
-  },
-
-  // Empty State
-  emptyState: {
-    backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg,
-    alignItems: 'center', marginTop: spacing.lg,
-  },
-  emptyStateText: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs,
-  },
-  emptyStateSubtext: {
-    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center',
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end',
-  },
-  keyboardAvoidingView: {
-    flex: 1, justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl, maxHeight: screenHeight * 0.85,
-    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: fontSize.lg, fontWeight: '600', color: colors.text,
-  },
-  modalCloseButton: {
-    width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.backgroundSecondary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  modalCloseText: {
-    fontSize: fontSize.lg, color: colors.textSecondary, fontWeight: '600',
-  },
-  modalScrollContent: {
-    padding: spacing.lg, paddingBottom: spacing.xl,
-  },
-
-  // Log Cards in Modals
-  logCard: {
-    backgroundColor: colors.backgroundSecondary, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border,
-  },
-  logHeader: {
-    flexDirection: 'row', justifyContent: 'flex-end',
-    alignItems: 'flex-start', marginBottom: spacing.md,
-  },
-  logCost: {
-    fontSize: fontSize.lg, color: colors.success, fontWeight: '700',
-  },
-  logDescription: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md,
-    lineHeight: 20,
-  },
+  bookingFooter: { paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center' },
+  tapToUpdate: { fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic' },
+  vehicleDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md },
+  vehicleDetailInfo: { flex: 1, marginRight: spacing.md },
+  vehicleModelText: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
+  vehiclePlateText: { fontSize: fontSize.lg, color: colors.primary, fontWeight: '600' },
+  bookingDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md },
+  bookingDetailInfo: { flex: 1, marginRight: spacing.md },
+  bookingTitleText: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
+  bookingPlateText: { fontSize: fontSize.lg, color: colors.primary, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, minWidth: 90, alignItems: 'center', justifyContent: 'center' },
+  statusBadgeText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
+  vehicleInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md },
+  bookingInfoSection: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
+  bookingInfoGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  infoItem: { width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm },
+  infoLabel: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: spacing.xs },
+  infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  locationSection: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
+  locationText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  statusUpdateSection: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
+  statusOptions: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: spacing.md },
+  statusOption: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm, marginBottom: spacing.sm, backgroundColor: colors.backgroundSecondary },
+  statusOptionSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  statusOptionText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  statusOptionTextSelected: { color: colors.white, fontWeight: '600' },
+  buttonGroup: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
+  buttonGroupTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md, textAlign: 'center' },
+  primaryButton: { backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
+  primaryButtonText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
+  secondaryButton: { backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginBottom: spacing.sm },
+  secondaryButtonText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
+  outlineButton: { backgroundColor: 'transparent', padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
+  outlineButtonText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
+  emptyState: { backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg, alignItems: 'center', marginTop: spacing.lg },
+  emptyStateText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  emptyStateSubtext: { fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  keyboardAvoidingView: { flex: 1, justifyContent: 'flex-end' },
+  modalContainer: { backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, maxHeight: screenHeight * 0.85, paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  modalCloseButton: { width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  modalCloseText: { fontSize: fontSize.lg, color: colors.textSecondary, fontWeight: '600' },
+  modalScrollContent: { padding: spacing.lg, paddingBottom: spacing.xl },
+  logCard: { backgroundColor: colors.backgroundSecondary, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  logHeader: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-start', marginBottom: spacing.md },
+  logCost: { fontSize: fontSize.lg, color: colors.success, fontWeight: '700' },
+  logDescription: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md, lineHeight: 20 },
   logDetails: {},
-  logDetail: {
-    fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs,
-  },
+  logDetail: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
   logLabel: { fontWeight: '600' },
-  fuelDetails: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    backgroundColor: colors.white, padding: spacing.md,
-    borderRadius: borderRadius.md, marginBottom: spacing.md,
-  },
+  fuelDetails: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: colors.white, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.md },
   fuelDetailItem: { alignItems: 'center' },
-  fuelDetailLabel: {
-    fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600',
-    textTransform: 'uppercase', marginBottom: spacing.xs,
-  },
-  fuelDetailValue: {
-    fontSize: fontSize.md, color: colors.text, fontWeight: '600',
-  },
-
-  // Form Styles
-  formGroup: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
-  },
-  textInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
-    padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 48,
-  },
-  descriptionInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
-    padding: spacing.md, fontSize: fontSize.sm, color: colors.text,
-    backgroundColor: colors.white, minHeight: 100, textAlignVertical: 'top',
-  },
-  modalButtons: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg,
-    paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border,
-  },
-  modalCancelButton: {
-    flex: 1, backgroundColor: colors.backgroundSecondary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginRight: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  modalCancelText: {
-    fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600',
-  },
-  modalSubmitButton: {
-    flex: 1, backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center', marginLeft: spacing.sm,
-    minHeight: 48, justifyContent: 'center',
-  },
-  modalSubmitButtonDisabled: {
-    backgroundColor: colors.textSecondary, opacity: 0.6,
-  },
-  modalSubmitText: {
-    fontSize: fontSize.sm, color: colors.white, fontWeight: '600',
-  },
+  fuelDetailLabel: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: spacing.xs },
+  fuelDetailValue: { fontSize: fontSize.md, color: colors.text, fontWeight: '600' },
+  formGroup: { marginBottom: spacing.lg },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  textInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fontSize.sm, color: colors.text, backgroundColor: colors.white, minHeight: 48 },
+  descriptionInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fontSize.sm, color: colors.text, backgroundColor: colors.white, minHeight: 100, textAlignVertical: 'top' },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
+  modalCancelButton: { flex: 1, backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  modalCancelText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600' },
+  modalSubmitButton: { flex: 1, backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginLeft: spacing.sm, minHeight: 48, justifyContent: 'center' },
+  modalSubmitButtonDisabled: { backgroundColor: colors.textSecondary, opacity: 0.6 },
+  modalSubmitText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
 });
-
 export default Driver;
