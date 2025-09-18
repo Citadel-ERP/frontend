@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
@@ -1264,7 +1265,6 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     </SafeAreaView>
   );
 };
-
 
 const styles = StyleSheet.create({
   dateButton: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, minHeight: 48, justifyContent: 'center' },
