@@ -1,24 +1,119 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
   StatusBar, Alert, Modal, TextInput, FlatList, Dimensions, ActivityIndicator
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
+import { RefreshControl } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_URL } from '../config/config';
+import * as DocumentPicker from 'expo-document-picker';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
+const TOKEN_KEY = 'token_2';
 interface BDTProps { onBack: () => void; }
 
+interface AssignedTo {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  profile_picture: string | null;
+  is_approved_by_hr: boolean;
+  is_approved_by_admin: boolean;
+  is_archived: boolean;
+  designation: string | null;
+}
+
 interface Lead {
-  id: string; name: string; email: string; phone: string; company: string;
-  status: 'active' | 'hold' | 'mandate' | 'closed'; phase: string; subphase: string;
-  collaborators: string[]; createdAt: string; comments: Comment[];
+  id: number;
+  name: string;
+  email: string;
+  phone_number: string | null;
+  company: string | null;
+  status: 'active' | 'hold' | 'mandate' | 'closed';
+  assigned_by: string | null;
+  assigned_to: AssignedTo;
+  created_at: string;
+  updated_at: string;
+  phase: string;
+  subphase: string;
+  meta: any;
+  // Legacy fields for compatibility
+  phone?: string;
+  createdAt?: string;
+  collaborators?: CollaboratorData[];
+  comments?: ApiComment[];
+}
+
+interface DocumentType {
+  id: number;
+  document: string;
+  document_url: string;
+  document_name: string;
+  uploaded_at: string;
+}
+
+interface CommentUser {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  profile_picture: string | null;
+  is_approved_by_hr: boolean;
+  is_approved_by_admin: boolean;
+  is_archived: boolean;
+  designation: string | null;
+}
+
+interface CommentData {
+  id: number;
+  user: CommentUser;
+  content: string;
+  documents: DocumentType[];
+  created_at: string;
+  updated_at: string;
+}
+
+interface ApiComment {
+  id: number;
+  lead: Lead;
+  comment: CommentData;
+  created_at: string;
+  updated_at: string;
+  created_at_phase: string;
+  created_at_subphase: string;
 }
 
 interface Comment {
   id: string; commentBy: string; date: string; phase: string; subphase: string;
-  content: string; hasFile?: boolean; fileName?: string;
+  content: string; hasFile?: boolean; fileName?: string; documents?: DocumentType[];
+}
+
+// New interface for collaborators
+interface CollaboratorData {
+  id: number;
+  user: CommentUser;
+  created_at: string;
+  updated_at: string;
+}
+
+// New interface for default comments
+interface DefaultComment {
+  id: number;
+  data: string;
+  at_subphase: string;
+  at_phase: string;
+}
+
+interface DefaultCommentsResponse {
+  message: string;
+  comments: DefaultComment[];
 }
 
 interface FilterOption { value: string; label: string; }
@@ -27,6 +122,67 @@ interface DropdownModalProps {
   visible: boolean; onClose: () => void; options: FilterOption[];
   onSelect: (value: string) => void; title: string; searchable?: boolean;
 }
+
+interface Pagination {
+  current_page: number;
+  total_pages: number;
+  total_items: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+  next_page: number | null;
+  previous_page: number | null;
+}
+
+interface LeadsResponse {
+  message: string;
+  leads: Lead[];
+  pagination?: Pagination;
+}
+
+interface CommentsResponse {
+  message: string;
+  comments: ApiComment[];
+  pagination: Pagination;
+}
+
+interface CollaboratorsResponse {
+  message: string;
+  collaborators: CollaboratorData[];
+}
+
+interface UpdateLeadResponse {
+  message: string;
+  lead: Lead;
+}
+
+interface PhasesResponse {
+  message: string;
+  phases: string[];
+}
+
+interface SubphasesResponse {
+  message: string;
+  subphases: string[];
+}
+
+interface AddCommentResponse {
+  message: string;
+  lead_comment: ApiComment;
+}
+
+// Utility functions for beautifying phase/subphase names
+const beautifyName = (name: string): string => {
+  return name
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const createFilterOption = (value: string): FilterOption => ({
+  value,
+  label: beautifyName(value)
+});
 
 const DropdownModal: React.FC<DropdownModalProps> = ({ 
   visible, onClose, options, onSelect, title, searchable = false 
@@ -83,55 +239,49 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
 const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  const [token, setToken] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('');
   const [filterValue, setFilterValue] = useState('');
+  const [selectedPhase, setSelectedPhase] = useState(''); // For subphase filtering
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [leads, setLeads] = useState<Lead[]>([
-    {
-      id: '1', name: 'John Doe', email: 'john.doe@example.com', phone: '+91 9876543210',
-      company: 'Tech Solutions Inc', status: 'active', phase: 'presentation', subphase: 'initial_contact',
-      collaborators: ['Alice Smith', 'Bob Johnson'], createdAt: '2024-01-15T10:30:00Z',
-      comments: [{
-        id: '1', commentBy: 'Alice Smith', date: '2024-01-15T14:30:00Z',
-        phase: 'presentation', subphase: 'initial_contact',
-        content: 'Initial contact made via phone call. Client showed interest in our CRM solution.',
-        hasFile: true, fileName: 'initial_discussion.pdf'
-      }]
-    },
-    {
-      id: '2', name: 'Sarah Wilson', email: 'sarah.wilson@corp.com', phone: '+91 8765432109',
-      company: 'Corporate Systems', status: 'hold', phase: 'closing', subphase: 'contract',
-      collaborators: ['Mike Davis'], createdAt: '2024-01-10T08:45:00Z', comments: []
-    }
-  ]);
+  // Data states
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
+  const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+
+  // Comments and collaborators states
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [collaborators, setCollaborators] = useState<CollaboratorData[]>([]);
+  const [commentsPagination, setCommentsPagination] = useState<Pagination | null>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
+  const [loadingCollaborators, setLoadingCollaborators] = useState(false);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newComment, setNewComment] = useState('');
   const [newCollaborator, setNewCollaborator] = useState('');
   const [showDefaultComments, setShowDefaultComments] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'filter' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'filter' | 'filter-phase' | 'filter-subphase' | null>(null);
+
+  // New states for default comments and file attachment
+  const [defaultComments, setDefaultComments] = useState<DefaultComment[]>([]);
+  const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
+  const [addingComment, setAddingComment] = useState(false);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
     { value: 'hold', label: 'Hold' },
     { value: 'mandate', label: 'Mandate' },
     { value: 'closed', label: 'Closed' }
-  ];
-
-  const PHASE_CHOICES: FilterOption[] = [
-    { value: 'presentation', label: 'Presentation' },
-    { value: 'negotiation', label: 'Negotiation' },
-    { value: 'closing', label: 'Closing' }
-  ];
-
-  const SUBPHASE_CHOICES: FilterOption[] = [
-    { value: 'initial_contact', label: 'Initial Contact' },
-    { value: 'contract', label: 'Contract' },
-    { value: 'follow_up', label: 'Follow Up' }
   ];
 
   const FILTER_OPTIONS: FilterOption[] = [
@@ -141,35 +291,569 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     { value: 'subphase', label: 'Filter by Subphase' }
   ];
 
-  const DEFAULT_COMMENTS = [
-    'Follow up call scheduled',
-    'Proposal sent to client',
-    'Meeting scheduled for next week',
-    'Demo completed successfully',
-    'Awaiting client response',
-    'Contract under review',
-    'Price negotiation in progress'
-  ];
+  useEffect(() => {
+    if (token) {
+      fetchLeads(1);
+      fetchPhases();
+    }
+  }, [token]);
 
-  // Filter leads
-  const filteredLeads = leads.filter(lead => {
-    const matchesSearch = !searchQuery || 
-      lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.email.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    let matchesFilter = true;
-    if (filterBy && filterValue) {
-      matchesFilter = lead[filterBy as keyof Lead] === filterValue;
+  useEffect(() => {
+      const getToken = async () => {
+        try {
+          const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
+          console.log("setting", API_TOKEN);
+          setToken(API_TOKEN);
+        } catch (error) {
+          console.error('Error getting token:', error);
+        }
+      };
+      getToken();
+    }, []);
+
+  // New function to fetch default comments
+  const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
+    try {
+      if (!token) return;
+      
+      setLoadingDefaultComments(true);
+
+      const response = await fetch(`${BACKEND_URL}/employee/getDefaultComments?at_phase=${encodeURIComponent(phase)}&at_subphase=${encodeURIComponent(subphase)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: DefaultCommentsResponse = await response.json();
+      setDefaultComments(data.comments);
+    } catch (error) {
+      console.error('Error fetching default comments:', error);
+      Alert.alert('Error', 'Failed to fetch default comments. Please try again.');
+      setDefaultComments([]);
+    } finally {
+      setLoadingDefaultComments(false);
+    }
+  };
+
+  // Function to handle document picker
+  const handleAttachDocuments = async (): Promise<void> => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        type: '*/*',
+      });
+
+      if (!result.canceled && result.assets) {
+        setSelectedDocuments(result.assets);
+        Alert.alert(
+          'Files Selected',
+          `${result.assets.length} file(s) selected: ${result.assets.map(doc => doc.name).join(', ')}`
+        );
+      }
+    } catch (error) {
+      console.error('Error picking documents:', error);
+      Alert.alert('Error', 'Failed to pick documents. Please try again.');
+    }
+  };
+
+  // Enhanced add comment function with file upload
+  const addCommentToBackend = async (comment: string, documents: DocumentPicker.DocumentPickerAsset[]): Promise<boolean> => {
+    try {
+      if (!token || !selectedLead) return false;
+
+      setAddingComment(true);
+
+      const formData = new FormData();
+      formData.append('token', token);
+      formData.append('lead_id', selectedLead.id.toString());
+      formData.append('comment', comment);
+
+      // Add documents if any
+      if (documents && documents.length > 0) {
+        documents.forEach((doc, index) => {
+          formData.append('documents', {
+            uri: doc.uri,
+            type: doc.mimeType || 'application/octet-stream',
+            name: doc.name,
+          } as any);
+        });
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/addComment`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: AddCommentResponse = await response.json();
+      
+      // Transform the response comment to match frontend interface
+      const newComment: Comment = {
+        id: data.lead_comment.comment.id.toString(),
+        commentBy: data.lead_comment.comment.user.full_name,
+        date: data.lead_comment.comment.created_at,
+        phase: data.lead_comment.created_at_phase,
+        subphase: data.lead_comment.created_at_subphase,
+        content: data.lead_comment.comment.content,
+        hasFile: data.lead_comment.comment.documents.length > 0,
+        fileName: data.lead_comment.comment.documents.length > 0 
+          ? data.lead_comment.comment.documents.map(doc => doc.document_name).join(', ')
+          : undefined,
+        documents: data.lead_comment.comment.documents
+      };
+
+      // Add comment to the beginning of the list (most recent first)
+      setComments(prevComments => [newComment, ...prevComments]);
+      
+      Alert.alert('Success', 'Comment added successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      Alert.alert('Error', 'Failed to add comment. Please try again.');
+      return false;
+    } finally {
+      setAddingComment(false);
+    }
+  };
+
+  // API functions
+  const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
+    try {
+      console.log("o", token);
+      if (!token) return;
+      if (!append) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/getLeads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          page: page
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: LeadsResponse = await response.json();
+      
+      // Transform backend data to match frontend interface
+      const transformedLeads = data.leads.map(lead => ({
+        ...lead,
+        phone: lead.phone_number || '',
+        createdAt: lead.created_at,
+        collaborators: [],
+        comments: []
+      }));
+
+      if (append) {
+        setLeads(prevLeads => [...prevLeads, ...transformedLeads]);
+      } else {
+        setLeads(transformedLeads);
+      }
+      
+      setPagination(data.pagination || null);
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+      Alert.alert('Error', 'Failed to fetch leads. Please try again.');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchComments = async (leadId: number, page: number = 1, append: boolean = false): Promise<void> => {
+    try {
+      if (!token) return;
+      
+      if (!append) {
+        setLoadingComments(true);
+      } else {
+        setLoadingMoreComments(true);
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/getComments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          lead_id: leadId,
+          page: page
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: CommentsResponse = await response.json();
+      
+      // Transform API comments to match frontend interface
+      const transformedComments: Comment[] = data.comments.map(apiComment => ({
+        id: apiComment.comment.id.toString(),
+        commentBy: apiComment.comment.user.full_name,
+        date: apiComment.comment.created_at,
+        phase: apiComment.created_at_phase,
+        subphase: apiComment.created_at_subphase,
+        content: apiComment.comment.content,
+        hasFile: apiComment.comment.documents.length > 0,
+        fileName: apiComment.comment.documents.length > 0 
+          ? apiComment.comment.documents.map(doc => doc.document_name).join(', ')
+          : undefined,
+        documents: apiComment.comment.documents
+      }));
+
+      if (append) {
+        setComments(prevComments => [...prevComments, ...transformedComments]);
+      } else {
+        setComments(transformedComments);
+      }
+      
+      setCommentsPagination(data.pagination);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      Alert.alert('Error', 'Failed to fetch comments. Please try again.');
+    } finally {
+      setLoadingComments(false);
+      setLoadingMoreComments(false);
+    }
+  };
+
+  // New function to fetch collaborators
+  const fetchCollaborators = async (leadId: number): Promise<void> => {
+    try {
+      if (!token) return;
+      
+      setLoadingCollaborators(true);
+
+      const response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          lead_id: leadId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: CollaboratorsResponse = await response.json();
+      setCollaborators(data.collaborators);
+    } catch (error) {
+      console.error('Error fetching collaborators:', error);
+      Alert.alert('Error', 'Failed to fetch collaborators. Please try again.');
+    } finally {
+      setLoadingCollaborators(false);
+    }
+  };
+
+  // New function to update lead
+  const updateLead = async (leadData: Partial<Lead>): Promise<boolean> => {
+    try {
+      if (!token || !selectedLead) return false;
+
+      setLoading(true);
+
+      const updatePayload: any = {
+        token: token,
+        lead_id: selectedLead.id
+      };
+
+      // Add only the fields that can be updated
+      if (leadData.phone_number !== undefined) updatePayload.phone_number = leadData.phone_number;
+      if (leadData.email !== undefined) updatePayload.email = leadData.email;
+      if (leadData.status !== undefined) updatePayload.status = leadData.status;
+      if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
+      if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
+
+      const response = await fetch(`${BACKEND_URL}/employee/updateLead`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatePayload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: UpdateLeadResponse = await response.json();
+      
+      // Update the selected lead with the response data
+      const updatedLead = {
+        ...data.lead,
+        phone: data.lead.phone_number || '',
+        createdAt: data.lead.created_at,
+        collaborators: collaborators,
+        comments: []
+      };
+      
+      setSelectedLead(updatedLead);
+      
+      // Update the lead in the leads list
+      setLeads(prevLeads => 
+        prevLeads.map(lead => 
+          lead.id === selectedLead.id ? updatedLead : lead
+        )
+      );
+
+      Alert.alert('Success', 'Lead updated successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error updating lead:', error);
+      Alert.alert('Error', 'Failed to update lead. Please try again.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // New function to add collaborator
+  const addCollaborator = async (email: string): Promise<boolean> => {
+    try {
+      if (!token || !selectedLead) return false;
+
+      const response = await fetch(`${BACKEND_URL}/employee/addCollaborators`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          lead_id: selectedLead.id,
+          email: email
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Refresh collaborators list
+      await fetchCollaborators(selectedLead.id);
+      Alert.alert('Success', 'Collaborator added successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error adding collaborator:', error);
+      Alert.alert('Error', 'Failed to add collaborator. Please try again.');
+      return false;
+    }
+  };
+
+  // New function to remove collaborator
+  const removeCollaborator = async (collaboratorId: number): Promise<boolean> => {
+    try {
+      if (!token || !selectedLead) return false;
+
+      const response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          lead_id: selectedLead.id,
+          collaborator_id: collaboratorId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Refresh collaborators list
+      await fetchCollaborators(selectedLead.id);
+      Alert.alert('Success', 'Collaborator removed successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error removing collaborator:', error);
+      Alert.alert('Error', 'Failed to remove collaborator. Please try again.');
+      return false;
+    }
+  };
+
+  const searchLeads = async (query: string): Promise<void> => {
+    if (!query.trim()) {
+      setIsSearchMode(false);
+      fetchLeads(1);
+      return;
     }
 
-    return matchesSearch && matchesFilter;
+    try {
+      setLoading(true);
+      setIsSearchMode(true);
+
+      const response = await fetch(`${BACKEND_URL}/employee/searchLeads?query=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: LeadsResponse = await response.json();
+      
+      // Transform backend data to match frontend interface
+      const transformedLeads = data.leads.map(lead => ({
+        ...lead,
+        phone: lead.phone_number || '',
+        createdAt: lead.created_at,
+        collaborators: [],
+        comments: []
+      }));
+
+      setLeads(transformedLeads);
+      setPagination(null); // No pagination for search results
+    } catch (error) {
+      console.error('Error searching leads:', error);
+      Alert.alert('Error', 'Failed to search leads. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPhases = async (): Promise<void> => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/employee/getAllPhases`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: PhasesResponse = await response.json();
+      setAllPhases(data.phases.map(createFilterOption));
+    } catch (error) {
+      console.error('Error fetching phases:', error);
+      // Fallback to empty array
+      setAllPhases([]);
+    }
+  };
+
+  const fetchSubphases = async (phase: string): Promise<void> => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/employee/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: SubphasesResponse = await response.json();
+      setAllSubphases(data.subphases.map(createFilterOption));
+    } catch (error) {
+      console.error('Error fetching subphases:', error);
+      setAllSubphases([]);
+    }
+  };
+
+  // Handle search with enter key
+  const handleSearchSubmit = () => {
+    searchLeads(searchQuery);
+  };
+
+  // Handle load more
+  const handleLoadMore = useCallback(() => {
+    if (pagination && pagination.has_next && !loadingMore && !isSearchMode) {
+      fetchLeads(pagination.current_page + 1, true);
+    }
+  }, [pagination, loadingMore, isSearchMode]);
+
+  // Handle load more comments
+  const handleLoadMoreComments = useCallback(() => {
+    if (commentsPagination && commentsPagination.has_next && !loadingMoreComments && selectedLead) {
+      fetchComments(selectedLead.id, commentsPagination.current_page + 1, true);
+    }
+  }, [commentsPagination, loadingMoreComments, selectedLead]);
+
+  // Check if user is near bottom of scroll
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      handleLoadMore();
+    }
+  };
+
+  // Check if user is near bottom of comments scroll
+  const handleCommentsScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      handleLoadMoreComments();
+    }
+  };
+
+  // Filter leads (client-side filtering for now)
+  const filteredLeads = leads.filter(lead => {
+    let matchesFilter = true;
+    if (filterBy && filterValue) {
+      if (filterBy === 'status') {
+        matchesFilter = lead.status === filterValue;
+      } else if (filterBy === 'phase') {
+        matchesFilter = lead.phase === filterValue;
+      } else if (filterBy === 'subphase') {
+        matchesFilter = lead.subphase === filterValue;
+      }
+    }
+    return matchesFilter;
   });
 
   const handleLeadPress = (lead: Lead) => {
     setSelectedLead({ ...lead });
     setViewMode('detail');
     setIsEditMode(false);
+    
+    // Reset comments and collaborators state
+    setComments([]);
+    setCollaborators([]);
+    setCommentsPagination(null);
+    setSelectedDocuments([]);
+    setNewComment('');
+    
+    // Fetch comments, collaborators, and default comments for this lead
+    fetchComments(lead.id, 1);
+    fetchCollaborators(lead.id);
+    fetchDefaultComments(lead.phase, lead.subphase);
   };
 
   const handleBackToList = () => {
@@ -178,64 +862,90 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setIsEditMode(false);
     setNewComment('');
     setNewCollaborator('');
+    
+    // Reset comments and collaborators state
+    setComments([]);
+    setCollaborators([]);
+    setCommentsPagination(null);
+    setSelectedDocuments([]);
+    setDefaultComments([]);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedLead) return;
     
-    setLoading(true);
-    setTimeout(() => {
-      const updatedLeads = leads.map(lead => 
-        lead.id === selectedLead.id ? selectedLead : lead
-      );
-      setLeads(updatedLeads);
+    const success = await updateLead(selectedLead);
+    if (success) {
       setIsEditMode(false);
-      setLoading(false);
-      Alert.alert('Success', 'Lead updated successfully!');
-    }, 1000);
+    }
   };
 
-  const handleAddComment = () => {
+  // Enhanced add comment function
+  const handleAddComment = async () => {
     if (!newComment.trim() || !selectedLead) {
       Alert.alert('Error', 'Please enter a comment');
       return;
     }
 
-    const comment: Comment = {
-      id: Date.now().toString(),
-      commentBy: 'Current User',
-      date: new Date().toISOString(),
-      phase: selectedLead.phase,
-      subphase: selectedLead.subphase,
-      content: newComment.trim()
-    };
-
-    setSelectedLead({
-      ...selectedLead,
-      comments: [...selectedLead.comments, comment]
-    });
-    setNewComment('');
-  };
-
-  const handleAddCollaborator = () => {
-    if (!newCollaborator.trim() || !selectedLead) return;
-    
-    if (!selectedLead.collaborators.includes(newCollaborator.trim())) {
-      setSelectedLead({
-        ...selectedLead,
-        collaborators: [...selectedLead.collaborators, newCollaborator.trim()]
-      });
+    const success = await addCommentToBackend(newComment.trim(), selectedDocuments);
+    if (success) {
+      setNewComment('');
+      setSelectedDocuments([]);
     }
-    setNewCollaborator('');
   };
 
-  const handleRemoveCollaborator = (collaborator: string) => {
-    if (!selectedLead) return;
+  const handleAddCollaborator = async () => {
+    if (!newCollaborator.trim()) {
+      Alert.alert('Error', 'Please enter an email address');
+      return;
+    }
     
-    setSelectedLead({
-      ...selectedLead,
-      collaborators: selectedLead.collaborators.filter(c => c !== collaborator)
-    });
+    const success = await addCollaborator(newCollaborator.trim());
+    if (success) {
+      setNewCollaborator('');
+    }
+  };
+
+  const handleRemoveCollaborator = (collaborator: CollaboratorData) => {
+    Alert.alert(
+      'Remove Collaborator',
+      `Are you sure you want to remove ${collaborator.user.full_name} from this lead?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove', 
+          style: 'destructive',
+          onPress: () => removeCollaborator(collaborator.id)
+        }
+      ]
+    );
+  };
+
+  // Handle default comment selection
+  const handleDefaultCommentSelect = (defaultComment: DefaultComment) => {
+    try {
+      // Parse the JSON string in the data field
+      const commentText = JSON.parse(defaultComment.data);
+      setNewComment(commentText);
+      setShowDefaultComments(false);
+    } catch (error) {
+      // If JSON parse fails, use the raw data
+      setNewComment(defaultComment.data);
+      setShowDefaultComments(false);
+    }
+  };
+
+  // Handle showing default comments
+  const handleShowDefaultComments = () => {
+    if (selectedLead) {
+      fetchDefaultComments(selectedLead.phase, selectedLead.subphase);
+      setShowDefaultComments(true);
+    }
+  };
+
+  // Handle removing selected documents
+  const handleRemoveDocument = (index: number) => {
+    setSelectedDocuments(prevDocs => prevDocs.filter((_, i) => i !== index));
   };
 
   const formatDate = (dateString: string): string => {
@@ -258,11 +968,59 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     let choices: FilterOption[] = [];
     switch (filterKey) {
       case 'status': choices = STATUS_CHOICES; break;
-      case 'phase': choices = PHASE_CHOICES; break;
-      case 'subphase': choices = SUBPHASE_CHOICES; break;
+      case 'phase': choices = allPhases; break;
+      case 'subphase': choices = allSubphases; break;
     }
     const option = choices.find(choice => choice.value === value);
-    return option ? option.label : value;
+    return option ? option.label : beautifyName(value);
+  };
+
+  const handleFilterSelection = (filterType: string) => {
+    setFilterBy(filterType);
+    if (!filterType) {
+      setFilterValue('');
+      setSelectedPhase('');
+    } else {
+      setTimeout(() => {
+        if (filterType === 'status') {
+          setActiveDropdown('status');
+        } else if (filterType === 'phase') {
+          setActiveDropdown('filter-phase');
+        } else if (filterType === 'subphase') {
+          // For subphase, we need to select phase first
+          if (allPhases.length > 0) {
+            setActiveDropdown('filter-phase');
+          }
+        }
+      }, 300);
+    }
+  };
+
+  const handlePhaseSelectionForFilter = (phase: string) => {
+    setSelectedPhase(phase);
+    if (filterBy === 'phase') {
+      setFilterValue(phase);
+    } else if (filterBy === 'subphase') {
+      // Fetch subphases for the selected phase
+      fetchSubphases(phase);
+      setTimeout(() => {
+        setActiveDropdown('filter-subphase');
+      }, 300);
+    }
+  };
+
+  // Updated phase selection handler for editing lead
+  const handlePhaseSelection = async (phase: string) => {
+    if (!selectedLead) return;
+    
+    setSelectedLead({...selectedLead, phase: phase});
+    // Fetch subphases for the selected phase and reset subphase
+    await fetchSubphases(phase);
+    
+    // Reset subphase when phase changes
+    if (allSubphases.length > 0) {
+      setSelectedLead(prev => prev ? {...prev, subphase: ''} : null);
+    }
   };
 
   const BackIcon = () => (
@@ -296,14 +1054,19 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           )}
         </View>
 
-        <ScrollView style={styles.detailScrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.detailScrollView} 
+          showsVerticalScrollIndicator={false}
+          onScroll={handleCommentsScroll}
+          scrollEventThrottle={16}
+        >
           {/* Lead Header */}
           <View style={styles.detailCard}>
             <View style={styles.leadHeader}>
               <View style={styles.leadInfo}>
                 <Text style={styles.leadName}>{selectedLead.name}</Text>
-                <Text style={styles.leadCompany}>{selectedLead.company}</Text>
-                <Text style={styles.leadDate}>Created: {formatDate(selectedLead.createdAt)}</Text>
+                <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
+                <Text style={styles.leadDate}>Created: {formatDate(selectedLead.created_at || selectedLead.createdAt)}</Text>
               </View>
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedLead.status) }]}>
                 <Text style={styles.statusBadgeText}>{selectedLead.status.toUpperCase()}</Text>
@@ -318,7 +1081,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               <Text style={styles.inputLabel}>Email</Text>
               <TextInput
                 style={[styles.input, !isEditMode && styles.inputDisabled]}
-                value={selectedLead.email}
+                value={selectedLead.email || ''}
                 onChangeText={isEditMode ? (text) => setSelectedLead({...selectedLead, email: text}) : undefined}
                 editable={isEditMode}
                 keyboardType="email-address"
@@ -328,8 +1091,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               <Text style={styles.inputLabel}>Phone</Text>
               <TextInput
                 style={[styles.input, !isEditMode && styles.inputDisabled]}
-                value={selectedLead.phone}
-                onChangeText={isEditMode ? (text) => setSelectedLead({...selectedLead, phone: text}) : undefined}
+                value={selectedLead.phone_number || selectedLead.phone || ''}
+                onChangeText={isEditMode ? (text) => setSelectedLead({...selectedLead, phone_number: text, phone: text}) : undefined}
                 editable={isEditMode}
                 keyboardType="phone-pad"
               />
@@ -408,28 +1171,50 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
           {/* Collaborators */}
           <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Collaborators</Text>
-            {selectedLead.collaborators.map((collaborator, index) => (
-              <View key={index} style={styles.collaboratorItem}>
-                <Text style={styles.collaboratorName}>{collaborator}</Text>
-                {isEditMode && (
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => handleRemoveCollaborator(collaborator)}
-                  >
-                    <Text style={styles.removeButtonText}>×</Text>
-                  </TouchableOpacity>
-                )}
+            <Text style={styles.sectionTitle}>
+              Collaborators ({collaborators.length})
+            </Text>
+            
+            {loadingCollaborators ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.loadingText}>Loading collaborators...</Text>
               </View>
-            ))}
+            ) : collaborators.length > 0 ? (
+              collaborators.map((collaborator) => (
+                <View key={collaborator.id} style={styles.collaboratorItem}>
+                  <View style={styles.collaboratorInfo}>
+                    <Text style={styles.collaboratorName}>{collaborator.user.full_name}</Text>
+                    <Text style={styles.collaboratorEmail}>{collaborator.user.email}</Text>
+                    <Text style={styles.collaboratorRole}>
+                      {collaborator.user.designation || collaborator.user.role}
+                    </Text>
+                  </View>
+                  {isEditMode && (
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveCollaborator(collaborator)}
+                    >
+                      <Text style={styles.removeButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyCollaborators}>
+                <Text style={styles.emptyCollaboratorsText}>No collaborators yet</Text>
+              </View>
+            )}
+            
             {isEditMode && (
               <View style={styles.addCollaboratorContainer}>
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
                   value={newCollaborator}
                   onChangeText={setNewCollaborator}
-                  placeholder="Add collaborator..."
+                  placeholder="Enter collaborator email..."
                   placeholderTextColor={colors.textSecondary}
+                  keyboardType="email-address"
                 />
                 <TouchableOpacity style={styles.addButton} onPress={handleAddCollaborator}>
                   <Text style={styles.addButtonText}>+</Text>
@@ -440,42 +1225,79 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
           {/* Comments Section */}
           <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Comments ({selectedLead.comments.length})</Text>
+            <Text style={styles.sectionTitle}>
+              Comments ({comments.length}
+              {commentsPagination && ` of ${commentsPagination.total_items}`})
+            </Text>
             
-            {selectedLead.comments.length > 0 ? (
-              selectedLead.comments.map((comment) => (
-                <View key={comment.id} style={styles.commentItem}>
-                  <View style={styles.commentHeaderRow}>
-                    <View style={styles.commentMetaItem}>
-                      <Text style={styles.commentLabel}>Comment By:</Text>
-                      <Text style={styles.commentValue}>{comment.commentBy}</Text>
+            {loadingComments ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Loading comments...</Text>
+              </View>
+            ) : comments.length > 0 ? (
+              <>
+                {comments.map((comment) => (
+                  <View key={comment.id} style={styles.commentItem}>
+                    <View style={styles.commentHeaderRow}>
+                      <View style={styles.commentMetaItem}>
+                        <Text style={styles.commentLabel}>Comment By:</Text>
+                        <Text style={styles.commentValue}>{comment.commentBy}</Text>
+                      </View>
+                      <View style={styles.commentMetaItem}>
+                        <Text style={styles.commentLabel}>Date:</Text>
+                        <Text style={styles.commentValue}>{formatDate(comment.date)}</Text>
+                      </View>
                     </View>
-                    <View style={styles.commentMetaItem}>
-                      <Text style={styles.commentLabel}>Date:</Text>
-                      <Text style={styles.commentValue}>{formatDate(comment.date)}</Text>
+                    <View style={styles.commentHeaderRow}>
+                      <View style={styles.commentMetaItem}>
+                        <Text style={styles.commentLabel}>Phase:</Text>
+                        <Text style={styles.commentValue}>{beautifyName(comment.phase)}</Text>
+                      </View>
+                      <View style={styles.commentMetaItem}>
+                        <Text style={styles.commentLabel}>Subphase:</Text>
+                        <Text style={styles.commentValue}>{beautifyName(comment.subphase)}</Text>
+                      </View>
                     </View>
+                    <View style={styles.commentContentRow}>
+                      <Text style={styles.commentLabel}>Content:</Text>
+                      <Text style={styles.commentContentText}>{comment.content}</Text>
+                    </View>
+                    {comment.documents && comment.documents.length > 0 && (
+                      <View style={styles.documentsContainer}>
+                        <Text style={styles.documentsLabel}>Attachments:</Text>
+                        {comment.documents.map((doc, index) => (
+                          <TouchableOpacity key={doc.id} style={styles.fileButton}>
+                            <Text style={styles.fileButtonText}>📎 {doc.document_name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                    {comment.hasFile && !comment.documents && (
+                      <TouchableOpacity style={styles.fileButton}>
+                        <Text style={styles.fileButtonText}>📎 {comment.fileName}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  <View style={styles.commentHeaderRow}>
-                    <View style={styles.commentMetaItem}>
-                      <Text style={styles.commentLabel}>Phase:</Text>
-                      <Text style={styles.commentValue}>{comment.phase}</Text>
-                    </View>
-                    <View style={styles.commentMetaItem}>
-                      <Text style={styles.commentLabel}>Subphase:</Text>
-                      <Text style={styles.commentValue}>{comment.subphase}</Text>
-                    </View>
+                ))}
+
+                {/* Load more comments indicator */}
+                {loadingMoreComments && (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.loadMoreText}>Loading more comments...</Text>
                   </View>
-                  <View style={styles.commentContentRow}>
-                    <Text style={styles.commentLabel}>Content:</Text>
-                    <Text style={styles.commentContentText}>{comment.content}</Text>
+                )}
+
+                {/* End of comments indicator */}
+                {commentsPagination && !commentsPagination.has_next && comments.length > 0 && (
+                  <View style={styles.endOfListContainer}>
+                    <Text style={styles.endOfListText}>
+                      You've reached the end of the comments
+                    </Text>
                   </View>
-                  {comment.hasFile && (
-                    <TouchableOpacity style={styles.fileButton}>
-                      <Text style={styles.fileButtonText}>📎 {comment.fileName}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))
+                )}
+              </>
             ) : (
               <View style={styles.emptyComments}>
                 <Text style={styles.emptyCommentsText}>No comments yet</Text>
@@ -488,14 +1310,42 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               <View style={styles.commentActions}>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => setShowDefaultComments(true)}
+                  onPress={handleShowDefaultComments}
+                  disabled={loadingDefaultComments}
                 >
-                  <Text style={styles.actionButtonText}>Default Comments</Text>
+                  {loadingDefaultComments ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={styles.actionButtonText}>Default Comments</Text>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>📎 Attach</Text>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={handleAttachDocuments}
+                >
+                  <Text style={styles.actionButtonText}>📎 Attach ({selectedDocuments.length})</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Display selected documents */}
+              {selectedDocuments.length > 0 && (
+                <View style={styles.selectedDocumentsContainer}>
+                  <Text style={styles.selectedDocumentsTitle}>Selected Files:</Text>
+                  {selectedDocuments.map((doc, index) => (
+                    <View key={index} style={styles.selectedDocumentItem}>
+                      <Text style={styles.selectedDocumentName} numberOfLines={1}>
+                        📎 {doc.name}
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.removeDocumentButton}
+                        onPress={() => handleRemoveDocument(index)}
+                      >
+                        <Text style={styles.removeDocumentButtonText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               <TextInput
                 style={styles.commentInput}
@@ -508,8 +1358,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                 placeholderTextColor={colors.textSecondary}
               />
 
-              <TouchableOpacity style={styles.submitButton} onPress={handleAddComment}>
-                <Text style={styles.submitButtonText}>Add Comment</Text>
+              <TouchableOpacity 
+                style={[styles.submitButton, addingComment && styles.submitButtonDisabled]} 
+                onPress={handleAddComment}
+                disabled={addingComment}
+              >
+                {addingComment ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Add Comment</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -517,7 +1375,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Modals */}
+        {/* Modals for detail view */}
         <DropdownModal
           visible={activeDropdown === 'status'}
           onClose={() => setActiveDropdown(null)}
@@ -528,36 +1386,57 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         <DropdownModal
           visible={activeDropdown === 'phase'}
           onClose={() => setActiveDropdown(null)}
-          options={PHASE_CHOICES}
-          onSelect={(value) => setSelectedLead({...selectedLead, phase: value})}
+          options={allPhases}
+          onSelect={handlePhaseSelection}
           title="Select Phase"
         />
         <DropdownModal
           visible={activeDropdown === 'subphase'}
           onClose={() => setActiveDropdown(null)}
-          options={SUBPHASE_CHOICES}
+          options={allSubphases}
           onSelect={(value) => setSelectedLead({...selectedLead, subphase: value})}
           title="Select Subphase"
         />
 
+        {/* Enhanced Default Comments Modal */}
         <Modal visible={showDefaultComments} transparent animationType="fade" onRequestClose={() => setShowDefaultComments(false)}>
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowDefaultComments(false)}>
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={styles.defaultCommentsModal}>
-                <Text style={styles.modalTitle}>Default Comments</Text>
+                <Text style={styles.modalTitle}>
+                  Default Comments - {beautifyName(selectedLead.phase)} → {beautifyName(selectedLead.subphase)}
+                </Text>
                 <ScrollView style={styles.defaultCommentsList}>
-                  {DEFAULT_COMMENTS.map((comment, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.defaultCommentItem}
-                      onPress={() => {
-                        setNewComment(comment);
-                        setShowDefaultComments(false);
-                      }}
-                    >
-                      <Text style={styles.defaultCommentText}>{comment}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {loadingDefaultComments ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={styles.loadingText}>Loading default comments...</Text>
+                    </View>
+                  ) : defaultComments.length > 0 ? (
+                    defaultComments.map((comment) => (
+                      <TouchableOpacity
+                        key={comment.id}
+                        style={styles.defaultCommentItem}
+                        onPress={() => handleDefaultCommentSelect(comment)}
+                      >
+                        <Text style={styles.defaultCommentText}>
+                          {(() => {
+                            try {
+                              return JSON.parse(comment.data);
+                            } catch {
+                              return comment.data;
+                            }
+                          })()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>
+                        No default comments available for this phase/subphase
+                      </Text>
+                    </View>
+                  )}
                 </ScrollView>
               </View>
             </TouchableOpacity>
@@ -585,9 +1464,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search leads..."
+            placeholder="Search leads... (Press Enter)"
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearchSubmit}
+            returnKeyType="search"
             placeholderTextColor={colors.textSecondary}
           />
         </View>
@@ -605,47 +1486,131 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           <Text style={styles.activeFilterText}>
             {getFilterLabel(filterBy, filterValue)}
           </Text>
-          <TouchableOpacity onPress={() => { setFilterBy(''); setFilterValue(''); }}>
+          <TouchableOpacity onPress={() => { 
+            setFilterBy(''); 
+            setFilterValue(''); 
+            setSelectedPhase('');
+            if (!isSearchMode) {
+              fetchLeads(1); // Refresh leads when clearing filter
+            }
+          }}>
             <Text style={styles.clearFilterText}>Clear</Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {isSearchMode && (
+        <View style={styles.searchModeIndicator}>
+          <Text style={styles.searchModeText}>
+            Search results for: "{searchQuery}"
+          </Text>
+          <TouchableOpacity onPress={() => {
+            setSearchQuery('');
+            setIsSearchMode(false);
+            fetchLeads(1);
+          }}>
+            <Text style={styles.clearSearchText}>Clear Search</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.contentContainer}>
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.tabContent} 
+          showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                if (isSearchMode) {
+                  searchLeads(searchQuery);
+                } else {
+                  fetchLeads(1);
+                }
+              }}
+              tintColor={colors.primary}
+            />
+          }
+        >
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              Leads ({filteredLeads.length}{filteredLeads.length !== leads.length && ` of ${leads.length}`})
+              Leads ({filteredLeads.length}
+              {pagination && !isSearchMode && (
+                ` of ${pagination.total_items}`
+              )})
+              {isSearchMode && ' - Search Results'}
             </Text>
             
-            {filteredLeads.length > 0 ? (
-              filteredLeads.map((lead) => (
-                <TouchableOpacity
-                  key={lead.id}
-                  style={styles.leadCard}
-                  onPress={() => handleLeadPress(lead)}
-                >
-                  <View style={styles.leadCardHeader}>
-                    <View style={styles.leadCardInfo}>
-                      <Text style={styles.leadCardName}>{lead.name}</Text>
-                      <Text style={styles.leadCardCompany}>{lead.company}</Text>
+            {loading && leads.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Loading leads...</Text>
+              </View>
+            ) : filteredLeads.length > 0 ? (
+              <>
+                {filteredLeads.map((lead) => (
+                  <TouchableOpacity
+                    key={lead.id}
+                    style={styles.leadCard}
+                    onPress={() => handleLeadPress(lead)}
+                  >
+                    <View style={styles.leadCardHeader}>
+                      <View style={styles.leadCardInfo}>
+                        <Text style={styles.leadCardName}>{lead.name}</Text>
+                        <Text style={styles.leadCardCompany}>
+                          {lead.company || 'No company specified'}
+                        </Text>
+                      </View>
+                      <View style={[styles.leadStatusBadge, { backgroundColor: getStatusColor(lead.status) }]}>
+                        <Text style={styles.leadStatusText}>
+                          {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={[styles.leadStatusBadge, { backgroundColor: getStatusColor(lead.status) }]}>
-                      <Text style={styles.leadStatusText}>{lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}</Text>
+                    <Text style={styles.leadCardContact} numberOfLines={1}>
+                      {lead.email || 'No email'} • {lead.phone_number || lead.phone || 'No phone'}
+                    </Text>
+                    <View style={styles.leadCardMeta}>
+                      <Text style={styles.leadCardPhase}>
+                        {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
+                      </Text>
+                      <Text style={styles.leadCardDate}>
+                        {formatDate(lead.created_at || lead.createdAt)}
+                      </Text>
                     </View>
+                  </TouchableOpacity>
+                ))}
+                
+                {/* Load more indicator */}
+                {loadingMore && (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.loadMoreText}>Loading more leads...</Text>
                   </View>
-                  <Text style={styles.leadCardContact} numberOfLines={1}>
-                    {lead.email} • {lead.phone}
-                  </Text>
-                </TouchableOpacity>
-              ))
+                )}
+                
+                {/* End of list indicator */}
+                {pagination && !pagination.has_next && !isSearchMode && leads.length > 0 && (
+                  <View style={styles.endOfListContainer}>
+                    <Text style={styles.endOfListText}>
+                      You've reached the end of the list
+                    </Text>
+                  </View>
+                )}
+              </>
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>
                   {searchQuery || filterValue ? 'No leads match your criteria' : 'No leads found'}
                 </Text>
                 <Text style={styles.emptyStateSubtext}>
-                  {searchQuery || filterValue ? 'Try adjusting your search or filters' : 'Your leads will appear here'}
+                  {searchQuery || filterValue 
+                    ? 'Try adjusting your search or filters' 
+                    : 'Your leads will appear here when they are created'
+                  }
                 </Text>
               </View>
             )}
@@ -658,22 +1623,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         visible={activeDropdown === 'filter'}
         onClose={() => setActiveDropdown(null)}
         options={FILTER_OPTIONS}
-        onSelect={(value) => {
-          setFilterBy(value);
-          if (!value) setFilterValue('');
-          else {
-            // Show secondary dropdown for filter value
-            setTimeout(() => {
-              if (value === 'status') setActiveDropdown('status');
-              else if (value === 'phase') setActiveDropdown('phase');
-              else if (value === 'subphase') setActiveDropdown('subphase');
-            }, 300);
-          }
-        }}
+        onSelect={handleFilterSelection}
         title="Filter Options"
       />
 
-      {/* Secondary filter dropdowns */}
+      {/* Secondary filter dropdowns for list view */}
       <DropdownModal
         visible={activeDropdown === 'status' && !selectedLead}
         onClose={() => setActiveDropdown(null)}
@@ -681,17 +1635,19 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         onSelect={(value) => setFilterValue(value)}
         title="Select Status"
       />
+      
       <DropdownModal
-        visible={activeDropdown === 'phase' && !selectedLead}
+        visible={activeDropdown === 'filter-phase'}
         onClose={() => setActiveDropdown(null)}
-        options={PHASE_CHOICES}
-        onSelect={(value) => setFilterValue(value)}
-        title="Select Phase"
+        options={allPhases}
+        onSelect={handlePhaseSelectionForFilter}
+        title={filterBy === 'subphase' ? "Select Phase (for Subphase)" : "Select Phase"}
       />
+      
       <DropdownModal
-        visible={activeDropdown === 'subphase' && !selectedLead}
+        visible={activeDropdown === 'filter-subphase'}
         onClose={() => setActiveDropdown(null)}
-        options={SUBPHASE_CHOICES}
+        options={allSubphases}
         onSelect={(value) => setFilterValue(value)}
         title="Select Subphase"
       />
@@ -699,7 +1655,93 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   );
 };
 
+
 const styles = StyleSheet.create({
+  selectedDocumentsContainer: {
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  selectedDocumentsTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  selectedDocumentItem: {
+    flexDirection: 'row',
+    justifyItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xs,
+    marginBottom: spacing.xs,
+  },
+  selectedDocumentName: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.primary,
+  },
+  removeDocumentButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeDocumentButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: 'bold',
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.textSecondary,
+    opacity: 0.6,
+  },
+    emptyCollaborators: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyCollaboratorsText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+   documentsContainer: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  documentsLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  searchModeIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.success + '20',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchModeText: {
+    color: colors.success,
+    fontWeight: '500',
+    flex: 1,
+  },
+  clearSearchText: {
+    color: colors.error,
+    fontWeight: '500',
+  },
   container: { flex: 1, backgroundColor: colors.primary },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
@@ -846,6 +1888,13 @@ const styles = StyleSheet.create({
   commentMetaItem: { flex: 1, marginRight: spacing.sm },
   commentLabel: { 
     fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs,
+  }, endOfListContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  endOfListText: {
+    color: colors.textSecondary,
+    fontStyle: 'italic',
   },
   commentValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
   commentContentRow: { marginTop: spacing.sm },
@@ -902,5 +1951,50 @@ const styles = StyleSheet.create({
   defaultCommentsList: { maxHeight: screenHeight * 0.4, padding: spacing.sm },
   defaultCommentItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   defaultCommentText: { fontSize: fontSize.md, color: colors.text },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },loadMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+  },
+  loadMoreText: {
+    marginLeft: spacing.sm,
+    color: colors.textSecondary,
+  },
+  loadingText: {
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
+  },
+  leadCardMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  leadCardPhase: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  leadCardDate: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+   collaboratorInfo: {
+    flex: 1,
+  },
+  collaboratorEmail: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  collaboratorRole: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
 });
 export default BDT;
