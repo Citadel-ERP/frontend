@@ -34,7 +34,7 @@ interface Lead {
   email: string;
   phone_number: string | null;
   company: string | null;
-  status: 'active' | 'hold' | 'mandate' | 'closed';
+  status: 'active' | 'hold' | 'no-requirement' | 'closed' | 'mandate' | 'transaction-complete' | 'non-responsive';
   assigned_by: string | null;
   assigned_to: AssignedTo;
   created_at: string;
@@ -281,7 +281,10 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     { value: 'active', label: 'Active' },
     { value: 'hold', label: 'Hold' },
     { value: 'mandate', label: 'Mandate' },
-    { value: 'closed', label: 'Closed' }
+    { value: 'closed', label: 'Closed' },
+    { value: 'no-requirement', label: 'No Requirement' },
+    { value: 'transaction-complete', label: 'Transaction Complete' },
+    { value: 'non-responsive', label: 'Non Responsive' }
   ];
 
   const FILTER_OPTIONS: FilterOption[] = [
@@ -960,7 +963,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       case 'hold': return colors.warning;
       case 'mandate': return colors.info;
       case 'closed': return colors.error;
+      case 'no-requirement': return colors.gray;
+      case 'transaction-complete': return colors.primary;
+      case 'non-responsive': return colors.textSecondary;
       default: return colors.textSecondary;
+      
     }
   };
 
