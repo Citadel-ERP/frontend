@@ -103,6 +103,26 @@ interface CollaboratorData {
   updated_at: string;
 }
 
+// New interface for potential collaborators
+interface PotentialCollaborator {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  profile_picture: string | null;
+  is_approved_by_hr: boolean;
+  is_approved_by_admin: boolean;
+  is_archived: boolean;
+  designation: string | null;
+}
+
+interface PotentialCollaboratorsResponse {
+  message: string;
+  potential_collaborators: PotentialCollaborator[];
+}
+
 // New interface for default comments
 interface DefaultComment {
   id: number;
@@ -277,6 +297,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [selectedDocuments, setSelectedDocuments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
   const [addingComment, setAddingComment] = useState(false);
 
+  // New states for potential collaborators
+  const [potentialCollaborators, setPotentialCollaborators] = useState<PotentialCollaborator[]>([]);
+  const [showPotentialCollaborators, setShowPotentialCollaborators] = useState(false);
+  const [loadingPotentialCollaborators, setLoadingPotentialCollaborators] = useState(false);
+  const [collaboratorSearchTimeout, setCollaboratorSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
     { value: 'hold', label: 'Hold' },
@@ -313,6 +339,71 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       };
       getToken();
     }, []);
+
+  // New function to fetch potential collaborators
+  const fetchPotentialCollaborators = async (query: string): Promise<void> => {
+    if (!query.trim() || !token) {
+      setPotentialCollaborators([]);
+      setShowPotentialCollaborators(false);
+      return;
+    }
+
+    try {
+      setLoadingPotentialCollaborators(true);
+
+      const response = await fetch(`${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: PotentialCollaboratorsResponse = await response.json();
+      setPotentialCollaborators(data.potential_collaborators);
+      setShowPotentialCollaborators(data.potential_collaborators.length > 0);
+    } catch (error) {
+      console.error('Error fetching potential collaborators:', error);
+      setPotentialCollaborators([]);
+      setShowPotentialCollaborators(false);
+    } finally {
+      setLoadingPotentialCollaborators(false);
+    }
+  };
+
+  // Handle collaborator input change with debouncing
+  const handleCollaboratorInputChange = (text: string) => {
+    setNewCollaborator(text);
+    
+    // Clear existing timeout
+    if (collaboratorSearchTimeout) {
+      clearTimeout(collaboratorSearchTimeout);
+    }
+    
+    // Hide suggestions if input is empty
+    if (!text.trim()) {
+      setPotentialCollaborators([]);
+      setShowPotentialCollaborators(false);
+      return;
+    }
+    
+    // Set new timeout for search
+    const timeout = setTimeout(() => {
+      fetchPotentialCollaborators(text);
+    }, 500); // 500ms debounce
+    
+    setCollaboratorSearchTimeout(timeout);
+  };
+
+  // Handle potential collaborator selection
+  const handlePotentialCollaboratorSelect = (collaborator: PotentialCollaborator) => {
+    setNewCollaborator(collaborator.email);
+    setShowPotentialCollaborators(false);
+    setPotentialCollaborators([]);
+  };
 
   // New function to fetch default comments
   const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
@@ -853,6 +944,14 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setSelectedDocuments([]);
     setNewComment('');
     
+    // Reset potential collaborators state
+    setNewCollaborator('');
+    setPotentialCollaborators([]);
+    setShowPotentialCollaborators(false);
+    if (collaboratorSearchTimeout) {
+      clearTimeout(collaboratorSearchTimeout);
+    }
+    
     // Fetch comments, collaborators, and default comments for this lead
     fetchComments(lead.id, 1);
     fetchCollaborators(lead.id);
@@ -872,6 +971,13 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setCommentsPagination(null);
     setSelectedDocuments([]);
     setDefaultComments([]);
+    
+    // Reset potential collaborators state
+    setPotentialCollaborators([]);
+    setShowPotentialCollaborators(false);
+    if (collaboratorSearchTimeout) {
+      clearTimeout(collaboratorSearchTimeout);
+    }
   };
 
   const handleSave = async () => {
@@ -906,6 +1012,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     const success = await addCollaborator(newCollaborator.trim());
     if (success) {
       setNewCollaborator('');
+      setPotentialCollaborators([]);
+      setShowPotentialCollaborators(false);
     }
   };
 
@@ -1215,14 +1323,55 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             
             {isEditMode && (
               <View style={styles.addCollaboratorContainer}>
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  value={newCollaborator}
-                  onChangeText={setNewCollaborator}
-                  placeholder="Enter collaborator email..."
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="email-address"
-                />
+                <View style={{ flex: 1, position: 'relative' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={newCollaborator}
+                    onChangeText={handleCollaboratorInputChange}
+                    placeholder="Enter collaborator email..."
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="email-address"
+                  />
+                  
+                  {/* Potential Collaborators Dropdown */}
+                  {showPotentialCollaborators && (
+                    <View style={styles.potentialCollaboratorsDropdown}>
+                      {loadingPotentialCollaborators ? (
+                        <View style={styles.potentialCollaboratorLoadingItem}>
+                          <ActivityIndicator size="small" color={colors.primary} />
+                          <Text style={styles.potentialCollaboratorLoadingText}>Searching...</Text>
+                        </View>
+                      ) : (
+                        <ScrollView
+                          style={styles.potentialCollaboratorsList}
+                          keyboardShouldPersistTaps="handled"
+                          nestedScrollEnabled={true}
+                        >
+                          {potentialCollaborators.map((collaborator) => (
+                            <TouchableOpacity
+                              key={collaborator.employee_id}
+                              style={styles.potentialCollaboratorItem}
+                              onPress={() => handlePotentialCollaboratorSelect(collaborator)}
+                            >
+                              <View style={styles.potentialCollaboratorInfo}>
+                                <Text style={styles.potentialCollaboratorName}>
+                                  {collaborator.full_name}
+                                </Text>
+                                <Text style={styles.potentialCollaboratorEmail}>
+                                  {collaborator.email}
+                                </Text>
+                                <Text style={styles.potentialCollaboratorRole}>
+                                  {collaborator.designation || collaborator.role}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      )}
+                    </View>
+                  )}
+                </View>
+                
                 <TouchableOpacity style={styles.addButton} onPress={handleAddCollaborator}>
                   <Text style={styles.addButtonText}>+</Text>
                 </TouchableOpacity>
@@ -1452,7 +1601,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       </SafeAreaView>
     );
   }
-
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
@@ -1662,8 +1810,59 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   );
 };
 
-
 const styles = StyleSheet.create({
+  potentialCollaboratorsDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 200,
+    zIndex: 1000,
+    ...shadows.md,
+  },
+  potentialCollaboratorsList: {
+    maxHeight: 200,
+  },
+  potentialCollaboratorItem: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  potentialCollaboratorInfo: {
+    flex: 1,
+  },
+  potentialCollaboratorName: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  potentialCollaboratorEmail: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  potentialCollaboratorRole: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  potentialCollaboratorLoadingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  potentialCollaboratorLoadingText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
   selectedDocumentsContainer: {
     marginBottom: spacing.md,
     padding: spacing.sm,
@@ -1684,7 +1883,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xs,
+    borderRadius: borderRadius.sm,
     marginBottom: spacing.xs,
   },
   selectedDocumentName: {
