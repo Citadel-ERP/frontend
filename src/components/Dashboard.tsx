@@ -381,10 +381,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   interface AttendanceCardProps {
     value: string;
     label: string;
+    color: string;
   }
 
-  const AttendanceCard: React.FC<AttendanceCardProps> = ({ value, label }) => (
-    <View style={styles.card}>
+  const AttendanceCard: React.FC<AttendanceCardProps> = ({ value, label, color }) => (
+    <View style={[styles.card, { backgroundColor: color }]}>
+      <View style={styles.cardCircle} />
+      <View style={styles.cardCircleSmall} />
       <Text style={styles.cardValue}>{value}</Text>
       <Text style={styles.cardLabel}>{label}</Text>
     </View>
@@ -406,7 +409,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <Text style={styles.dateText}>{date}</Text>
         </View>
       </View>
-      <Text style={styles.eventName}>{name}</Text>
+      <Text style={styles.eventName} numberOfLines={2}>{name}</Text>
     </View>
   );
 
@@ -421,7 +424,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       <View style={styles.moduleIconContainer}>
         <Image source={{ uri: iconUrl }} style={styles.moduleIconImage} resizeMode="contain" />
       </View>
-      <Text style={styles.moduleTitle}>{title}</Text>
+      <Text style={styles.moduleTitle} numberOfLines={2}>{title}</Text>
     </TouchableOpacity>
   );
 
@@ -498,71 +501,94 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
             <View style={styles.userInfo}>
               <View style={styles.userDetails}>
+                <Text style={styles.greeting}>Hi</Text>
+                <Text style={styles.userName}>Hi {userData.full_name.split(' ')[0]},</Text>
                 <Text style={styles.userRole}>{userData.designation || userData.role || 'Employee'}</Text>
-                <Text style={styles.userName}>{userData.full_name}</Text>
               </View>
             </View>
           </View>
 
           <View style={styles.mainContent}>
-            <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+            <ScrollView 
+              style={styles.scrollContent} 
+              showsVerticalScrollIndicator={false} 
+              contentContainerStyle={styles.scrollContainer} 
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.blueBar} />
-                  <Text style={styles.sectionTitle}>Attendance</Text>
+                <Text style={styles.sectionTitle}>Attendance</Text>
+
+                <View style={styles.attendanceGrid}>
+                  <AttendanceCard value="261" label="Days Present" color="#A7F3D0" />
+                  <AttendanceCard 
+                    value={String(userData.earned_leaves + userData.sick_leaves + userData.casual_leaves)} 
+                    label="Leaves Applied" 
+                    color="#FED7AA" 
+                  />
+                  <AttendanceCard value="7" label="Holidays" color="#DDD6FE" />
+                  <AttendanceCard value="0" label="Late Arrivals" color="#FBCFE8" />
                 </View>
 
-                <View style={styles.cardGrid}>
-                  <View style={styles.cardRow}>
-                    <AttendanceCard value="261" label="Days Present" />
-                    <AttendanceCard value={String(userData.earned_leaves + userData.sick_leaves + userData.casual_leaves)} label="Leaves Applied" />
-                  </View>
-                  <View style={styles.cardRow}>
-                    <AttendanceCard value="7" label="Holidays" />
-                    <AttendanceCard value="0" label="Late" />
-                  </View>
-                </View>
-
-                <TouchableOpacity style={styles.applyButton} activeOpacity={0.8} onPress={() => {
-                  setAttendanceKey(prev => prev + 1);
-                  setShowAttendance(true);
-                }}>
-                  <Text style={styles.applyButtonText}>Mark Attendance</Text>
+                <TouchableOpacity 
+                  style={styles.markAttendanceButton} 
+                  activeOpacity={0.8} 
+                  onPress={() => {
+                    setAttendanceKey(prev => prev + 1);
+                    setShowAttendance(true);
+                  }}
+                >
+                  <Text style={styles.markAttendanceButtonText}>Mark Attendance</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.blueBar} />
-                  <Text style={styles.sectionTitle}>Upcoming Birthdays & Anniversaries</Text>
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventsScroll} contentContainerStyle={styles.eventsScrollContent}>
-                  {upcomingBirthdays.length > 0 ? (
-                    upcomingBirthdays.map((person, index) => (
-                      <EventAvatar key={index} name={person.full_name} date={formatDate(person.birth_date)} initials={getInitials(person.full_name)} />
-                    ))
-                  ) : (
-                    <Text style={styles.noBirthdaysText}>No upcoming birthdays and Anniversaries</Text>
-                  )}
-                </ScrollView>
-              </View>
-
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.blueBar} />
-                  <Text style={styles.sectionTitle}>Modules</Text>
-                </View>
+                <Text style={styles.sectionTitle}>Modules</Text>
 
                 <View style={styles.modulesGrid}>
                   {displayModules.length > 0 ? (
                     displayModules.map((module, index) => (
-                      <ModuleItem key={index} title={module.title} iconUrl={module.iconUrl} onPress={() => handleModulePress(module.title, module.module_unique_name)} />
+                      <ModuleItem 
+                        key={index} 
+                        title={module.title} 
+                        iconUrl={module.iconUrl} 
+                        onPress={() => handleModulePress(module.title, module.module_unique_name)} 
+                      />
                     ))
                   ) : (
                     <Text style={styles.noModulesText}>No modules available</Text>
                   )}
                 </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Upcoming Events</Text>
+
+                {upcomingBirthdays.length > 0 ? (
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    style={styles.eventsScroll} 
+                    contentContainerStyle={styles.eventsScrollContent}
+                  >
+                    {upcomingBirthdays.map((person, index) => (
+                      <EventAvatar 
+                        key={index} 
+                        name={person.full_name} 
+                        date={formatDate(person.birth_date)} 
+                        initials={getInitials(person.full_name)} 
+                      />
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.noEventsContainer}>
+                    <Image 
+                      source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2965/2965140.png' }} 
+                      style={styles.noEventsImage} 
+                      resizeMode="contain"
+                      />
+                    <Text style={styles.noEventsText}>No upcoming events</Text>
+                  </View>
+                )}
               </View>
             </ScrollView>
 
@@ -604,75 +630,444 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 export default Dashboard;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.primary },
-  centerContent: { justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: colors.white, fontSize: fontSize.md, marginTop: spacing.md },
-  errorText: { color: colors.white, fontSize: fontSize.md, textAlign: 'center', marginBottom: spacing.lg },
-  retryButton: { backgroundColor: colors.white, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: borderRadius.md },
-  retryButtonText: { color: colors.primary, fontSize: fontSize.md, fontWeight: '600' },
-  noBirthdaysText: { color: colors.textSecondary, fontSize: fontSize.sm, fontStyle: 'italic', textAlign: 'center', paddingVertical: spacing.lg },
-  noModulesText: { color: colors.textSecondary, fontSize: fontSize.sm, fontStyle: 'italic', textAlign: 'center', paddingVertical: spacing.lg, width: '100%' },
-  header: { backgroundColor: colors.primary, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg, marginTop: spacing.sm },
-  menuIcon: { padding: spacing.sm, borderRadius: borderRadius.sm },
-  menuLine: { width: 20, height: 2, backgroundColor: colors.white, marginVertical: 3, borderRadius: 1 },
-  logoContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logo: { width: 90, height: 80, backgroundColor: 'transparent' },
-  headerSpacer: { width: 36 },
-  userInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  userDetails: { flex: 1 },
-  userRole: { color: colors.textLight, fontSize: fontSize.sm, marginBottom: 2 },
-  userName: { color: colors.white, fontSize: fontSize.xxl, fontWeight: '600' },
-  mainContent: { flex: 1, backgroundColor: colors.backgroundSecondary },
-  scrollContent: { flex: 1 },
-  scrollContainer: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.lg },
-  section: { marginBottom: spacing.xl },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
-  blueBar: { width: 4, height: 20, backgroundColor: colors.info, borderRadius: borderRadius.sm, marginRight: spacing.sm },
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
-  cardGrid: { marginBottom: spacing.lg },
-  cardRow: { flexDirection: 'row', marginBottom: spacing.sm, gap: spacing.sm },
-  card: { flex: 1, backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.lg, alignItems: 'center', ...shadows.sm, borderWidth: 1, borderColor: colors.border },
-  cardValue: { fontSize: Math.min(screenWidth * 0.09, 36), fontWeight: 'bold', color: colors.text, marginBottom: 4 },
-  cardLabel: { fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center' },
-  applyButton: { backgroundColor: colors.primary, borderRadius: borderRadius.full, paddingVertical: spacing.md, alignItems: 'center' },
-  applyButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  eventsScroll: { marginTop: spacing.sm },
-  eventsScrollContent: { paddingRight: spacing.md },
-  eventContainer: { alignItems: 'center', marginRight: spacing.md, width: 70 },
-  avatarContainer: { position: 'relative', alignItems: 'center', marginBottom: spacing.sm },
-  avatar: { width: 60, height: 60, backgroundColor: colors.info, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
-  avatarInitials: { color: colors.white, fontSize: fontSize.md, fontWeight: 'bold' },
-  dateBadge: { position: 'absolute', bottom: -8, backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingHorizontal: 6, paddingVertical: 2, minWidth: 40, alignItems: 'center' },
-  dateText: { color: colors.white, fontSize: 10, fontWeight: '500' },
-  eventName: { fontSize: fontSize.xs, color: colors.textSecondary, textAlign: 'center', lineHeight: 16 },
-  modulesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: spacing.sm },
-  moduleItem: { width: (screenWidth - 52) / 2, backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.lg, alignItems: 'center', marginBottom: spacing.sm, ...shadows.sm, borderWidth: 1, borderColor: colors.border },
-  moduleIconContainer: { width: 50, height: 50, backgroundColor: colors.backgroundSecondary, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.sm, overflow: 'hidden' },
-  moduleIconImage: { width: 32, height: 32 },
-  moduleTitle: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500', textAlign: 'center' },
-  bottomNav: { flexDirection: 'row', backgroundColor: colors.white, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
-  navItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, gap: 4 },
-  navLabel: { fontSize: 10, fontWeight: '500', marginTop: 2 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', flexDirection: 'row' },
-  overlayTouchable: { flex: 1 },
-  menuContainer: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 300, backgroundColor: colors.white, ...shadows.lg, flexDirection: 'column' },
-  menuHeader: { backgroundColor: colors.primary, position: 'relative' },
-  menuHeaderContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.lg, flexDirection: 'row', alignItems: 'center' },
-  menuUserAvatarCircle: { width: 50, height: 50, backgroundColor: 'rgba(255, 255, 255, 0.2)', borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  menuUserDetails: { flex: 1 },
-  menuUserRole: { color: colors.textLight, fontSize: fontSize.sm, marginBottom: 2 },
-  menuUserName: { color: colors.white, fontSize: fontSize.lg, fontWeight: '600' },
-  menuItems: { flex: 1, backgroundColor: colors.white },
-  menuItemsContent: { paddingTop: spacing.lg, paddingBottom: spacing.sm },
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, marginHorizontal: spacing.sm, borderRadius: borderRadius.sm, marginBottom: spacing.xs },
-  menuItemActive: { backgroundColor: colors.backgroundSecondary, borderLeftWidth: 3, borderLeftColor: colors.primary },
-  menuItemIconContainer: { width: 30, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
-  menuItemText: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500', flex: 1 },
-  menuItemTextActive: { color: colors.primary, fontWeight: '600' },
-  logoutSection: { backgroundColor: colors.white, paddingTop: spacing.sm },
-  logoutDivider: { height: 1, backgroundColor: colors.border, marginHorizontal: spacing.lg, marginBottom: spacing.sm },
-  logoutButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: '#FEF2F2', marginHorizontal: spacing.lg, borderRadius: borderRadius.sm, borderLeftWidth: 3, borderLeftColor: colors.error },
-  logoutIconContainer: { width: 30, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
-  logoutButtonText: { fontSize: fontSize.md, color: colors.error, fontWeight: '600', flex: 1 },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.primary 
+  },
+  centerContent: { 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  loadingText: { 
+    color: colors.white, 
+    fontSize: fontSize.md, 
+    marginTop: spacing.md 
+  },
+  errorText: { 
+    color: colors.white, 
+    fontSize: fontSize.md, 
+    textAlign: 'center', 
+    marginBottom: spacing.lg 
+  },
+  retryButton: { 
+    backgroundColor: colors.white, 
+    paddingHorizontal: spacing.lg, 
+    paddingVertical: spacing.md, 
+    borderRadius: borderRadius.md 
+  },
+  retryButtonText: { 
+    color: colors.primary, 
+    fontSize: fontSize.md, 
+    fontWeight: '600' 
+  },
+  noModulesText: { 
+    color: colors.textSecondary, 
+    fontSize: fontSize.sm, 
+    fontStyle: 'italic', 
+    textAlign: 'center', 
+    paddingVertical: spacing.lg, 
+    width: '100%' 
+  },
+  
+  header: { 
+    backgroundColor: colors.primary, 
+    paddingHorizontal: spacing.lg, 
+    paddingBottom: spacing.xl 
+  },
+  headerTop: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: spacing.md, 
+    marginTop: spacing.sm 
+  },
+  menuIcon: { 
+    padding: spacing.sm, 
+    borderRadius: borderRadius.sm 
+  },
+  menuLine: { 
+    width: 20, 
+    height: 2, 
+    backgroundColor: colors.white, 
+    marginVertical: 3, 
+    borderRadius: 1 
+  },
+  logoContainer: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  logo: { 
+    width: 90, 
+    height: 80, 
+    backgroundColor: 'transparent' 
+  },
+  headerSpacer: { 
+    width: 36 
+  },
+  userInfo: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start' 
+  },
+  userDetails: { 
+    flex: 1 
+  },
+  greeting: {
+    color: colors.textLight,
+    fontSize: fontSize.sm,
+    marginBottom: 2
+  },
+  userName: { 
+    color: colors.white, 
+    fontSize: fontSize.xxl, 
+    fontWeight: '700',
+    marginBottom: 4
+  },
+  userRole: { 
+    color: colors.textLight, 
+    fontSize: fontSize.md,
+    fontWeight: '400'
+  },
+  
+  mainContent: { 
+    flex: 1, 
+    backgroundColor: colors.backgroundSecondary,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -12
+  },
+  scrollContent: { 
+    flex: 1 
+  },
+  scrollContainer: { 
+    paddingHorizontal: spacing.lg, 
+    paddingTop: spacing.xl, 
+    paddingBottom: spacing.lg 
+  },
+  
+  section: { 
+    marginBottom: spacing.xl 
+  },
+  sectionTitle: { 
+    fontSize: fontSize.lg, 
+    fontWeight: '700', 
+    color: colors.text,
+    marginBottom: spacing.md
+  },
+  
+ attendanceGrid: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md
+  },
+  card: { 
+    flex: 1,
+    minWidth: (screenWidth - spacing.lg * 2 - spacing.sm) / 2,
+    borderRadius: 16,
+    padding: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 75,
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  cardCircle: {
+    position: 'absolute',
+    top: -20,
+    right: -20,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)'
+  },
+  cardCircleSmall: {
+    position: 'absolute',
+    bottom: -10,
+    left: -10,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cardValue: { 
+    fontSize: 36, 
+    fontWeight: '800', 
+    color: colors.text, 
+    marginBottom: 4,
+    zIndex: 1
+  },
+  cardLabel: { 
+    fontSize: fontSize.sm, 
+    color: colors.textSecondary, 
+    textAlign: 'center',
+    fontWeight: '600',
+    zIndex: 1
+  },
+  markAttendanceButton: { 
+    backgroundColor: colors.primary, 
+    borderRadius: borderRadius.full, 
+    paddingVertical: spacing.md + 2, 
+    alignItems: 'center',
+    ...shadows.md,
+    marginTop: 100
+  },
+  markAttendanceButtonText: { 
+    color: colors.white, 
+    fontSize: fontSize.md, 
+    fontWeight: '700'
+  },
+  modulesGrid: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  moduleItem: { 
+    width: (screenWidth - 48) / 4,
+    padding: 10,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm
+  },
+  moduleIconContainer: { 
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+    overflow: 'hidden'
+  },
+  moduleIconImage: { 
+    width: 28, 
+    height: 28 
+  },
+  moduleTitle: { 
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  
+  eventsScroll: { 
+    marginTop: spacing.sm 
+  },
+  eventsScrollContent: { 
+    paddingRight: spacing.md,
+    gap: spacing.md
+  },
+  eventContainer: { 
+    alignItems: 'center', 
+    width: 80 
+  },
+  avatarContainer: { 
+    position: 'relative', 
+    alignItems: 'center', 
+    marginBottom: spacing.sm 
+  },
+  avatar: { 
+    width: 64, 
+    height: 64, 
+    backgroundColor: colors.info, 
+    borderRadius: 32, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: colors.white,
+    ...shadows.sm
+  },
+  avatarInitials: { 
+    color: colors.white, 
+    fontSize: fontSize.lg, 
+    fontWeight: 'bold' 
+  },
+  dateBadge: { 
+    position: 'absolute', 
+    bottom: -10, 
+    backgroundColor: colors.primary, 
+    borderRadius: borderRadius.md, 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    minWidth: 50, 
+    alignItems: 'center',
+    ...shadows.sm
+  },
+  dateText: { 
+    color: colors.white, 
+    fontSize: 11, 
+    fontWeight: '600' 
+  },
+  eventName: { 
+    fontSize: fontSize.xs, 
+    color: colors.textSecondary, 
+    textAlign: 'center', 
+    lineHeight: 16,
+    fontWeight: '500'
+  },
+  noEventsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    ...shadows.sm
+  },
+  noEventsImage: {
+    width: 80,
+    height: 80,
+    marginBottom: spacing.md,
+    opacity: 0.5
+  },
+  noEventsText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontStyle: 'italic'
+  },
+  
+  bottomNav: { 
+    flexDirection: 'row', 
+    backgroundColor: colors.white, 
+    paddingVertical: spacing.sm, 
+    paddingHorizontal: spacing.sm, 
+    borderTopWidth: 1, 
+    borderTopColor: colors.border,
+    ...shadows.lg
+  },
+  navItem: { 
+    flex: 1, 
+    alignItems: 'center', 
+    paddingVertical: spacing.sm, 
+    gap: 4 
+  },
+  navLabel: { 
+    fontSize: 10, 
+    fontWeight: '600', 
+    marginTop: 2 
+  },
+  
+  overlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+    flexDirection: 'row' 
+  },
+  overlayTouchable: { 
+    flex: 1 
+  },
+  menuContainer: { 
+    position: 'absolute', 
+    left: 0, 
+    top: 0, 
+    bottom: 0, 
+    width: 300, 
+    backgroundColor: colors.white, 
+    ...shadows.lg, 
+    flexDirection: 'column' 
+  },
+  menuHeader: { 
+    backgroundColor: colors.primary, 
+    position: 'relative' 
+  },
+  menuHeaderContent: { 
+    paddingHorizontal: spacing.lg, 
+    paddingTop: spacing.lg, 
+    paddingBottom: spacing.lg, 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  menuUserAvatarCircle: { 
+    width: 50, 
+    height: 50, 
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+    borderRadius: 25, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 15 
+  },
+  menuUserDetails: { 
+    flex: 1 
+  },
+  menuUserRole: { 
+    color: colors.textLight, 
+    fontSize: fontSize.sm, 
+    marginBottom: 2 
+  },
+  menuUserName: { 
+    color: colors.white, 
+    fontSize: fontSize.lg, 
+    fontWeight: '600' 
+  },
+  menuItems: { 
+    flex: 1, 
+    backgroundColor: colors.white 
+  },
+  menuItemsContent: { 
+    paddingTop: spacing.lg, 
+    paddingBottom: spacing.sm 
+  },
+  menuItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: spacing.lg, 
+    paddingVertical: spacing.md, 
+    marginHorizontal: spacing.sm, 
+    borderRadius: borderRadius.sm, 
+    marginBottom: spacing.xs 
+  },
+  menuItemActive: { 
+    backgroundColor: colors.backgroundSecondary, 
+    borderLeftWidth: 3, 
+    borderLeftColor: colors.primary 
+  },
+  menuItemIconContainer: { 
+    width: 30, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: spacing.md 
+  },
+  menuItemText: { 
+    fontSize: fontSize.md, 
+    color: colors.textSecondary, 
+    fontWeight: '500', 
+    flex: 1 
+  },
+  menuItemTextActive: { 
+    color: colors.primary, 
+    fontWeight: '600' 
+  },
+  logoutSection: { 
+    backgroundColor: colors.white, 
+    paddingTop: spacing.sm 
+  },
+  logoutDivider: { 
+    height: 1, 
+    backgroundColor: colors.border, 
+    marginHorizontal: spacing.lg, 
+    marginBottom: spacing.sm 
+  },
+  logoutButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: spacing.lg, 
+    paddingVertical: spacing.md, 
+    backgroundColor: '#FEF2F2', 
+    marginHorizontal: spacing.lg, 
+    borderRadius: borderRadius.sm, 
+    borderLeftWidth: 3, 
+    borderLeftColor: colors.error 
+  },
+  logoutIconContainer: { 
+    width: 30, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: spacing.md 
+  },
+  logoutButtonText: { 
+    fontSize: fontSize.md, 
+    color: colors.error, 
+    fontWeight: '600', 
+    flex: 1 
+  },
 });
