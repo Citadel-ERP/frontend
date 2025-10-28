@@ -13,6 +13,8 @@ import HR from './HR';
 import Cab from './Cab';
 import Driver from './Driver';
 import BDT from './BDT';
+import Medical from './Medical';
+import ScoutBoy from './ScoutBoy';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -79,6 +81,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showCab, setShowCab] = useState(false);
   const [showDriver, setShowDriver] = useState(false);
   const [showBDT, setShowBDT] = useState(false);
+  const [showMedical, setShowMedical] = useState(false);
+  const [showScoutBoy, setShowScoutBoy] = useState(false);
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
@@ -314,6 +318,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setShowDriver(true);
     } else if (moduleUniqueName === 'bdt' || module.toLowerCase().includes('bdt')) {
       setShowBDT(true);
+    } else if (moduleUniqueName === 'mediclaim' || module.toLowerCase().includes('mediclaim')) {
+      setShowMedical(true);
+    } else if (moduleUniqueName === 'scout_boy' || module.toLowerCase().includes('scout')) {
+      setShowScoutBoy(true);
     } else {
       Alert.alert('Coming Soon', `${module} module will be available soon!`);
     }
@@ -346,6 +354,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleBackFromBDT = () => {
     setShowBDT(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromMedical = () => {
+    setShowMedical(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromScoutBoy = () => {
+    setShowScoutBoy(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -482,6 +500,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <Driver onBack={handleBackFromDriver} />
       ) : showBDT ? (
         <BDT onBack={handleBackFromBDT} />
+      ) : showMedical ? (
+        <Medical onBack={handleBackFromMedical} />
+      ) : showScoutBoy ? (
+        <ScoutBoy onBack={handleBackFromScoutBoy} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
@@ -533,20 +555,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Modules</Text>
 
-                <View style={styles.modulesGrid}>
-                  {displayModules.length > 0 ? (
-                    displayModules.map((module, index) => (
+                {displayModules.length > 0 ? (
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.modulesScrollContent}
+                  >
+                    {displayModules.map((module, index) => (
                       <ModuleItem 
                         key={index} 
                         title={module.title} 
                         iconUrl={module.iconUrl} 
                         onPress={() => handleModulePress(module.title, module.module_unique_name)} 
                       />
-                    ))
-                  ) : (
-                    <Text style={styles.noModulesText}>No modules available</Text>
-                  )}
-                </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={styles.noModulesText}>No modules available</Text>
+                )}
               </View>
 
               <View style={styles.section}>
@@ -797,14 +823,13 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
 
-  modulesGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 7
+  modulesScrollContent: {
+    paddingRight: 16,
+    gap: 12
   },
   moduleItem: {
-    width: (screenWidth - 20 - 34) / 4,
-    padding: 10,
+    width: 110,
+    padding: 12,
     borderRadius: 18,
     backgroundColor: colors.white,
     alignItems: 'center',
@@ -819,7 +844,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
-    minHeight: 100
+    minHeight: 110
   },
   moduleIconContainer: {
     width: 48,

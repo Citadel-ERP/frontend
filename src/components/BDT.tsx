@@ -9,6 +9,7 @@ import { RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
 import * as DocumentPicker from 'expo-document-picker';
+import Incentive from './Incentive';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
@@ -42,7 +43,6 @@ interface Lead {
   phase: string;
   subphase: string;
   meta: any;
-  // Legacy fields for compatibility
   phone?: string;
   createdAt?: string;
   collaborators?: CollaboratorData[];
@@ -95,7 +95,6 @@ interface Comment {
   content: string; hasFile?: boolean; fileName?: string; documents?: DocumentType[];
 }
 
-// New interface for collaborators
 interface CollaboratorData {
   id: number;
   user: CommentUser;
@@ -103,7 +102,6 @@ interface CollaboratorData {
   updated_at: string;
 }
 
-// New interface for potential collaborators
 interface PotentialCollaborator {
   employee_id: string;
   email: string;
@@ -123,7 +121,6 @@ interface PotentialCollaboratorsResponse {
   potential_collaborators: PotentialCollaborator[];
 }
 
-// New interface for default comments
 interface DefaultComment {
   id: number;
   data: string;
@@ -191,7 +188,6 @@ interface AddCommentResponse {
   lead_comment: ApiComment;
 }
 
-// Utility functions for beautifying phase/subphase names
 const beautifyName = (name: string): string => {
   return name
     .split('_')
@@ -258,26 +254,24 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
 
 const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'detail' | 'incentive'>('list');
   const [token, setToken] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('');
   const [filterValue, setFilterValue] = useState('');
-  const [selectedPhase, setSelectedPhase] = useState(''); // For subphase filtering
+  const [selectedPhase, setSelectedPhase] = useState('');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Data states
   const [leads, setLeads] = useState<Lead[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [isSearchMode, setIsSearchMode] = useState(false);
 
-  // Comments and collaborators states
   const [comments, setComments] = useState<Comment[]>([]);
   const [collaborators, setCollaborators] = useState<CollaboratorData[]>([]);
   const [commentsPagination, setCommentsPagination] = useState<Pagination | null>(null);
@@ -291,13 +285,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [showDefaultComments, setShowDefaultComments] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'filter' | 'filter-phase' | 'filter-subphase' | null>(null);
 
-  // New states for default comments and file attachment
   const [defaultComments, setDefaultComments] = useState<DefaultComment[]>([]);
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
   const [addingComment, setAddingComment] = useState(false);
 
-  // New states for potential collaborators
   const [potentialCollaborators, setPotentialCollaborators] = useState<PotentialCollaborator[]>([]);
   const [showPotentialCollaborators, setShowPotentialCollaborators] = useState(false);
   const [loadingPotentialCollaborators, setLoadingPotentialCollaborators] = useState(false);
@@ -331,7 +323,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       const getToken = async () => {
         try {
           const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
-          console.log("setting", API_TOKEN);
           setToken(API_TOKEN);
         } catch (error) {
           console.error('Error getting token:', error);
@@ -340,7 +331,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       getToken();
     }, []);
 
-  // New function to fetch potential collaborators
   const fetchPotentialCollaborators = async (query: string): Promise<void> => {
     if (!query.trim() || !token) {
       setPotentialCollaborators([]);
@@ -374,38 +364,32 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Handle collaborator input change with debouncing
   const handleCollaboratorInputChange = (text: string) => {
     setNewCollaborator(text);
     
-    // Clear existing timeout
     if (collaboratorSearchTimeout) {
       clearTimeout(collaboratorSearchTimeout);
     }
     
-    // Hide suggestions if input is empty
     if (!text.trim()) {
       setPotentialCollaborators([]);
       setShowPotentialCollaborators(false);
       return;
     }
     
-    // Set new timeout for search
     const timeout = setTimeout(() => {
       fetchPotentialCollaborators(text);
-    }, 500); // 500ms debounce
+    }, 500);
     
     setCollaboratorSearchTimeout(timeout);
   };
 
-  // Handle potential collaborator selection
   const handlePotentialCollaboratorSelect = (collaborator: PotentialCollaborator) => {
     setNewCollaborator(collaborator.email);
     setShowPotentialCollaborators(false);
     setPotentialCollaborators([]);
   };
 
-  // New function to fetch default comments
   const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
     try {
       if (!token) return;
@@ -434,7 +418,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Function to handle document picker
   const handleAttachDocuments = async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -455,7 +438,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Enhanced add comment function with file upload
   const addCommentToBackend = async (comment: string, documents: DocumentPicker.DocumentPickerAsset[]): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
@@ -467,7 +449,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       formData.append('lead_id', selectedLead.id.toString());
       formData.append('comment', comment);
 
-      // Add documents if any
       if (documents && documents.length > 0) {
         documents.forEach((doc, index) => {
           formData.append('documents', {
@@ -492,7 +473,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
       const data: AddCommentResponse = await response.json();
       
-      // Transform the response comment to match frontend interface
       const newComment: Comment = {
         id: data.lead_comment.comment.id.toString(),
         commentBy: data.lead_comment.comment.user.full_name,
@@ -507,7 +487,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         documents: data.lead_comment.comment.documents
       };
 
-      // Add comment to the beginning of the list (most recent first)
       setComments(prevComments => [newComment, ...prevComments]);
       
       Alert.alert('Success', 'Comment added successfully!');
@@ -521,10 +500,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // API functions
   const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
     try {
-      console.log("o", token);
       if (!token) return;
       if (!append) {
         setLoading(true);
@@ -549,7 +526,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
       const data: LeadsResponse = await response.json();
       
-      // Transform backend data to match frontend interface
       const transformedLeads = data.leads.map(lead => ({
         ...lead,
         phone: lead.phone_number || '',
@@ -603,7 +579,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
       const data: CommentsResponse = await response.json();
       
-      // Transform API comments to match frontend interface
       const transformedComments: Comment[] = data.comments.map(apiComment => ({
         id: apiComment.comment.id.toString(),
         commentBy: apiComment.comment.user.full_name,
@@ -634,7 +609,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // New function to fetch collaborators
   const fetchCollaborators = async (leadId: number): Promise<void> => {
     try {
       if (!token) return;
@@ -666,7 +640,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // New function to update lead
   const updateLead = async (leadData: Partial<Lead>): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
@@ -678,7 +651,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         lead_id: selectedLead.id
       };
 
-      // Add only the fields that can be updated
       if (leadData.phone_number !== undefined) updatePayload.phone_number = leadData.phone_number;
       if (leadData.email !== undefined) updatePayload.email = leadData.email;
       if (leadData.status !== undefined) updatePayload.status = leadData.status;
@@ -699,7 +671,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
       const data: UpdateLeadResponse = await response.json();
       
-      // Update the selected lead with the response data
       const updatedLead = {
         ...data.lead,
         phone: data.lead.phone_number || '',
@@ -710,7 +681,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       
       setSelectedLead(updatedLead);
       
-      // Update the lead in the leads list
       setLeads(prevLeads => 
         prevLeads.map(lead => 
           lead.id === selectedLead.id ? updatedLead : lead
@@ -728,7 +698,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // New function to add collaborator
   const addCollaborator = async (email: string): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
@@ -749,7 +718,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Refresh collaborators list
       await fetchCollaborators(selectedLead.id);
       Alert.alert('Success', 'Collaborator added successfully!');
       return true;
@@ -760,7 +728,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // New function to remove collaborator
   const removeCollaborator = async (collaboratorId: number): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
@@ -781,7 +748,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Refresh collaborators list
       await fetchCollaborators(selectedLead.id);
       Alert.alert('Success', 'Collaborator removed successfully!');
       return true;
@@ -816,7 +782,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
       const data: LeadsResponse = await response.json();
       
-      // Transform backend data to match frontend interface
       const transformedLeads = data.leads.map(lead => ({
         ...lead,
         phone: lead.phone_number || '',
@@ -826,7 +791,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       }));
 
       setLeads(transformedLeads);
-      setPagination(null); // No pagination for search results
+      setPagination(null);
     } catch (error) {
       console.error('Error searching leads:', error);
       Alert.alert('Error', 'Failed to search leads. Please try again.');
@@ -852,7 +817,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       setAllPhases(data.phases.map(createFilterOption));
     } catch (error) {
       console.error('Error fetching phases:', error);
-      // Fallback to empty array
       setAllPhases([]);
     }
   };
@@ -878,26 +842,22 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Handle search with enter key
   const handleSearchSubmit = () => {
     searchLeads(searchQuery);
   };
 
-  // Handle load more
   const handleLoadMore = useCallback(() => {
     if (pagination && pagination.has_next && !loadingMore && !isSearchMode) {
       fetchLeads(pagination.current_page + 1, true);
     }
   }, [pagination, loadingMore, isSearchMode]);
 
-  // Handle load more comments
   const handleLoadMoreComments = useCallback(() => {
     if (commentsPagination && commentsPagination.has_next && !loadingMoreComments && selectedLead) {
       fetchComments(selectedLead.id, commentsPagination.current_page + 1, true);
     }
   }, [commentsPagination, loadingMoreComments, selectedLead]);
 
-  // Check if user is near bottom of scroll
   const handleScroll = (event: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const paddingToBottom = 20;
@@ -907,7 +867,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Check if user is near bottom of comments scroll
   const handleCommentsScroll = (event: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const paddingToBottom = 20;
@@ -917,7 +876,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Filter leads (client-side filtering for now)
   const filteredLeads = leads.filter(lead => {
     let matchesFilter = true;
     if (filterBy && filterValue) {
@@ -937,14 +895,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setViewMode('detail');
     setIsEditMode(false);
     
-    // Reset comments and collaborators state
     setComments([]);
     setCollaborators([]);
     setCommentsPagination(null);
     setSelectedDocuments([]);
     setNewComment('');
     
-    // Reset potential collaborators state
     setNewCollaborator('');
     setPotentialCollaborators([]);
     setShowPotentialCollaborators(false);
@@ -952,10 +908,14 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       clearTimeout(collaboratorSearchTimeout);
     }
     
-    // Fetch comments, collaborators, and default comments for this lead
     fetchComments(lead.id, 1);
     fetchCollaborators(lead.id);
     fetchDefaultComments(lead.phase, lead.subphase);
+  };
+
+  const handleIncentivePress = (lead: Lead) => {
+    setSelectedLead({ ...lead });
+    setViewMode('incentive');
   };
 
   const handleBackToList = () => {
@@ -965,14 +925,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setNewComment('');
     setNewCollaborator('');
     
-    // Reset comments and collaborators state
     setComments([]);
     setCollaborators([]);
     setCommentsPagination(null);
     setSelectedDocuments([]);
     setDefaultComments([]);
     
-    // Reset potential collaborators state
     setPotentialCollaborators([]);
     setShowPotentialCollaborators(false);
     if (collaboratorSearchTimeout) {
@@ -989,7 +947,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Enhanced add comment function
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedLead) {
       Alert.alert('Error', 'Please enter a comment');
@@ -1032,21 +989,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     );
   };
 
-  // Handle default comment selection
   const handleDefaultCommentSelect = (defaultComment: DefaultComment) => {
     try {
-      // Parse the JSON string in the data field
       const commentText = JSON.parse(defaultComment.data);
       setNewComment(commentText);
       setShowDefaultComments(false);
     } catch (error) {
-      // If JSON parse fails, use the raw data
       setNewComment(defaultComment.data);
       setShowDefaultComments(false);
     }
   };
 
-  // Handle showing default comments
   const handleShowDefaultComments = () => {
     if (selectedLead) {
       fetchDefaultComments(selectedLead.phase, selectedLead.subphase);
@@ -1054,13 +1007,15 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Handle removing selected documents
   const handleRemoveDocument = (index: number) => {
     setSelectedDocuments(prevDocs => prevDocs.filter((_, i) => i !== index));
   };
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-GB', {
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return '-';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('en-IN', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   };
@@ -1075,7 +1030,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       case 'transaction-complete': return colors.primary;
       case 'non-responsive': return colors.textSecondary;
       default: return colors.textSecondary;
-      
     }
   };
 
@@ -1102,7 +1056,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         } else if (filterType === 'phase') {
           setActiveDropdown('filter-phase');
         } else if (filterType === 'subphase') {
-          // For subphase, we need to select phase first
           if (allPhases.length > 0) {
             setActiveDropdown('filter-phase');
           }
@@ -1116,7 +1069,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     if (filterBy === 'phase') {
       setFilterValue(phase);
     } else if (filterBy === 'subphase') {
-      // Fetch subphases for the selected phase
       fetchSubphases(phase);
       setTimeout(() => {
         setActiveDropdown('filter-subphase');
@@ -1124,15 +1076,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  // Updated phase selection handler for editing lead
   const handlePhaseSelection = async (phase: string) => {
     if (!selectedLead) return;
     
     setSelectedLead({...selectedLead, phase: phase});
-    // Fetch subphases for the selected phase and reset subphase
     await fetchSubphases(phase);
     
-    // Reset subphase when phase changes
     if (allSubphases.length > 0) {
       setSelectedLead(prev => prev ? {...prev, subphase: ''} : null);
     }
@@ -1143,6 +1092,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       <View style={styles.backArrow} />
     </View>
   );
+
+  if (viewMode === 'incentive' && selectedLead) {
+    return (
+      <Incentive 
+        onBack={handleBackToList}
+        leadId={selectedLead.id}
+        leadName={selectedLead.name}
+      />
+    );
+  }
 
   if (viewMode === 'detail' && selectedLead) {
     return (
@@ -1175,7 +1134,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           onScroll={handleCommentsScroll}
           scrollEventThrottle={16}
         >
-          {/* Lead Header */}
           <View style={styles.detailCard}>
             <View style={styles.leadHeader}>
               <View style={styles.leadInfo}>
@@ -1189,7 +1147,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             </View>
           </View>
 
-          {/* Contact Information */}
           <View style={styles.detailCard}>
             <Text style={styles.sectionTitle}>Contact Information</Text>
             <View style={styles.inputGroup}>
@@ -1214,7 +1171,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             </View>
           </View>
 
-          {/* Lead Management */}
           <View style={styles.detailCard}>
             <Text style={styles.sectionTitle}>Lead Management</Text>
             
@@ -1284,7 +1240,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             </View>
           </View>
 
-          {/* Collaborators */}
           <View style={styles.detailCard}>
             <Text style={styles.sectionTitle}>
               Collaborators ({collaborators.length})
@@ -1333,7 +1288,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                     keyboardType="email-address"
                   />
                   
-                  {/* Potential Collaborators Dropdown */}
                   {showPotentialCollaborators && (
                     <View style={styles.potentialCollaboratorsDropdown}>
                       {loadingPotentialCollaborators ? (
@@ -1379,7 +1333,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             )}
           </View>
 
-          {/* Comments Section */}
           <View style={styles.detailCard}>
             <Text style={styles.sectionTitle}>
               Comments ({comments.length}
@@ -1437,7 +1390,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                   </View>
                 ))}
 
-                {/* Load more comments indicator */}
                 {loadingMoreComments && (
                   <View style={styles.loadMoreContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -1445,7 +1397,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                   </View>
                 )}
 
-                {/* End of comments indicator */}
                 {commentsPagination && !commentsPagination.has_next && comments.length > 0 && (
                   <View style={styles.endOfListContainer}>
                     <Text style={styles.endOfListText}>
@@ -1461,7 +1412,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               </View>
             )}
 
-            {/* Add Comment Section */}
             <View style={styles.addCommentSection}>
               <View style={styles.commentActions}>
                 <TouchableOpacity
@@ -1483,7 +1433,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Display selected documents */}
               {selectedDocuments.length > 0 && (
                 <View style={styles.selectedDocumentsContainer}>
                   <Text style={styles.selectedDocumentsTitle}>Selected Files:</Text>
@@ -1531,7 +1480,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Modals for detail view */}
         <DropdownModal
           visible={activeDropdown === 'status'}
           onClose={() => setActiveDropdown(null)}
@@ -1554,7 +1502,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           title="Select Subphase"
         />
 
-        {/* Enhanced Default Comments Modal */}
         <Modal visible={showDefaultComments} transparent animationType="fade" onRequestClose={() => setShowDefaultComments(false)}>
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowDefaultComments(false)}>
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
@@ -1601,6 +1548,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       </SafeAreaView>
     );
   }
+  
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
@@ -1613,7 +1561,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Search and Filter */}
       <View style={styles.searchFilterContainer}>
         <View style={styles.searchContainer}>
           <Text style={styles.searchIcon}>🔍</Text>
@@ -1646,7 +1593,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             setFilterValue(''); 
             setSelectedPhase('');
             if (!isSearchMode) {
-              fetchLeads(1); // Refresh leads when clearing filter
+              fetchLeads(1);
             }
           }}>
             <Text style={styles.clearFilterText}>Clear</Text>
@@ -1707,39 +1654,45 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             ) : filteredLeads.length > 0 ? (
               <>
                 {filteredLeads.map((lead) => (
-                  <TouchableOpacity
-                    key={lead.id}
-                    style={styles.leadCard}
-                    onPress={() => handleLeadPress(lead)}
-                  >
-                    <View style={styles.leadCardHeader}>
-                      <View style={styles.leadCardInfo}>
-                        <Text style={styles.leadCardName}>{lead.name}</Text>
-                        <Text style={styles.leadCardCompany}>
-                          {lead.company || 'No company specified'}
+                  <View key={lead.id} style={styles.leadCardWrapper}>
+                    <TouchableOpacity
+                      style={styles.leadCard}
+                      onPress={() => handleLeadPress(lead)}
+                    >
+                      <View style={styles.leadCardHeader}>
+                        <View style={styles.leadCardInfo}>
+                          <Text style={styles.leadCardName}>{lead.name}</Text>
+                          <Text style={styles.leadCardCompany}>
+                            {lead.company || 'No company specified'}
+                          </Text>
+                        </View>
+                        <View style={[styles.leadStatusBadge, { backgroundColor: getStatusColor(lead.status) }]}>
+                          <Text style={styles.leadStatusText}>
+                            {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.leadCardContact} numberOfLines={1}>
+                        {lead.email || 'No email'} • {lead.phone_number || lead.phone || 'No phone'}
+                      </Text>
+                      <View style={styles.leadCardMeta}>
+                        <Text style={styles.leadCardPhase}>
+                          {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
+                        </Text>
+                        <Text style={styles.leadCardDate}>
+                          {formatDate(lead.created_at || lead.createdAt)}
                         </Text>
                       </View>
-                      <View style={[styles.leadStatusBadge, { backgroundColor: getStatusColor(lead.status) }]}>
-                        <Text style={styles.leadStatusText}>
-                          {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.leadCardContact} numberOfLines={1}>
-                      {lead.email || 'No email'} • {lead.phone_number || lead.phone || 'No phone'}
-                    </Text>
-                    <View style={styles.leadCardMeta}>
-                      <Text style={styles.leadCardPhase}>
-                        {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
-                      </Text>
-                      <Text style={styles.leadCardDate}>
-                        {formatDate(lead.created_at || lead.createdAt)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.incentiveButton}
+                      onPress={() => handleIncentivePress(lead)}
+                    >
+                      <Text style={styles.incentiveButtonText}>💰 Incentive</Text>
+                    </TouchableOpacity>
+                  </View>
                 ))}
                 
-                {/* Load more indicator */}
                 {loadingMore && (
                   <View style={styles.loadMoreContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -1747,7 +1700,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                   </View>
                 )}
                 
-                {/* End of list indicator */}
                 {pagination && !pagination.has_next && !isSearchMode && leads.length > 0 && (
                   <View style={styles.endOfListContainer}>
                     <Text style={styles.endOfListText}>
@@ -1773,7 +1725,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         </ScrollView>
       </View>
 
-      {/* Filter Modal */}
       <DropdownModal
         visible={activeDropdown === 'filter'}
         onClose={() => setActiveDropdown(null)}
@@ -1782,7 +1733,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         title="Filter Options"
       />
 
-      {/* Secondary filter dropdowns for list view */}
       <DropdownModal
         visible={activeDropdown === 'status' && !selectedLead}
         onClose={() => setActiveDropdown(null)}
@@ -1879,7 +1829,7 @@ const styles = StyleSheet.create({
   },
   selectedDocumentItem: {
     flexDirection: 'row',
-    justifyItems: 'center',
+    alignItems: 'center',
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.white,
@@ -1908,7 +1858,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textSecondary,
     opacity: 0.6,
   },
-    emptyCollaborators: {
+  emptyCollaborators: {
     paddingVertical: 20,
     alignItems: 'center',
   },
@@ -1917,7 +1867,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-   documentsContainer: {
+  documentsContainer: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
@@ -2004,9 +1954,17 @@ const styles = StyleSheet.create({
   section: { marginBottom: spacing.xl },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
 
+  leadCardWrapper: {
+    marginBottom: spacing.md,
+  },
   leadCard: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.white, 
+    padding: spacing.lg, 
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+    ...shadows.md, 
+    borderWidth: 1, 
+    borderColor: colors.border,
   },
   leadCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
   leadCardInfo: { flex: 1, marginRight: spacing.sm },
@@ -2019,6 +1977,24 @@ const styles = StyleSheet.create({
   leadStatusText: { color: colors.white, fontSize: fontSize.xs, fontWeight: '600' },
   leadCardContact: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm },
 
+  incentiveButton: {
+    backgroundColor: colors.success,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomLeftRadius: borderRadius.lg,
+    borderBottomRightRadius: borderRadius.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  incentiveButtonText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+  },
+
   emptyState: {
     backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.xl,
     alignItems: 'center', ...shadows.md, borderWidth: 1, borderColor: colors.border,
@@ -2026,7 +2002,6 @@ const styles = StyleSheet.create({
   emptyStateText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs },
   emptyStateSubtext: { fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
 
-  // Detail View Styles
   detailScrollView: { flex: 1, backgroundColor: colors.backgroundSecondary },
   detailCard: {
     backgroundColor: colors.white, marginHorizontal: spacing.lg, marginBottom: spacing.lg,
@@ -2094,7 +2069,8 @@ const styles = StyleSheet.create({
   commentMetaItem: { flex: 1, marginRight: spacing.sm },
   commentLabel: { 
     fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs,
-  }, endOfListContainer: {
+  },
+  endOfListContainer: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
   },
@@ -2108,7 +2084,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md, color: colors.text, lineHeight: 22, marginTop: spacing.xs,
     backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md,
   },
-  fileButton: { backgroundColor: colors.info + '20', paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, alignSelf: 'flex-start' },
+  fileButton: { backgroundColor: colors.info + '20', paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, alignSelf: 'flex-start', marginTop: spacing.xs },
   fileButtonText: { fontSize: fontSize.sm, color: colors.info, fontWeight: '500' },
 
   emptyComments: { alignItems: 'center', paddingVertical: spacing.xl },
@@ -2134,7 +2110,6 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
 
-  // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', paddingHorizontal: spacing.xl },
   dropdownContainer: {
     backgroundColor: colors.white, borderRadius: borderRadius.xl, maxHeight: screenHeight * 0.6, ...shadows.lg,
@@ -2160,7 +2135,8 @@ const styles = StyleSheet.create({
   loadingContainer: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
-  },loadMoreContainer: {
+  },
+  loadMoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2188,7 +2164,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textSecondary,
   },
-   collaboratorInfo: {
+  collaboratorInfo: {
     flex: 1,
   },
   collaboratorEmail: {
@@ -2203,4 +2179,5 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
+
 export default BDT;
