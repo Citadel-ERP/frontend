@@ -552,7 +552,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </View>
               </View>
 
-              <View style={styles.section}>
+              <View style={styles.sectionModules}>
                 <Text style={styles.sectionTitle}>Modules</Text>
 
                 {displayModules.length > 0 ? (
@@ -762,6 +762,10 @@ const styles = StyleSheet.create({
   },
 
   section: {
+    marginBottom: 32
+  },
+  sectionModules: {
+    marginTop: 115,
     marginBottom: 32
   },
   sectionTitle: {
