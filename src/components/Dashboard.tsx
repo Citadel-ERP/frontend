@@ -109,7 +109,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   useEffect(() => {
     if (!token) return;
-
     const fetchUserData = async () => {
       try {
         setLoading(true);
@@ -119,10 +118,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
-
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data: ApiResponse = await response.json();
-
         if (data.message === "Get modules successful") {
           const transformedUserData: UserData = {
             ...data.user,
@@ -157,9 +154,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const getDisplayModules = () => {
     return modules.map(module => ({
       title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-      iconUrl: module.module_unique_name === 'attendance'
-        ? 'https://cdn-icons-png.flaticon.com/512/8847/8847444.png'
-        : module.module_icon,
+      iconUrl: module.module_icon,
       module_unique_name: module.module_unique_name,
       is_generic: module.is_generic
     }));
@@ -180,7 +175,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       info: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color },
       settings: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.1, borderWidth: 2, borderColor: color },
     };
-
     return (
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <View style={iconStyles[type]} />
@@ -436,7 +430,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     iconUrl: string;
     onPress: () => void;
   }
-
   const ModuleItem: React.FC<ModuleItemProps> = ({ title, iconUrl, onPress }) => (
     <TouchableOpacity style={styles.moduleItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.moduleIconContainer}>
@@ -462,7 +455,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </View>
             </View>
           </View>
-
           <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuItemsContent}>
             {menuItems.map((item, index) => (
               <TouchableOpacity key={index} style={[styles.menuItem, item.isActive && styles.menuItemActive]} onPress={() => handleMenuItemPress(item.title)} activeOpacity={0.7}>
@@ -471,7 +463,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </TouchableOpacity>
             ))}
           </ScrollView>
-
           <View style={[styles.logoutSection, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.logoutDivider} />
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
@@ -507,20 +498,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <TouchableOpacity style={styles.menuIcon} onPress={openMenu}>
                 {[1, 2, 3].map(i => <View key={i} style={styles.menuLine} />)}
               </TouchableOpacity>
-
               <View style={styles.logoContainer}>
                 <Image source={require('../assets/logo_back.png')} style={styles.logo} resizeMode="contain" />
               </View>
-
               <View style={styles.headerSpacer} />
             </View>
-
             <View style={styles.userInfo}>
               <View style={styles.userDetails}>
                 <Text style={styles.greeting}>Hi</Text>
@@ -529,7 +516,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </View>
             </View>
           </View>
-
           <View style={styles.mainContent}>
             <ScrollView 
               style={styles.scrollContent} 
@@ -539,7 +525,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             >
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Attendance</Text>
-
                 <View style={styles.attendanceGrid}>
                   <AttendanceCard value="261" label="Days Present" color="#A7F3D0" />
                   <AttendanceCard 
@@ -551,10 +536,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   <AttendanceCard value="0" label="Late Arrivals" color="#FBCFE8" />
                 </View>
               </View>
-
               <View style={styles.sectionModules}>
                 <Text style={styles.sectionTitle}>Modules</Text>
-
                 {displayModules.length > 0 ? (
                   <ScrollView 
                     horizontal 
@@ -574,10 +557,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   <Text style={styles.noModulesText}>No modules available</Text>
                 )}
               </View>
-
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Upcoming Events</Text>
-
                 {upcomingBirthdays.length > 0 ? (
                   <ScrollView 
                     horizontal 
@@ -606,35 +587,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 )}
               </View>
             </ScrollView>
-
             <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('home')}>
                 <HomeIcon color={activeNavItem === 'home' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'home' ? colors.primary : colors.textSecondary }]}>Home</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('message')}>
                 <MessageIcon color={activeNavItem === 'message' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'message' ? colors.primary : colors.textSecondary }]}>Messages</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('team')}>
                 <TeamIcon color={activeNavItem === 'team' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'team' ? colors.primary : colors.textSecondary }]}>Organisation</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('ai-bot')}>
                 <BotIcon color={activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary }]}>AI Bot</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('support')}>
                 <SupportIcon color={activeNavItem === 'support' ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.navLabel, { color: activeNavItem === 'support' ? colors.primary : colors.textSecondary }]}>Support</Text>
               </TouchableOpacity>
             </View>
           </View>
-
           <HamburgerMenu />
         </View>
       )}
@@ -683,7 +658,6 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     width: '100%'
   },
-
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: 20,
@@ -744,7 +718,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400'
   },
-
   mainContent: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
@@ -760,12 +733,11 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 20
   },
-
   section: {
     marginBottom: 32
   },
   sectionModules: {
-    marginTop: 115,
+    marginTop: Platform.OS === 'android' ? -50 : 0,
     marginBottom: 32
   },
   sectionTitle: {
@@ -775,7 +747,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     letterSpacing: -0.5
   },
-
   attendanceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -785,11 +756,13 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minWidth: (screenWidth - 40 - 12) / 2,
+    maxWidth: (screenWidth - 40 - 12) / 2,
+    aspectRatio: Platform.OS === 'android' ? 1 : undefined,
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 110,
+    minHeight: Platform.OS === 'ios' ? 110 : undefined,
     position: 'relative',
     overflow: 'hidden'
   },
@@ -826,7 +799,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     zIndex: 1
   },
-
   modulesScrollContent: {
     paddingRight: 16,
     gap: 12
@@ -870,7 +842,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14
   },
-
   eventsScroll: {
     marginTop: 8
   },
@@ -966,7 +937,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic'
   },
-
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: colors.white,
@@ -994,7 +964,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2
   },
-
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

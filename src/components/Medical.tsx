@@ -9,6 +9,7 @@ import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface MedicalProps {
@@ -57,6 +58,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [mediclaimData, setMediclaimData] = useState<MediclaimData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAddFamily, setShowAddFamily] = useState(false);
@@ -73,7 +75,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
   const [showGenderDropdown, setShowGenderDropdown] = useState(false);
   const [showFamilyDatePicker, setShowFamilyDatePicker] = useState(false);
   const [familyMemberDate, setFamilyMemberDate] = useState(new Date());
-
   const [newFamilyMember, setNewFamilyMember] = useState({
     first_name: '',
     last_name: '',
@@ -107,12 +108,11 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
   const fetchMediclaimData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/core/getMediclaim`, {
+      const response = await fetch(`${BACKEND_URL}/core/getMediclaim`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-
       const data = await response.json();
       
       if (data.message === "Mediclaim fetched successfully") {
@@ -129,6 +129,68 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
       Alert.alert('Error', 'Failed to fetch mediclaim data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  
+  const downloadPDF = async () => {
+    try {
+      setDownloadingPDF(true);
+
+      const response = await fetch(`${BACKEND_URL}/core/downloadMediclaim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.status === 200) {
+        Alert.alert('Error', 'Failed to download PDF');
+        setDownloadingPDF(false);
+        return;
+      }
+
+      const blob = await response.blob();
+
+      if (blob.size === 0) {
+        Alert.alert('Error', 'PDF is empty');
+        setDownloadingPDF(false);
+        return;
+      }
+
+      // Read blob as text (base64)
+      const reader = new FileReader();
+
+      reader.onload = async () => {
+        try {
+          const base64String = (reader.result as string).split(',')[1];
+
+          // Use documentDirectory without accessing EncodingType
+          const documentPath = FileSystem.documentDirectory + `mediclaim_${Date.now()}.pdf`;
+
+          // Write file
+          await FileSystem.writeAsStringAsync(documentPath, base64String, {
+            encoding: 'base64',
+          });
+
+          // Share
+          await Sharing.shareAsync(documentPath, {
+            mimeType: 'application/pdf',
+          });
+
+          Alert.alert('Success', 'PDF downloaded');
+        } catch (err) {
+          console.error(err);
+          Alert.alert('Error', 'Failed to save PDF');
+        } finally {
+          setDownloadingPDF(false);
+        }
+      };
+
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to download PDF');
+      setDownloadingPDF(false);
     }
   };
 
@@ -157,9 +219,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
           onPress: async () => {
             const documents: { url: string; name: string }[] = [];
             
-            if (mediclaimData?.employee_signature) {
-              documents.push({ url: mediclaimData.employee_signature, name: 'Employee Signature' });
-            }
             if (mediclaimData?.sig_and_stamp) {
               documents.push({ url: mediclaimData.sig_and_stamp, name: 'HR Signature & Stamp' });
             }
@@ -172,7 +231,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
                 documents.push({ url: member.pan_card, name: `${member.first_name} - PAN` });
               }
             });
-
+            
             for (const doc of documents) {
               await downloadDocument(doc.url, doc.name);
               await new Promise(resolve => setTimeout(resolve, 500));
@@ -188,7 +247,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
       const result = await DocumentPicker.getDocumentAsync({
         type: type === 'signature' ? 'image/*' : ['image/*', 'application/pdf'],
       });
-
       if (!result.canceled) {
         const file = result.assets?.[0];
         if (file) {
@@ -281,59 +339,136 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
   const handleUpdateMediclaim = async () => {
     try {
       setLoading(true);
-
-      const formData = new FormData();
-      formData.append('token', token || '');
-      formData.append('nominee_name', nomineeName);
-      formData.append('nominee_relationship', nomineeRelationship);
-      formData.append('nominee_date_of_birth', nomineeDOB);
-      formData.append('family_members', JSON.stringify(familyMembers));
-
+      
+      console.log('=== STEP 1: Testing nominee update ===');
+      const nomineeFormData = new FormData();
+      nomineeFormData.append('token', token || '');
+      nomineeFormData.append('nominee_name', nomineeName);
+      nomineeFormData.append('nominee_relationship', nomineeRelationship);
+      nomineeFormData.append('nominee_date_of_birth', nomineeDOB);
+      nomineeFormData.append('family_members', JSON.stringify([]));
+      
+      console.log('Sending nominee update...');
+      let response = await fetch(`${BACKEND_URL}/core/updateMediclaim`, {
+        method: 'POST',
+        body: nomineeFormData,
+      });
+      
+      let data = await response.json();
+      console.log('Nominee update response:', data);
+      
+      if (data.message !== "Mediclaim updated successfully") {
+        Alert.alert('Error', 'Nominee update failed: ' + data.message);
+        setLoading(false);
+        return;
+      }
+      
+      if (familyMembers.length > 0) {
+        console.log('=== STEP 2: Updating family members ===');
+        console.log('Family members count:', familyMembers.length);
+        
+        familyMembers.forEach((member, idx) => {
+          console.log(`Member ${idx}:`, {
+            name: `${member.first_name} ${member.last_name}`,
+            hasAadhar: !!member.aadhar_card?.uri,
+            hasPan: !!member.pan_card?.uri,
+            aadharUri: member.aadhar_card?.uri,
+            panUri: member.pan_card?.uri,
+          });
+        });
+        
+        const familyFormData = new FormData();
+        familyFormData.append('token', token || '');
+        
+        const processedMembers = familyMembers.map((member) => ({
+          first_name: member.first_name,
+          last_name: member.last_name,
+          relationship: member.relationship,
+          date_of_birth: member.date_of_birth,
+          gender: member.gender,
+          dependant: member.dependant,
+          existing_illness: member.existing_illness || [],
+          ...(member.id && { id: member.id }),
+        }));
+        
+        familyFormData.append('family_members', JSON.stringify(processedMembers));
+        
+        console.log('Attaching files...');
+        familyMembers.forEach((member, index) => {
+          if (member.aadhar_card?.uri) {
+            console.log(`Appending aadhar for ${member.first_name} ${member.last_name}`);
+            const key = `aadhar_card_${member.first_name}_${member.last_name}`;
+            familyFormData.append(key, {
+              uri: member.aadhar_card.uri,
+              type: 'application/pdf',
+              name: member.aadhar_card.name || `aadhar_${index}.pdf`,
+            } as any);
+          }
+          
+          if (member.pan_card?.uri) {
+            console.log(`Appending pan for ${member.first_name} ${member.last_name}`);
+            const key = `pan_card_${member.first_name}_${member.last_name}`;
+            familyFormData.append(key, {
+              uri: member.pan_card.uri,
+              type: 'application/pdf',
+              name: member.pan_card.name || `pan_${index}.pdf`,
+            } as any);
+          }
+        });
+        
+        console.log('Sending family members update...');
+        response = await fetch(`${BACKEND_URL}/core/updateMediclaim`, {
+          method: 'POST',
+          body: familyFormData,
+        });
+        
+        data = await response.json();
+        console.log('Family update response:', data);
+        
+        if (data.message !== "Mediclaim updated successfully") {
+          Alert.alert('Error', 'Family members update failed: ' + data.message);
+          setLoading(false);
+          return;
+        }
+      }
+      
       if (signature) {
-        formData.append('employee_sign', {
+        console.log('=== STEP 3: Uploading signature ===');
+        const signatureFormData = new FormData();
+        signatureFormData.append('token', token || '');
+        signatureFormData.append('family_members', JSON.stringify([]));
+        
+        console.log('Signature URI:', signature.uri);
+        signatureFormData.append('employee_sign', {
           uri: signature.uri,
           type: signature.mimeType || 'image/jpeg',
           name: signature.name || 'signature.jpg',
         } as any);
-      }
-
-      familyMembers.forEach((member, index) => {
-        if (member.aadhar_card && member.aadhar_card.uri) {
-          formData.append(`aadhar_card_${index}`, {
-            uri: member.aadhar_card.uri,
-            type: member.aadhar_card.mimeType || 'application/pdf',
-            name: member.aadhar_card.name || `aadhar_${index}.pdf`,
-          } as any);
+        
+        console.log('Sending signature upload...');
+        response = await fetch(`${BACKEND_URL}/core/updateMediclaim`, {
+          method: 'POST',
+          body: signatureFormData,
+        });
+        
+        data = await response.json();
+        console.log('Signature upload response:', data);
+        
+        if (data.message !== "Mediclaim updated successfully") {
+          Alert.alert('Error', 'Signature upload failed: ' + data.message);
+          setLoading(false);
+          return;
         }
-        if (member.pan_card && member.pan_card.uri) {
-          formData.append(`pan_card_${index}`, {
-            uri: member.pan_card.uri,
-            type: member.pan_card.mimeType || 'application/pdf',
-            name: member.pan_card.name || `pan_${index}.pdf`,
-          } as any);
-        }
-      });
-
-      const response = await fetch(`${BACKEND_URL}/core/updateMediclaim`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      const data = await response.json();
-
-      if (data.message === "Mediclaim updated successfully") {
-        Alert.alert('Success', 'Mediclaim updated successfully');
-        setIsEditing(false);
-        fetchMediclaimData();
-      } else {
-        Alert.alert('Error', data.message);
       }
+      
+      Alert.alert('Success', 'Mediclaim updated successfully');
+      setIsEditing(false);
+      fetchMediclaimData();
+      
     } catch (error) {
       console.error('Error updating mediclaim:', error);
-      Alert.alert('Error', 'Failed to update mediclaim');
+      console.error('Error stack:', JSON.stringify(error, null, 2));
+      Alert.alert('Error', 'Failed to update mediclaim: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -497,8 +632,16 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
           <BackIcon />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Mediclaim</Text>
-        <TouchableOpacity style={styles.downloadAllButton} onPress={downloadAllDocuments}>
-          <DownloadIcon size={22} color={colors.white} />
+        <TouchableOpacity 
+          style={styles.downloadAllButton} 
+          onPress={downloadPDF}
+          disabled={downloadingPDF}
+        >
+          {downloadingPDF ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <DownloadIcon size={22} color={colors.white} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -672,21 +815,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
             </View>
           )}
 
-          {mediclaimData.employee_signature && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Employee Signature</Text>
-                <TouchableOpacity 
-                  onPress={() => downloadDocument(mediclaimData.employee_signature!, 'employee_signature.jpg')}
-                  style={styles.downloadIconButton}
-                >
-                  <DownloadIcon />
-                </TouchableOpacity>
-              </View>
-              <Image source={{ uri: mediclaimData.employee_signature }} style={styles.signatureImage} resizeMode="contain" />
-            </View>
-          )}
-
           {mediclaimData.sig_and_stamp && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
@@ -719,7 +847,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
               <Text style={styles.warningText}>Updates are currently not allowed</Text>
             </View>
           )}
-
         </View>
       </ScrollView>
 
@@ -804,7 +931,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
                   </TouchableOpacity>
                 </View>
               )}
-
               <TouchableOpacity 
                 onPress={() => setNewFamilyMember(prev => ({ ...prev, dependant: !prev.dependant }))}
                 style={styles.checkboxContainer}
@@ -816,20 +942,17 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
                 </View>
                 <Text style={styles.checkboxLabel}>Is Dependant</Text>
               </TouchableOpacity>
-
               <TouchableOpacity onPress={() => pickDocument('aadhar')} style={styles.uploadButton}>
                 <Text style={styles.uploadButtonText}>
                   {newFamilyMember.aadhar_card ? 'Aadhar Selected' : 'Upload Aadhar Card'}
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity onPress={() => pickDocument('pan')} style={styles.uploadButton}>
                 <Text style={styles.uploadButtonText}>
                   {newFamilyMember.pan_card ? 'PAN Selected' : 'Upload PAN Card'}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
-
             <View style={styles.modalButtons}>
               <TouchableOpacity 
                 onPress={() => {
@@ -1096,9 +1219,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
-  },
-  iconButtonText: {
-    fontSize: 18,
   },
   familyMemberDetails: {
     gap: 6,
