@@ -908,14 +908,14 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       clearTimeout(collaboratorSearchTimeout);
     }
     
-    fetchComments(lead.id, 1);
-    fetchCollaborators(lead.id);
+    fetchComments(lead.id, 1);fetchCollaborators(lead.id);
     fetchDefaultComments(lead.phase, lead.subphase);
   };
 
-  const handleIncentivePress = (lead: Lead) => {
-    setSelectedLead({ ...lead });
-    setViewMode('incentive');
+  const handleIncentivePress = () => {
+    if (selectedLead) {
+      setViewMode('incentive');
+    }
   };
 
   const handleBackToList = () => {
@@ -1012,6 +1012,24 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   };
 
   const formatDate = (dateString?: string): string => {
+    if (!dateString) return '-';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric'
+    });
+  };
+
+  const formatTime = (dateString?: string): string => {
+    if (!dateString) return '-';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const formatDateTime = (dateString?: string): string => {
     if (!dateString) return '-';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
@@ -1113,19 +1131,26 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             <BackIcon />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Lead Details</Text>
-          {!isEditMode ? (
-            <TouchableOpacity style={styles.editButton} onPress={() => setIsEditMode(true)}>
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save</Text>
-              )}
-            </TouchableOpacity>
-          )}
+          <View style={styles.headerActions}>
+            {!isEditMode ? (
+              <>
+                <TouchableOpacity style={styles.incentiveButton} onPress={handleIncentivePress}>
+                  <Text style={styles.incentiveButtonText}>💰</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.editButton} onPress={() => setIsEditMode(true)}>
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <ScrollView 
@@ -1135,17 +1160,23 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           scrollEventThrottle={16}
         >
           <View style={styles.detailCard}>
-            <View style={styles.leadHeader}>
-              <View style={styles.leadInfo}>
-                <Text style={styles.leadName}>{selectedLead.name}</Text>
-                <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
-                <Text style={styles.leadDate}>Created: {formatDate(selectedLead.created_at || selectedLead.createdAt)}</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedLead.status) }]}>
-                <Text style={styles.statusBadgeText}>{selectedLead.status.toUpperCase()}</Text>
-              </View>
-            </View>
+  <View style={styles.leadHeader}>
+    <View style={styles.leadInfo}>
+      <View style={styles.leadNameRow}>
+        <Text style={styles.leadName}>{selectedLead.name}</Text>
+        <TouchableOpacity style={styles.incentiveIconButton} onPress={handleIncentivePress}>
+          <Text style={styles.incentiveIconText}>💰</Text>
+        </TouchableOpacity>
+      </View>
+          <View style={styles.statusIndicatorRow}>
+            <View style={[styles.statusDot, { backgroundColor: getStatusColor(selectedLead.status) }]} />
+            <Text style={styles.statusText}>{beautifyName(selectedLead.status)}</Text>
           </View>
+          <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
+          <Text style={styles.leadDate}>Created: {formatDateTime(selectedLead.created_at || selectedLead.createdAt)}</Text>
+        </View>
+      </View>
+    </View>
 
           <View style={styles.detailCard}>
             <Text style={styles.sectionTitle}>Contact Information</Text>
@@ -1355,7 +1386,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                       </View>
                       <View style={styles.commentMetaItem}>
                         <Text style={styles.commentLabel}>Date:</Text>
-                        <Text style={styles.commentValue}>{formatDate(comment.date)}</Text>
+                        <Text style={styles.commentValue}>{formatDateTime(comment.date)}</Text>
                       </View>
                     </View>
                     <View style={styles.commentHeaderRow}>
@@ -1654,43 +1685,40 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             ) : filteredLeads.length > 0 ? (
               <>
                 {filteredLeads.map((lead) => (
-                  <View key={lead.id} style={styles.leadCardWrapper}>
-                    <TouchableOpacity
-                      style={styles.leadCard}
-                      onPress={() => handleLeadPress(lead)}
-                    >
-                      <View style={styles.leadCardHeader}>
-                        <View style={styles.leadCardInfo}>
-                          <Text style={styles.leadCardName}>{lead.name}</Text>
-                          <Text style={styles.leadCardCompany}>
-                            {lead.company || 'No company specified'}
-                          </Text>
+                  <TouchableOpacity
+                    key={lead.id}
+                    style={styles.leadCard}
+                    onPress={() => handleLeadPress(lead)}
+                  >
+                    <View style={styles.leadCardHeader}>
+                      <View style={styles.leadCardInfo}>
+                        <Text style={styles.leadCardName}>{lead.name}</Text>
+                        <View style={styles.leadCardStatusRow}>
+                          <View style={[styles.leadStatusDot, { backgroundColor: getStatusColor(lead.status) }]} />
+                          <Text style={styles.leadCardStatusText}>{beautifyName(lead.status)}</Text>
                         </View>
-                        <View style={[styles.leadStatusBadge, { backgroundColor: getStatusColor(lead.status) }]}>
-                          <Text style={styles.leadStatusText}>
-                            {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.leadCardContact} numberOfLines={1}>
-                        {lead.email || 'No email'} • {lead.phone_number || lead.phone || 'No phone'}
-                      </Text>
-                      <View style={styles.leadCardMeta}>
-                        <Text style={styles.leadCardPhase}>
-                          {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
+                        <Text style={styles.leadCardCompany}>
+                          {lead.company || 'No company specified'}
                         </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.leadCardContact} numberOfLines={1}>
+                      {lead.email || 'No email'} • {lead.phone_number || lead.phone || 'No phone'}
+                    </Text>
+                    <View style={styles.leadCardMeta}>
+                      <Text style={styles.leadCardPhase}>
+                        {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
+                      </Text>
+                      <View style={styles.leadCardDateContainer}>
                         <Text style={styles.leadCardDate}>
                           {formatDate(lead.created_at || lead.createdAt)}
                         </Text>
+                        <Text style={styles.leadCardTime}>
+                          {formatTime(lead.created_at || lead.createdAt)}
+                        </Text>
                       </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.incentiveButton}
-                      onPress={() => handleIncentivePress(lead)}
-                    >
-                      <Text style={styles.incentiveButtonText}>💰 Incentive</Text>
-                    </TouchableOpacity>
-                  </View>
+                    </View>
+                  </TouchableOpacity>
                 ))}
                 
                 {loadingMore && (
@@ -1913,6 +1941,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center',
   },
   headerSpacer: { width: 40 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  incentiveButton: {
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  incentiveButtonText: {
+    fontSize: 18,
+  },
   editButton: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     backgroundColor: colors.info, borderRadius: borderRadius.lg, ...shadows.sm,
@@ -1954,45 +2000,64 @@ const styles = StyleSheet.create({
   section: { marginBottom: spacing.xl },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
 
-  leadCardWrapper: {
-    marginBottom: spacing.md,
-  },
   leadCard: {
-    backgroundColor: colors.white, 
-    padding: spacing.lg, 
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
-    ...shadows.md, 
-    borderWidth: 1, 
-    borderColor: colors.border,
-  },
-  leadCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
-  leadCardInfo: { flex: 1, marginRight: spacing.sm },
-  leadCardName: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  leadCardCompany: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
-  leadStatusBadge: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.full,
-    minWidth: 80, alignItems: 'center',
-  },
-  leadStatusText: { color: colors.white, fontSize: fontSize.xs, fontWeight: '600' },
-  leadCardContact: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.sm },
-
-  incentiveButton: {
-    backgroundColor: colors.success,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomLeftRadius: borderRadius.lg,
-    borderBottomRightRadius: borderRadius.lg,
-    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
     borderWidth: 1,
-    borderTopWidth: 0,
     borderColor: colors.border,
-    ...shadows.sm,
   },
-  incentiveButtonText: {
+  leadCardHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start', 
+    marginBottom: spacing.sm 
+  },
+  leadCardInfo: { flex: 1, marginRight: spacing.sm },
+  leadCardName: { 
+    fontSize: fontSize.md, 
+    fontWeight: '600', 
+    color: colors.text, 
+    marginBottom: spacing.xs 
+  },
+  leadCardStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  leadStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: spacing.xs,
+  },
+  leadCardStatusText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  leadCardStatusButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  leadCardStatusButtonText: {
+    fontSize: fontSize.xs,
     color: colors.white,
-    fontSize: fontSize.sm,
     fontWeight: '600',
+  },
+  leadCardCompany: { 
+    fontSize: fontSize.sm, 
+    color: colors.textSecondary, 
+    fontWeight: '500' 
+  },
+  leadCardContact: { 
+    fontSize: fontSize.sm, 
+    color: colors.textSecondary, 
+    marginBottom: spacing.sm 
   },
 
   emptyState: {
@@ -2008,16 +2073,61 @@ const styles = StyleSheet.create({
     padding: spacing.lg, borderRadius: borderRadius.xl, ...shadows.md,
   },
 
-  leadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
-  leadInfo: { flex: 1 },
-  leadName: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  leadCompany: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500', marginBottom: spacing.sm },
-  leadDate: { fontSize: fontSize.sm, color: colors.textLight },
-  statusBadge: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg,
-    alignItems: 'center', minWidth: 90,
+  leadNameRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: spacing.sm,
+  gap: spacing.sm,
+},
+leadName: { 
+  fontSize: fontSize.xxl, 
+  fontWeight: '700', 
+  color: colors.text,
+  flex: 1,
+},
+incentiveIconButton: {
+  width: 32,
+  height: 32,
+  backgroundColor: colors.success + '20',
+  borderRadius: borderRadius.md,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderWidth: 1,
+  borderColor: colors.success + '40',
+},
+incentiveIconText: {
+  fontSize: 16,
+},
+  leadHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start', 
+    marginBottom: spacing.md 
   },
-  statusBadgeText: { color: colors.white, fontSize: fontSize.sm, fontWeight: '700', letterSpacing: 0.5 },
+  leadInfo: { flex: 1 },
+  statusIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: spacing.sm,
+  },
+  statusText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  leadCompany: { 
+    fontSize: fontSize.md, 
+    color: colors.textSecondary, 
+    fontWeight: '500', 
+    marginBottom: spacing.sm 
+  },
+  leadDate: { fontSize: fontSize.sm, color: colors.textLight },
 
   inputGroup: { marginBottom: spacing.md },
   inputLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
@@ -2084,14 +2194,35 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md, color: colors.text, lineHeight: 22, marginTop: spacing.xs,
     backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md,
   },
-  fileButton: { backgroundColor: colors.info + '20', paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, alignSelf: 'flex-start', marginTop: spacing.xs },
+  fileButton: { 
+    backgroundColor: colors.info + '20', 
+    paddingHorizontal: spacing.sm, 
+    paddingVertical: spacing.sm, 
+    borderRadius: borderRadius.sm, 
+    alignSelf: 'flex-start', 
+    marginTop: spacing.xs 
+  },
   fileButtonText: { fontSize: fontSize.sm, color: colors.info, fontWeight: '500' },
 
   emptyComments: { alignItems: 'center', paddingVertical: spacing.xl },
-  emptyCommentsText: { fontSize: fontSize.lg, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm },
-  emptyCommentsSubtext: { fontSize: fontSize.sm, color: colors.textLight, textAlign: 'center' },
+  emptyCommentsText: { 
+    fontSize: fontSize.lg, 
+    fontWeight: '600', 
+    color: colors.textSecondary, 
+    marginBottom: spacing.sm 
+  },
+  emptyCommentsSubtext: { 
+    fontSize: fontSize.sm, 
+    color: colors.textLight, 
+    textAlign: 'center' 
+  },
 
-  addCommentSection: { marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
+  addCommentSection: { 
+    marginTop: spacing.lg, 
+    paddingTop: spacing.lg, 
+    borderTopWidth: 1, 
+    borderTopColor: colors.border 
+  },
   commentActions: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   actionButton: {
     flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderWidth: 1,
@@ -2110,27 +2241,50 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+    justifyContent: 'center', 
+    paddingHorizontal: spacing.xl 
+  },
   dropdownContainer: {
-    backgroundColor: colors.white, borderRadius: borderRadius.xl, maxHeight: screenHeight * 0.6, ...shadows.lg,
+    backgroundColor: colors.white, 
+    borderRadius: borderRadius.xl, 
+    maxHeight: screenHeight * 0.6, 
+    ...shadows.lg,
   },
   dropdownTitle: {
     fontSize: fontSize.lg, fontWeight: '600', color: colors.text, textAlign: 'center',
     padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   dropdownList: { maxHeight: screenHeight * 0.4 },
-  dropdownItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dropdownItem: { 
+    paddingHorizontal: spacing.md, 
+    paddingVertical: spacing.md, 
+    borderBottomWidth: 1, 
+    borderBottomColor: colors.border 
+  },
   dropdownItemText: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
   emptyDropdown: { padding: spacing.xl, alignItems: 'center' },
   emptyDropdownText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center' },
 
-  defaultCommentsModal: { backgroundColor: colors.white, borderRadius: borderRadius.xl, maxHeight: screenHeight * 0.6, ...shadows.lg },
+  defaultCommentsModal: { 
+    backgroundColor: colors.white, 
+    borderRadius: borderRadius.xl, 
+    maxHeight: screenHeight * 0.6, 
+    ...shadows.lg 
+  },
   modalTitle: {
     fontSize: fontSize.lg, fontWeight: '600', color: colors.text, textAlign: 'center',
     padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   defaultCommentsList: { maxHeight: screenHeight * 0.4, padding: spacing.sm },
-  defaultCommentItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  defaultCommentItem: { 
+    paddingHorizontal: spacing.md, 
+    paddingVertical: spacing.md, 
+    borderBottomWidth: 1, 
+    borderBottomColor: colors.border 
+  },
   defaultCommentText: { fontSize: fontSize.md, color: colors.text },
   loadingContainer: {
     alignItems: 'center',
@@ -2159,10 +2313,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.primary,
     fontWeight: '500',
+    flex: 1,
+  },
+  leadCardDateContainer: {
+    alignItems: 'flex-end',
   },
   leadCardDate: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  leadCardTime: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   collaboratorInfo: {
     flex: 1,
