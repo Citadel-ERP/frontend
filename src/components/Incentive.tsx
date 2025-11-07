@@ -77,6 +77,38 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
   const [bdtSharePercentage, setBdtSharePercentage] = useState('7');
   const [showIntercityDropdown, setShowIntercityDropdown] = useState(false);
 
+  // Format number with commas as user types
+  const formatNumberWithCommas = (value: string): string => {
+    const number = value.replace(/[^0-9.]/g, '');
+    const parts = number.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  };
+
+  const parseFormattedNumber = (value: string): string => {
+    return value.replace(/,/g, '');
+  };
+
+  const handleGrossIncomeChange = (text: string) => {
+    const formatted = formatNumberWithCommas(text);
+    setGrossIncome(formatted);
+  };
+
+  const handleReferralAmtChange = (text: string) => {
+    const formatted = formatNumberWithCommas(text);
+    setReferralAmt(formatted);
+  };
+
+  const handleBdtExpensesChange = (text: string) => {
+    const formatted = formatNumberWithCommas(text);
+    setBdtExpenses(formatted);
+  };
+
+  const handleGoodwillChange = (text: string) => {
+    const formatted = formatNumberWithCommas(text);
+    setGoodwill(formatted);
+  };
+
   useEffect(() => {
     const getToken = async () => {
       try {
@@ -119,10 +151,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
       if (response.ok) {
         const data = await response.json();
         setIncentiveData(data.incentive);
-        setGrossIncome(data.incentive.gross_income_recieved.toString());
-        setReferralAmt(data.incentive.referral_amt.toString());
-        setBdtExpenses(data.incentive.bdt_expenses.toString());
-        setGoodwill(data.incentive.goodwill.toString());
+        setGrossIncome(formatNumberWithCommas(data.incentive.gross_income_recieved.toString()));
+        setReferralAmt(formatNumberWithCommas(data.incentive.referral_amt.toString()));
+        setBdtExpenses(formatNumberWithCommas(data.incentive.bdt_expenses.toString()));
+        setGoodwill(formatNumberWithCommas(data.incentive.goodwill.toString()));
         setIntercityDeals(data.incentive.intercity_deals ? 'Yes' : 'No');
       } else {
         const errorData = await response.json();
@@ -152,17 +184,26 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
 
       setLoading(true);
 
+      const calculated = calculateIncentive();
+      const isIntercity = intercityDeals === 'Yes';
+
       const response = await fetch(`${BACKEND_URL}/employee/createIncentive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
           lead_id: leadId,
-          gross_income_recieved: grossIncome,
-          referral_amt: referralAmt,
-          bdt_expenses: bdtExpenses,
-          goodwill: goodwill,
-          intercity_deals: intercityDeals === 'Yes'
+          gross_income_recieved: parseFormattedNumber(grossIncome),
+          referral_amt: parseFormattedNumber(referralAmt),
+          bdt_expenses: parseFormattedNumber(bdtExpenses),
+          goodwill: parseFormattedNumber(goodwill),
+          intercity_deals: isIntercity,
+          intercity_amount: calculated.intercityAmount,
+          net_company_earning: calculated.netCompanyEarning,
+          bdt_share: calculated.bdtShare,
+          tds_deducted: calculated.tds,
+          less_tax: calculated.tds,
+          final_amount_payable: calculated.netAmount
         })
       });
 
@@ -263,10 +304,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
   };
 
   const calculateIncentive = () => {
-    const gross = parseFloat(grossIncome) || 0;
-    const referral = parseFloat(referralAmt) || 0;
-    const expenses = parseFloat(bdtExpenses) || 0;
-    const goodwillAmt = parseFloat(goodwill) || 0;
+    const gross = parseFloat(parseFormattedNumber(grossIncome)) || 0;
+    const referral = parseFloat(parseFormattedNumber(referralAmt)) || 0;
+    const expenses = parseFloat(parseFormattedNumber(bdtExpenses)) || 0;
+    const goodwillAmt = parseFloat(parseFormattedNumber(goodwill)) || 0;
     
     const netCompanyEarning = gross - referral;
     const isIntercity = intercityDeals === 'Yes';
@@ -318,19 +359,21 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
       case 'pending': return colors.warning;
       case 'correction': return colors.error;
       case 'accepted': return colors.success;
-      case 'payment_raised': return colors.info;
-      case 'paid': return colors.primary;
+      case 'accepted_by_bdt': return colors.success;
+      case 'payment_confirmation': return colors.info;
+      case 'completed': return colors.primary;
       default: return colors.textSecondary;
     }
   };
 
   const getStatusText = (status: string): string => {
     switch (status) {
-      case 'pending': return 'Pending Review';
+      case 'pending': return 'Under Review';
       case 'correction': return 'Needs Correction';
       case 'accepted': return 'Accepted';
-      case 'payment_raised': return 'Payment Raised';
-      case 'paid': return 'Paid';
+      case 'accepted_by_bdt': return 'Confirmed';
+      case 'payment_confirmation': return 'Payment Processing';
+      case 'completed': return 'Completed';
       default: return status;
     }
   };
@@ -371,47 +414,54 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
             <TouchableOpacity style={styles.backButton} onPress={() => setShowCalculation(false)}>
               <BackIcon />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Review Incentive</Text>
+            <Text style={styles.headerTitle}>Review & Submit</Text>
             <View style={styles.headerSpacer} />
           </View>
 
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>📊 Incentive Calculation</Text>
+              <Text style={styles.reviewTitle}>Review Incentive Details</Text>
               <Text style={styles.leadNameLarge}>{leadName}</Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Income Details</Text>
+              <Text style={styles.cardTitle}>Transaction Summary</Text>
               
-              <View style={styles.summaryRow}>
+              <View style={styles.summaryGrid}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Gross Income</Text>
                   <Text style={styles.summaryValue}>{formatCurrency(calculated.gross)}</Text>
                 </View>
-                <View style={styles.summaryDivider} />
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Referral Fee</Text>
                   <Text style={styles.summaryValue}>{formatCurrency(calculated.referral)}</Text>
                 </View>
               </View>
 
-              <View style={styles.summaryRow}>
+              <View style={styles.summaryGrid}>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Goodwill</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(parseFloat(goodwill) || 0)}</Text>
+                  <Text style={styles.summaryLabel}>Goodwill Amount</Text>
+                  <Text style={styles.summaryValue}>{formatCurrency(parseFloat(parseFormattedNumber(goodwill)) || 0)}</Text>
                 </View>
-                <View style={styles.summaryDivider} />
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Your Share %</Text>
-                  <Text style={styles.summaryValue}>{bdtSharePercentage}%</Text>
+                  <Text style={styles.summaryLabel}>BD Expenses</Text>
+                  <Text style={styles.summaryValue}>{formatCurrency(parseFloat(parseFormattedNumber(bdtExpenses)) || 0)}</Text>
                 </View>
               </View>
 
-              <View style={styles.intercityBadge}>
-                <Text style={styles.intercityText}>
-                  {intercityDeals === 'Yes' ? '✓ Intercity Deal' : '✗ Not Intercity'}
-                </Text>
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Your Share</Text>
+                  <Text style={styles.summaryValue}>{bdtSharePercentage}%</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Deal Type</Text>
+                  <View style={intercityDeals === 'Yes' ? styles.intercityBadgeYes : styles.intercityBadgeNo}>
+                    <Text style={intercityDeals === 'Yes' ? styles.intercityTextYes : styles.intercityTextNo}>
+                      {intercityDeals === 'Yes' ? 'Intercity' : 'Local'}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
 
@@ -455,7 +505,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
               </View>
 
               <View style={[styles.calculationRow, styles.finalRow]}>
-                <Text style={styles.finalLabel}>💰 Net Amount Payable</Text>
+                <Text style={styles.finalLabel}>Net Amount Payable</Text>
                 <Text style={styles.finalValue}>{formatCurrency(calculated.netAmount)}</Text>
               </View>
             </View>
@@ -468,7 +518,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
               {loading ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
-                <Text style={styles.submitButtonText}>✓ Submit Incentive</Text>
+                <Text style={styles.submitButtonText}>Submit Incentive</Text>
               )}
             </TouchableOpacity>
 
@@ -491,7 +541,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>📝 Incentive Details</Text>
+            <Text style={styles.sectionTitle}>Incentive Details</Text>
             <Text style={styles.leadName}>Lead: {leadName}</Text>
           </View>
 
@@ -500,12 +550,12 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
             
             <View style={styles.rowContainer}>
               <View style={styles.halfInput}>
-                <Text style={styles.label}>Gross Income</Text>
+                <Text style={styles.label}>Gross Income *</Text>
                 <TextInput
                   style={styles.input}
                   value={grossIncome}
-                  onChangeText={setGrossIncome}
-                  placeholder="₹ 0.00"
+                  onChangeText={handleGrossIncomeChange}
+                  placeholder="₹ 0"
                   keyboardType="decimal-pad"
                   placeholderTextColor={colors.textSecondary}
                 />
@@ -516,8 +566,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                 <TextInput
                   style={styles.input}
                   value={referralAmt}
-                  onChangeText={setReferralAmt}
-                  placeholder="₹ 0.00"
+                  onChangeText={handleReferralAmtChange}
+                  placeholder="₹ 0"
                   keyboardType="decimal-pad"
                   placeholderTextColor={colors.textSecondary}
                 />
@@ -530,8 +580,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                 <TextInput
                   style={styles.input}
                   value={goodwill}
-                  onChangeText={setGoodwill}
-                  placeholder="₹ 0.00"
+                  onChangeText={handleGoodwillChange}
+                  placeholder="₹ 0"
                   keyboardType="decimal-pad"
                   placeholderTextColor={colors.textSecondary}
                 />
@@ -555,20 +605,22 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
               <TextInput
                 style={styles.input}
                 value={bdtExpenses}
-                onChangeText={setBdtExpenses}
-                placeholder="₹ 0.00"
+                onChangeText={handleBdtExpensesChange}
+                placeholder="₹ 0"
                 keyboardType="decimal-pad"
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Intercity Deal *</Text>
+              <Text style={styles.label}>Deal Type *</Text>
               <TouchableOpacity
                 style={styles.dropdown}
                 onPress={() => setShowIntercityDropdown(!showIntercityDropdown)}
               >
-                <Text style={styles.dropdownText}>{intercityDeals}</Text>
+                <Text style={styles.dropdownText}>
+                  {intercityDeals === 'Yes' ? 'Intercity Deal' : 'Local Deal'}
+                </Text>
                 <Text style={styles.dropdownArrow}>▼</Text>
               </TouchableOpacity>
               
@@ -582,7 +634,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                     }}
                   >
                     <Text style={[styles.dropdownItemText, intercityDeals === 'Yes' && styles.selectedText]}>
-                      Yes
+                      Intercity Deal
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -593,7 +645,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                     }}
                   >
                     <Text style={[styles.dropdownItemText, intercityDeals === 'No' && styles.selectedText]}>
-                      No
+                      Local Deal
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -605,7 +657,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue to Review →</Text>
+            <Text style={styles.continueButtonText}>Continue to Review</Text>
           </TouchableOpacity>
 
           <View style={{ height: 100 }} />
@@ -664,20 +716,55 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Incentive Breakdown</Text>
+          <Text style={styles.cardTitle}>Transaction Details</Text>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Gross Income:</Text>
+            <Text style={styles.infoValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Referral Amount:</Text>
+            <Text style={styles.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Goodwill:</Text>
+            <Text style={styles.infoValue}>{formatCurrency(incentiveData.goodwill)}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>BD Expenses:</Text>
+            <Text style={styles.infoValue}>{formatCurrency(incentiveData.bdt_expenses)}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Deal Type:</Text>
+            <View style={incentiveData.intercity_deals ? styles.intercityBadgeYes : styles.intercityBadgeNo}>
+              <Text style={incentiveData.intercity_deals ? styles.intercityTextYes : styles.intercityTextNo}>
+                {incentiveData.intercity_deals ? 'Intercity' : 'Local'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Earnings Breakdown</Text>
 
           <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Brokerage Amount (Gross):</Text>
+            <Text style={styles.calculationLabel}>Brokerage Amount (Gross)</Text>
             <Text style={styles.calculationValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
           </View>
 
           <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less Referral Fee:</Text>
-            <Text style={styles.calculationValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
+            <Text style={styles.calculationLabel}>Less: Referral Fee</Text>
+            <Text style={[styles.calculationValue, styles.negativeValue]}>
+              - {formatCurrency(incentiveData.referral_amt)}
+            </Text>
           </View>
 
           <View style={[styles.calculationRow, styles.highlightRow]}>
-            <Text style={styles.calculationLabelBold}>Net Company Earnings:</Text>
+            <Text style={styles.calculationLabelBold}>Net Company Earnings</Text>
             <Text style={styles.calculationValueBold}>
               {formatCurrency(incentiveData.net_company_earning)}
             </Text>
@@ -685,23 +772,25 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
 
           {incentiveData.intercity_deals && (
             <View style={styles.calculationRow}>
-              <Text style={styles.calculationLabel}>Intercity Share:</Text>
+              <Text style={styles.calculationLabel}>Intercity Share (50%)</Text>
               <Text style={styles.calculationValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
             </View>
           )}
 
           <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Your Share (7%):</Text>
+            <Text style={styles.calculationLabel}>Your Share (7%)</Text>
             <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
           </View>
 
           <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less 10% TDS:</Text>
-            <Text style={styles.calculationValue}>{formatCurrency(incentiveData.less_tax)}</Text>
+            <Text style={styles.calculationLabel}>Less: TDS (10%)</Text>
+            <Text style={[styles.calculationValue, styles.negativeValue]}>
+              - {formatCurrency(incentiveData.less_tax)}
+            </Text>
           </View>
 
           <View style={[styles.calculationRow, styles.finalRow]}>
-            <Text style={styles.finalLabel}>Net Amount Payable:</Text>
+            <Text style={styles.finalLabel}>Net Amount Payable</Text>
             <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
           </View>
         </View>
@@ -817,6 +906,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     ...shadows.md,
   },
+  reviewTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '700',
@@ -846,7 +941,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   statusBadge: {
-    paddingHorizontal: spacing.md,
+    marginTop: -15,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
   },
@@ -925,7 +1021,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-  summaryRow: {
+  summaryGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundSecondary,
@@ -937,11 +1033,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  summaryDivider: {
-    width: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
-  },
   summaryLabel: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
@@ -952,17 +1043,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  intercityBadge: {
-    backgroundColor: colors.info + '20',
-    paddingVertical: spacing.sm,
+  intercityBadgeYes: {
+    backgroundColor: colors.success + '20',
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.success,
   },
-  intercityText: {
+  intercityBadgeNo: {
+    backgroundColor: colors.textSecondary + '20',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.textSecondary,
+  },
+  intercityTextYes: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.info,
+    color: colors.success,
+  },
+  intercityTextNo: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   calculationRow: {
     flexDirection: 'row',
@@ -1073,6 +1178,7 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: spacing.xs,
   },
   infoLabel: {

@@ -5,10 +5,10 @@ interface AppConfig {
 // You can also use different configs for different environments
 const configs: Record<string, AppConfig> = {
   development: {
-    BACKEND_URL: 'https://89vlj2ck-8000.inc1.devtunnels.ms/',
+    BACKEND_URL: 'https://962xzp32-8000.inc1.devtunnels.ms/',
   },
   production: {
-    BACKEND_URL: 'https://89vlj2ck-8000.inc1.devtunnels.ms/',
+    BACKEND_URL: 'https://962xzp32-8000.inc1.devtunnels.ms/',
   },
 };
 

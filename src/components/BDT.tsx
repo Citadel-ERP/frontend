@@ -1134,9 +1134,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           <View style={styles.headerActions}>
             {!isEditMode ? (
               <>
-                <TouchableOpacity style={styles.incentiveButton} onPress={handleIncentivePress}>
-                  <Text style={styles.incentiveButtonText}>💰</Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={styles.editButton} onPress={() => setIsEditMode(true)}>
                   <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
@@ -1165,7 +1162,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       <View style={styles.leadNameRow}>
         <Text style={styles.leadName}>{selectedLead.name}</Text>
         <TouchableOpacity style={styles.incentiveIconButton} onPress={handleIncentivePress}>
-          <Text style={styles.incentiveIconText}>💰</Text>
+          <Text style={styles.incentiveIconText}>Incentive</Text>
         </TouchableOpacity>
       </View>
           <View style={styles.statusIndicatorRow}>
@@ -2085,19 +2082,23 @@ leadName: {
   color: colors.text,
   flex: 1,
 },
-incentiveIconButton: {
-  width: 32,
-  height: 32,
-  backgroundColor: colors.success + '20',
-  borderRadius: borderRadius.md,
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderWidth: 1,
-  borderColor: colors.success + '40',
-},
-incentiveIconText: {
-  fontSize: 16,
-},
+ incentiveIconButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.success,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    ...shadows.md,
+    minWidth: 90,
+  },
+  incentiveIconText: {
+    fontSize: fontSize.sm,
+    color: colors.white,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   leadHeader: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
