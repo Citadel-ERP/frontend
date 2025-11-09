@@ -13,6 +13,7 @@ import Incentive from './Incentive';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
+
 interface BDTProps { onBack: () => void; }
 
 interface AssignedTo {
@@ -29,11 +30,25 @@ interface AssignedTo {
   designation: string | null;
 }
 
+interface ContactEmail {
+  id: number;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ContactPhone {
+  id: number;
+  number: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface Lead {
   id: number;
   name: string;
-  email: string;
-  phone_number: string | null;
+  emails: ContactEmail[];
+  phone_numbers: ContactPhone[];
   company: string | null;
   status: 'active' | 'hold' | 'no-requirement' | 'closed' | 'mandate' | 'transaction-complete' | 'non-responsive';
   assigned_by: string | null;
@@ -43,7 +58,6 @@ interface Lead {
   phase: string;
   subphase: string;
   meta: any;
-  phone?: string;
   createdAt?: string;
   collaborators?: CollaboratorData[];
   comments?: ApiComment[];
@@ -295,6 +309,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [loadingPotentialCollaborators, setLoadingPotentialCollaborators] = useState(false);
   const [collaboratorSearchTimeout, setCollaboratorSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
+  // New state for managing emails and phone numbers in edit mode
+  const [editingEmails, setEditingEmails] = useState<string[]>([]);
+  const [editingPhones, setEditingPhones] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
     { value: 'hold', label: 'Hold' },
@@ -320,16 +340,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   }, [token]);
 
   useEffect(() => {
-      const getToken = async () => {
-        try {
-          const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
-          setToken(API_TOKEN);
-        } catch (error) {
-          console.error('Error getting token:', error);
-        }
-      };
-      getToken();
-    }, []);
+    const getToken = async () => {
+      try {
+        const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
+        setToken(API_TOKEN);
+      } catch (error) {
+        console.error('Error getting token:', error);
+      }
+    };
+    getToken();
+  }, []);
 
   const fetchPotentialCollaborators = async (query: string): Promise<void> => {
     if (!query.trim() || !token) {
@@ -528,7 +548,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       
       const transformedLeads = data.leads.map(lead => ({
         ...lead,
-        phone: lead.phone_number || '',
         createdAt: lead.created_at,
         collaborators: [],
         comments: []
@@ -651,8 +670,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         lead_id: selectedLead.id
       };
 
-      if (leadData.phone_number !== undefined) updatePayload.phone_number = leadData.phone_number;
-      if (leadData.email !== undefined) updatePayload.email = leadData.email;
+      if (editingEmails.length > 0) updatePayload.emails = editingEmails;
+      if (editingPhones.length > 0) updatePayload.phone_numbers = editingPhones;
       if (leadData.status !== undefined) updatePayload.status = leadData.status;
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
@@ -673,7 +692,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       
       const updatedLead = {
         ...data.lead,
-        phone: data.lead.phone_number || '',
         createdAt: data.lead.created_at,
         collaborators: collaborators,
         comments: []
@@ -784,7 +802,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       
       const transformedLeads = data.leads.map(lead => ({
         ...lead,
-        phone: lead.phone_number || '',
         createdAt: lead.created_at,
         collaborators: [],
         comments: []
@@ -900,7 +917,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setCommentsPagination(null);
     setSelectedDocuments([]);
     setNewComment('');
-    
     setNewCollaborator('');
     setPotentialCollaborators([]);
     setShowPotentialCollaborators(false);
@@ -908,7 +924,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       clearTimeout(collaboratorSearchTimeout);
     }
     
-    fetchComments(lead.id, 1);fetchCollaborators(lead.id);
+    // Initialize editing arrays with current emails and phone numbers
+    setEditingEmails(lead.emails.map(e => e.email) || []);
+    setEditingPhones(lead.phone_numbers.map(p => p.number) || []);
+    
+    fetchComments(lead.id, 1);
+    fetchCollaborators(lead.id);
     fetchDefaultComments(lead.phase, lead.subphase);
   };
 
@@ -936,6 +957,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     if (collaboratorSearchTimeout) {
       clearTimeout(collaboratorSearchTimeout);
     }
+    
+    setEditingEmails([]);
+    setEditingPhones([]);
+    setNewEmail('');
+    setNewPhone('');
   };
 
   const handleSave = async () => {
@@ -944,7 +970,43 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     const success = await updateLead(selectedLead);
     if (success) {
       setIsEditMode(false);
+      setNewEmail('');
+      setNewPhone('');
     }
+  };
+
+  const handleAddEmail = () => {
+    if (!newEmail.trim()) {
+      Alert.alert('Error', 'Please enter a valid email');
+      return;
+    }
+    if (editingEmails.includes(newEmail.trim())) {
+      Alert.alert('Error', 'This email already exists');
+      return;
+    }
+    setEditingEmails([...editingEmails, newEmail.trim()]);
+    setNewEmail('');
+  };
+
+  const handleRemoveEmail = (index: number) => {
+    setEditingEmails(editingEmails.filter((_, i) => i !== index));
+  };
+
+  const handleAddPhone = () => {
+    if (!newPhone.trim()) {
+      Alert.alert('Error', 'Please enter a valid phone number');
+      return;
+    }
+    if (editingPhones.includes(newPhone.trim())) {
+      Alert.alert('Error', 'This phone number already exists');
+      return;
+    }
+    setEditingPhones([...editingPhones, newPhone.trim()]);
+    setNewPhone('');
+  };
+
+  const handleRemovePhone = (index: number) => {
+    setEditingPhones(editingPhones.filter((_, i) => i !== index));
   };
 
   const handleAddComment = async () => {
@@ -1157,46 +1219,106 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           scrollEventThrottle={16}
         >
           <View style={styles.detailCard}>
-  <View style={styles.leadHeader}>
-    <View style={styles.leadInfo}>
-      <View style={styles.leadNameRow}>
-        <Text style={styles.leadName}>{selectedLead.name}</Text>
-        <TouchableOpacity style={styles.incentiveIconButton} onPress={handleIncentivePress}>
-          <Text style={styles.incentiveIconText}>Incentive</Text>
-        </TouchableOpacity>
-      </View>
-          <View style={styles.statusIndicatorRow}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(selectedLead.status) }]} />
-            <Text style={styles.statusText}>{beautifyName(selectedLead.status)}</Text>
+            <View style={styles.leadHeader}>
+              <View style={styles.leadInfo}>
+                <View style={styles.leadNameRow}>
+                  <Text style={styles.leadName}>{selectedLead.name}</Text>
+                  <TouchableOpacity style={styles.incentiveIconButton} onPress={handleIncentivePress}>
+                    <Text style={styles.incentiveIconText}>Incentive</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.statusIndicatorRow}>
+                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(selectedLead.status) }]} />
+                  <Text style={styles.statusText}>{beautifyName(selectedLead.status)}</Text>
+                </View>
+                <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
+                <Text style={styles.leadDate}>Created: {formatDateTime(selectedLead.created_at || selectedLead.createdAt)}</Text>
+              </View>
+            </View>
           </View>
-          <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
-          <Text style={styles.leadDate}>Created: {formatDateTime(selectedLead.created_at || selectedLead.createdAt)}</Text>
-        </View>
-      </View>
-    </View>
 
           <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={[styles.input, !isEditMode && styles.inputDisabled]}
-                value={selectedLead.email || ''}
-                onChangeText={isEditMode ? (text) => setSelectedLead({...selectedLead, email: text}) : undefined}
-                editable={isEditMode}
-                keyboardType="email-address"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone</Text>
-              <TextInput
-                style={[styles.input, !isEditMode && styles.inputDisabled]}
-                value={selectedLead.phone_number || selectedLead.phone || ''}
-                onChangeText={isEditMode ? (text) => setSelectedLead({...selectedLead, phone_number: text, phone: text}) : undefined}
-                editable={isEditMode}
-                keyboardType="phone-pad"
-              />
-            </View>
+            <Text style={styles.sectionTitle}>Email Addresses ({editingEmails.length})</Text>
+            
+            {editingEmails.length > 0 ? (
+              editingEmails.map((email, index) => (
+                <View key={index} style={styles.contactItemContainer}>
+                  <View style={styles.contactItemContent}>
+                    <Text style={styles.contactItemText}>📧 {email}</Text>
+                  </View>
+                  {isEditMode && (
+                    <TouchableOpacity 
+                      style={styles.removeContactButton}
+                      onPress={() => handleRemoveEmail(index)}
+                    >
+                      <Text style={styles.removeContactButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyContactContainer}>
+                <Text style={styles.emptyContactText}>No emails added</Text>
+              </View>
+            )}
+
+            {isEditMode && (
+              <View style={styles.addContactContainer}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={newEmail}
+                  onChangeText={setNewEmail}
+                  placeholder="Add email..."
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="email-address"
+                />
+                <TouchableOpacity style={styles.addButton} onPress={handleAddEmail}>
+                  <Text style={styles.addButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.detailCard}>
+            <Text style={styles.sectionTitle}>Phone Numbers ({editingPhones.length})</Text>
+            
+            {editingPhones.length > 0 ? (
+              editingPhones.map((phone, index) => (
+                <View key={index} style={styles.contactItemContainer}>
+                  <View style={styles.contactItemContent}>
+                    <Text style={styles.contactItemText}>📱 {phone}</Text>
+                  </View>
+                  {isEditMode && (
+                    <TouchableOpacity 
+                      style={styles.removeContactButton}
+                      onPress={() => handleRemovePhone(index)}
+                    >
+                      <Text style={styles.removeContactButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyContactContainer}>
+                <Text style={styles.emptyContactText}>No phone numbers added</Text>
+              </View>
+            )}
+
+            {isEditMode && (
+              <View style={styles.addContactContainer}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={newPhone}
+                  onChangeText={setNewPhone}
+                  placeholder="Add phone..."
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="phone-pad"
+                />
+                <TouchableOpacity style={styles.addButton} onPress={handleAddPhone}>
+                  <Text style={styles.addButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <View style={styles.detailCard}>
@@ -1700,7 +1822,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                       </View>
                     </View>
                     <Text style={styles.leadCardContact} numberOfLines={1}>
-                      {lead.email || 'No email'} • {lead.phone_number || lead.phone || 'No phone'}
+                      {lead.emails && lead.emails.length > 0 
+                        ? lead.emails.map(e => e.email).join(', ') 
+                        : 'No email'} • {lead.phone_numbers && lead.phone_numbers.length > 0 
+                        ? lead.phone_numbers.map(p => p.number).join(', ') 
+                        : 'No phone'}
                     </Text>
                     <View style={styles.leadCardMeta}>
                       <Text style={styles.leadCardPhase}>
@@ -1786,6 +1912,60 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 };
 
 const styles = StyleSheet.create({
+  contactItemContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.info,
+  },
+  contactItemContent: {
+    flex: 1,
+  },
+  contactItemText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  removeContactButton: {
+    backgroundColor: colors.error,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  removeContactButtonText: {
+    color: colors.white,
+    fontSize: fontSize.lg,
+    fontWeight: 'bold',
+  },
+  addContactContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-end',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  emptyContactContainer: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.gray + '20',
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  emptyContactText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
   potentialCollaboratorsDropdown: {
     position: 'absolute',
     top: '100%',
@@ -2071,18 +2251,18 @@ const styles = StyleSheet.create({
   },
 
   leadNameRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginBottom: spacing.sm,
-  gap: spacing.sm,
-},
-leadName: { 
-  fontSize: fontSize.xxl, 
-  fontWeight: '700', 
-  color: colors.text,
-  flex: 1,
-},
- incentiveIconButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  leadName: { 
+    fontSize: fontSize.xxl, 
+    fontWeight: '700', 
+    color: colors.text,
+    flex: 1,
+  },
+  incentiveIconButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.success,
