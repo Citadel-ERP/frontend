@@ -1,18 +1,88 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Alert, Modal, TextInput, FlatList, Dimensions, ActivityIndicator,
+  StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
   Image, Animated
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { RefreshControl } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
-import * as DocumentPicker from 'expo-document-picker';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+const colors = {
+  primary: '#161b34ff',
+  primaryLight: '#c1c7f4ff',
+  primaryDark: '#1A1D2E',
+  background: '#FFFFFF',
+  backgroundSecondary: '#F8F9FA',
+  text: '#2F3349',
+  textSecondary: '#6C7293',
+  textLight: '#8B92B2',
+  white: '#FFFFFF',
+  black: '#000000',
+  gray: '#F1F3F4',
+  border: '#E0E4E7',
+  success: '#28A745',
+  error: '#DC3545',
+  warning: '#FFC107',
+  info: '#ffcc92ff',
+  link: '#007BFF',
+  disabled: '#6C757D',
+};
+
+const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+};
+
+const fontSize = {
+  xs: 12,
+  sm: 14,
+  md: 16,
+  lg: 18,
+  xl: 20,
+  xxl: 24,
+  xxxl: 28,
+};
+
+const borderRadius = {
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  full: 999,
+};
+
+const shadows = {
+  sm: {
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  lg: {
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+};
+
 const TOKEN_KEY = 'token_2';
+
 
 interface ScoutBoyProps {
   onBack: () => void;
@@ -51,7 +121,6 @@ interface SiteInfo {
   lock_in_period: string | null;
   will_developer_do_fitouts: string | null;
   contact_person_designation: string | null;
-  contact_person_email: string | null;
   power: string | null;
   power_backup: string | null;
   number_of_cabins: string | null;
@@ -145,408 +214,120 @@ const getStatusIcon = (status: string): string => {
 };
 
 const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
-  const insets = useSafeAreaInsets();
-  const [viewMode, setViewMode] = useState<'visits-list' | 'visit-detail'>('visits-list');
-  const [token, setToken] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'visits-list' | 'visit-detail' | 'create-site'>('visits-list');
+  const [token, setToken] = useState<string | null>('mock_token');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [visits, setVisits] = useState<Visit[]>([]);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [visits, setVisits] = useState<Visit[]>([
+    {
+      id: 1,
+      site: {
+        id: 1,
+        building_name: 'Prestige Tower',
+        location: 'MSK Residency 404 floor 5',
+        rent: '1232231.22',
+        building_status: 'Ready to Move',
+        total_area: '5000',
+        area_per_floor: '1000',
+        availble_floors: '1,2,3,4,5',
+        car_parking_ratio: '1:100',
+        contact_person_name: 'John Doe',
+        contact_person_number: '+91 9876543210',
+        contact_person_email: 'john@example.com',
+        contact_person_designation: 'Manager',
+        latitude: 28.6139,
+        longitude: 77.2090,
+        total_floors: 10,
+        number_of_basements: 2,
+        floor_condition: 'Excellent',
+        car_parking_charges: '5000',
+        car_parking_slots: '50',
+        cam: '15',
+        cam_deposit: '50000',
+        oc: 'Yes',
+        rental_escalation: '5%',
+        security_deposit: '500000',
+        two_wheeler_slots: '100',
+        two_wheeler_charges: '1000',
+        efficiency: '85%',
+        notice_period: '3 months',
+        lease_term: '3 years',
+        lock_in_period: '1 year',
+        will_developer_do_fitouts: 'Yes',
+        power: '500 KW',
+        power_backup: '100%',
+        number_of_cabins: '20',
+        number_of_workstations: '200',
+        size_of_workstation: '60 sq ft',
+        server_room: 'Yes',
+        training_room: 'Yes',
+        pantry: 'Yes',
+        electrical_ups_room: 'Yes',
+        cafeteria: 'Yes',
+        gym: 'Yes',
+        discussion_room: 'Yes',
+        meeting_room: 'Yes',
+        remarks: 'Prime location with excellent connectivity',
+        updated_at: '2025-11-13T10:30:00Z',
+      },
+      status: 'scout_completed',
+      comments: [
+        {
+          id: 1,
+          user: { full_name: 'Jane Smith', profile_picture: null },
+          content: 'Great property with excellent facilities. The location is prime and very accessible.',
+          documents: [],
+          created_at: '2025-11-13T09:00:00Z',
+          updated_at: '2025-11-13T09:00:00Z',
+        }
+      ],
+      photos: [
+        {
+          id: 1,
+          file_url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800',
+          description: 'Front view',
+          created_at: '2025-11-13T08:00:00Z',
+        }
+      ],
+      assigned_by: { full_name: 'Admin User' },
+      created_at: '2025-11-13T07:00:00Z',
+      updated_at: '2025-11-13T10:30:00Z',
+      scout_completed_at: '2025-11-13T10:30:00Z',
+      is_visible_to_scout: true,
+    }
+  ]);
+  const [pagination, setPagination] = useState<Pagination | null>({
+    current_page: 1,
+    total_pages: 1,
+    total_items: 1,
+    page_size: 10,
+    has_next: false,
+    has_previous: false,
+  });
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedSite, setEditedSite] = useState<Partial<SiteInfo> | null>(null);
   const [updatingDetails, setUpdatingDetails] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [selectedDocuments, setSelectedDocuments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<any[]>([]);
   const [addingComment, setAddingComment] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState('');
   const [markingComplete, setMarkingComplete] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
-
-  useEffect(() => {
-    const getToken = async () => {
-      try {
-        const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
-        setToken(API_TOKEN);
-      } catch (error) {
-        console.error('Error getting token:', error);
-      }
-    };
-    getToken();
-  }, []);
-
-  useEffect(() => {
-    if (token) {
-      fetchVisits(1);
-    }
-  }, [token]);
-
-  const fetchVisits = async (page: number = 1, append: boolean = false): Promise<void> => {
-    try {
-      if (!token) return;
-      if (!append) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      
-      const response = await fetch(`${BACKEND_URL}/employee/getAssignedVisits`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          page: page
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.visits && Array.isArray(data.visits)) {
-        if (append) {
-          setVisits(prevVisits => [...prevVisits, ...data.visits]);
-        } else {
-          setVisits(data.visits);
-        }
-        setPagination(data.pagination || null);
-      } else {
-        Alert.alert('Error', 'Invalid data format received');
-      }
-    } catch (error) {
-      console.error('Error fetching visits:', error);
-      Alert.alert('Error', 'Failed to fetch visits. Please try again.');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
-    }
-  };
-
-  const searchVisits = async (query: string): Promise<void> => {
-    if (!query.trim()) {
-      fetchVisits(1);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/employee/searchVisits`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          query: query
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setVisits(data.visits || []);
-      setPagination(null);
-    } catch (error) {
-      console.error('Error searching visits:', error);
-      Alert.alert('Error', 'Failed to search visits. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateVisitDetails = async (): Promise<boolean> => {
-    try {
-      if (!token || !selectedVisit || !editedSite) return false;
-      
-      setUpdatingDetails(true);
-      const updatePayload: any = {
-        token: token,
-        visit_id: selectedVisit.id,
-      };
-
-      // Define editable fields
-      const editableFields = [
-        'floor_condition', 'area_per_floor', 'total_area', 'availble_floors',
-        'car_parking_charges', 'car_parking_ratio', 'car_parking_slots',
-        'building_status', 'rent', 'cam', 'cam_deposit', 'oc', 'rental_escalation',
-        'security_deposit', 'two_wheeler_slots', 'two_wheeler_charges', 'efficiency',
-        'notice_period', 'lease_term', 'lock_in_period', 'will_developer_do_fitouts',
-        'contact_person_name', 'contact_person_designation', 'contact_person_number',
-        'contact_person_email', 'power', 'power_backup', 'number_of_cabins',
-        'number_of_workstations', 'size_of_workstation', 'server_room', 'training_room',
-        'pantry', 'electrical_ups_room', 'cafeteria', 'gym', 'discussion_room',
-        'meeting_room', 'remarks', 'total_floors', 'number_of_basements'
-      ];
-
-      const originalSite = selectedVisit.site;
-      let hasChanges = false;
-
-      editableFields.forEach(field => {
-        if (editedSite[field as keyof SiteInfo] !== originalSite[field as keyof SiteInfo]) {
-          updatePayload[field] = editedSite[field as keyof SiteInfo];
-          hasChanges = true;
-        }
-      });
-
-      if (!hasChanges) {
-        Alert.alert('Info', 'No changes to update');
-        return false;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/employee/updateVisitDetails`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatePayload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      // Update selected visit with new site data
-      const updatedVisit: Visit = {
-        ...selectedVisit,
-        site: { ...selectedVisit.site, ...data.visit.site }
-      };
-      
-      setSelectedVisit(updatedVisit);
-      setVisits(prevVisits =>
-        prevVisits.map(visit =>
-          visit.id === selectedVisit.id ? updatedVisit : visit
-        )
-      );
-
-      Alert.alert('Success', 'Site details updated successfully!');
-      setIsEditMode(false);
-      return true;
-    } catch (error) {
-      console.error('Error updating visit details:', error);
-      Alert.alert('Error', 'Failed to update details. Please try again.');
-      return false;
-    } finally {
-      setUpdatingDetails(false);
-    }
-  };
-
-  const addCommentToVisit = async (): Promise<boolean> => {
-    try {
-      if (!token || !selectedVisit || !newComment.trim()) {
-        Alert.alert('Error', 'Please enter a comment');
-        return false;
-      }
-
-      setAddingComment(true);
-      const formData = new FormData();
-      formData.append('token', token);
-      formData.append('visit_id', selectedVisit.id.toString());
-      formData.append('comment', newComment.trim());
-
-      if (selectedDocuments && selectedDocuments.length > 0) {
-        selectedDocuments.forEach((doc) => {
-          formData.append('documents', {
-            uri: doc.uri,
-            type: doc.mimeType || 'application/octet-stream',
-            name: doc.name,
-          } as any);
-        });
-      }
-
-      const response = await fetch(`${BACKEND_URL}/employee/addVisitComment`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const newCommentObj: VisitComment = data.comment;
-
-      // Update selected visit
-      const updatedVisit: Visit = {
-        ...selectedVisit,
-        comments: [newCommentObj, ...selectedVisit.comments]
-      };
-
-      setSelectedVisit(updatedVisit);
-      setVisits(prevVisits =>
-        prevVisits.map(visit =>
-          visit.id === selectedVisit.id ? updatedVisit : visit
-        )
-      );
-
-      setNewComment('');
-      setSelectedDocuments([]);
-      Alert.alert('Success', 'Comment added successfully!');
-      return true;
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment. Please try again.');
-      return false;
-    } finally {
-      setAddingComment(false);
-    }
-  };
-
-  const fetchVisitComments = async (): Promise<void> => {
-    try {
-      if (!token || !selectedVisit) return;
-
-      setLoadingComments(true);
-      const response = await fetch(`${BACKEND_URL}/employee/getVisitComments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          visit_id: selectedVisit.id,
-          page: 1
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const updatedVisit: Visit = {
-        ...selectedVisit,
-        comments: data.comments || []
-      };
-
-      setSelectedVisit(updatedVisit);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-
-  const markVisitComplete = async (): Promise<boolean> => {
-    try {
-      if (!token || !selectedVisit) return false;
-
-      setMarkingComplete(true);
-      const response = await fetch(`${BACKEND_URL}/employee/markVisitCompleted`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          visit_id: selectedVisit.id
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      // Update selected visit
-      const updatedVisit: Visit = {
-        ...selectedVisit,
-        status: 'scout_completed',
-        scout_completed_at: data.visit.scout_completed_at
-      };
-
-      setSelectedVisit(updatedVisit);
-      setVisits(prevVisits =>
-        prevVisits.map(visit =>
-          visit.id === selectedVisit.id ? updatedVisit : visit
-        )
-      );
-
-      Alert.alert(
-        'Visit Completed',
-        'Your visit has been marked as complete. Admin will review and finalize it.'
-      );
-      return true;
-    } catch (error) {
-      console.error('Error marking visit as complete:', error);
-      Alert.alert('Error', 'Failed to mark visit as complete. Please try again.');
-      return false;
-    } finally {
-      setMarkingComplete(false);
-    }
-  };
-
-  const handleAttachDocuments = async (): Promise<void> => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        multiple: true,
-        type: '*/*',
-      });
-
-      if (!result.canceled && result.assets) {
-        setSelectedDocuments(result.assets);
-        Alert.alert(
-          'Files Selected',
-          `${result.assets.length} file(s) selected: ${result.assets.map(doc => doc.name).join(', ')}`
-        );
-      }
-    } catch (error) {
-      console.error('Error picking documents:', error);
-      Alert.alert('Error', 'Failed to pick documents. Please try again.');
-    }
-  };
-
-  const handleRemoveDocument = (index: number) => {
-    setSelectedDocuments(prevDocs => prevDocs.filter((_, i) => i !== index));
-  };
-
-  const handleVisitPress = (visit: Visit) => {
-    setSelectedVisit(visit);
-    setEditedSite({ ...visit.site });
-    setViewMode('visit-detail');
-    setIsEditMode(false);
-    // Load comments when opening visit
-    setTimeout(() => fetchVisitComments(), 300);
-  };
-
-  const handleBackToList = () => {
-    setViewMode('visits-list');
-    setSelectedVisit(null);
-    setEditedSite(null);
-    setIsEditMode(false);
-    setNewComment('');
-    setSelectedDocuments([]);
-  };
-
-  const handleLoadMore = useCallback(() => {
-    if (pagination && pagination.has_next && !loadingMore && !searchQuery) {
-      fetchVisits(pagination.current_page + 1, true);
-    }
-  }, [pagination, loadingMore, searchQuery]);
-
-  const handleScroll = (event: any) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 20;
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
-      handleLoadMore();
-    }
-  };
+  
+  const [newSite, setNewSite] = useState({
+    building_name: '',
+    latitude: '',
+    longitude: '',
+    location: '',
+    total_area: '',
+    rent: '',
+  });
+  const [creatingsite, setCreatingSite] = useState(false);
 
   const formatDateTime = (dateString?: string): string => {
     if (!dateString) return '-';
@@ -561,7 +342,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  const formatDate = (dateString?: string): string => {
+  const formatDate = (dateString?: string | null): string => {
     if (!dateString) return '-';
     try {
       const d = new Date(dateString);
@@ -574,8 +355,80 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  const handleSearchSubmit = () => {
-    searchVisits(searchQuery);
+  const handleVisitPress = (visit: Visit) => {
+    setSelectedVisit(visit);
+    setEditedSite({ ...visit.site });
+    setViewMode('visit-detail');
+    setIsEditMode(false);
+  };
+
+  const handleBackToList = () => {
+    setViewMode('visits-list');
+    setSelectedVisit(null);
+    setEditedSite(null);
+    setIsEditMode(false);
+    setNewComment('');
+    setSelectedDocuments([]);
+  };
+
+  const updateVisitDetails = async (): Promise<boolean> => {
+    setUpdatingDetails(true);
+    setTimeout(() => {
+      Alert.alert('Success', 'Site details updated successfully!');
+      setIsEditMode(false);
+      setUpdatingDetails(false);
+    }, 1000);
+    return true;
+  };
+
+  const addCommentToVisit = async (): Promise<boolean> => {
+    if (!newComment.trim()) {
+      Alert.alert('Error', 'Please enter a comment');
+      return false;
+    }
+    setAddingComment(true);
+    setTimeout(() => {
+      Alert.alert('Success', 'Comment added successfully!');
+      setNewComment('');
+      setSelectedDocuments([]);
+      setAddingComment(false);
+    }, 1000);
+    return true;
+  };
+
+  const markVisitComplete = async (): Promise<boolean> => {
+    setMarkingComplete(true);
+    setTimeout(() => {
+      setVisits(prevVisits => prevVisits.filter(v => v.id !== selectedVisit?.id));
+      setMarkingComplete(false);
+      Alert.alert(
+        'Visit Completed',
+        'Your visit has been marked as complete and removed from your list.',
+        [{ text: 'OK', onPress: handleBackToList }]
+      );
+    }, 1000);
+    return true;
+  };
+
+  const handleCreateSite = async () => {
+    if (!newSite.building_name || !newSite.latitude || !newSite.longitude) {
+      Alert.alert('Error', 'Please fill required fields: Building Name, Latitude, Longitude');
+      return;
+    }
+    setCreatingSite(true);
+    setTimeout(() => {
+      Alert.alert('Success', 'Site created successfully!');
+      setViewMode('visits-list');
+      setNewSite({
+        building_name: '',
+        latitude: '',
+        longitude: '',
+        location: '',
+        total_area: '',
+        rent: '',
+      });
+      setCreatingSite(false);
+    }, 1000);
   };
 
   const BackIcon = () => (
@@ -584,10 +437,139 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     </View>
   );
 
-  // VISIT DETAIL VIEW
+  const EditIcon = ({ size = 18 }: { size?: number }) => (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{
+        width: size * 0.65,
+        height: size * 0.65,
+        borderWidth: 1.5,
+        borderColor: colors.white,
+        transform: [{ rotate: '45deg' }],
+        position: 'relative',
+      }}>
+        <View style={{
+          position: 'absolute',
+          bottom: -size * 0.15,
+          right: -size * 0.15,
+          width: size * 0.35,
+          height: size * 0.35,
+          backgroundColor: colors.white,
+          transform: [{ rotate: '-45deg' }],
+        }} />
+      </View>
+    </View>
+  );
+
+  if (viewMode === 'create-site') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
+            <BackIcon />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create New Site</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.formContainer}>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Basic Information</Text>
+              
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Building Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.building_name}
+                  onChangeText={(val) => setNewSite({ ...newSite, building_name: val })}
+                  placeholder="Enter building name"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Latitude *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.latitude}
+                    onChangeText={(val) => setNewSite({ ...newSite, latitude: val })}
+                    placeholder="0.0000"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Longitude *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.longitude}
+                    onChangeText={(val) => setNewSite({ ...newSite, longitude: val })}
+                    placeholder="0.0000"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Location</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.location}
+                  onChangeText={(val) => setNewSite({ ...newSite, location: val })}
+                  placeholder="Enter full address"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Total Area (sq ft)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.total_area}
+                    onChangeText={(val) => setNewSite({ ...newSite, total_area: val })}
+                    placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.rent}
+                    onChangeText={(val) => setNewSite({ ...newSite, rent: val })}
+                    placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, creatingsite && styles.buttonDisabled]}
+              onPress={handleCreateSite}
+              disabled={creatingsite}
+            >
+              {creatingsite ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Create Site</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (viewMode === 'visit-detail' && selectedVisit) {
     return (
-      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
@@ -596,611 +578,367 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           <Text style={styles.headerTitle}>Visit Details</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <ScrollView
-          style={styles.detailScrollView}
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        >
-          {/* SITE HEADER CARD */}
-          <View style={styles.detailCard}>
-            <View style={styles.siteHeaderRow}>
-              <View style={styles.siteHeaderInfo}>
-                <Text style={styles.siteName}>{selectedVisit.site.building_name}</Text>
-                <View style={styles.statusRow}>
-                  <Text style={styles.statusIcon}>{getStatusIcon(selectedVisit.status)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVisit.status) }]}>
-                    <Text style={styles.statusBadgeText}>{beautifyName(selectedVisit.status)}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-            {selectedVisit.site.location && (
-              <Text style={styles.locationText}>📍 {selectedVisit.site.location}</Text>
-            )}
-            <View style={styles.metaInfo}>
-              <Text style={styles.metaLabel}>Assigned by:</Text>
-              <Text style={styles.metaValue}>{selectedVisit.assigned_by.full_name}</Text>
-            </View>
-            <View style={styles.metaInfo}>
-              <Text style={styles.metaLabel}>Site Updated:</Text>
-              <Text style={styles.metaValue}>{formatDateTime(selectedVisit.site.updated_at)}</Text>
-            </View>
-            {selectedVisit.scout_completed_at && (
-              <View style={styles.metaInfo}>
-                <Text style={styles.metaLabel}>You Completed:</Text>
-                <Text style={styles.metaValue}>{formatDateTime(selectedVisit.scout_completed_at)}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* EDIT MODE BUTTON */}
-          {selectedVisit.status === 'pending' && (
-            <View style={styles.detailCard}>
-              <TouchableOpacity
-                style={[styles.editButton, isEditMode && styles.editButtonActive]}
-                onPress={() => setIsEditMode(!isEditMode)}
-              >
-                <Text style={styles.editButtonText}>
-                  {isEditMode ? '✓ Done Editing' : '✎ Edit Details'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* KEY DETAILS CARD */}
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Key Details</Text>
-            
-            {/* Building Status */}
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Building Status</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.building_status || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, building_status: val })}
-                    placeholder="Enter status"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.building_status || '-'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Total Area (sq ft)</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.total_area || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, total_area: val })}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.total_area || '-'}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Rent & Parking */}
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Monthly Rent (₹)</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.rent || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, rent: val })}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.rent ? `₹${selectedVisit.site.rent}` : '-'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Car Parking Ratio</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.car_parking_ratio || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, car_parking_ratio: val })}
-                    placeholder="e.g., 1:100"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.car_parking_ratio || '-'}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Floors & Area Per Floor */}
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Available Floors</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.availble_floors || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, availble_floors: val })}
-                    placeholder="e.g., 1,2,3"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.availble_floors || '-'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Area Per Floor</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.area_per_floor || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, area_per_floor: val })}
-                    placeholder="sq ft"
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.area_per_floor || '-'}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Total Floors & Basements */}
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Total Floors</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.total_floors?.toString() || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, total_floors: parseInt(val) || null })}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.total_floors || '-'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Basements</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.number_of_basements?.toString() || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, number_of_basements: parseInt(val) || null })}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.number_of_basements || '-'}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Amenities - CAM, OC, Security Deposit */}
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>CAM (₹/sq ft)</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.cam || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, cam: val })}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.cam || '-'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>OC</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.oc || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, oc: val })}
-                    placeholder="e.g., Yes/No"
-                  />
-                ) : (
-                  <Text style={styles.detailValue}>{selectedVisit.site.oc || '-'}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Update Details Button */}
-            {isEditMode && (
-              <TouchableOpacity
-                style={[styles.submitButton, updatingDetails && styles.submitButtonDisabled]}
-                onPress={updateVisitDetails}
-                disabled={updatingDetails}
-              >
-                {updatingDetails ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.submitButtonText}>💾 Save Changes</Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* CONTACT INFORMATION */}
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
-            
-            {selectedVisit.site.contact_person_name && (
-              <View style={styles.contactItem}>
-                <Text style={styles.contactLabel}>Person:</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.contact_person_name || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, contact_person_name: val })}
-                    placeholder="Name"
-                  />
-                ) : (
-                  <Text style={styles.contactValue}>{selectedVisit.site.contact_person_name}</Text>
-                )}
-              </View>
-            )}
-            
-            {selectedVisit.site.contact_person_designation && (
-              <View style={styles.contactItem}>
-                <Text style={styles.contactLabel}>Designation:</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.contact_person_designation || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, contact_person_designation: val })}
-                    placeholder="Designation"
-                  />
-                ) : (
-                  <Text style={styles.contactValue}>{selectedVisit.site.contact_person_designation}</Text>
-                )}
-              </View>
-            )}
-
-            {selectedVisit.site.contact_person_number && (
-              <View style={styles.contactItem}>
-                <Text style={styles.contactLabel}>Phone:</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.contact_person_number || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, contact_person_number: val })}
-                    placeholder="Phone"
-                    keyboardType="phone-pad"
-                  />
-                ) : (
-                  <TouchableOpacity>
-                    <Text style={[styles.contactValue, styles.phoneLink]}>
-                      📞 {selectedVisit.site.contact_person_number}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {selectedVisit.site.contact_person_email && (
-              <View style={styles.contactItem}>
-                <Text style={styles.contactLabel}>Email:</Text>
-                {isEditMode ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedSite?.contact_person_email || ''}
-                    onChangeText={(val) => setEditedSite({ ...editedSite, contact_person_email: val })}
-                    placeholder="Email"
-                    keyboardType="email-address"
-                  />
-                ) : (
-                  <Text style={styles.contactValue}>{selectedVisit.site.contact_person_email}</Text>
-                )}
-              </View>
-            )}
-          </View>
-
-          {/* FACILITIES SECTION */}
-          {(selectedVisit.site.number_of_cabins || selectedVisit.site.pantry || selectedVisit.site.cafeteria || selectedVisit.site.gym || isEditMode) && (
-            <View style={styles.detailCard}>
-              <Text style={styles.sectionTitle}>Facilities</Text>
-              
-              <View style={styles.detailRow}>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Cabins</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.number_of_cabins || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, number_of_cabins: val })}
-                      placeholder="0"
-                      keyboardType="numeric"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.number_of_cabins || '-'}</Text>
-                  )}
-                </View>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Workstations</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.number_of_workstations || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, number_of_workstations: val })}
-                      placeholder="0"
-                      keyboardType="numeric"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.number_of_workstations || '-'}</Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.detailRow}>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Pantry</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.pantry || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, pantry: val })}
-                      placeholder="Yes/No"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.pantry ? '✓' : '-'}</Text>
-                  )}
-                </View>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Cafeteria</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.cafeteria || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, cafeteria: val })}
-                      placeholder="Yes/No"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.cafeteria ? '✓' : '-'}</Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.detailRow}>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Gym</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.gym || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, gym: val })}
-                      placeholder="Yes/No"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.gym ? '✓' : '-'}</Text>
-                  )}
-                </View>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Meeting Room</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.meeting_room || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, meeting_room: val })}
-                      placeholder="Yes/No"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.meeting_room ? '✓' : '-'}</Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.detailRow}>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Training Room</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.training_room || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, training_room: val })}
-                      placeholder="Yes/No"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.training_room ? '✓' : '-'}</Text>
-                  )}
-                </View>
-                <View style={styles.detailColumn}>
-                  <Text style={styles.detailLabel}>Discussion Room</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.editInput}
-                      value={editedSite?.discussion_room || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, discussion_room: val })}
-                      placeholder="Yes/No"
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.discussion_room ? '✓' : '-'}</Text>
-                  )}
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* PHOTOS SECTION */}
-          {selectedVisit.photos && selectedVisit.photos.length > 0 && (
-            <View style={styles.detailCard}>
-              <Text style={styles.sectionTitle}>Photos ({selectedVisit.photos.length})</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.photoScroll}
-              >
-                {selectedVisit.photos.map((photo, index) => (
-                  <TouchableOpacity
-                    key={photo.id}
-                    style={styles.photoThumbnail}
-                    onPress={() => {
-                      setSelectedPhotoIndex(index);
-                      setSelectedPhotoUrl(photo.file_url);
-                      setShowPhotoModal(true);
-                    }}
-                  >
-                    <Image
-                      source={{ uri: photo.file_url }}
-                      style={styles.photoImage}
-                    />
-                    <Text style={styles.photoNumber}>{index + 1}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* COMMENTS SECTION */}
-          <View style={styles.detailCard}>
-            <View style={styles.commentsHeader}>
-              <Text style={styles.sectionTitle}>
-                Comments ({selectedVisit.comments.length})
-              </Text>
-              {loadingComments && <ActivityIndicator color={colors.primary} size="small" />}
-            </View>
-
-            {selectedVisit.comments.length > 0 ? (
-              <>
-                {selectedVisit.comments.map((comment) => (
-                  <View key={comment.id} style={styles.commentItem}>
-                    <View style={styles.commentHeader}>
-                      <Text style={styles.commentAuthor}>{comment.user.full_name}</Text>
-                      <Text style={styles.commentDate}>{formatDateTime(comment.created_at)}</Text>
-                    </View>
-                    <Text style={styles.commentContent}>{comment.content}</Text>
-                    {comment.documents && comment.documents.length > 0 && (
-                      <View style={styles.documentsSection}>
-                        <Text style={styles.documentsLabel}>Attachments:</Text>
-                        {comment.documents.map((doc) => (
-                          <TouchableOpacity key={doc.id} style={styles.documentLink}>
-                            <Text style={styles.documentLinkText}>📎 {doc.document_name}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No comments yet</Text>
-              </View>
-            )}
-
-            {/* ADD COMMENT FORM */}
-            <View style={styles.addCommentForm}>
-              <TextInput
-                style={styles.commentInput}
-                value={newComment}
-                onChangeText={setNewComment}
-                placeholder="Add your observations..."
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                placeholderTextColor={colors.textSecondary}
-              />
-              <View style={styles.commentFormActions}>
-                <TouchableOpacity
-                  style={styles.attachButton}
-                  onPress={handleAttachDocuments}
-                >
-                  <Text style={styles.attachButtonText}>📎 Attach ({selectedDocuments.length})</Text>
-                </TouchableOpacity>
-              </View>
-
-              {selectedDocuments.length > 0 && (
-                <View style={styles.documentsPreview}>
-                  <Text style={styles.documentsPreviewTitle}>Selected Files:</Text>
-                  {selectedDocuments.map((doc, index) => (
-                    <View key={index} style={styles.documentPreviewItem}>
-                      <Text style={styles.documentPreviewName} numberOfLines={1}>
-                        {doc.name}
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.detailContainer}>
+            <View style={styles.card}>
+              <View style={styles.siteHeader}>
+                <View style={styles.siteHeaderContent}>
+                  <Text style={styles.siteName}>{selectedVisit.site.building_name}</Text>
+                  <View style={styles.statusBadgeContainer}>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVisit.status) }]}>
+                      <Text style={styles.statusBadgeText}>
+                        {getStatusIcon(selectedVisit.status)} {beautifyName(selectedVisit.status)}
                       </Text>
-                      <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
-                        <Text style={styles.removeButton}>✕</Text>
-                      </TouchableOpacity>
                     </View>
-                  ))}
+                  </View>
+                </View>
+              </View>
+              
+              {selectedVisit.site.location && (
+                <View style={styles.locationContainer}>
+                  <Text style={styles.locationIcon}>📍</Text>
+                  <Text style={styles.locationText}>{selectedVisit.site.location}</Text>
                 </View>
               )}
 
-              <TouchableOpacity
-                style={[styles.submitButton, addingComment && styles.submitButtonDisabled]}
-                onPress={addCommentToVisit}
-                disabled={addingComment}
-              >
-                {addingComment ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Post Comment</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.metaGrid}>
+                <View style={styles.metaItem}>
+                  <Text style={styles.metaLabel}>Assigned by</Text>
+                  <Text style={styles.metaValue}>{selectedVisit.assigned_by.full_name}</Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Text style={styles.metaLabel}>Site Updated</Text>
+                  <Text style={styles.metaValue}>{formatDate(selectedVisit.site.updated_at)}</Text>
+                </View>
+              </View>
+
+              {selectedVisit.scout_completed_at && (
+                <View style={styles.metaItem}>
+                  <Text style={styles.metaLabel}>Completed On</Text>
+                  <Text style={styles.metaValue}>{formatDate(selectedVisit.scout_completed_at)}</Text>
+                </View>
+              )}
             </View>
+
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Property Details</Text>
+                {selectedVisit.status === 'pending' && (
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => setIsEditMode(!isEditMode)}
+                  >
+                    <EditIcon size={16} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              <View style={styles.detailsGrid}>
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Building Status</Text>
+                  {isEditMode ? (
+                    <TextInput
+                      style={styles.detailInput}
+                      value={editedSite?.building_status || ''}
+                      onChangeText={(val) => setEditedSite({ ...editedSite, building_status: val })}
+                      placeholder="Enter status"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text style={styles.detailValue}>{selectedVisit.site.building_status || '-'}</Text>
+                  )}
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Total Area</Text>
+                  {isEditMode ? (
+                    <TextInput
+                      style={styles.detailInput}
+                      value={editedSite?.total_area || ''}
+                      onChangeText={(val) => setEditedSite({ ...editedSite, total_area: val })}
+                      placeholder="0"
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text style={styles.detailValue}>
+                      {selectedVisit.site.total_area ? `${selectedVisit.site.total_area} sq ft` : '-'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Monthly Rent</Text>
+                  {isEditMode ? (
+                    <TextInput
+                      style={styles.detailInput}
+                      value={editedSite?.rent || ''}
+                      onChangeText={(val) => setEditedSite({ ...editedSite, rent: val })}
+                      placeholder="0"
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text style={styles.detailValue}>
+                      {selectedVisit.site.rent ? `₹${selectedVisit.site.rent}` : '-'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Car Parking Ratio</Text>
+                  {isEditMode ? (
+                    <TextInput
+                      style={styles.detailInput}
+                      value={editedSite?.car_parking_ratio || ''}
+                      onChangeText={(val) => setEditedSite({ ...editedSite, car_parking_ratio: val })}
+                      placeholder="1:100"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text style={styles.detailValue}>{selectedVisit.site.car_parking_ratio || '-'}</Text>
+                  )}
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Available Floors</Text>
+                  {isEditMode ? (
+                    <TextInput
+                      style={styles.detailInput}
+                      value={editedSite?.availble_floors || ''}
+                      onChangeText={(val) => setEditedSite({ ...editedSite, availble_floors: val })}
+                      placeholder="1,2,3"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text style={styles.detailValue}>{selectedVisit.site.availble_floors || '-'}</Text>
+                  )}
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Area Per Floor</Text>
+                  {isEditMode ? (
+                    <TextInput
+                      style={styles.detailInput}
+                      value={editedSite?.area_per_floor || ''}
+                      onChangeText={(val) => setEditedSite({ ...editedSite, area_per_floor: val })}
+                      placeholder="0"
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  ) : (
+                    <Text style={styles.detailValue}>
+                      {selectedVisit.site.area_per_floor ? `${selectedVisit.site.area_per_floor} sq ft` : '-'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {isEditMode && (
+                <TouchableOpacity
+                  style={[styles.primaryButton, updatingDetails && styles.buttonDisabled]}
+                  onPress={updateVisitDetails}
+                  disabled={updatingDetails}
+                >
+                  {updatingDetails ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Contact Information</Text>
+              <View style={styles.contactGrid}>
+                {selectedVisit.site.contact_person_name && (
+                  <View style={styles.contactItem}>
+                    <Text style={styles.contactLabel}>Name</Text>
+                    <Text style={styles.contactValue}>{selectedVisit.site.contact_person_name}</Text>
+                  </View>
+                )}
+                {selectedVisit.site.contact_person_designation && (
+                  <View style={styles.contactItem}>
+                    <Text style={styles.contactLabel}>Designation</Text>
+                    <Text style={styles.contactValue}>{selectedVisit.site.contact_person_designation}</Text>
+                  </View>
+                )}
+                {selectedVisit.site.contact_person_number && (
+                  <View style={styles.contactItem}>
+                    <Text style={styles.contactLabel}>Phone</Text>
+                    <Text style={[styles.contactValue, styles.contactLink]}>
+                      📞 {selectedVisit.site.contact_person_number}
+                    </Text>
+                  </View>
+                )}
+                {selectedVisit.site.contact_person_email && (
+                  <View style={styles.contactItem}>
+                    <Text style={styles.contactLabel}>Email</Text>
+                    <Text style={[styles.contactValue, styles.contactLink]}>
+                      {selectedVisit.site.contact_person_email}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {selectedVisit.photos && selectedVisit.photos.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Photos ({selectedVisit.photos.length})</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photoScroll}
+                >
+                  {selectedVisit.photos.map((photo, index) => (
+                    <TouchableOpacity
+                      key={photo.id}
+                      style={styles.photoThumbnail}
+                      onPress={() => {
+                        setSelectedPhotoIndex(index);
+                        setSelectedPhotoUrl(photo.file_url);
+                        setShowPhotoModal(true);
+                      }}
+                    >
+                      <Image
+                        source={{ uri: photo.file_url }}
+                        style={styles.photoImage}
+                      />
+                      <View style={styles.photoNumberBadge}>
+                        <Text style={styles.photoNumber}>{index + 1}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.card}>
+              <View style={styles.commentsHeader}>
+                <Text style={styles.cardTitle}>Comments ({selectedVisit.comments.length})</Text>
+                {loadingComments && <ActivityIndicator color={colors.primary} size="small" />}
+              </View>
+
+              {selectedVisit.comments.length > 0 ? (
+                <View style={styles.commentsContainer}>
+                  {selectedVisit.comments.map((comment) => (
+                    <View key={comment.id} style={styles.commentCard}>
+                      <View style={styles.commentHeader}>
+                        <View style={styles.commentAvatar}>
+                          <Text style={styles.commentAvatarText}>
+                            {comment.user.full_name.split(' ').map(n => n[0]).join('')}
+                          </Text>
+                        </View>
+                        <View style={styles.commentHeaderContent}>
+                          <Text style={styles.commentAuthor}>{comment.user.full_name}</Text>
+                          <Text style={styles.commentDate}>{formatDate(comment.created_at)}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.commentContent}>{comment.content}</Text>
+                      {comment.documents && comment.documents.length > 0 && (
+                        <View style={styles.documentsSection}>
+                          {comment.documents.map((doc) => (
+                            <View key={doc.id} style={styles.documentChip}>
+                              <Text style={styles.documentIcon}>📎</Text>
+                              <Text style={styles.documentName} numberOfLines={1}>{doc.document_name}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>💬</Text>
+                  <Text style={styles.emptyStateText}>No comments yet</Text>
+                </View>
+              )}
+
+              <View style={styles.addCommentSection}>
+                <Text style={styles.formLabel}>Add Your Observation</Text>
+                <TextInput
+                  style={styles.commentInput}
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  placeholder="Share your thoughts about this site..."
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  placeholderTextColor={colors.textSecondary}
+                />
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, addingComment && styles.buttonDisabled]}
+                  onPress={addCommentToVisit}
+                  disabled={addingComment}
+                >
+                  {addingComment ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Post Comment</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {selectedVisit.status === 'pending' && (
+              <View style={styles.actionContainer}>
+                <TouchableOpacity
+                  style={[styles.completeButton, markingComplete && styles.buttonDisabled]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Mark Visit Complete?',
+                      'Once you mark this visit as complete, it will be removed from your list and sent to admin for final verification.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Mark Complete',
+                          onPress: markVisitComplete,
+                          style: 'default',
+                        },
+                      ]
+                    );
+                  }}
+                  disabled={markingComplete}
+                >
+                  {markingComplete ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.completeButtonText}>✓ Mark Visit as Complete</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedVisit.status === 'scout_completed' && (
+              <View style={[styles.card, styles.statusCard, { backgroundColor: colors.info + '15' }]}>
+                <View style={styles.statusCardContent}>
+                  <Text style={styles.statusCardIcon}>⏳</Text>
+                  <Text style={styles.statusCardText}>Waiting for admin to finalize this visit</Text>
+                  <Text style={styles.statusCardSubtext}>
+                    Completed on {formatDate(selectedVisit.scout_completed_at)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {selectedVisit.status === 'admin_completed' && (
+              <View style={[styles.card, styles.statusCard, { backgroundColor: colors.success + '15' }]}>
+                <View style={styles.statusCardContent}>
+                  <Text style={styles.statusCardIcon}>✓✓</Text>
+                  <Text style={[styles.statusCardText, { color: colors.success }]}>
+                    This visit has been finalized by admin
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={{ height: 24 }} />
           </View>
-
-          {/* COMPLETE VISIT SECTION */}
-          {selectedVisit.status === 'pending' && (
-            <View style={styles.detailCard}>
-              <TouchableOpacity
-                style={[styles.completeButton, markingComplete && styles.completeButtonDisabled]}
-                onPress={() => {
-                  Alert.alert(
-                    'Mark Visit Complete?',
-                    'Once you mark this visit as complete, it will be sent to admin for final verification.',
-                    [
-                      { text: 'Cancel', onPress: () => {}, style: 'cancel' },
-                      {
-                        text: 'Mark Complete',
-                        onPress: markVisitComplete,
-                        style: 'default',
-                      },
-                    ]
-                  );
-                }}
-                disabled={markingComplete}
-              >
-                {markingComplete ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.completeButtonText}>✓ Mark Visit as Complete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {selectedVisit.status === 'scout_completed' && (
-            <View style={[styles.detailCard, styles.pendingReviewCard]}>
-              <View style={styles.pendingReviewContent}>
-                <Text style={styles.pendingReviewIcon}>⏳</Text>
-                <Text style={styles.pendingReviewText}>
-                  Waiting for admin to finalize this visit
-                </Text>
-                <Text style={styles.pendingReviewSubtext}>
-                  You completed this visit on {formatDateTime(selectedVisit.scout_completed_at)}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {selectedVisit.status === 'admin_completed' && (
-            <View style={[styles.detailCard, styles.completedCard]}>
-              <View style={styles.completedContent}>
-                <Text style={styles.completedIcon}>✓✓</Text>
-                <Text style={styles.completedText}>
-                  This visit has been finalized by admin
-                </Text>
-              </View>
-            </View>
-          )}
-
-          <View style={{ height: 40 }} />
         </ScrollView>
 
-        {/* PHOTO MODAL */}
         <Modal
           visible={showPhotoModal}
           transparent
@@ -1230,9 +968,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     );
   }
 
-  // VISITS LIST VIEW
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -1242,146 +979,133 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search visits..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearchSubmit}
-          returnKeyType="search"
-          placeholderTextColor={colors.textSecondary}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => { setSearchQuery(''); fetchVisits(1); }}>
-            <Text style={styles.clearSearchButton}>✕</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      {searchQuery && (
-        <View style={styles.searchIndicator}>
-          <Text style={styles.searchIndicatorText}>
-            Searching for: "{searchQuery}"
-          </Text>
-        </View>
-      )}
-
-      <ScrollView
-        style={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchVisits(1);
-            }}
-            tintColor={colors.primary}
+      <View style={styles.contentContainer}>
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search visits..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            placeholderTextColor={colors.textSecondary}
           />
-        }
-      >
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Assigned Visits ({visits.length})</Text>
-            {pagination && !searchQuery && (
-              <Text style={styles.paginationInfo}>
-                of {pagination.total_items}
-              </Text>
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.clearSearchButton}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        <View style={styles.createButtonWrapper}>
+          <TouchableOpacity
+            style={styles.createSiteButton}
+            onPress={() => setViewMode('create-site')}
+          >
+            <Text style={styles.createSiteButtonText}>+ Create New Site</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.listScrollView}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                setTimeout(() => setRefreshing(false), 1000);
+              }}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          <View style={styles.listContainer}>
+            <View style={styles.listHeader}>
+              <Text style={styles.listTitle}>Assigned Visits</Text>
+              {pagination && !searchQuery && (
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{visits.length} of {pagination.total_items}</Text>
+                </View>
+              )}
+            </View>
+
+            {loading && visits.length === 0 ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Loading your visits...</Text>
+              </View>
+            ) : visits.length > 0 ? (
+              <>
+                {visits.map((visit) => (
+                  <TouchableOpacity
+                    key={visit.id}
+                    style={styles.visitCard}
+                    onPress={() => handleVisitPress(visit)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.visitCardHeader}>
+                      <Text style={styles.visitCardTitle} numberOfLines={1}>
+                        {visit.site.building_name}
+                      </Text>
+                      <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
+                        <Text style={styles.visitStatusText}>
+                          {getStatusIcon(visit.status)} {beautifyName(visit.status)}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    {visit.site.location && (
+                      <View style={styles.visitLocationRow}>
+                        <Text style={styles.visitLocationIcon}>📍</Text>
+                        <Text style={styles.visitLocationText} numberOfLines={1}>
+                          {visit.site.location}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.visitMetaRow}>
+                      {visit.site.rent && (
+                        <View style={styles.visitMetaItem}>
+                          <Text style={styles.visitMetaText}>₹{visit.site.rent}/mo</Text>
+                        </View>
+                      )}
+                      {visit.photos.length > 0 && (
+                        <View style={styles.visitMetaItem}>
+                          <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
+                        </View>
+                      )}
+                      {visit.comments.length > 0 && (
+                        <View style={styles.visitMetaItem}>
+                          <Text style={styles.visitMetaText}>💬 {visit.comments.length}</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <View style={styles.visitCardFooter}>
+                      <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
+                      <Text style={styles.visitArrow}>→</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <View style={styles.emptyListContainer}>
+                <Text style={styles.emptyListIcon}>📋</Text>
+                <Text style={styles.emptyListTitle}>
+                  {searchQuery ? 'No visits found' : 'No visits assigned yet'}
+                </Text>
+                <Text style={styles.emptyListSubtitle}>
+                  {searchQuery
+                    ? 'Try adjusting your search'
+                    : 'Your assigned visits will appear here'}
+                </Text>
+              </View>
             )}
           </View>
-
-          {loading && visits.length === 0 ? (
-            <View style={styles.centerContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Loading your visits...</Text>
-            </View>
-          ) : visits.length > 0 ? (
-            <>
-              {visits.map((visit) => (
-                <TouchableOpacity
-                  key={visit.id}
-                  style={styles.visitCard}
-                  onPress={() => handleVisitPress(visit)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.visitCardInner}>
-                    <View style={styles.visitCardLeft}>
-                      <View style={[styles.visitStatusIndicator, { backgroundColor: getStatusColor(visit.status) }]} />
-                    </View>
-                    <View style={styles.visitCardContent}>
-                      <View style={styles.visitCardTop}>
-                        <Text style={styles.visitCardTitle} numberOfLines={2}>
-                          {visit.site.building_name}
-                        </Text>
-                        <View style={[styles.visitCardBadge, { backgroundColor: getStatusColor(visit.status) }]}>
-                          <Text style={styles.visitCardBadgeText}>
-                            {getStatusIcon(visit.status)} {beautifyName(visit.status)}
-                          </Text>
-                        </View>
-                      </View>
-                      {visit.site.location && (
-                        <Text style={styles.visitCardLocation} numberOfLines={1}>
-                          📍 {visit.site.location}
-                        </Text>
-                      )}
-                      <View style={styles.visitCardMeta}>
-                        {visit.site.rent && (
-                          <View style={styles.metaTag}>
-                            <Text style={styles.metaTagText}>₹{visit.site.rent}/mo</Text>
-                          </View>
-                        )}
-                        {visit.photos.length > 0 && (
-                          <View style={styles.metaTag}>
-                            <Text style={styles.metaTagText}>📷 {visit.photos.length}</Text>
-                          </View>
-                        )}
-                        {visit.comments.length > 0 && (
-                          <View style={styles.metaTag}>
-                            <Text style={styles.metaTagText}>💬 {visit.comments.length}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.visitCardFooter}>
-                        <Text style={styles.visitCardDate}>
-                          {formatDate(visit.created_at)}
-                        </Text>
-                        <Text style={styles.visitCardArrow}>→</Text>
-                      </View>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              {loadingMore && (
-                <View style={styles.centerContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.loadingMoreText}>Loading more visits...</Text>
-                </View>
-              )}
-              {pagination && !pagination.has_next && !searchQuery && visits.length > 0 && (
-                <View style={styles.endOfListMessage}>
-                  <Text style={styles.endOfListText}>✓ You've seen all your visits</Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyTitle}>
-                {searchQuery ? 'No visits found' : 'No visits assigned yet'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {searchQuery
-                  ? 'Try adjusting your search'
-                  : 'Your assigned visits will appear here'}
-              </Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -1418,7 +1142,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: fontSize.xl,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.white,
     flex: 1,
     textAlign: 'center',
@@ -1426,11 +1150,18 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -16,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: spacing.lg,
-    marginVertical: spacing.md,
+    marginTop: spacing.lg,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -1444,74 +1175,77 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.md,
     color: colors.text,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
   },
   clearSearchButton: {
     fontSize: fontSize.lg,
     color: colors.textSecondary,
     padding: spacing.xs,
   },
-  searchIndicator: {
+  createButtonWrapper: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.info + '20',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.info,
-    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
   },
-  searchIndicatorText: {
-    fontSize: fontSize.sm,
-    color: colors.info,
-    fontWeight: '500',
-  },
-  listContent: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
+  createSiteButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    ...shadows.md,
   },
-  section: {
-    marginBottom: spacing.xl,
+  createSiteButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
   },
-  sectionHeader: {
+  listScrollView: {
+    flex: 1,
+    marginTop: spacing.md,
+  },
+  listContainer: {
+    paddingHorizontal: spacing.lg,
+  },
+  listHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  sectionTitle: {
+  listTitle: {
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.text,
   },
-  paginationInfo: {
-    fontSize: fontSize.sm,
+  countBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  countText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  centerContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  loadingText: {
+    marginTop: spacing.md,
     color: colors.textSecondary,
+    fontSize: fontSize.md,
     fontWeight: '500',
   },
   visitCard: {
     marginBottom: spacing.md,
     borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+    backgroundColor: colors.white,
+    padding: spacing.md,
     ...shadows.md,
   },
-  visitCardInner: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    borderLeftWidth: 5,
-    borderLeftColor: colors.primary,
-  },
-  visitCardLeft: {
-    width: 4,
-    backgroundColor: colors.primary,
-  },
-  visitCardContent: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  visitCardTop: {
+  visitCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -1524,37 +1258,45 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.sm,
   },
-  visitCardBadge: {
+  visitStatusBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
-  visitCardBadgeText: {
+  visitStatusText: {
     fontSize: fontSize.xs,
     fontWeight: '700',
     color: colors.white,
   },
-  visitCardLocation: {
+  visitLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  visitLocationIcon: {
+    fontSize: fontSize.sm,
+    marginRight: spacing.xs,
+  },
+  visitLocationText: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    fontWeight: '500',
+    flex: 1,
   },
-  visitCardMeta: {
+  visitMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: spacing.sm,
     gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  metaTag: {
+  visitMetaItem: {
     backgroundColor: colors.backgroundSecondary,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
-  metaTagText: {
+  visitMetaText: {
     fontSize: fontSize.xs,
-    color: colors.primary,
+    color: colors.text,
     fontWeight: '600',
   },
   visitCardFooter: {
@@ -1565,83 +1307,121 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  visitCardDate: {
+  visitDate: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
-    fontWeight: '500',
   },
-  visitCardArrow: {
+  visitArrow: {
     fontSize: fontSize.md,
     color: colors.primary,
     fontWeight: '700',
   },
-  visitStatusIndicator: {
-    width: 4,
-    height: '100%',
-  },
-  centerContainer: {
+  emptyListContainer: {
     alignItems: 'center',
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.xxl * 2,
   },
-  loadingText: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    fontWeight: '500',
-  },
-  loadingMoreText: {
-    marginLeft: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-  },
-  endOfListMessage: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  endOfListText: {
-    color: colors.success,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  emptyIcon: {
+  emptyListIcon: {
     fontSize: 60,
     marginBottom: spacing.md,
   },
-  emptyTitle: {
+  emptyListTitle: {
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  emptySubtitle: {
+  emptyListSubtitle: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  // DETAIL VIEW STYLES
-  detailScrollView: {
+  scrollView: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
   },
-  detailCard: {
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+  formContainer: {
     padding: spacing.lg,
+  },
+  detailContainer: {
+    padding: spacing.lg,
+  },
+  card: {
+    backgroundColor: colors.white,
     borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     ...shadows.md,
   },
-  siteHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  cardTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
     marginBottom: spacing.md,
   },
-  siteHeaderInfo: {
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  editButton: {
+    backgroundColor: colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  formGroup: {
+    marginBottom: spacing.md,
+  },
+  formLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  input: {
+    height: 48,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.white,
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  halfWidth: {
+    flex: 1,
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    ...shadows.md,
+  },
+  primaryButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  siteHeader: {
+    marginBottom: spacing.md,
+  },
+  siteHeaderContent: {
     flex: 1,
   },
   siteName: {
@@ -1650,14 +1430,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  statusRow: {
+  statusBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  statusIcon: {
-    fontSize: fontSize.lg,
-    marginRight: spacing.sm,
   },
   statusBadge: {
     paddingHorizontal: spacing.md,
@@ -1669,63 +1444,56 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.white,
   },
-  locationText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-    fontWeight: '500',
-  },
-  metaInfo: {
+  locationContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+    backgroundColor: colors.backgroundSecondary,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  locationIcon: {
+    fontSize: fontSize.md,
+    marginRight: spacing.xs,
+  },
+  locationText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    flex: 1,
+    lineHeight: 20,
+  },
+  metaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  metaItem: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.backgroundSecondary,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   metaLabel: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     fontWeight: '600',
     color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
   },
   metaValue: {
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.text,
   },
-  editButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
+  detailsGrid: {
+    gap: spacing.sm,
   },
-  editButtonActive: {
-    backgroundColor: colors.warning,
-  },
-  editButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  editInput: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+  detailItem: {
     backgroundColor: colors.backgroundSecondary,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginTop: spacing.xs,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    marginBottom: spacing.md,
-    gap: spacing.md,
-  },
-  detailColumn: {
-    flex: 1,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   detailLabel: {
     fontSize: fontSize.xs,
@@ -1735,14 +1503,28 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   detailValue: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.text,
   },
+  detailInput: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.white,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    marginTop: spacing.xs,
+  },
+  contactGrid: {
+    gap: spacing.sm,
+  },
   contactItem: {
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.backgroundSecondary,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   contactLabel: {
     fontSize: fontSize.xs,
@@ -1752,21 +1534,22 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   contactValue: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: '500',
     color: colors.text,
   },
-  phoneLink: {
+  contactLink: {
     color: colors.primary,
     fontWeight: '600',
   },
   photoScroll: {
-    marginVertical: spacing.md,
+    marginTop: spacing.sm,
   },
   photoThumbnail: {
     marginRight: spacing.md,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     overflow: 'hidden',
+    position: 'relative',
     ...shadows.sm,
   },
   photoImage: {
@@ -1774,15 +1557,17 @@ const styles = StyleSheet.create({
     height: 120,
     backgroundColor: colors.backgroundSecondary,
   },
-  photoNumber: {
+  photoNumberBadge: {
     position: 'absolute',
     bottom: spacing.xs,
     right: spacing.xs,
-    backgroundColor: colors.primary + 'CC',
-    color: colors.white,
+    backgroundColor: colors.primary,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
+  },
+  photoNumber: {
+    color: colors.white,
     fontSize: fontSize.xs,
     fontWeight: '700',
   },
@@ -1794,7 +1579,7 @@ const styles = StyleSheet.create({
   },
   photoModalClose: {
     position: 'absolute',
-    top: spacing.lg,
+    top: 60,
     right: spacing.lg,
     zIndex: 10,
     width: 40,
@@ -1815,8 +1600,7 @@ const styles = StyleSheet.create({
   },
   photoModalCounter: {
     position: 'absolute',
-    bottom: spacing.lg,
-    alignSelf: 'center',
+    bottom: 60,
     backgroundColor: colors.white,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
@@ -1833,19 +1617,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  commentItem: {
+  commentsContainer: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  commentCard: {
     backgroundColor: colors.backgroundSecondary,
     padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
+    borderRadius: borderRadius.md,
     borderLeftWidth: 3,
-    borderLeftColor: colors.info,
+    borderLeftColor: colors.primary,
   },
   commentHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.sm,
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  commentAvatarText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  commentHeaderContent: {
+    flex: 1,
   },
   commentAuthor: {
     fontSize: fontSize.sm,
@@ -1855,140 +1658,76 @@ const styles = StyleSheet.create({
   commentDate: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
-    fontWeight: '500',
   },
   commentContent: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: colors.text,
-    lineHeight: 22,
-    marginBottom: spacing.sm,
+    lineHeight: 20,
   },
   documentsSection: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
-  documentsLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    textTransform: 'uppercase',
+  documentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight + '40',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    maxWidth: '100%',
   },
-  documentLink: {
-    backgroundColor: colors.info + '20',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.xs,
-  },
-  documentLinkText: {
+  documentIcon: {
     fontSize: fontSize.sm,
-    color: colors.info,
+    marginRight: spacing.xs,
+  },
+  documentName: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
     fontWeight: '600',
+    flex: 1,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
   },
+  emptyStateIcon: {
+    fontSize: 40,
+    marginBottom: spacing.sm,
+  },
   emptyStateText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    fontWeight: '500',
   },
-  addCommentForm: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
+  addCommentSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   commentInput: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     padding: spacing.md,
     backgroundColor: colors.white,
     fontSize: fontSize.sm,
     color: colors.text,
     textAlignVertical: 'top',
     minHeight: 100,
-    marginBottom: spacing.md,
-    ...shadows.sm,
+    marginBottom: spacing.xl,
   },
-  commentFormActions: {
-    marginBottom: spacing.md,
-  },
-  attachButton: {
-    backgroundColor: colors.primary + '10',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  attachButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  documentsPreview: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  documentsPreviewTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: spacing.sm,
-  },
-  documentPreviewItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-  },
-  documentPreviewName: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  removeButton: {
-    fontSize: fontSize.lg,
-    color: colors.error,
-    fontWeight: '700',
-    paddingHorizontal: spacing.sm,
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    marginTop: spacing.md,
-    ...shadows.md,
-  },
-  submitButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.textSecondary,
-    opacity: 0.6,
+  actionContainer: {
+    marginBottom: spacing.xxl,
   },
   completeButton: {
     backgroundColor: colors.success,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
@@ -1999,51 +1738,28 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '700',
   },
-  completeButtonDisabled: {
-    backgroundColor: colors.textSecondary,
-    opacity: 0.6,
-  },
-  pendingReviewCard: {
-    backgroundColor: colors.warning + '10',
+  statusCard: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.warning,
   },
-  pendingReviewContent: {
+  statusCardContent: {
     alignItems: 'center',
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  pendingReviewIcon: {
+  statusCardIcon: {
     fontSize: 40,
-    marginBottom: spacing.md,
-  },
-  pendingReviewText: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
     marginBottom: spacing.sm,
   },
-  pendingReviewSubtext: {
+  statusCardText: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  statusCardSubtext: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     textAlign: 'center',
-  },
-  completedCard: {
-    backgroundColor: colors.success + '10',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.success,
-  },
-  completedContent: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  completedIcon: {
-    fontSize: 40,
-    marginBottom: spacing.md,
-  },
-  completedText: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.success,
   },
 });
 
