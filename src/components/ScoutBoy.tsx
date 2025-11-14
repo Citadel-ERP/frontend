@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
   StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
-  Image, Animated
+  Image, Animated, Platform
 } from 'react-native';
 import { RefreshControl } from 'react-native';
-import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -81,110 +80,20 @@ const shadows = {
   },
 };
 
-const TOKEN_KEY = 'token_2';
+const BUILDING_STATUS_OPTIONS = [
+  { label: 'Available', value: 'available' },
+  { label: 'Leased Out', value: 'leased_out' },
+  { label: 'Readily Available', value: 'readily_available' },
+  { label: 'Ready to Move In', value: 'ready_to_move_in' },
+  { label: 'Ready for Fitouts', value: 'ready_for_fitouts' },
+];
 
-
-interface ScoutBoyProps {
-  onBack: () => void;
-}
-
-interface SiteInfo {
-  id: number;
-  building_name: string;
-  building_status: string | null;
-  rent: string | null;
-  car_parking_ratio: string | null;
-  contact_person_name: string | null;
-  contact_person_number: string | null;
-  contact_person_email: string | null;
-  total_area: string | null;
-  area_per_floor: string | null;
-  availble_floors: string | null;
-  location: string | null;
-  latitude: number;
-  longitude: number;
-  total_floors: number | null;
-  number_of_basements: number | null;
-  floor_condition: string | null;
-  car_parking_charges: string | null;
-  car_parking_slots: string | null;
-  cam: string | null;
-  cam_deposit: string | null;
-  oc: string | null;
-  rental_escalation: string | null;
-  security_deposit: string | null;
-  two_wheeler_slots: string | null;
-  two_wheeler_charges: string | null;
-  efficiency: string | null;
-  notice_period: string | null;
-  lease_term: string | null;
-  lock_in_period: string | null;
-  will_developer_do_fitouts: string | null;
-  contact_person_designation: string | null;
-  power: string | null;
-  power_backup: string | null;
-  number_of_cabins: string | null;
-  number_of_workstations: string | null;
-  size_of_workstation: string | null;
-  server_room: string | null;
-  training_room: string | null;
-  pantry: string | null;
-  electrical_ups_room: string | null;
-  cafeteria: string | null;
-  gym: string | null;
-  discussion_room: string | null;
-  meeting_room: string | null;
-  remarks: string | null;
-  updated_at: string;
-  meta?: Record<string, any>;
-}
-
-interface VisitPhoto {
-  id: number;
-  file_url: string;
-  description: string | null;
-  created_at: string;
-}
-
-interface VisitCommentDocument {
-  id: number;
-  document: string;
-  document_name: string;
-}
-
-interface VisitComment {
-  id: number;
-  user: {
-    full_name: string;
-    profile_picture: string | null;
-  };
-  content: string;
-  documents: VisitCommentDocument[];
-  created_at: string;
-  updated_at: string;
-}
-
-interface Visit {
-  id: number;
-  site: SiteInfo;
-  status: 'pending' | 'scout_completed' | 'admin_completed' | 'cancelled';
-  comments: VisitComment[];
-  photos: VisitPhoto[];
-  assigned_by: { full_name: string };
-  created_at: string;
-  updated_at: string;
-  scout_completed_at: string | null;
-  is_visible_to_scout: boolean;
-}
-
-interface Pagination {
-  current_page: number;
-  total_pages: number;
-  total_items: number;
-  page_size: number;
-  has_next: boolean;
-  has_previous: boolean;
-}
+const FLOOR_CONDITION_OPTIONS = [
+  { label: 'Bareshell', value: 'bareshell' },
+  { label: 'Warmshell', value: 'warmshell' },
+  { label: 'Fully Furnished', value: 'fully_furnished' },
+  { label: 'Semi Furnished', value: 'semi_furnished' },
+];
 
 const beautifyName = (name: string): string => {
   return name
@@ -213,14 +122,24 @@ const getStatusIcon = (status: string): string => {
   }
 };
 
-const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
+const formatCurrency = (value: string): string => {
+  const numStr = value.replace(/[^0-9]/g, '');
+  if (!numStr) return '';
+  const num = parseInt(numStr);
+  return num.toLocaleString('en-IN');
+};
+
+const parseCurrency = (formatted: string): string => {
+  return formatted.replace(/,/g, '');
+};
+
+const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [viewMode, setViewMode] = useState<'visits-list' | 'visit-detail' | 'create-site'>('visits-list');
   const [token, setToken] = useState<string | null>('mock_token');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [visits, setVisits] = useState<Visit[]>([
+  const [visits, setVisits] = useState([
     {
       id: 1,
       site: {
@@ -298,36 +217,76 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       is_visible_to_scout: true,
     }
   ]);
-  const [pagination, setPagination] = useState<Pagination | null>({
-    current_page: 1,
-    total_pages: 1,
-    total_items: 1,
-    page_size: 10,
-    has_next: false,
-    has_previous: false,
-  });
-  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editedSite, setEditedSite] = useState<Partial<SiteInfo> | null>(null);
+  const [editedSite, setEditedSite] = useState(null);
   const [updatingDetails, setUpdatingDetails] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [selectedDocuments, setSelectedDocuments] = useState<any[]>([]);
   const [addingComment, setAddingComment] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState('');
   const [markingComplete, setMarkingComplete] = useState(false);
-  const [loadingComments, setLoadingComments] = useState(false);
-  
+
+  // Create Site States
   const [newSite, setNewSite] = useState({
     building_name: '',
-    latitude: '',
-    longitude: '',
     location: '',
+    landmark: '',
+    total_floors: '',
+    number_of_basements: '',
+    floor_condition: 'bareshell',
+    area_per_floor: '',
     total_area: '',
+    availble_floors: '',
+    car_parking_charges: '',
+    car_parking_ratio_left: '',
+    car_parking_ratio_right: '',
+    car_parking_slots: '',
+    building_status: 'available',
     rent: '',
+    cam: '',
+    cam_deposit: '',
+    oc: false,
+    rental_escalation: '',
+    security_deposit: '',
+    two_wheeler_slots: '',
+    two_wheeler_charges: '',
+    efficiency: '',
+    notice_period: '',
+    lease_term: '',
+    lock_in_period: '',
+    will_developer_do_fitouts: false,
+    contact_person_name: '',
+    contact_person_designation: '',
+    contact_person_number: '',
+    contact_person_email: '',
+    power: '',
+    power_backup: '',
+    number_of_cabins: '',
+    number_of_workstations: '',
+    size_of_workstation: '',
+    server_room: '',
+    training_room: '',
+    pantry: '',
+    electrical_ups_room: '',
+    cafeteria: '',
+    gym: '',
+    discussion_room: '',
+    meeting_room: '',
+    remarks: '',
+    visit_date: '',
+    visit_completed: false,
+    purpose: '',
+    proof: '',
+    building_owner_name: '',
+    building_owner_contact: '',
   });
-  const [creatingsite, setCreatingSite] = useState(false);
+  const [buildingPhotos, setBuildingPhotos] = useState([]);
+  const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
+  const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
+  const [creatingSite, setCreatingSite] = useState(false);
+  const [customFields, setCustomFields] = useState([]);
 
   const formatDateTime = (dateString?: string): string => {
     if (!dateString) return '-';
@@ -355,7 +314,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  const handleVisitPress = (visit: Visit) => {
+  const handleVisitPress = (visit) => {
     setSelectedVisit(visit);
     setEditedSite({ ...visit.site });
     setViewMode('visit-detail');
@@ -368,67 +327,214 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     setEditedSite(null);
     setIsEditMode(false);
     setNewComment('');
-    setSelectedDocuments([]);
   };
 
-  const updateVisitDetails = async (): Promise<boolean> => {
-    setUpdatingDetails(true);
-    setTimeout(() => {
-      Alert.alert('Success', 'Site details updated successfully!');
-      setIsEditMode(false);
-      setUpdatingDetails(false);
-    }, 1000);
-    return true;
-  };
-
-  const addCommentToVisit = async (): Promise<boolean> => {
-    if (!newComment.trim()) {
-      Alert.alert('Error', 'Please enter a comment');
-      return false;
+  const captureLocation = async (): Promise<{ latitude: string; longitude: string } | null> => {
+    try {
+      // Simulate location capture - in real app, use navigator.geolocation or React Native's Geolocation
+      const mockLat = 28.6139 + Math.random() * 0.01;
+      const mockLng = 77.2090 + Math.random() * 0.01;
+      return {
+        latitude: mockLat.toFixed(6),
+        longitude: mockLng.toFixed(6),
+      };
+    } catch (error) {
+      console.error('Location capture error:', error);
+      return null;
     }
-    setAddingComment(true);
-    setTimeout(() => {
-      Alert.alert('Success', 'Comment added successfully!');
-      setNewComment('');
-      setSelectedDocuments([]);
-      setAddingComment(false);
-    }, 1000);
-    return true;
   };
 
-  const markVisitComplete = async (): Promise<boolean> => {
-    setMarkingComplete(true);
-    setTimeout(() => {
-      setVisits(prevVisits => prevVisits.filter(v => v.id !== selectedVisit?.id));
-      setMarkingComplete(false);
-      Alert.alert(
-        'Visit Completed',
-        'Your visit has been marked as complete and removed from your list.',
-        [{ text: 'OK', onPress: handleBackToList }]
-      );
-    }, 1000);
-    return true;
+  const addCustomField = () => {
+    setCustomFields([...customFields, { key: '', value: '' }]);
+  };
+
+  const removeCustomField = (index: number) => {
+    setCustomFields(customFields.filter((_, i) => i !== index));
+  };
+
+  const updateCustomField = (index: number, field: string, val: string) => {
+    const updated = [...customFields];
+    updated[index] = { ...updated[index], [field]: val };
+    setCustomFields(updated);
+  };
+
+  const handleAddPhoto = () => {
+    // Simulate adding a photo - in real app, use image picker
+    const newPhoto = {
+      id: Date.now(),
+      uri: `https://images.unsplash.com/photo-${Date.now()}?w=800`,
+      type: 'image/jpeg',
+    };
+    setBuildingPhotos([...buildingPhotos, newPhoto]);
+    Alert.alert('Success', 'Photo added successfully!');
+  };
+
+  const removePhoto = (photoId: number) => {
+    setBuildingPhotos(buildingPhotos.filter(p => p.id !== photoId));
   };
 
   const handleCreateSite = async () => {
-    if (!newSite.building_name || !newSite.latitude || !newSite.longitude) {
-      Alert.alert('Error', 'Please fill required fields: Building Name, Latitude, Longitude');
+    if (!newSite.building_name || !newSite.location) {
+      Alert.alert('Error', 'Please fill in Building Name and Location');
       return;
     }
+
+    // Validate custom fields
+    for (let field of customFields) {
+      if (field.key && !field.value) {
+        Alert.alert('Error', `Please provide value for ${field.key}`);
+        return;
+      }
+      if (!field.key && field.value) {
+        Alert.alert('Error', 'Please provide key for custom field');
+        return;
+      }
+    }
+
     setCreatingSite(true);
-    setTimeout(() => {
-      Alert.alert('Success', 'Site created successfully!');
-      setViewMode('visits-list');
-      setNewSite({
-        building_name: '',
-        latitude: '',
-        longitude: '',
-        location: '',
-        total_area: '',
-        rent: '',
+
+    try {
+      // Capture location automatically
+      const locationData = await captureLocation();
+      
+      if (!locationData) {
+        Alert.alert('Error', 'Failed to capture location. Please try again.');
+        setCreatingSite(false);
+        return;
+      }
+
+      const payload = {
+        token: token,
+        building_name: newSite.building_name,
+        location: newSite.location,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        landmark: newSite.landmark,
+        total_floors: newSite.total_floors,
+        number_of_basements: newSite.number_of_basements,
+        floor_condition: newSite.floor_condition,
+        area_per_floor: parseCurrency(newSite.area_per_floor),
+        total_area: parseCurrency(newSite.total_area),
+        availble_floors: newSite.availble_floors,
+        car_parking_charges: parseCurrency(newSite.car_parking_charges),
+        car_parking_ratio: newSite.car_parking_ratio_left && newSite.car_parking_ratio_right 
+          ? `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`
+          : '',
+        car_parking_slots: newSite.car_parking_slots,
+        building_status: newSite.building_status,
+        rent: parseCurrency(newSite.rent),
+        cam: parseCurrency(newSite.cam),
+        cam_deposit: parseCurrency(newSite.cam_deposit),
+        oc: newSite.oc,
+        rental_escalation: newSite.rental_escalation,
+        security_deposit: parseCurrency(newSite.security_deposit),
+        two_wheeler_slots: newSite.two_wheeler_slots,
+        two_wheeler_charges: parseCurrency(newSite.two_wheeler_charges),
+        efficiency: newSite.efficiency,
+        notice_period: newSite.notice_period,
+        lease_term: newSite.lease_term,
+        lock_in_period: newSite.lock_in_period,
+        will_developer_do_fitouts: newSite.will_developer_do_fitouts,
+        contact_person_name: newSite.contact_person_name,
+        contact_person_designation: newSite.contact_person_designation,
+        contact_person_number: newSite.contact_person_number,
+        contact_person_email: newSite.contact_person_email,
+        power: newSite.power,
+        power_backup: newSite.power_backup,
+        number_of_cabins: newSite.number_of_cabins,
+        number_of_workstations: newSite.number_of_workstations,
+        size_of_workstation: newSite.size_of_workstation,
+        server_room: newSite.server_room,
+        training_room: newSite.training_room,
+        pantry: newSite.pantry,
+        electrical_ups_room: newSite.electrical_ups_room,
+        cafeteria: newSite.cafeteria,
+        gym: newSite.gym,
+        discussion_room: newSite.discussion_room,
+        meeting_room: newSite.meeting_room,
+        remarks: newSite.remarks,
+        visit_date: newSite.visit_date,
+        visit_completed: newSite.visit_completed,
+        purpose: newSite.purpose,
+        proof: newSite.proof,
+        building_owner_name: newSite.building_owner_name,
+        building_owner_contact: newSite.building_owner_contact,
+        photos: buildingPhotos,
+      };
+
+      // Add custom fields to payload
+      customFields.forEach(field => {
+        if (field.key) {
+          payload[field.key] = field.value;
+        }
       });
+
+      // Simulate API call
+      setTimeout(() => {
+        Alert.alert('Success', `Site created successfully!\nLocation captured: ${locationData.latitude}, ${locationData.longitude}`);
+        setViewMode('visits-list');
+        // Reset form
+        setNewSite({
+          building_name: '',
+          location: '',
+          landmark: '',
+          total_floors: '',
+          number_of_basements: '',
+          floor_condition: 'bareshell',
+          area_per_floor: '',
+          total_area: '',
+          availble_floors: '',
+          car_parking_charges: '',
+          car_parking_ratio_left: '',
+          car_parking_ratio_right: '',
+          car_parking_slots: '',
+          building_status: 'available',
+          rent: '',
+          cam: '',
+          cam_deposit: '',
+          oc: false,
+          rental_escalation: '',
+          security_deposit: '',
+          two_wheeler_slots: '',
+          two_wheeler_charges: '',
+          efficiency: '',
+          notice_period: '',
+          lease_term: '',
+          lock_in_period: '',
+          will_developer_do_fitouts: false,
+          contact_person_name: '',
+          contact_person_designation: '',
+          contact_person_number: '',
+          contact_person_email: '',
+          power: '',
+          power_backup: '',
+          number_of_cabins: '',
+          number_of_workstations: '',
+          size_of_workstation: '',
+          server_room: '',
+          training_room: '',
+          pantry: '',
+          electrical_ups_room: '',
+          cafeteria: '',
+          gym: '',
+          discussion_room: '',
+          meeting_room: '',
+          remarks: '',
+          visit_date: '',
+          visit_completed: false,
+          purpose: '',
+          proof: '',
+          building_owner_name: '',
+          building_owner_contact: '',
+        });
+        setBuildingPhotos([]);
+        setCustomFields([]);
+        setCreatingSite(false);
+      }, 2000);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create site');
       setCreatingSite(false);
-    }, 1000);
+    }
   };
 
   const BackIcon = () => (
@@ -437,27 +543,37 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     </View>
   );
 
-  const EditIcon = ({ size = 18 }: { size?: number }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.65,
-        height: size * 0.65,
-        borderWidth: 1.5,
-        borderColor: colors.white,
-        transform: [{ rotate: '45deg' }],
-        position: 'relative',
-      }}>
-        <View style={{
-          position: 'absolute',
-          bottom: -size * 0.15,
-          right: -size * 0.15,
-          width: size * 0.35,
-          height: size * 0.35,
-          backgroundColor: colors.white,
-          transform: [{ rotate: '-45deg' }],
-        }} />
-      </View>
-    </View>
+  const DropdownModal = ({ visible, options, onSelect, onClose, title }) => (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity 
+        style={styles.dropdownOverlay} 
+        activeOpacity={1} 
+        onPress={onClose}
+      >
+        <View style={styles.dropdownContainer}>
+          <Text style={styles.dropdownTitle}>{title}</Text>
+          <ScrollView style={styles.dropdownScroll}>
+            {options.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={styles.dropdownOption}
+                onPress={() => {
+                  onSelect(option.value);
+                  onClose();
+                }}
+              >
+                <Text style={styles.dropdownOptionText}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
   );
 
   if (viewMode === 'create-site') {
@@ -465,64 +581,157 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setViewMode('visits-list')}>
             <BackIcon />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create New Site</Text>
           <View style={styles.headerSpacer} />
         </View>
+
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.formContainer}>
+            {/* Basic Information */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Basic Information</Text>
-              
+              <Text style={styles.sectionTitle}>Basic Information</Text>
+              <Text style={styles.sectionSubtitle}>Essential details about the property</Text>
+
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Building Name *</Text>
                 <TextInput
                   style={styles.input}
                   value={newSite.building_name}
                   onChangeText={(val) => setNewSite({ ...newSite, building_name: val })}
-                  placeholder="Enter building name"
+                  placeholder="e.g., Prestige Tower"
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
 
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Location Address *</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={newSite.location}
+                  onChangeText={(val) => setNewSite({ ...newSite, location: val })}
+                  placeholder="Enter full address"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Landmark</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.landmark}
+                  onChangeText={(val) => setNewSite({ ...newSite, landmark: val })}
+                  placeholder="e.g., Near City Mall"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.infoBox}>
+                <Text style={styles.infoBoxIcon}>📍</Text>
+                <Text style={styles.infoBoxText}>
+                  Location will be captured automatically when you create the site
+                </Text>
+              </View>
+            </View>
+
+            {/* Building Status & Condition */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Building Status & Condition</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Building Status</Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setShowBuildingStatusDropdown(true)}
+                >
+                  <Text style={styles.dropdownButtonText}>
+                    {BUILDING_STATUS_OPTIONS.find(o => o.value === newSite.building_status)?.label || 'Select Status'}
+                  </Text>
+                  <Text style={styles.dropdownButtonIcon}>▼</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Floor Condition</Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setShowFloorConditionDropdown(true)}
+                >
+                  <Text style={styles.dropdownButtonText}>
+                    {FLOOR_CONDITION_OPTIONS.find(o => o.value === newSite.floor_condition)?.label || 'Select Condition'}
+                  </Text>
+                  <Text style={styles.dropdownButtonIcon}>▼</Text>
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.row}>
                 <View style={styles.halfWidth}>
-                  <Text style={styles.formLabel}>Latitude *</Text>
+                  <Text style={styles.formLabel}>Total Floors</Text>
                   <TextInput
                     style={styles.input}
-                    value={newSite.latitude}
-                    onChangeText={(val) => setNewSite({ ...newSite, latitude: val })}
-                    placeholder="0.0000"
-                    keyboardType="decimal-pad"
+                    value={newSite.total_floors}
+                    onChangeText={(val) => setNewSite({ ...newSite, total_floors: val })}
+                    placeholder="10"
+                    keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                   />
                 </View>
                 <View style={styles.halfWidth}>
-                  <Text style={styles.formLabel}>Longitude *</Text>
+                  <Text style={styles.formLabel}>Basements</Text>
                   <TextInput
                     style={styles.input}
-                    value={newSite.longitude}
-                    onChangeText={(val) => setNewSite({ ...newSite, longitude: val })}
-                    placeholder="0.0000"
-                    keyboardType="decimal-pad"
+                    value={newSite.number_of_basements}
+                    onChangeText={(val) => setNewSite({ ...newSite, number_of_basements: val })}
+                    placeholder="2"
+                    keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                   />
                 </View>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Location</Text>
+                <Text style={styles.formLabel}>Available Floors</Text>
                 <TextInput
                   style={styles.input}
-                  value={newSite.location}
-                  onChangeText={(val) => setNewSite({ ...newSite, location: val })}
-                  placeholder="Enter full address"
+                  value={newSite.availble_floors}
+                  onChangeText={(val) => setNewSite({ ...newSite, availble_floors: val })}
+                  placeholder="e.g., 2nd Floor, B+G+3"
                   placeholderTextColor={colors.textSecondary}
-                  multiline
                 />
               </View>
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={() => setNewSite({ ...newSite, oc: !newSite.oc })}
+                >
+                  <View style={[styles.checkboxBox, newSite.oc && styles.checkboxBoxChecked]}>
+                    {newSite.oc && <Text style={styles.checkboxCheck}>✓</Text>}
+                  </View>
+                  <Text style={styles.checkboxLabel}>Occupancy Certificate (OC) Available</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={() => setNewSite({ ...newSite, will_developer_do_fitouts: !newSite.will_developer_do_fitouts })}
+                >
+                  <View style={[styles.checkboxBox, newSite.will_developer_do_fitouts && styles.checkboxBoxChecked]}>
+                    {newSite.will_developer_do_fitouts && <Text style={styles.checkboxCheck}>✓</Text>}
+                  </View>
+                  <Text style={styles.checkboxLabel}>Developer will do Fitouts</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Area Details */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Area Details</Text>
 
               <View style={styles.row}>
                 <View style={styles.halfWidth}>
@@ -530,19 +739,215 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                   <TextInput
                     style={styles.input}
                     value={newSite.total_area}
-                    onChangeText={(val) => setNewSite({ ...newSite, total_area: val })}
-                    placeholder="0"
+                    onChangeText={(val) => setNewSite({ ...newSite, total_area: formatCurrency(val) })}
+                    placeholder="41,000"
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                   />
                 </View>
                 <View style={styles.halfWidth}>
-                  <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
+                  <Text style={styles.formLabel}>Area per Floor (sq ft)</Text>
                   <TextInput
                     style={styles.input}
-                    value={newSite.rent}
-                    onChangeText={(val) => setNewSite({ ...newSite, rent: val })}
+                    value={newSite.area_per_floor}
+                    onChangeText={(val) => setNewSite({ ...newSite, area_per_floor: formatCurrency(val) })}
+                    placeholder="11,400"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Efficiency (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.efficiency}
+                  onChangeText={(val) => setNewSite({ ...newSite, efficiency: val })}
+                  placeholder="80"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            {/* Financial Details */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Financial Details</Text>
+              <Text style={styles.sectionSubtitle}>All amounts in INR</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.rent}
+                  onChangeText={(val) => setNewSite({ ...newSite, rent: formatCurrency(val) })}
+                  placeholder="12,54,000"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>CAM (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.cam}
+                    onChangeText={(val) => setNewSite({ ...newSite, cam: formatCurrency(val) })}
+                    placeholder="12"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>CAM Deposit (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.cam_deposit}
+                    onChangeText={(val) => setNewSite({ ...newSite, cam_deposit: formatCurrency(val) })}
                     placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Security Deposit (₹)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.security_deposit}
+                  onChangeText={(val) => setNewSite({ ...newSite, security_deposit: formatCurrency(val) })}
+                  placeholder="1,50,48,000"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Rental Escalation (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.rental_escalation}
+                  onChangeText={(val) => setNewSite({ ...newSite, rental_escalation: val })}
+                  placeholder="5"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            {/* Lease Terms */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Lease Terms</Text>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Lease Term</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.lease_term}
+                    onChangeText={(val) => setNewSite({ ...newSite, lease_term: val })}
+                    placeholder="5 + 5 years"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Lock-in Period</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.lock_in_period}
+                    onChangeText={(val) => setNewSite({ ...newSite, lock_in_period: val })}
+                    placeholder="5 years"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Notice Period</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.notice_period}
+                  onChangeText={(val) => setNewSite({ ...newSite, notice_period: val })}
+                  placeholder="6 months post lock-in"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            {/* Parking Details */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Parking Details</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Car Parking Ratio</Text>
+                <View style={styles.ratioContainer}>
+                  <TextInput
+                    style={[styles.input, styles.ratioInput]}
+                    value={newSite.car_parking_ratio_left}
+                    onChangeText={(val) => setNewSite({ ...newSite, car_parking_ratio_left: val })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                  <Text style={styles.ratioSeparator}>:</Text>
+                  <TextInput
+                    style={[styles.input, styles.ratioInput]}
+                    value={newSite.car_parking_ratio_right}
+                    onChangeText={(val) => setNewSite({ ...newSite, car_parking_ratio_right: val })}
+                    placeholder="1000"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Car Parking Slots</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.car_parking_slots}
+                    onChangeText={(val) => setNewSite({ ...newSite, car_parking_slots: val })}
+                    placeholder="11"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Car Parking Charges (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.car_parking_charges}
+                    onChangeText={(val) => setNewSite({ ...newSite, car_parking_charges: formatCurrency(val) })}
+                    placeholder="5,500"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Two Wheeler Slots</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.two_wheeler_slots}
+                    onChangeText={(val) => setNewSite({ ...newSite, two_wheeler_slots: val })}
+                    placeholder="100"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Two Wheeler Charges (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.two_wheeler_charges}
+                    onChangeText={(val) => setNewSite({ ...newSite, two_wheeler_charges: formatCurrency(val) })}
+                    placeholder="1,000"
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                   />
@@ -550,19 +955,407 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               </View>
             </View>
 
+            {/* Utilities & Infrastructure */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Utilities & Infrastructure</Text>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Power</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.power}
+                    onChangeText={(val) => setNewSite({ ...newSite, power: val })}
+                    placeholder="0.8 kva per 100 sft"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Power Backup</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.power_backup}
+                    onChangeText={(val) => setNewSite({ ...newSite, power_backup: val })}
+                    placeholder="100%"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Workspace Configuration */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Workspace Configuration</Text>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Number of Cabins</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.number_of_cabins}
+                    onChangeText={(val) => setNewSite({ ...newSite, number_of_cabins: val })}
+                    placeholder="20"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Number of Workstations</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.number_of_workstations}
+                    onChangeText={(val) => setNewSite({ ...newSite, number_of_workstations: val })}
+                    placeholder="200"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Workstation Size</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.size_of_workstation}
+                  onChangeText={(val) => setNewSite({ ...newSite, size_of_workstation: val })}
+                  placeholder="60 sq ft"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            {/* Amenities & Facilities */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Amenities & Facilities</Text>
+              <Text style={styles.sectionSubtitle}>Enter number of rooms/facilities</Text>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Server Room</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.server_room}
+                    onChangeText={(val) => setNewSite({ ...newSite, server_room: val })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Training Room</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.training_room}
+                    onChangeText={(val) => setNewSite({ ...newSite, training_room: val })}
+                    placeholder="2"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Meeting Room</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.meeting_room}
+                    onChangeText={(val) => setNewSite({ ...newSite, meeting_room: val })}
+                    placeholder="3"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Discussion Room</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.discussion_room}
+                    onChangeText={(val) => setNewSite({ ...newSite, discussion_room: val })}
+                    placeholder="2"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Pantry</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.pantry}
+                    onChangeText={(val) => setNewSite({ ...newSite, pantry: val })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Cafeteria</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.cafeteria}
+                    onChangeText={(val) => setNewSite({ ...newSite, cafeteria: val })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Electrical/UPS Room</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.electrical_ups_room}
+                    onChangeText={(val) => setNewSite({ ...newSite, electrical_ups_room: val })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Gym</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.gym}
+                    onChangeText={(val) => setNewSite({ ...newSite, gym: val })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Building Owner Information */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Building Owner Information</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Owner Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.building_owner_name}
+                  onChangeText={(val) => setNewSite({ ...newSite, building_owner_name: val })}
+                  placeholder="Enter owner name"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Owner Contact</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.building_owner_contact}
+                  onChangeText={(val) => setNewSite({ ...newSite, building_owner_contact: val })}
+                  placeholder="+91 9876543210"
+                  keyboardType="phone-pad"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            {/* Contact Person Information */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Contact Person Information</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Contact Person Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.contact_person_name}
+                  onChangeText={(val) => setNewSite({ ...newSite, contact_person_name: val })}
+                  placeholder="Enter name"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Phone Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.contact_person_number}
+                    onChangeText={(val) => setNewSite({ ...newSite, contact_person_number: val })}
+                    placeholder="+91 9876543210"
+                    keyboardType="phone-pad"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <Text style={styles.formLabel}>Designation</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newSite.contact_person_designation}
+                    onChangeText={(val) => setNewSite({ ...newSite, contact_person_designation: val })}
+                    placeholder="Manager"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newSite.contact_person_email}
+                  onChangeText={(val) => setNewSite({ ...newSite, contact_person_email: val })}
+                  placeholder="contact@example.com"
+                  keyboardType="email-address"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            {/* Building Photos */}
+            <View style={styles.card}>
+              <View style={styles.customFieldsHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Building Photos</Text>
+                  <Text style={styles.sectionSubtitle}>Upload photos of the property</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.addFieldButton}
+                  onPress={handleAddPhoto}
+                >
+                  <Text style={styles.addFieldButtonText}>📷 Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {buildingPhotos.length === 0 ? (
+                <View style={styles.emptyCustomFields}>
+                  <Text style={styles.emptyCustomFieldsText}>No photos added yet</Text>
+                </View>
+              ) : (
+                <View style={styles.photoGrid}>
+                  {buildingPhotos.map((photo, index) => (
+                    <View key={photo.id} style={styles.photoGridItem}>
+                      <Image
+                        source={{ uri: photo.uri }}
+                        style={styles.photoGridImage}
+                      />
+                      <TouchableOpacity
+                        style={styles.photoRemoveButton}
+                        onPress={() => removePhoto(photo.id)}
+                      >
+                        <Text style={styles.photoRemoveButtonText}>×</Text>
+                      </TouchableOpacity>
+                      <View style={styles.photoIndexBadge}>
+                        <Text style={styles.photoIndexText}>{index + 1}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Remarks */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Additional Notes</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Remarks</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={newSite.remarks}
+                  onChangeText={(val) => setNewSite({ ...newSite, remarks: val })}
+                  placeholder="Any additional information or observations..."
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </View>
+
+            {/* Custom Fields Section */}
+            <View style={styles.card}>
+              <View style={styles.customFieldsHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Custom Fields</Text>
+                  <Text style={styles.sectionSubtitle}>Add any additional information</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.addFieldButton}
+                  onPress={addCustomField}
+                >
+                  <Text style={styles.addFieldButtonText}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {customFields.length === 0 ? (
+                <View style={styles.emptyCustomFields}>
+                  <Text style={styles.emptyCustomFieldsText}>No custom fields yet</Text>
+                </View>
+              ) : (
+                customFields.map((field, index) => (
+                  <View key={index} style={styles.customFieldRow}>
+                    <View style={styles.customFieldInputContainer}>
+                      <TextInput
+                        style={[styles.input, styles.customFieldKeyInput]}
+                        value={field.key}
+                        onChangeText={(val) => updateCustomField(index, 'key', val)}
+                        placeholder="Field name"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                      <TextInput
+                        style={[styles.input, styles.customFieldValueInput]}
+                        value={field.value}
+                        onChangeText={(val) => updateCustomField(index, 'value', val)}
+                        placeholder="Value"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeFieldButton}
+                      onPress={() => removeCustomField(index)}
+                    >
+                      <Text style={styles.removeFieldButtonText}>−</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* Create Button */}
             <TouchableOpacity
-              style={[styles.primaryButton, creatingsite && styles.buttonDisabled]}
+              style={[styles.primaryButton, creatingSite && styles.buttonDisabled]}
               onPress={handleCreateSite}
-              disabled={creatingsite}
+              disabled={creatingSite}
             >
-              {creatingsite ? (
-                <ActivityIndicator color={colors.white} size="small" />
+              {creatingSite ? (
+                <View style={styles.buttonLoading}>
+                  <ActivityIndicator color={colors.white} size="small" />
+                  <Text style={[styles.primaryButtonText, { marginLeft: spacing.sm }]}>
+                    Capturing location & creating site...
+                  </Text>
+                </View>
               ) : (
                 <Text style={styles.primaryButtonText}>Create Site</Text>
               )}
             </TouchableOpacity>
+
+            <View style={{ height: 24 }} />
           </View>
         </ScrollView>
+
+        <DropdownModal
+          visible={showBuildingStatusDropdown}
+          options={BUILDING_STATUS_OPTIONS}
+          onSelect={(value) => setNewSite({ ...newSite, building_status: value })}
+          onClose={() => setShowBuildingStatusDropdown(false)}
+          title="Select Building Status"
+        />
+
+        <DropdownModal
+          visible={showFloorConditionDropdown}
+          options={FLOOR_CONDITION_OPTIONS}
+          onSelect={(value) => setNewSite({ ...newSite, floor_condition: value })}
+          onClose={() => setShowFloorConditionDropdown(false)}
+          title="Select Floor Condition"
+        />
       </SafeAreaView>
     );
   }
@@ -593,7 +1386,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                   </View>
                 </View>
               </View>
-              
+
               {selectedVisit.site.location && (
                 <View style={styles.locationContainer}>
                   <Text style={styles.locationIcon}>📍</Text>
@@ -611,181 +1404,11 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                   <Text style={styles.metaValue}>{formatDate(selectedVisit.site.updated_at)}</Text>
                 </View>
               </View>
-
-              {selectedVisit.scout_completed_at && (
-                <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Completed On</Text>
-                  <Text style={styles.metaValue}>{formatDate(selectedVisit.scout_completed_at)}</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Property Details</Text>
-                {selectedVisit.status === 'pending' && (
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => setIsEditMode(!isEditMode)}
-                  >
-                    <EditIcon size={16} />
-                  </TouchableOpacity>
-                )}
-              </View>
-              
-              <View style={styles.detailsGrid}>
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Building Status</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.detailInput}
-                      value={editedSite?.building_status || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, building_status: val })}
-                      placeholder="Enter status"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.building_status || '-'}</Text>
-                  )}
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Total Area</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.detailInput}
-                      value={editedSite?.total_area || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, total_area: val })}
-                      placeholder="0"
-                      keyboardType="numeric"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>
-                      {selectedVisit.site.total_area ? `${selectedVisit.site.total_area} sq ft` : '-'}
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Monthly Rent</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.detailInput}
-                      value={editedSite?.rent || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, rent: val })}
-                      placeholder="0"
-                      keyboardType="numeric"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>
-                      {selectedVisit.site.rent ? `₹${selectedVisit.site.rent}` : '-'}
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Car Parking Ratio</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.detailInput}
-                      value={editedSite?.car_parking_ratio || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, car_parking_ratio: val })}
-                      placeholder="1:100"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.car_parking_ratio || '-'}</Text>
-                  )}
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Available Floors</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.detailInput}
-                      value={editedSite?.availble_floors || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, availble_floors: val })}
-                      placeholder="1,2,3"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>{selectedVisit.site.availble_floors || '-'}</Text>
-                  )}
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Area Per Floor</Text>
-                  {isEditMode ? (
-                    <TextInput
-                      style={styles.detailInput}
-                      value={editedSite?.area_per_floor || ''}
-                      onChangeText={(val) => setEditedSite({ ...editedSite, area_per_floor: val })}
-                      placeholder="0"
-                      keyboardType="numeric"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  ) : (
-                    <Text style={styles.detailValue}>
-                      {selectedVisit.site.area_per_floor ? `${selectedVisit.site.area_per_floor} sq ft` : '-'}
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              {isEditMode && (
-                <TouchableOpacity
-                  style={[styles.primaryButton, updatingDetails && styles.buttonDisabled]}
-                  onPress={updateVisitDetails}
-                  disabled={updatingDetails}
-                >
-                  {updatingDetails ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Save Changes</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Contact Information</Text>
-              <View style={styles.contactGrid}>
-                {selectedVisit.site.contact_person_name && (
-                  <View style={styles.contactItem}>
-                    <Text style={styles.contactLabel}>Name</Text>
-                    <Text style={styles.contactValue}>{selectedVisit.site.contact_person_name}</Text>
-                  </View>
-                )}
-                {selectedVisit.site.contact_person_designation && (
-                  <View style={styles.contactItem}>
-                    <Text style={styles.contactLabel}>Designation</Text>
-                    <Text style={styles.contactValue}>{selectedVisit.site.contact_person_designation}</Text>
-                  </View>
-                )}
-                {selectedVisit.site.contact_person_number && (
-                  <View style={styles.contactItem}>
-                    <Text style={styles.contactLabel}>Phone</Text>
-                    <Text style={[styles.contactValue, styles.contactLink]}>
-                      📞 {selectedVisit.site.contact_person_number}
-                    </Text>
-                  </View>
-                )}
-                {selectedVisit.site.contact_person_email && (
-                  <View style={styles.contactItem}>
-                    <Text style={styles.contactLabel}>Email</Text>
-                    <Text style={[styles.contactValue, styles.contactLink]}>
-                      {selectedVisit.site.contact_person_email}
-                    </Text>
-                  </View>
-                )}
-              </View>
             </View>
 
             {selectedVisit.photos && selectedVisit.photos.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Photos ({selectedVisit.photos.length})</Text>
+                <Text style={styles.sectionTitle}>Photos ({selectedVisit.photos.length})</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -815,11 +1438,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             )}
 
             <View style={styles.card}>
-              <View style={styles.commentsHeader}>
-                <Text style={styles.cardTitle}>Comments ({selectedVisit.comments.length})</Text>
-                {loadingComments && <ActivityIndicator color={colors.primary} size="small" />}
-              </View>
-
+              <Text style={styles.sectionTitle}>Comments ({selectedVisit.comments.length})</Text>
               {selectedVisit.comments.length > 0 ? (
                 <View style={styles.commentsContainer}>
                   {selectedVisit.comments.map((comment) => (
@@ -836,16 +1455,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                         </View>
                       </View>
                       <Text style={styles.commentContent}>{comment.content}</Text>
-                      {comment.documents && comment.documents.length > 0 && (
-                        <View style={styles.documentsSection}>
-                          {comment.documents.map((doc) => (
-                            <View key={doc.id} style={styles.documentChip}>
-                              <Text style={styles.documentIcon}>📎</Text>
-                              <Text style={styles.documentName} numberOfLines={1}>{doc.document_name}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
                     </View>
                   ))}
                 </View>
@@ -855,85 +1464,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                   <Text style={styles.emptyStateText}>No comments yet</Text>
                 </View>
               )}
-
-              <View style={styles.addCommentSection}>
-                <Text style={styles.formLabel}>Add Your Observation</Text>
-                <TextInput
-                  style={styles.commentInput}
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  placeholder="Share your thoughts about this site..."
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  placeholderTextColor={colors.textSecondary}
-                />
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, addingComment && styles.buttonDisabled]}
-                  onPress={addCommentToVisit}
-                  disabled={addingComment}
-                >
-                  {addingComment ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Post Comment</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </View>
-
-            {selectedVisit.status === 'pending' && (
-              <View style={styles.actionContainer}>
-                <TouchableOpacity
-                  style={[styles.completeButton, markingComplete && styles.buttonDisabled]}
-                  onPress={() => {
-                    Alert.alert(
-                      'Mark Visit Complete?',
-                      'Once you mark this visit as complete, it will be removed from your list and sent to admin for final verification.',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Mark Complete',
-                          onPress: markVisitComplete,
-                          style: 'default',
-                        },
-                      ]
-                    );
-                  }}
-                  disabled={markingComplete}
-                >
-                  {markingComplete ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.completeButtonText}>✓ Mark Visit as Complete</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {selectedVisit.status === 'scout_completed' && (
-              <View style={[styles.card, styles.statusCard, { backgroundColor: colors.info + '15' }]}>
-                <View style={styles.statusCardContent}>
-                  <Text style={styles.statusCardIcon}>⏳</Text>
-                  <Text style={styles.statusCardText}>Waiting for admin to finalize this visit</Text>
-                  <Text style={styles.statusCardSubtext}>
-                    Completed on {formatDate(selectedVisit.scout_completed_at)}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {selectedVisit.status === 'admin_completed' && (
-              <View style={[styles.card, styles.statusCard, { backgroundColor: colors.success + '15' }]}>
-                <View style={styles.statusCardContent}>
-                  <Text style={styles.statusCardIcon}>✓✓</Text>
-                  <Text style={[styles.statusCardText, { color: colors.success }]}>
-                    This visit has been finalized by admin
-                  </Text>
-                </View>
-              </View>
-            )}
 
             <View style={{ height: 24 }} />
           </View>
@@ -957,11 +1488,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               style={styles.photoModalImage}
               resizeMode="contain"
             />
-            <View style={styles.photoModalCounter}>
-              <Text style={styles.photoModalCounterText}>
-                {selectedPhotoIndex + 1} / {selectedVisit.photos.length}
-              </Text>
-            </View>
           </View>
         </Modal>
       </SafeAreaView>
@@ -1023,19 +1549,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           <View style={styles.listContainer}>
             <View style={styles.listHeader}>
               <Text style={styles.listTitle}>Assigned Visits</Text>
-              {pagination && !searchQuery && (
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{visits.length} of {pagination.total_items}</Text>
-                </View>
-              )}
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>{visits.length}</Text>
+              </View>
             </View>
 
-            {loading && visits.length === 0 ? (
-              <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading your visits...</Text>
-              </View>
-            ) : visits.length > 0 ? (
+            {visits.length > 0 ? (
               <>
                 {visits.map((visit) => (
                   <TouchableOpacity
@@ -1054,7 +1573,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                         </Text>
                       </View>
                     </View>
-                    
+
                     {visit.site.location && (
                       <View style={styles.visitLocationRow}>
                         <Text style={styles.visitLocationIcon}>📍</Text>
@@ -1063,7 +1582,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                         </Text>
                       </View>
                     )}
-                    
+
                     <View style={styles.visitMetaRow}>
                       {visit.site.rent && (
                         <View style={styles.visitMetaItem}>
@@ -1081,7 +1600,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                         </View>
                       )}
                     </View>
-                    
+
                     <View style={styles.visitCardFooter}>
                       <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
                       <Text style={styles.visitArrow}>→</Text>
@@ -1092,14 +1611,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             ) : (
               <View style={styles.emptyListContainer}>
                 <Text style={styles.emptyListIcon}>📋</Text>
-                <Text style={styles.emptyListTitle}>
-                  {searchQuery ? 'No visits found' : 'No visits assigned yet'}
-                </Text>
-                <Text style={styles.emptyListSubtitle}>
-                  {searchQuery
-                    ? 'Try adjusting your search'
-                    : 'Your assigned visits will appear here'}
-                </Text>
+                <Text style={styles.emptyListTitle}>No visits assigned yet</Text>
+                <Text style={styles.emptyListSubtitle}>Your assigned visits will appear here</Text>
               </View>
             )}
           </View>
@@ -1228,16 +1741,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.white,
   },
-  centerContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    fontWeight: '500',
-  },
   visitCard: {
     marginBottom: spacing.md,
     borderRadius: borderRadius.lg,
@@ -1352,26 +1855,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.md,
   },
-  cardTitle: {
+  sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  sectionSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
     marginBottom: spacing.md,
-  },
-  editButton: {
-    backgroundColor: colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.sm,
+    fontWeight: '500',
   },
   formGroup: {
     marginBottom: spacing.md,
@@ -1383,15 +1877,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   input: {
-    height: 48,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     backgroundColor: colors.white,
     fontSize: fontSize.md,
     color: colors.text,
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   row: {
     flexDirection: 'row',
@@ -1401,13 +1898,134 @@ const styles = StyleSheet.create({
   halfWidth: {
     flex: 1,
   },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight + '15',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.sm,
+  },
+  infoBoxIcon: {
+    fontSize: fontSize.lg,
+    marginRight: spacing.sm,
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.white,
+  },
+  dropdownButtonText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  dropdownButtonIcon: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  dropdownContainer: {
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: 400,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.lg,
+  },
+  dropdownTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  dropdownScroll: {
+    maxHeight: 300,
+  },
+  dropdownOption: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  dropdownOptionText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  checkboxContainer: {
+    marginBottom: spacing.md,
+  },
+  checkbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkboxBox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    marginRight: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxBoxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  checkboxCheck: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  checkboxLabel: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    flex: 1,
+  },
+  ratioContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  ratioInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  ratioSeparator: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   primaryButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
     ...shadows.md,
   },
   primaryButtonText: {
@@ -1415,8 +2033,116 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '700',
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  buttonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customFieldsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  addFieldButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  addFieldButtonText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  emptyCustomFields: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+  },
+  emptyCustomFieldsText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+  },
+  customFieldRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    alignItems: 'flex-end',
+  },
+  customFieldInputContainer: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  customFieldKeyInput: {
+    marginBottom: 0,
+  },
+  customFieldValueInput: {
+    marginBottom: 0,
+  },
+  removeFieldButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  removeFieldButtonText: {
+    color: colors.white,
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  photoGridItem: {
+    width: (screenWidth - spacing.lg * 2 - spacing.lg * 2 - spacing.md) / 2,
+    height: 120,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    position: 'relative',
+    ...shadows.sm,
+  },
+  photoGridImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.backgroundSecondary,
+  },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoRemoveButtonText: {
+    color: colors.white,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  photoIndexBadge: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    left: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  photoIndexText: {
+    color: colors.white,
+    fontSize: fontSize.xs,
+    fontWeight: '700',
   },
   siteHeader: {
     marginBottom: spacing.md,
@@ -1487,61 +2213,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  detailsGrid: {
-    gap: spacing.sm,
-  },
-  detailItem: {
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  detailLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  detailValue: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  detailInput: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.white,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginTop: spacing.xs,
-  },
-  contactGrid: {
-    gap: spacing.sm,
-  },
-  contactItem: {
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  contactLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  contactValue: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  contactLink: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
   photoScroll: {
     marginTop: spacing.sm,
   },
@@ -1598,25 +2269,6 @@ const styles = StyleSheet.create({
     width: screenWidth * 0.9,
     height: screenHeight * 0.7,
   },
-  photoModalCounter: {
-    position: 'absolute',
-    bottom: 60,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-  },
-  photoModalCounterText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  commentsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
   commentsContainer: {
     gap: spacing.sm,
     marginBottom: spacing.md,
@@ -1664,34 +2316,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 20,
   },
-  documentsSection: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  documentChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primaryLight + '40',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    maxWidth: '100%',
-  },
-  documentIcon: {
-    fontSize: fontSize.sm,
-    marginRight: spacing.xs,
-  },
-  documentName: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '600',
-    flex: 1,
-  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
@@ -1703,63 +2327,6 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-  },
-  addCommentSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  commentInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    backgroundColor: colors.white,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    textAlignVertical: 'top',
-    minHeight: 100,
-    marginBottom: spacing.xl,
-  },
-  actionContainer: {
-    marginBottom: spacing.xxl,
-  },
-  completeButton: {
-    backgroundColor: colors.success,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    ...shadows.md,
-  },
-  completeButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  statusCard: {
-    borderLeftWidth: 4,
-  },
-  statusCardContent: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  statusCardIcon: {
-    fontSize: 40,
-    marginBottom: spacing.sm,
-  },
-  statusCardText: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  statusCardSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
   },
 });
 
