@@ -15,6 +15,7 @@ import Driver from './Driver';
 import BDT from './BDT';
 import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
+import CreateSite from './CreateSite';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -83,6 +84,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showBDT, setShowBDT] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
   const [showScoutBoy, setShowScoutBoy] = useState(false);
+  const [showCreateSite, setShowCreateSite] = useState(false);
+
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-300));
@@ -299,6 +302,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       Alert.alert('Coming Soon', `${item} feature will be available soon!`);
     }
   };
+  const handleBackFromCreateSite = () => {
+    setShowCreateSite(false);
+    setShowScoutBoy(true); // Go back to ScoutBoy
+    setActiveMenuItem('Dashboard');
+  };
+
 
   const handleModulePress = (module: string, moduleUniqueName?: string) => {
     if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
@@ -495,6 +504,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <Medical onBack={handleBackFromMedical} />
       ) : showScoutBoy ? (
         <ScoutBoy onBack={handleBackFromScoutBoy} />
+      ) : showCreateSite ? (
+        <CreateSite
+          onBack={handleBackFromCreateSite}
+          colors={colors}
+          spacing={spacing}
+          fontSize={fontSize}
+          borderRadius={borderRadius}
+          shadows={shadows}
+        />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
@@ -517,20 +535,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             </View>
           </View>
           <View style={styles.mainContent}>
-            <ScrollView 
-              style={styles.scrollContent} 
-              showsVerticalScrollIndicator={false} 
-              contentContainerStyle={styles.scrollContainer} 
+            <ScrollView
+              style={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContainer}
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Attendance</Text>
                 <View style={styles.attendanceGrid}>
                   <AttendanceCard value="261" label="Days Present" color="#A7F3D0" />
-                  <AttendanceCard 
-                    value={String(userData.earned_leaves + userData.sick_leaves + userData.casual_leaves)} 
-                    label="Leaves Applied" 
-                    color="#FED7AA" 
+                  <AttendanceCard
+                    value={String(userData.earned_leaves + userData.sick_leaves + userData.casual_leaves)}
+                    label="Leaves Applied"
+                    color="#FED7AA"
                   />
                   <AttendanceCard value="7" label="Holidays" color="#DDD6FE" />
                   <AttendanceCard value="0" label="Late Arrivals" color="#FBCFE8" />
@@ -539,17 +557,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <View style={styles.sectionModules}>
                 <Text style={styles.sectionTitle}>Modules</Text>
                 {displayModules.length > 0 ? (
-                  <ScrollView 
-                    horizontal 
+                  <ScrollView
+                    horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.modulesScrollContent}
                   >
                     {displayModules.map((module, index) => (
-                      <ModuleItem 
-                        key={index} 
-                        title={module.title} 
-                        iconUrl={module.iconUrl} 
-                        onPress={() => handleModulePress(module.title, module.module_unique_name)} 
+                      <ModuleItem
+                        key={index}
+                        title={module.title}
+                        iconUrl={module.iconUrl}
+                        onPress={() => handleModulePress(module.title, module.module_unique_name)}
                       />
                     ))}
                   </ScrollView>
@@ -560,26 +578,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Upcoming Events</Text>
                 {upcomingBirthdays.length > 0 ? (
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false} 
-                    style={styles.eventsScroll} 
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.eventsScroll}
                     contentContainerStyle={styles.eventsScrollContent}
                   >
                     {upcomingBirthdays.map((person, index) => (
-                      <EventAvatar 
-                        key={index} 
-                        name={person.full_name} 
-                        date={formatDate(person.birth_date)} 
-                        initials={getInitials(person.full_name)} 
+                      <EventAvatar
+                        key={index}
+                        name={person.full_name}
+                        date={formatDate(person.birth_date)}
+                        initials={getInitials(person.full_name)}
                       />
                     ))}
                   </ScrollView>
                 ) : (
                   <View style={styles.noEventsContainer}>
-                    <Image 
-                      source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2965/2965140.png' }} 
-                      style={styles.noEventsImage} 
+                    <Image
+                      source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2965/2965140.png' }}
+                      style={styles.noEventsImage}
                       resizeMode="contain"
                     />
                     <Text style={styles.noEventsText}>No upcoming events</Text>

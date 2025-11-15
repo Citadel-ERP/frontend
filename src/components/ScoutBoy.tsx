@@ -1,51 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
-  Image
+  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator,
+  Image, RefreshControl
 } from 'react-native';
-import { RefreshControl } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_URL } from '../config/config';
+import CreateSite from './CreateSite';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// Design tokens
 const colors = {
-  primary: '#161b34ff',
-  primaryLight: '#c1c7f4ff',
-  primaryDark: '#1A1D2E',
-  background: '#FFFFFF',
-  backgroundSecondary: '#F8F9FA',
-  text: '#2F3349',
-  textSecondary: '#6C7293',
-  textLight: '#8B92B2',
+  primary: '#161b34',
+  primaryLight: '#2a3150',
+  secondary: '#4A5568',
+  accent: '#3B82F6',
+  success: '#28A745',
+  warning: '#FFC107',
+  error: '#DC3545',
   white: '#FFFFFF',
   black: '#000000',
-  gray: '#F1F3F4',
-  border: '#E0E4E7',
-  success: '#28A745',
-  error: '#DC3545',
-  warning: '#FFC107',
-  info: '#ffcc92ff',
-  link: '#007BFF',
-  disabled: '#6C757D',
+  text: '#1a202c',
+  textSecondary: '#718096',
+  textLight: '#A0AEC0',
+  background: '#FFFFFF',
+  backgroundSecondary: '#F7FAFC',
+  border: '#E2E8F0',
 };
 
 const spacing = {
   xs: 4,
   sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
 };
 
 const fontSize = {
-  xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-  xl: 20,
-  xxl: 24,
-  xxxl: 28,
+  xs: 10,
+  sm: 12,
+  md: 14,
+  lg: 16,
+  xl: 18,
+  xxl: 20,
 };
 
 const borderRadius = {
@@ -53,242 +52,82 @@ const borderRadius = {
   md: 8,
   lg: 12,
   xl: 16,
-  full: 999,
+  full: 9999,
 };
 
 const shadows = {
   sm: {
-    shadowColor: colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1,
+    elevation: 2,
   },
   md: {
-    shadowColor: colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   lg: {
-    shadowColor: colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
 };
 
-const BUILDING_STATUS_OPTIONS = [
-  { label: 'Available', value: 'available' },
-  { label: 'Leased Out', value: 'leased_out' },
-  { label: 'Readily Available', value: 'readily_available' },
-  { label: 'Ready to Move In', value: 'ready_to_move_in' },
-  { label: 'Ready for Fitouts', value: 'ready_for_fitouts' },
-];
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+  </View>
+);
 
-const FLOOR_CONDITION_OPTIONS = [
-  { label: 'Bareshell', value: 'bareshell' },
-  { label: 'Warmshell', value: 'warmshell' },
-  { label: 'Fully Furnished', value: 'fully_furnished' },
-  { label: 'Semi Furnished', value: 'semi_furnished' },
-];
+interface ScoutBoyProps {
+  onBack: () => void;
+}
 
-const beautifyName = (name: string): string => {
-  if (!name) return '-';
-  return name
-    .split('_')
-    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-};
-
-const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'pending': return colors.warning;
-    case 'scout_completed': return colors.info;
-    case 'admin_completed': return colors.success;
-    case 'cancelled': return colors.error;
-    default: return colors.textSecondary;
-  }
-};
-
-const getStatusIcon = (status: string): string => {
-  switch (status) {
-    case 'pending': return '⏳';
-    case 'scout_completed': return '✓';
-    case 'admin_completed': return '✓✓';
-    case 'cancelled': return '✗';
-    default: return '•';
-  }
-};
-
-const formatCurrency = (value: string): string => {
-  const numStr = value.replace(/[^0-9]/g, '');
-  if (!numStr) return '';
-  const num = parseInt(numStr);
-  return num.toLocaleString('en-IN');
-};
-
-const parseCurrency = (formatted: string): string => {
-  return formatted.replace(/,/g, '');
-};
-
-const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [viewMode, setViewMode] = useState('visits-list');
-  const [token, setToken] = useState('mock_token');
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [visits, setVisits] = useState([
-    {
-      id: 1,
-      site: {
-        id: 1,
-        building_name: 'Prestige Tower',
-        location: 'MSK Residency 404 floor 5',
-        rent: '1232231.22',
-        building_status: 'Ready to Move',
-        total_area: '5000',
-        area_per_floor: '1000',
-        availble_floors: '1,2,3,4,5',
-        car_parking_ratio: '1:100',
-        contact_person_name: 'John Doe',
-        contact_person_number: '+91 9876543210',
-        contact_person_email: 'john@example.com',
-        contact_person_designation: 'Manager',
-        latitude: 28.6139,
-        longitude: 77.2090,
-        total_floors: 10,
-        number_of_basements: 2,
-        floor_condition: 'Excellent',
-        car_parking_charges: '5000',
-        car_parking_slots: '50',
-        cam: '15',
-        cam_deposit: '50000',
-        oc: 'Yes',
-        rental_escalation: '5%',
-        security_deposit: '500000',
-        two_wheeler_slots: '100',
-        two_wheeler_charges: '1000',
-        efficiency: '85%',
-        notice_period: '3 months',
-        lease_term: '3 years',
-        lock_in_period: '1 year',
-        will_developer_do_fitouts: 'Yes',
-        power: '500 KW',
-        power_backup: '100%',
-        number_of_cabins: '20',
-        number_of_workstations: '200',
-        size_of_workstation: '60 sq ft',
-        server_room: 'Yes',
-        training_room: 'Yes',
-        pantry: 'Yes',
-        electrical_ups_room: 'Yes',
-        cafeteria: 'Yes',
-        gym: 'Yes',
-        discussion_room: 'Yes',
-        meeting_room: 'Yes',
-        remarks: 'Prime location with excellent connectivity',
-        updated_at: '2025-11-13T10:30:00Z',
-      },
-      status: 'scout_completed',
-      comments: [
-        {
-          id: 1,
-          user: { full_name: 'Jane Smith', profile_picture: null },
-          content: 'Great property with excellent facilities. The location is prime and very accessible.',
-          documents: [],
-          created_at: '2025-11-13T09:00:00Z',
-          updated_at: '2025-11-13T09:00:00Z',
-        }
-      ],
-      photos: [
-        {
-          id: 1,
-          file_url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800',
-          description: 'Front view',
-          created_at: '2025-11-13T08:00:00Z',
-        }
-      ],
-      assigned_by: { full_name: 'Admin User' },
-      created_at: '2025-11-13T07:00:00Z',
-      updated_at: '2025-11-13T10:30:00Z',
-      scout_completed_at: '2025-11-13T10:30:00Z',
-      is_visible_to_scout: true,
-    }
-  ]);
-  const [selectedVisit, setSelectedVisit] = useState(null);
-  const [newComment, setNewComment] = useState('');
-  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [visits, setVisits] = useState<any[]>([]);
+  const [loadingVisits, setLoadingVisits] = useState(true);
+  const [visitsError, setVisitsError] = useState<string | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState<any>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  
+  // Photo modal state
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState('');
+  
+  // Comment state
+  const [newComment, setNewComment] = useState('');
+  const [addingComment, setAddingComment] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [hasMoreComments, setHasMoreComments] = useState(false);
+  const [allComments, setAllComments] = useState<any[]>([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Mark complete state
+  const [markingComplete, setMarkingComplete] = useState(false);
 
-  const [currentStep, setCurrentStep] = useState(1);
-  const [newSite, setNewSite] = useState({
-    building_name: '',
-    location: '',
-    landmark: '',
-    total_floors: '',
-    number_of_basements: '',
-    floor_condition: 'bareshell',
-    area_per_floor: '',
-    total_area: '',
-    availble_floors: '',
-    car_parking_charges: '',
-    car_parking_ratio_left: '',
-    car_parking_ratio_right: '',
-    car_parking_slots: '',
-    building_status: 'available',
-    rent: '',
-    cam: '',
-    cam_deposit: '',
-    oc: false,
-    rental_escalation: '',
-    security_deposit: '',
-    two_wheeler_slots: '',
-    two_wheeler_charges: '',
-    efficiency: '',
-    notice_period: '',
-    lease_term: '',
-    lock_in_period: '',
-    will_developer_do_fitouts: false,
-    contact_person_name: '',
-    contact_person_designation: '',
-    contact_person_number: '',
-    contact_person_email: '',
-    power: '',
-    power_backup: '',
-    number_of_cabins: '',
-    number_of_workstations: '',
-    size_of_workstation: '',
-    server_room: '',
-    training_room: '',
-    pantry: '',
-    electrical_ups_room: '',
-    cafeteria: '',
-    gym: '',
-    discussion_room: '',
-    meeting_room: '',
-    remarks: '',
-    building_owner_name: '',
-    building_owner_contact: '',
-  });
-  const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
-  const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
-  const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
-  const [creatingSite, setCreatingSite] = useState(false);
+  const TOKEN_KEY = 'token_2';
 
-  const formatDateTime = (dateString?: string): string => {
-    if (!dateString) return '-';
-    try {
-      const d = new Date(dateString);
-      if (isNaN(d.getTime())) return '-';
-      return d.toLocaleDateString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-    } catch {
-      return '-';
-    }
+  // Utility functions
+  const beautifyName = (name: string): string => {
+    if (!name) return '-';
+    return name
+      .split('_')
+      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   };
 
   const formatDate = (dateString?: string): string => {
@@ -304,8 +143,157 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   };
 
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'pending': return '#FFC107';
+      case 'scout_completed': return '#ffcc92ff';
+      case 'admin_completed': return '#28A745';
+      case 'cancelled': return '#DC3545';
+      default: return '#6C7293';
+    }
+  };
+
+  const getStatusIcon = (status: string): string => {
+    switch (status) {
+      case 'pending': return '⏳';
+      case 'scout_completed': return '✓';
+      case 'admin_completed': return '✓✓';
+      case 'cancelled': return '✗';
+      default: return '•';
+    }
+  };
+
+  // Fetch visits from API with pagination
+  const fetchVisits = async (page: number = 1, append: boolean = false) => {
+    try {
+      if (!append) {
+        setLoadingVisits(true);
+      } else {
+        setLoadingMore(true);
+      }
+      setVisitsError(null);
+      
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) {
+        setVisitsError('Token not found. Please login again.');
+        setLoadingVisits(false);
+        return;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/getAssignedVisits`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: storedToken,
+          page: page,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch visits: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const formattedVisits = data.visits.map((visit: any) => ({
+        id: visit.id,
+        site: { ...visit.site },
+        status: visit.status,
+        comments: visit.comments || [],
+        collaborators: visit.collaborators || [],
+        assigned_by: visit.assigned_by,
+        created_at: visit.created_at,
+        updated_at: visit.updated_at,
+        scout_completed_at: visit.scout_completed_at,
+        building_photos: visit.building_photos || [],
+        photos: visit.building_photos || [],
+      }));
+
+      if (append) {
+        setVisits(prev => [...prev, ...formattedVisits]);
+      } else {
+        setVisits(formattedVisits);
+      }
+      
+      setCurrentPage(data.pagination.current_page);
+      setHasNextPage(data.pagination.has_next);
+      setLoadingVisits(false);
+      setLoadingMore(false);
+    } catch (error) {
+      console.error('Error fetching visits:', error);
+      setVisitsError(error instanceof Error ? error.message : 'Failed to load visits');
+      setLoadingVisits(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVisits(1, false);
+  }, []);
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setCurrentPage(1);
+    await fetchVisits(1, false);
+    setRefreshing(false);
+  };
+
+  // Load more visits
+  const loadMoreVisits = () => {
+    if (hasNextPage && !loadingMore) {
+      fetchVisits(currentPage + 1, true);
+    }
+  };
+
+  // Search visits
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      fetchVisits(1, false);
+      return;
+    }
+
+    try {
+      setLoadingVisits(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) return;
+
+      const response = await fetch(`${BACKEND_URL}/employee/searchVisits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: storedToken, query }),
+      });
+
+      const data = await response.json();
+      const formattedVisits = data.visits.map((visit: any) => ({
+        id: visit.id,
+        site: { ...visit.site },
+        status: visit.status,
+        comments: visit.comments || [],
+        collaborators: visit.collaborators || [],
+        assigned_by: visit.assigned_by,
+        created_at: visit.created_at,
+        updated_at: visit.updated_at,
+        scout_completed_at: visit.scout_completed_at,
+        building_photos: visit.building_photos || [],
+        photos: visit.building_photos || [],
+      }));
+
+      setVisits(formattedVisits);
+    } catch (error) {
+      console.error('Error searching visits:', error);
+    } finally {
+      setLoadingVisits(false);
+    }
+  };
+
   const handleVisitPress = (visit: any) => {
     setSelectedVisit(visit);
+    setAllComments(visit.comments || []);
+    setCommentsPage(1);
+    fetchVisitComments(visit.id, 1, false);
     setViewMode('visit-detail');
   };
 
@@ -313,1040 +301,137 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setViewMode('visits-list');
     setSelectedVisit(null);
     setNewComment('');
+    setAllComments([]);
   };
 
-  const captureLocation = async () => {
+  const handleCreateSiteClick = () => {
+    setViewMode('create-site');
+  };
+
+  const handleBackFromCreateSite = () => {
+    setViewMode('visits-list');
+    handleRefresh();
+  };
+
+  // Fetch visit comments with pagination
+  const fetchVisitComments = async (visitId: number, page: number, append: boolean) => {
     try {
-      const mockLat = 28.6139 + Math.random() * 0.01;
-      const mockLng = 77.2090 + Math.random() * 0.01;
-      return {
-        latitude: mockLat.toFixed(6),
-        longitude: mockLng.toFixed(6),
-      };
-    } catch (error) {
-      console.error('Location capture error:', error);
-      return null;
-    }
-  };
+      setLoadingComments(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) return;
 
-  const handleAddPhoto = () => {
-    Alert.alert(
-      'Upload Photo',
-      'Choose photo source',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Take Photo',
-          onPress: () => {
-            const photoId = Date.now();
-            const newPhoto = {
-              id: photoId,
-              uri: `https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80&random=${photoId}`,
-              type: 'image/jpeg',
-            };
-            setBuildingPhotos([...buildingPhotos, newPhoto]);
-            Alert.alert('Success', 'Photo captured successfully!');
-          }
-        },
-        {
-          text: 'Choose from Gallery',
-          onPress: () => {
-            const photoId = Date.now();
-            const newPhoto = {
-              id: photoId,
-              uri: `https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80&random=${photoId}`,
-              type: 'image/jpeg',
-            };
-            setBuildingPhotos([...buildingPhotos, newPhoto]);
-            Alert.alert('Success', 'Photo uploaded successfully!');
-          }
-        }
-      ]
-    );
-  };
+      const response = await fetch(`${BACKEND_URL}/employee/getVisitComments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: storedToken, 
+          visit_id: visitId,
+          page: page 
+        }),
+      });
 
-  const removePhoto = (photoId: number) => {
-    setBuildingPhotos(buildingPhotos.filter(p => p.id !== photoId));
-  };
+      const data = await response.json();
+      console.log(data)
+      console.log(visitId)
+      const formattedComments = data.comments.map((sc: any) => ({
+        id: sc.id,
+        user: sc.user,
+        content: sc.content,
+        documents: sc.documents,
+        created_at: sc.created_at,
+        updated_at: sc.updated_at,
+      }));
 
-  const validateStep = (step: number) => {
-    if (step === 1) {
-      if (!newSite.building_name || !newSite.location) {
-        Alert.alert('Required Fields', 'Please fill in Building Name and Location');
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const handleNextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handlePrevStep = () => {
-    setCurrentStep(currentStep - 1);
-  };
-
-  const handleCreateSite = async () => {
-    if (!validateStep(currentStep)) return;
-
-    setCreatingSite(true);
-
-    try {
-      const locationData = await captureLocation();
-      
-      if (!locationData) {
-        Alert.alert('Error', 'Failed to capture location. Please try again.');
-        setCreatingSite(false);
-        return;
+      if (append) {
+        setAllComments(prev => [...prev, ...formattedComments]);
+      } else {
+        setAllComments(formattedComments);
       }
 
-      const newVisit = {
-        id: visits.length + 1,
-        site: {
-          id: visits.length + 1,
-          building_name: newSite.building_name,
-          location: newSite.location,
-          landmark: newSite.landmark,
-          latitude: parseFloat(locationData.latitude),
-          longitude: parseFloat(locationData.longitude),
-          rent: parseCurrency(newSite.rent),
-          building_status: beautifyName(newSite.building_status),
-          total_area: parseCurrency(newSite.total_area),
-          area_per_floor: parseCurrency(newSite.area_per_floor),
-          availble_floors: newSite.availble_floors,
-          car_parking_ratio: newSite.car_parking_ratio_left && newSite.car_parking_ratio_right 
-            ? `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`
-            : '-',
-          contact_person_name: newSite.contact_person_name,
-          contact_person_number: newSite.contact_person_number,
-          contact_person_email: newSite.contact_person_email,
-          contact_person_designation: newSite.contact_person_designation,
-          total_floors: newSite.total_floors,
-          number_of_basements: newSite.number_of_basements,
-          floor_condition: beautifyName(newSite.floor_condition),
-          car_parking_charges: parseCurrency(newSite.car_parking_charges),
-          car_parking_slots: newSite.car_parking_slots,
-          cam: parseCurrency(newSite.cam),
-          cam_deposit: parseCurrency(newSite.cam_deposit),
-          oc: newSite.oc ? 'Yes' : 'No',
-          rental_escalation: newSite.rental_escalation ? `${newSite.rental_escalation}%` : '-',
-          security_deposit: parseCurrency(newSite.security_deposit),
-          two_wheeler_slots: newSite.two_wheeler_slots,
-          two_wheeler_charges: parseCurrency(newSite.two_wheeler_charges),
-          efficiency: newSite.efficiency ? `${newSite.efficiency}%` : '-',
-          notice_period: newSite.notice_period,
-          lease_term: newSite.lease_term,
-          lock_in_period: newSite.lock_in_period,
-          will_developer_do_fitouts: newSite.will_developer_do_fitouts ? 'Yes' : 'No',
-          power: newSite.power,
-          power_backup: newSite.power_backup,
-          number_of_cabins: newSite.number_of_cabins,
-          number_of_workstations: newSite.number_of_workstations,
-          size_of_workstation: newSite.size_of_workstation,
-          server_room: newSite.server_room,
-          training_room: newSite.training_room,
-          pantry: newSite.pantry,
-          electrical_ups_room: newSite.electrical_ups_room,
-          cafeteria: newSite.cafeteria,
-          gym: newSite.gym,
-          discussion_room: newSite.discussion_room,
-          meeting_room: newSite.meeting_room,
-          remarks: newSite.remarks,
-          building_owner_name: newSite.building_owner_name,
-          building_owner_contact: newSite.building_owner_contact,
-          updated_at: new Date().toISOString(),
-        },
-        status: 'scout_completed',
-        comments: [],
-        photos: buildingPhotos.map((photo, idx) => ({
-          id: idx + 1,
-          file_url: photo.uri,
-          description: `Photo ${idx + 1}`,
-          created_at: new Date().toISOString(),
-        })),
-        assigned_by: { full_name: 'You' },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        scout_completed_at: new Date().toISOString(),
-        is_visible_to_scout: true,
-      };
-
-      setVisits([newVisit, ...visits]);
-
-      setTimeout(() => {
-        Alert.alert('Success', `Site created successfully!\nLocation: ${locationData.latitude}, ${locationData.longitude}`);
-        setViewMode('visits-list');
-        setCurrentStep(1);
-        setNewSite({
-          building_name: '',
-          location: '',
-          landmark: '',
-          total_floors: '',
-          number_of_basements: '',
-          floor_condition: 'bareshell',
-          area_per_floor: '',
-          total_area: '',
-          availble_floors: '',
-          car_parking_charges: '',
-          car_parking_ratio_left: '',
-          car_parking_ratio_right: '',
-          car_parking_slots: '',
-          building_status: 'available',
-          rent: '',
-          cam: '',
-          cam_deposit: '',
-          oc: false,
-          rental_escalation: '',
-          security_deposit: '',
-          two_wheeler_slots: '',
-          two_wheeler_charges: '',
-          efficiency: '',
-          notice_period: '',
-          lease_term: '',
-          lock_in_period: '',
-          will_developer_do_fitouts: false,
-          contact_person_name: '',
-          contact_person_designation: '',
-          contact_person_number: '',
-          contact_person_email: '',
-          power: '',
-          power_backup: '',
-          number_of_cabins: '',
-          number_of_workstations: '',
-          size_of_workstation: '',
-          server_room: '',
-          training_room: '',
-          pantry: '',
-          electrical_ups_room: '',
-          cafeteria: '',
-          gym: '',
-          discussion_room: '',
-          meeting_room: '',
-          remarks: '',
-          building_owner_name: '',
-          building_owner_contact: '',
-        });
-        setBuildingPhotos([]);
-        setCreatingSite(false);
-      }, 1500);
+      setHasMoreComments(data.pagination.has_next);
+      setCommentsPage(page);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create site');
-      setCreatingSite(false);
+      console.error('Error fetching comments:', error);
+    } finally {
+      setLoadingComments(false);
     }
   };
 
-  const BackIcon = () => (
-    <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
-    </View>
-  );
+  // Add comment
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !selectedVisit) return;
 
-  const DropdownModal: React.FC<{
-    visible: boolean;
-    options: Array<{ label: string; value: string }>;
-    onSelect: (value: string) => void;
-    onClose: () => void;
-    title: string;
-  }> = ({ visible, options, onSelect, onClose, title }) => (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity 
-        style={styles.dropdownOverlay} 
-        activeOpacity={1} 
-        onPress={onClose}
-      >
-        <View style={styles.dropdownContainer}>
-          <Text style={styles.dropdownTitle}>{title}</Text>
-          <ScrollView style={styles.dropdownScroll}>
-            {options.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={styles.dropdownOption}
-                onPress={() => {
-                  onSelect(option.value);
-                  onClose();
-                }}
-              >
-                <Text style={styles.dropdownOptionText}>{option.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
+    try {
+      setAddingComment(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) return;
 
-  const renderStepIndicator = () => (
-    <View style={styles.stepIndicator}>
-      {[1, 2, 3, 4, 5, 6].map((step) => (
-        <View key={step} style={styles.stepIndicatorItem}>
-          <View style={[
-            styles.stepCircle,
-            currentStep >= step && styles.stepCircleActive
-          ]}>
-            <Text style={[
-              styles.stepNumber,
-              currentStep >= step && styles.stepNumberActive
-            ]}>{step}</Text>
-          </View>
-          {step < 6 && <View style={[
-            styles.stepLine,
-            currentStep > step && styles.stepLineActive
-          ]} />}
-        </View>
-      ))}
-    </View>
-  );
+      const response = await fetch(`${BACKEND_URL}/employee/addVisitComment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: storedToken,
+          visit_id: selectedVisit.id,
+          comment: newComment,
+        }),
+      });
 
-  const renderStep1 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>📍 Basic Information</Text>
-      <Text style={styles.stepDescription}>Let's start with the property essentials</Text>
+      const data = await response.json();
+      const newCommentObj = {
+        id: data.comment.id,
+        user: data.comment.user,
+        content: data.comment.content,
+        documents: data.comment.documents,
+        created_at: data.comment.created_at,
+        updated_at: data.comment.updated_at,
+      };
 
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Building Name *</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.building_name}
-          onChangeText={(val) => setNewSite({ ...newSite, building_name: val })}
-          placeholder="e.g., Prestige Tower"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
+      setAllComments(prev => [newCommentObj, ...prev]);
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    } finally {
+      setAddingComment(false);
+    }
+  };
 
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Location Address *</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={newSite.location}
-          onChangeText={(val) => setNewSite({ ...newSite, location: val })}
-          placeholder="Enter full address"
-          placeholderTextColor={colors.textSecondary}
-          multiline
-          numberOfLines={3}
-        />
-      </View>
+  // Load more comments
+  const handleLoadMoreComments = () => {
+    if (selectedVisit && hasMoreComments && !loadingComments) {
+      fetchVisitComments(selectedVisit.id, commentsPage + 1, true);
+    }
+  };
 
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Landmark</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.landmark}
-          onChangeText={(val) => setNewSite({ ...newSite, landmark: val })}
-          placeholder="e.g., Near City Mall"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
+  // Mark visit as completed
+  const handleMarkComplete = async () => {
+    if (!selectedVisit) return;
 
-      <View style={styles.infoBox}>
-        <Text style={styles.infoBoxIcon}>📍</Text>
-        <Text style={styles.infoBoxText}>
-          GPS location will be automatically captured when you submit
-        </Text>
-      </View>
-    </View>
-  );
+    try {
+      setMarkingComplete(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) return;
 
-  const renderStep2 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>🏢 Property Details</Text>
-      <Text style={styles.stepDescription}>Building specifications and condition</Text>
+      const response = await fetch(`${BACKEND_URL}/employee/markVisitCompleted`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: storedToken,
+          visit_id: selectedVisit.id,
+        }),
+      });
 
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Building Status</Text>
-        <TouchableOpacity
-          style={styles.dropdownButton}
-          onPress={() => setShowBuildingStatusDropdown(true)}
-        >
-          <Text style={styles.dropdownButtonText}>
-            {BUILDING_STATUS_OPTIONS.find(o => o.value === newSite.building_status)?.label || 'Select'}
-          </Text>
-          <Text style={styles.dropdownButtonIcon}>▼</Text>
-        </TouchableOpacity>
-      </View>
+      if (response.ok) {
+        setSelectedVisit({ ...selectedVisit, status: 'scout_completed' });
+        handleRefresh();
+      }
+    } catch (error) {
+      console.error('Error marking visit complete:', error);
+    } finally {
+      setMarkingComplete(false);
+    }
+  };
 
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Floor Condition</Text>
-        <TouchableOpacity
-          style={styles.dropdownButton}
-          onPress={() => setShowFloorConditionDropdown(true)}
-        >
-          <Text style={styles.dropdownButtonText}>
-            {FLOOR_CONDITION_OPTIONS.find(o => o.value === newSite.floor_condition)?.label || 'Select'}
-          </Text>
-          <Text style={styles.dropdownButtonIcon}>▼</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Total Floors</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.total_floors}
-            onChangeText={(val) => setNewSite({ ...newSite, total_floors: val })}
-            placeholder="10"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Basements</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.number_of_basements}
-            onChangeText={(val) => setNewSite({ ...newSite, number_of_basements: val })}
-            placeholder="2"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Available Floors</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.availble_floors}
-          onChangeText={(val) => setNewSite({ ...newSite, availble_floors: val })}
-          placeholder="e.g., 2,3,4 or B+G+3"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Total Area (sq ft)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.total_area}
-            onChangeText={(val) => setNewSite({ ...newSite, total_area: formatCurrency(val) })}
-            placeholder="41,000"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Area/Floor (sq ft)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.area_per_floor}
-            onChangeText={(val) => setNewSite({ ...newSite, area_per_floor: formatCurrency(val) })}
-            placeholder="11,400"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Efficiency (%)</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.efficiency}
-          onChangeText={(val) => setNewSite({ ...newSite, efficiency: val })}
-          placeholder="80"
-          keyboardType="numeric"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.checkboxContainer}>
-        <TouchableOpacity
-          style={styles.checkbox}
-          onPress={() => setNewSite({ ...newSite, oc: !newSite.oc })}
-        >
-          <View style={[styles.checkboxBox, newSite.oc && styles.checkboxBoxChecked]}>
-            {newSite.oc && <Text style={styles.checkboxCheck}>✓</Text>}
-          </View>
-          <Text style={styles.checkboxLabel}>Occupancy Certificate Available</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.checkboxContainer}>
-        <TouchableOpacity
-          style={styles.checkbox}
-          onPress={() => setNewSite({ ...newSite, will_developer_do_fitouts: !newSite.will_developer_do_fitouts })}
-        >
-          <View style={[styles.checkboxBox, newSite.will_developer_do_fitouts && styles.checkboxBoxChecked]}>
-            {newSite.will_developer_do_fitouts && <Text style={styles.checkboxCheck}>✓</Text>}
-          </View>
-          <Text style={styles.checkboxLabel}>Developer will do Fitouts</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderStep3 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>💰 Financial Terms</Text>
-      <Text style={styles.stepDescription}>Rent, deposits and lease details</Text>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.rent}
-          onChangeText={(val) => setNewSite({ ...newSite, rent: formatCurrency(val) })}
-          placeholder="12,54,000"
-          keyboardType="numeric"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>CAM (₹/sq ft)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.cam}
-            onChangeText={(val) => setNewSite({ ...newSite, cam: formatCurrency(val) })}
-            placeholder="12"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>CAM Deposit (₹)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.cam_deposit}
-            onChangeText={(val) => setNewSite({ ...newSite, cam_deposit: formatCurrency(val) })}
-            placeholder="0"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Security Deposit (₹)</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.security_deposit}
-          onChangeText={(val) => setNewSite({ ...newSite, security_deposit: formatCurrency(val) })}
-          placeholder="1,50,48,000"
-          keyboardType="numeric"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Lease Term</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.lease_term}
-            onChangeText={(val) => setNewSite({ ...newSite, lease_term: val })}
-            placeholder="5 + 5 years"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Lock-in Period</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.lock_in_period}
-            onChangeText={(val) => setNewSite({ ...newSite, lock_in_period: val })}
-            placeholder="5 years"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Notice Period</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.notice_period}
-          onChangeText={(val) => setNewSite({ ...newSite, notice_period: val })}
-          placeholder="6 months post lock-in"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Rental Escalation (%)</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.rental_escalation}
-          onChangeText={(val) => setNewSite({ ...newSite, rental_escalation: val })}
-          placeholder="5"
-          keyboardType="numeric"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-    </View>
-  );
-
-  const renderStep4 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>🚗 Parking & Utilities</Text>
-      <Text style={styles.stepDescription}>Parking facilities and power infrastructure</Text>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Car Parking Ratio</Text>
-        <View style={styles.ratioContainer}>
-          <TextInput
-            style={[styles.input, styles.ratioInput]}
-            value={newSite.car_parking_ratio_left}
-            onChangeText={(val) => setNewSite({ ...newSite, car_parking_ratio_left: val })}
-            placeholder="1"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-          <Text style={styles.ratioSeparator}>:</Text>
-          <TextInput
-            style={[styles.input, styles.ratioInput]}
-            value={newSite.car_parking_ratio_right}
-            onChangeText={(val) => setNewSite({ ...newSite, car_parking_ratio_right: val })}
-            placeholder="1000"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Car Slots</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.car_parking_slots}
-            onChangeText={(val) => setNewSite({ ...newSite, car_parking_slots: val })}
-            placeholder="11"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Car Charges (₹)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.car_parking_charges}
-            onChangeText={(val) => setNewSite({ ...newSite, car_parking_charges: formatCurrency(val) })}
-            placeholder="5,500"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>2-Wheeler Slots</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.two_wheeler_slots}
-            onChangeText={(val) => setNewSite({ ...newSite, two_wheeler_slots: val })}
-            placeholder="100"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>2-Wheeler Charges (₹)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.two_wheeler_charges}
-            onChangeText={(val) => setNewSite({ ...newSite, two_wheeler_charges: formatCurrency(val) })}
-            placeholder="1,000"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Power</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.power}
-            onChangeText={(val) => setNewSite({ ...newSite, power: val })}
-            placeholder="0.8 kva/100 sft"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Power Backup</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.power_backup}
-            onChangeText={(val) => setNewSite({ ...newSite, power_backup: val })}
-            placeholder="100%"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderStep5 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>🏢 Workspace & Amenities</Text>
-      <Text style={styles.stepDescription}>Office configuration and facilities</Text>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Cabins</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.number_of_cabins}
-            onChangeText={(val) => setNewSite({ ...newSite, number_of_cabins: val })}
-            placeholder="20"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Workstations</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.number_of_workstations}
-            onChangeText={(val) => setNewSite({ ...newSite, number_of_workstations: val })}
-            placeholder="200"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Workstation Size</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.size_of_workstation}
-          onChangeText={(val) => setNewSite({ ...newSite, size_of_workstation: val })}
-          placeholder="60 sq ft"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Meeting Rooms</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.meeting_room}
-            onChangeText={(val) => setNewSite({ ...newSite, meeting_room: val })}
-            placeholder="3"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Discussion Rooms</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.discussion_room}
-            onChangeText={(val) => setNewSite({ ...newSite, discussion_room: val })}
-            placeholder="2"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Server Room</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.server_room}
-            onChangeText={(val) => setNewSite({ ...newSite, server_room: val })}
-            placeholder="1"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Training Room</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.training_room}
-            onChangeText={(val) => setNewSite({ ...newSite, training_room: val })}
-            placeholder="2"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Pantry</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.pantry}
-            onChangeText={(val) => setNewSite({ ...newSite, pantry: val })}
-            placeholder="1"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Cafeteria</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.cafeteria}
-            onChangeText={(val) => setNewSite({ ...newSite, cafeteria: val })}
-            placeholder="1"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>UPS Room</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.electrical_ups_room}
-            onChangeText={(val) => setNewSite({ ...newSite, electrical_ups_room: val })}
-            placeholder="1"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Gym</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.gym}
-            onChangeText={(val) => setNewSite({ ...newSite, gym: val })}
-            placeholder="1"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderStep6 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>👤 Contact & Photos</Text>
-      <Text style={styles.stepDescription}>Contact details and property images</Text>
-
-      <Text style={styles.subSectionTitle}>Building Owner</Text>
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Owner Name</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.building_owner_name}
-          onChangeText={(val) => setNewSite({ ...newSite, building_owner_name: val })}
-          placeholder="Enter owner name"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Owner Contact</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.building_owner_contact}
-          onChangeText={(val) => setNewSite({ ...newSite, building_owner_contact: val })}
-          placeholder="+91 9876543210"
-          keyboardType="phone-pad"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <Text style={styles.subSectionTitle}>Contact Person</Text>
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Name</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.contact_person_name}
-          onChangeText={(val) => setNewSite({ ...newSite, contact_person_name: val })}
-          placeholder="Enter name"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Phone</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.contact_person_number}
-            onChangeText={(val) => setNewSite({ ...newSite, contact_person_number: val })}
-            placeholder="+91 9876543210"
-            keyboardType="phone-pad"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Designation</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.contact_person_designation}
-            onChangeText={(val) => setNewSite({ ...newSite, contact_person_designation: val })}
-            placeholder="Manager"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Email</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.contact_person_email}
-          onChangeText={(val) => setNewSite({ ...newSite, contact_person_email: val })}
-          placeholder="contact@example.com"
-          keyboardType="email-address"
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-
-      <Text style={styles.subSectionTitle}>Additional Notes</Text>
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Remarks</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={newSite.remarks}
-          onChangeText={(val) => setNewSite({ ...newSite, remarks: val })}
-          placeholder="Any additional observations..."
-          placeholderTextColor={colors.textSecondary}
-          multiline
-          numberOfLines={4}
-        />
-      </View>
-
-      <Text style={styles.subSectionTitle}>Property Photos</Text>
-      <TouchableOpacity
-        style={styles.addPhotoButton}
-        onPress={handleAddPhoto}
-      >
-        <Text style={styles.addPhotoButtonText}>📤 Upload Photo</Text>
-      </TouchableOpacity>
-
-      {buildingPhotos.length > 0 && (
-        <View style={styles.photoPreviewContainer}>
-          <Text style={styles.photoCountText}>{buildingPhotos.length} photo(s) uploaded</Text>
-          <View style={styles.photoGrid}>
-            {buildingPhotos.map((photo, index) => (
-              <View key={photo.id} style={styles.photoGridItem}>
-                <Image
-                  source={{ uri: photo.uri }}
-                  style={styles.photoGridImage}
-                />
-                <TouchableOpacity
-                  style={styles.photoRemoveButton}
-                  onPress={() => removePhoto(photo.id)}
-                >
-                  <Text style={styles.photoRemoveButtonText}>×</Text>
-                </TouchableOpacity>
-                <View style={styles.photoIndexBadge}>
-                  <Text style={styles.photoIndexText}>{index + 1}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-
-  if (viewMode === 'create-site') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => {
-            setViewMode('visits-list');
-            setCurrentStep(1);
-          }}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create New Site</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <View style={styles.createSiteContainer}>
-          {renderStepIndicator()}
-          
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-            <View style={styles.formContainer}>
-              {currentStep === 1 && renderStep1()}
-              {currentStep === 2 && renderStep2()}
-              {currentStep === 3 && renderStep3()}
-              {currentStep === 4 && renderStep4()}
-              {currentStep === 5 && renderStep5()}
-              {currentStep === 6 && renderStep6()}
-            </View>
-          </ScrollView>
-
-          <View style={styles.navigationButtons}>
-            {currentStep > 1 && (
-              <TouchableOpacity
-                style={styles.navButton}
-                onPress={handlePrevStep}
-              >
-                <Text style={styles.navButtonText}>← Previous</Text>
-              </TouchableOpacity>
-            )}
-            
-            {currentStep < 6 ? (
-              <TouchableOpacity
-                style={[styles.navButton, styles.navButtonPrimary, currentStep === 1 && styles.navButtonFull]}
-                onPress={handleNextStep}
-              >
-                <Text style={styles.navButtonTextPrimary}>Next →</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.navButton, styles.navButtonPrimary, styles.navButtonFull, creatingSite && styles.buttonDisabled]}
-                onPress={handleCreateSite}
-                disabled={creatingSite}
-              >
-                {creatingSite ? (
-                  <View style={styles.buttonLoading}>
-                    <ActivityIndicator color={colors.white} size="small" />
-                    <Text style={[styles.navButtonTextPrimary, { marginLeft: spacing.sm }]}>
-                      Creating...
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.navButtonTextPrimary}>✓ Create Site</Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        <DropdownModal
-          visible={showBuildingStatusDropdown}
-          options={BUILDING_STATUS_OPTIONS}
-          onSelect={(value) => setNewSite({ ...newSite, building_status: value })}
-          onClose={() => setShowBuildingStatusDropdown(false)}
-          title="Select Building Status"
-        />
-
-        <DropdownModal
-          visible={showFloorConditionDropdown}
-          options={FLOOR_CONDITION_OPTIONS}
-          onSelect={(value) => setNewSite({ ...newSite, floor_condition: value })}
-          onClose={() => setShowFloorConditionDropdown(false)}
-          title="Select Floor Condition"
-        />
-      </SafeAreaView>
-    );
-  }
-
+  // Visit Detail View
   if (viewMode === 'visit-detail' && selectedVisit) {
     const site = selectedVisit.site;
     return (
@@ -1394,15 +479,15 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </View>
             </View>
 
-            {selectedVisit.photos && selectedVisit.photos.length > 0 && (
+            {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
               <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Photos ({selectedVisit.photos.length})</Text>
+                <Text style={styles.sectionTitle}>Photos ({selectedVisit.building_photos.length})</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.photoScroll}
                 >
-                  {selectedVisit.photos.map((photo, index) => (
+                  {selectedVisit.building_photos.map((photo: any, index: number) => (
                     <TouchableOpacity
                       key={photo.id}
                       style={styles.photoThumbnail}
@@ -1423,230 +508,21 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   ))}
                 </ScrollView>
               </View>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Photos</Text>
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>📷</Text>
+                  <Text style={styles.emptyStateText}>No photos available</Text>
+                </View>
+              </View>
             )}
 
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Property Details</Text>
-              
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>📋 Basic Information</Text>
-                <View style={styles.detailGrid}>
-                  {site.landmark && (
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Landmark</Text>
-                      <Text style={styles.detailValue}>{site.landmark}</Text>
-                    </View>
-                  )}
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Building Status</Text>
-                    <Text style={styles.detailValue}>{site.building_status || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Floor Condition</Text>
-                    <Text style={styles.detailValue}>{site.floor_condition || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Total Floors</Text>
-                    <Text style={styles.detailValue}>{site.total_floors || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Basements</Text>
-                    <Text style={styles.detailValue}>{site.number_of_basements || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Available Floors</Text>
-                    <Text style={styles.detailValue}>{site.availble_floors || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Total Area</Text>
-                    <Text style={styles.detailValue}>{site.total_area ? `${site.total_area} sq ft` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Area per Floor</Text>
-                    <Text style={styles.detailValue}>{site.area_per_floor ? `${site.area_per_floor} sq ft` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Efficiency</Text>
-                    <Text style={styles.detailValue}>{site.efficiency || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>OC Available</Text>
-                    <Text style={styles.detailValue}>{site.oc || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Developer Fitouts</Text>
-                    <Text style={styles.detailValue}>{site.will_developer_do_fitouts || '-'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>💰 Financial Details</Text>
-                <View style={styles.detailGrid}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Monthly Rent</Text>
-                    <Text style={styles.detailValue}>{site.rent ? `₹${site.rent}` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>CAM</Text>
-                    <Text style={styles.detailValue}>{site.cam ? `₹${site.cam}` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>CAM Deposit</Text>
-                    <Text style={styles.detailValue}>{site.cam_deposit ? `₹${site.cam_deposit}` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Security Deposit</Text>
-                    <Text style={styles.detailValue}>{site.security_deposit ? `₹${site.security_deposit}` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Lease Term</Text>
-                    <Text style={styles.detailValue}>{site.lease_term || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Lock-in Period</Text>
-                    <Text style={styles.detailValue}>{site.lock_in_period || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Notice Period</Text>
-                    <Text style={styles.detailValue}>{site.notice_period || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Rental Escalation</Text>
-                    <Text style={styles.detailValue}>{site.rental_escalation || '-'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>🚗 Parking Details</Text>
-                <View style={styles.detailGrid}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Car Parking Ratio</Text>
-                    <Text style={styles.detailValue}>{site.car_parking_ratio || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Car Parking Slots</Text>
-                    <Text style={styles.detailValue}>{site.car_parking_slots || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Car Parking Charges</Text>
-                    <Text style={styles.detailValue}>{site.car_parking_charges ? `₹${site.car_parking_charges}` : '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>2-Wheeler Slots</Text>
-                    <Text style={styles.detailValue}>{site.two_wheeler_slots || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>2-Wheeler Charges</Text>
-                    <Text style={styles.detailValue}>{site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>⚡ Utilities</Text>
-                <View style={styles.detailGrid}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Power</Text>
-                    <Text style={styles.detailValue}>{site.power || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Power Backup</Text>
-                    <Text style={styles.detailValue}>{site.power_backup || '-'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>🏢 Workspace Configuration</Text>
-                <View style={styles.detailGrid}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Number of Cabins</Text>
-                    <Text style={styles.detailValue}>{site.number_of_cabins || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Workstations</Text>
-                    <Text style={styles.detailValue}>{site.number_of_workstations || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Workstation Size</Text>
-                    <Text style={styles.detailValue}>{site.size_of_workstation || '-'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>🎯 Amenities & Facilities</Text>
-                <View style={styles.detailGrid}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Meeting Room</Text>
-                    <Text style={styles.detailValue}>{site.meeting_room || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Discussion Room</Text>
-                    <Text style={styles.detailValue}>{site.discussion_room || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Server Room</Text>
-                    <Text style={styles.detailValue}>{site.server_room || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Training Room</Text>
-                    <Text style={styles.detailValue}>{site.training_room || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Pantry</Text>
-                    <Text style={styles.detailValue}>{site.pantry || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Cafeteria</Text>
-                    <Text style={styles.detailValue}>{site.cafeteria || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>UPS Room</Text>
-                    <Text style={styles.detailValue}>{site.electrical_ups_room || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Gym</Text>
-                    <Text style={styles.detailValue}>{site.gym || '-'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>👤 Contact Information</Text>
-                <View style={styles.detailGrid}>
-                  {site.building_owner_name && (
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Building Owner</Text>
-                      <Text style={styles.detailValue}>{site.building_owner_name}</Text>
-                    </View>
-                  )}
-                  {site.building_owner_contact && (
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Owner Contact</Text>
-                      <Text style={styles.detailValue}>{site.building_owner_contact}</Text>
-                    </View>
-                  )}
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Contact Person</Text>
-                    <Text style={styles.detailValue}>{site.contact_person_name || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Phone</Text>
-                    <Text style={styles.detailValue}>{site.contact_person_number || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Email</Text>
-                    <Text style={styles.detailValue}>{site.contact_person_email || '-'}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Designation</Text>
-                    <Text style={styles.detailValue}>{site.contact_person_designation || '-'}</Text>
-                  </View>
-                </View>
-              </View>
+              <DetailSection title="📋 Basic Information" site={site} />
+              <DetailSection title="💰 Financial Details" site={site} />
+              <DetailSection title="👤 Contact Information" site={site} />
 
               {site.remarks && (
                 <View style={styles.detailSection}>
@@ -1654,46 +530,93 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <Text style={styles.remarksText}>{site.remarks}</Text>
                 </View>
               )}
-
-              {site.latitude && site.longitude && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>📍 Location Coordinates</Text>
-                  <Text style={styles.remarksText}>
-                    Latitude: {site.latitude}{'\n'}
-                    Longitude: {site.longitude}
-                  </Text>
-                </View>
-              )}
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Comments ({selectedVisit.comments.length})</Text>
-              {selectedVisit.comments.length > 0 ? (
-                <View style={styles.commentsContainer}>
-                  {selectedVisit.comments.map((comment) => (
-                    <View key={comment.id} style={styles.commentCard}>
-                      <View style={styles.commentHeader}>
-                        <View style={styles.commentAvatar}>
-                          <Text style={styles.commentAvatarText}>
-                            {comment.user.full_name.split(' ').map(n => n[0]).join('')}
-                          </Text>
+              <Text style={styles.sectionTitle}>Comments ({allComments.length})</Text>
+              
+              {/* Add Comment Section */}
+              <View style={styles.addCommentContainer}>
+                <TextInput
+                  style={styles.commentInput}
+                  placeholder="Add a comment..."
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  multiline
+                  placeholderTextColor={colors.textSecondary}
+                />
+                <TouchableOpacity
+                  style={[styles.addCommentButton, (!newComment.trim() || addingComment) && styles.addCommentButtonDisabled]}
+                  onPress={handleAddComment}
+                  disabled={!newComment.trim() || addingComment}
+                >
+                  {addingComment ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.addCommentButtonText}>Post</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {allComments.length > 0 ? (
+                <>
+                  <View style={styles.commentsContainer}>
+                    {allComments.map((comment: any) => (
+                      <View key={comment.id} style={styles.commentCard}>
+                        <View style={styles.commentHeader}>
+                          <View style={styles.commentAvatar}>
+                            <Text style={styles.commentAvatarText}>
+                              {comment.user.full_name.split(' ').map((n: string) => n[0]).join('')}
+                            </Text>
+                          </View>
+                          <View style={styles.commentHeaderContent}>
+                            <Text style={styles.commentAuthor}>{comment.user.full_name}</Text>
+                            <Text style={styles.commentDate}>{formatDate(comment.created_at)}</Text>
+                          </View>
                         </View>
-                        <View style={styles.commentHeaderContent}>
-                          <Text style={styles.commentAuthor}>{comment.user.full_name}</Text>
-                          <Text style={styles.commentDate}>{formatDate(comment.created_at)}</Text>
-                        </View>
+                        <Text style={styles.commentContent}>{comment.content}</Text>
                       </View>
-                      <Text style={styles.commentContent}>{comment.content}</Text>
-                    </View>
-                  ))}
-                </View>
+                    ))}
+                  </View>
+                  
+                  {hasMoreComments && (
+                    <TouchableOpacity
+                      style={styles.loadMoreButton}
+                      onPress={handleLoadMoreComments}
+                      disabled={loadingComments}
+                    >
+                      {loadingComments ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <Text style={styles.loadMoreText}>Load More Comments</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </>
               ) : (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateIcon}>💬</Text>
-                  <Text style={styles.emptyStateText}>No comments yet</Text>
+                  <Text style={styles.emptyStateText}>No comments yet. Be the first to comment!</Text>
                 </View>
               )}
             </View>
+
+            {/* Mark Complete Button */}
+            {selectedVisit.status === 'pending' && (
+              <TouchableOpacity
+                style={[styles.markCompleteButton, markingComplete && styles.markCompleteButtonDisabled]}
+                onPress={handleMarkComplete}
+                disabled={markingComplete}
+              >
+                {markingComplete ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <>
+                    <Text style={styles.markCompleteButtonText}>✓ Mark Visit as Completed</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             <View style={{ height: 24 }} />
           </View>
@@ -1723,6 +646,21 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     );
   }
 
+  // Create Site View
+  if (viewMode === 'create-site') {
+    return (
+      <CreateSite
+        onBack={handleBackFromCreateSite}
+        colors={colors}
+        spacing={spacing}
+        fontSize={fontSize}
+        borderRadius={borderRadius}
+        shadows={shadows}
+      />
+    );
+  }
+
+  // Default view: Visits List
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
@@ -1741,7 +679,12 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             style={styles.searchInput}
             placeholder="Search visits..."
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (text.length > 2 || text.length === 0) {
+                handleSearch(text);
+              }
+            }}
             returnKeyType="search"
             placeholderTextColor={colors.textSecondary}
           />
@@ -1755,7 +698,7 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <View style={styles.createButtonWrapper}>
           <TouchableOpacity
             style={styles.createSiteButton}
-            onPress={() => setViewMode('create-site')}
+            onPress={handleCreateSiteClick}
           >
             <Text style={styles.createSiteButtonText}>+ Create New Site</Text>
           </TouchableOpacity>
@@ -1767,88 +710,225 @@ const ScoutBoy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                setTimeout(() => setRefreshing(false), 1000);
-              }}
+              onRefresh={handleRefresh}
               tintColor={colors.primary}
             />
           }
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+            if (isCloseToBottom && !loadingMore) {
+              loadMoreVisits();
+            }
+          }}
+          scrollEventThrottle={400}
         >
-          <View style={styles.listContainer}>
-            <View style={styles.listHeader}>
-              <Text style={styles.listTitle}>Assigned Visits</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{visits.length}</Text>
-              </View>
+          {loadingVisits ? (
+            <View style={styles.emptyListContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.emptyListSubtitle}>Loading visits...</Text>
             </View>
-
-            {visits.length > 0 ? (
-              <>
-                {visits.map((visit) => (
-                  <TouchableOpacity
-                    key={visit.id}
-                    style={styles.visitCard}
-                    onPress={() => handleVisitPress(visit)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.visitCardHeader}>
-                      <Text style={styles.visitCardTitle} numberOfLines={1}>
-                        {visit.site.building_name}
-                      </Text>
-                      <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
-                        <Text style={styles.visitStatusText}>
-                          {getStatusIcon(visit.status)} {beautifyName(visit.status)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {visit.site.location && (
-                      <View style={styles.visitLocationRow}>
-                        <Text style={styles.visitLocationIcon}>📍</Text>
-                        <Text style={styles.visitLocationText} numberOfLines={1}>
-                          {visit.site.location}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={styles.visitMetaRow}>
-                      {visit.site.rent && (
-                        <View style={styles.visitMetaItem}>
-                          <Text style={styles.visitMetaText}>₹{visit.site.rent}/mo</Text>
-                        </View>
-                      )}
-                      {visit.photos.length > 0 && (
-                        <View style={styles.visitMetaItem}>
-                          <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
-                        </View>
-                      )}
-                      {visit.comments.length > 0 && (
-                        <View style={styles.visitMetaItem}>
-                          <Text style={styles.visitMetaText}>💬 {visit.comments.length}</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.visitCardFooter}>
-                      <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
-                      <Text style={styles.visitArrow}>→</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </>
-            ) : (
-              <View style={styles.emptyListContainer}>
-                <Text style={styles.emptyListIcon}>📋</Text>
-                <Text style={styles.emptyListTitle}>No visits assigned yet</Text>
-                <Text style={styles.emptyListSubtitle}>Your assigned visits will appear here</Text>
+          ) : visitsError ? (
+            <View style={styles.emptyListContainer}>
+              <Text style={styles.emptyStateIcon}>⚠️</Text>
+              <Text style={styles.emptyListTitle}>{visitsError}</Text>
+              <TouchableOpacity
+                style={styles.createSiteButton}
+                onPress={handleRefresh}
+              >
+                <Text style={styles.createSiteButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.listContainer}>
+              <View style={styles.listHeader}>
+                <Text style={styles.listTitle}>Assigned Visits</Text>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{visits.length}</Text>
+                </View>
               </View>
-            )}
-          </View>
+
+              {visits.length > 0 ? (
+                <>
+                  {visits.map((visit) => (
+                    <TouchableOpacity
+                      key={visit.id}
+                      style={styles.visitCard}
+                      onPress={() => handleVisitPress(visit)}
+                      activeOpacity={0.7}
+                    >
+                      {/* Photo Section */}
+                      <View style={styles.visitCardImage}>
+                        {visit.building_photos && visit.building_photos.length > 0 ? (
+                          <Image
+                            source={{ uri: visit.building_photos[0].file_url }}
+                            style={styles.visitImage}
+                          />
+                        ) : (
+                          <View style={styles.visitImagePlaceholder}>
+                            <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.visitCardContent}>
+                        <View style={styles.visitCardHeader}>
+                          <Text style={styles.visitCardTitle} numberOfLines={1}>
+                            {visit.site.building_name}
+                          </Text>
+                          <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
+                            <Text style={styles.visitStatusText}>
+                              {getStatusIcon(visit.status)} {beautifyName(visit.status)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {visit.site.location && (
+                          <View style={styles.visitLocationRow}>
+                            <Text style={styles.visitLocationIcon}>📍</Text>
+                            <Text style={styles.visitLocationText} numberOfLines={1}>
+                              {visit.site.location}
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.visitMetaRow}>
+                          {visit.site.rent && (
+                            <View style={styles.visitMetaItem}>
+                              <Text style={styles.visitMetaText}>₹{visit.site.rent}/mo</Text>
+                            </View>
+                          )}
+                          {visit.photos && visit.photos.length > 0 && (
+                            <View style={styles.visitMetaItem}>
+                              <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
+                            </View>
+                          )}
+                          {visit.comments.length > 0 && (
+                            <View style={styles.visitMetaItem}>
+                              <Text style={styles.visitMetaText}>💬 {visit.comments.length}</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.visitCardFooter}>
+                          <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
+                          <Text style={styles.visitArrow}>→</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  
+                  {loadingMore && (
+                    <View style={styles.loadingMoreContainer}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.loadingMoreText}>Loading more visits...</Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.emptyListContainer}>
+                  <Text style={styles.emptyListIcon}>📋</Text>
+                  <Text style={styles.emptyListTitle}>No visits assigned yet</Text>
+                  <Text style={styles.emptyListSubtitle}>Your assigned visits will appear here</Text>
+                </View>
+              )}
+            </View>
+          )}
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
     </SafeAreaView>
+  );
+};
+
+// Helper component for detail sections
+const DetailSection = ({ title, site }: { title: string; site: any }) => {
+  const getDetailItems = () => {
+    switch (title) {
+      case '📋 Basic Information':
+        return [
+          { label: 'Landmark', value: site.landmark },
+          { label: 'Building Status', value: site.building_status },
+          { label: 'Floor Condition', value: site.floor_condition },
+          { label: 'Total Floors', value: site.total_floors },
+          { label: 'Basements', value: site.number_of_basements },
+          { label: 'Available Floors', value: site.availble_floors },
+          { label: 'Total Area', value: site.total_area ? `${site.total_area} sq ft` : '-' },
+          { label: 'Area per Floor', value: site.area_per_floor ? `${site.area_per_floor} sq ft` : '-' },
+          { label: 'Efficiency', value: site.efficiency },
+          { label: 'OC Available', value: site.oc },
+          { label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
+        ];
+      case '💰 Financial Details':
+        return [
+          { label: 'Monthly Rent', value: site.rent ? `₹${site.rent}` : '-' },
+          { label: 'CAM', value: site.cam ? `₹${site.cam}` : '-' },
+          { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
+          { label: 'Security Deposit', value: site.security_deposit ? `₹${site.security_deposit}` : '-' },
+          { label: 'Lease Term', value: site.lease_term },
+          { label: 'Lock-in Period', value: site.lock_in_period },
+          { label: 'Notice Period', value: site.notice_period },
+          { label: 'Rental Escalation', value: site.rental_escalation },
+        ];
+      case '🚗 Parking Details':
+        return [
+          { label: 'Car Parking Ratio', value: site.car_parking_ratio },
+          { label: 'Car Parking Slots', value: site.car_parking_slots },
+          { label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
+          { label: '2-Wheeler Slots', value: site.two_wheeler_slots },
+          { label: '2-Wheeler Charges', value: site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-' },
+        ];
+      case '⚡ Utilities':
+        return [
+          { label: 'Power', value: site.power },
+          { label: 'Power Backup', value: site.power_backup },
+        ];
+      case '🏢 Workspace Configuration':
+        return [
+          { label: 'Number of Cabins', value: site.number_of_cabins },
+          { label: 'Workstations', value: site.number_of_workstations },
+          { label: 'Workstation Size', value: site.size_of_workstation },
+        ];
+      case '🎯 Amenities & Facilities':
+        return [
+          { label: 'Meeting Room', value: site.meeting_room },
+          { label: 'Discussion Room', value: site.discussion_room },
+          { label: 'Server Room', value: site.server_room },
+          { label: 'Training Room', value: site.training_room },
+          { label: 'Pantry', value: site.pantry },
+          { label: 'Cafeteria', value: site.cafeteria },
+          { label: 'UPS Room', value: site.electrical_ups_room },
+          { label: 'Gym', value: site.gym },
+        ];
+      case '👤 Contact Information':
+        return [
+          { label: 'Building Owner', value: site.building_owner_name },
+          { label: 'Owner Contact', value: site.building_owner_contact },
+          { label: 'Contact Person', value: site.contact_person_name },
+          { label: 'Phone', value: site.contact_person_number },
+          { label: 'Email', value: site.contact_person_email },
+          { label: 'Designation', value: site.contact_person_designation },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const items = getDetailItems();
+  return (
+    <View style={styles.detailSection}>
+      <Text style={styles.detailSectionTitle}>{title}</Text>
+      <View style={styles.detailGrid}>
+        {items.map((item, idx) => (
+          item.value && (
+            <View key={idx} style={styles.detailItem}>
+              <Text style={styles.detailLabel}>{item.label}</Text>
+              <Text style={styles.detailValue}>{item.value || '-'}</Text>
+            </View>
+          )
+        ))}
+      </View>
+    </View>
   );
 };
 
@@ -1974,8 +1054,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.white,
-    padding: spacing.md,
+    overflow: 'hidden',
     ...shadows.md,
+  },
+  visitCardImage: {
+    width: '100%',
+    height: 160,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  visitImage: {
+    width: '100%',
+    height: '100%',
+  },
+  visitImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
+  },
+  visitImagePlaceholderIcon: {
+    fontSize: 48,
+  },
+  visitCardContent: {
+    padding: spacing.md,
   },
   visitCardHeader: {
     flexDirection: 'row',
@@ -2070,354 +1172,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
-  },
-  createSiteContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -16,
-  },
-  stepIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  stepIndicatorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepCircleActive: {
-    backgroundColor: colors.primary,
-  },
-  stepNumber: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  stepNumberActive: {
-    color: colors.white,
-  },
-  stepLine: {
-    width: 20,
-    height: 2,
-    backgroundColor: colors.border,
-  },
-  stepLineActive: {
-    backgroundColor: colors.primary,
-  },
-  stepContent: {
-    flex: 1,
-  },
-  stepTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  stepDescription: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  subSectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  formContainer: {
-    padding: spacing.lg,
-  },
-  detailContainer: {
-    padding: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  formGroup: {
-    marginBottom: spacing.md,
-  },
-  formLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.white,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  halfWidth: {
-    flex: 1,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primaryLight + '15',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
-  },
-  infoBoxIcon: {
-    fontSize: fontSize.lg,
-    marginRight: spacing.sm,
-  },
-  infoBoxText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  dropdownButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.white,
-  },
-  dropdownButtonText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  dropdownButtonIcon: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  dropdownContainer: {
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: 400,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    ...shadows.lg,
-  },
-  dropdownTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  dropdownScroll: {
-    maxHeight: 300,
-  },
-  dropdownOption: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  dropdownOptionText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  checkboxContainer: {
-    marginBottom: spacing.md,
-  },
-  checkbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkboxBox: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: borderRadius.sm,
-    marginRight: spacing.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxBoxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkboxCheck: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  checkboxLabel: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    flex: 1,
-  },
-  ratioContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  ratioInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  ratioSeparator: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  addPhotoButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  addPhotoButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  photoPreviewContainer: {
-    marginTop: spacing.sm,
-  },
-  photoCountText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '600',
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  photoGridItem: {
-    width: (screenWidth - spacing.lg * 2 - spacing.lg * 2 - spacing.md) / 2,
-    height: 120,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    position: 'relative',
-    ...shadows.sm,
-  },
-  photoGridImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  photoRemoveButton: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoRemoveButtonText: {
-    color: colors.white,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    lineHeight: 20,
-  },
-  photoIndexBadge: {
-    position: 'absolute',
-    bottom: spacing.xs,
-    left: spacing.xs,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
-  photoIndexText: {
-    color: colors.white,
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  navigationButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  navButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  navButtonPrimary: {
-    backgroundColor: colors.primary,
-  },
-  navButtonFull: {
-    flex: 1,
-  },
-  navButtonText: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  navButtonTextPrimary: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   siteHeader: {
     marginBottom: spacing.md,
@@ -2544,6 +1298,22 @@ const styles = StyleSheet.create({
     width: screenWidth * 0.9,
     height: screenHeight * 0.7,
   },
+  detailContainer: {
+    padding: spacing.lg,
+  },
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
   detailSection: {
     marginBottom: spacing.lg,
   },
@@ -2643,6 +1413,76 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
+  },
+  addCommentContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  commentInput: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.text,
+    minHeight: 44,
+    maxHeight: 100,
+  },
+  addCommentButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 70,
+  },
+  addCommentButtonDisabled: {
+    backgroundColor: colors.textLight,
+  },
+  addCommentButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  loadMoreButton: {
+    backgroundColor: colors.backgroundSecondary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  loadMoreText: {
+    color: colors.primary,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  markCompleteButton: {
+    backgroundColor: colors.success,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  markCompleteButtonDisabled: {
+    backgroundColor: colors.textLight,
+  },
+  markCompleteButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  loadingMoreText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
   },
 });
 
