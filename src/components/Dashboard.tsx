@@ -16,6 +16,7 @@ import BDT from './BDT';
 import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';
+import Reminder from './Reminder';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -85,6 +86,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showMedical, setShowMedical] = useState(false);
   const [showScoutBoy, setShowScoutBoy] = useState(false);
   const [showCreateSite, setShowCreateSite] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -302,12 +304,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       Alert.alert('Coming Soon', `${item} feature will be available soon!`);
     }
   };
+
   const handleBackFromCreateSite = () => {
     setShowCreateSite(false);
-    setShowScoutBoy(true); // Go back to ScoutBoy
+    setShowScoutBoy(true);
     setActiveMenuItem('Dashboard');
   };
-
 
   const handleModulePress = (module: string, moduleUniqueName?: string) => {
     if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
@@ -325,6 +327,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setShowMedical(true);
     } else if (moduleUniqueName === 'scout_boy' || module.toLowerCase().includes('scout')) {
       setShowScoutBoy(true);
+    } else if (moduleUniqueName === 'reminder' || module.toLowerCase().includes('reminder')) {
+      setShowReminder(true);
     } else {
       Alert.alert('Coming Soon', `${module} module will be available soon!`);
     }
@@ -367,6 +371,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleBackFromScoutBoy = () => {
     setShowScoutBoy(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromReminder = () => {
+    setShowReminder(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -439,6 +448,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     iconUrl: string;
     onPress: () => void;
   }
+  
   const ModuleItem: React.FC<ModuleItemProps> = ({ title, iconUrl, onPress }) => (
     <TouchableOpacity style={styles.moduleItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.moduleIconContainer}>
@@ -513,6 +523,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           borderRadius={borderRadius}
           shadows={shadows}
         />
+      ) : showReminder ? (
+        <Reminder onBack={handleBackFromReminder} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
