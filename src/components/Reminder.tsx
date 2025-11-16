@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert
+  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert, FlatList
 } from 'react-native';
 
-const PREVIEW_MODE = true;
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Import these from your config
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_URL } from '../config/config';
+const TOKEN_KEY = 'token_2';
+
 
 const colors = {
   primary: '#161b34',
@@ -19,16 +24,26 @@ const colors = {
   divider: '#E5E5EA',
   error: '#DC3545',
   success: '#34C759',
-  cardGreen: '#A7F3D0',
-  cardOrange: '#FED7AA',
-  cardPurple: '#DDD6FE',
-  cardPink: '#FBCFE8',
   blue: '#007AFF',
   green: '#34C759',
+  orange: '#FF9500',
+  purple: '#AF52DE',
+  pink: '#FF2D55',
+  yellow: '#FFCC00',
 };
 
 interface ReminderProps {
   onBack: () => void;
+}
+
+interface Employee {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  profile_picture: string | null;
 }
 
 interface ReminderItem {
@@ -41,10 +56,8 @@ interface ReminderItem {
   created_at: string;
   updated_at: string;
   also_share_with: string[];
-  created_by: {
-    employee_id: string;
-    full_name: string;
-  };
+  color: string | null;
+  created_by: number;
 }
 
 type ViewMode = 'month' | 'agenda';
@@ -52,9 +65,11 @@ type ViewMode = 'month' | 'agenda';
 const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedReminder, setSelectedReminder] = useState<ReminderItem | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -66,48 +81,130 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [date, setDate] = useState('');
   const [selectedHour, setSelectedHour] = useState('12');
   const [selectedMinute, setSelectedMinute] = useState('00');
-  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(colors.blue);
+  const [selectedColor, setSelectedColor] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
-  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
-  const minutes = ['00', '15', '30', '45'];
+  // Employee selection states
+  const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+  const [employeeSearchResults, setEmployeeSearchResults] = useState<Employee[]>([]);
+  const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
+  const [searchingEmployees, setSearchingEmployees] = useState(false);
+
+  // Generate hours (00-23) and minutes (00-59)
+  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
   
-  const eventColors = [colors.blue, colors.green, colors.cardOrange, colors.cardPurple, colors.error, colors.cardPink];
+  const eventColors = [
+    { name: 'blue', value: colors.blue },
+    { name: 'green', value: colors.green },
+    { name: 'orange', value: colors.orange },
+    { name: 'purple', value: colors.purple },
+    { name: 'pink', value: colors.pink },
+    { name: 'yellow', value: colors.yellow },
+  ];
+
+  // Get token on mount
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem('token_2');
+        setToken(storedToken);
+      } catch (error) {
+        console.error('Error getting token:', error);
+        Alert.alert('Error', 'Failed to retrieve authentication token');
+      }
+    };
+    getToken();
+  }, []);
+
+  // Fetch reminders when token is available
+  useEffect(() => {
+    if (token) {
+      fetchReminders();
+    }
+  }, [token]);
+
+  const fetchReminders = async () => {
+    if (!token) return;
+    
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/getReminders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.data) {
+        setReminders(result.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch reminders');
+      }
+    } catch (error) {
+      console.error('Error fetching reminders:', error);
+      Alert.alert('Error', 'Failed to load reminders. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchEmployees = async (query: string) => {
+    if (!query.trim() || !token) {
+      setEmployeeSearchResults([]);
+      return;
+    }
+
+    setSearchingEmployees(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/getUsers?query=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.data) {
+        // Filter out already selected employees
+        const filtered = result.data.filter(
+          (emp: Employee) => !selectedEmployees.some(sel => sel.employee_id === emp.employee_id)
+        );
+        setEmployeeSearchResults(filtered);
+      }
+    } catch (error) {
+      console.error('Error searching employees:', error);
+    } finally {
+      setSearchingEmployees(false);
+    }
+  };
 
   useEffect(() => {
-    if (PREVIEW_MODE) {
-      const today = new Date();
-      const demoReminders: ReminderItem[] = [
-        {
-          id: 1,
-          title: 'Team Meeting',
-          description: 'Quarterly review',
-          reminder_date: today.toISOString().split('T')[0],
-          reminder_time: '10:00:00',
-          is_completed: false,
-          created_at: today.toISOString(),
-          updated_at: today.toISOString(),
-          also_share_with: [],
-          created_by: { employee_id: '001', full_name: 'John Doe' }
-        },
-        {
-          id: 2,
-          title: 'Project Deadline',
-          description: 'Submit final report',
-          reminder_date: new Date(today.getTime() + 86400000 * 3).toISOString().split('T')[0],
-          reminder_time: '17:00:00',
-          is_completed: false,
-          created_at: today.toISOString(),
-          updated_at: today.toISOString(),
-          also_share_with: [],
-          created_by: { employee_id: '001', full_name: 'John Doe' }
-        }
-      ];
-      setReminders(demoReminders);
-    }
-  }, []);
+    const timeoutId = setTimeout(() => {
+      if (showEmployeeSearch) {
+        searchEmployees(employeeSearchQuery);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [employeeSearchQuery, showEmployeeSearch]);
+
+  const addEmployee = (employee: Employee) => {
+    setSelectedEmployees([...selectedEmployees, employee]);
+    setEmployeeSearchQuery('');
+    setEmployeeSearchResults([]);
+    setShowEmployeeSearch(false);
+  };
+
+  const removeEmployee = (employeeId: string) => {
+    setSelectedEmployees(selectedEmployees.filter(emp => emp.employee_id !== employeeId));
+  };
 
   const resetForm = () => {
     setTitle('');
@@ -115,10 +212,14 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setDate('');
     setSelectedHour('12');
     setSelectedMinute('00');
-    setSelectedPeriod('AM');
-    setSelectedColor(colors.blue);
+    setSelectedColor('');
     setSelectedDate(null);
     setShowTimePicker(false);
+    setSelectedEmployees([]);
+    setEmployeeSearchQuery('');
+    setEmployeeSearchResults([]);
+    setShowEmployeeSearch(false);
+    setIsEditMode(false);
   };
 
   const isDateBeforeToday = (dateStr: string): boolean => {
@@ -129,7 +230,18 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     return selectedDate < today;
   };
 
-  const handleCreateReminder = () => {
+  const getColorName = (colorValue: string): string => {
+    const colorObj = eventColors.find(c => c.value === colorValue);
+    return colorObj ? colorObj.name : 'blue';
+  };
+
+  const getColorValue = (colorName: string | null): string => {
+    if (!colorName) return colors.blue;
+    const colorObj = eventColors.find(c => c.name === colorName);
+    return colorObj ? colorObj.value : colors.blue;
+  };
+
+  const handleCreateReminder = async () => {
     if (!title.trim()) {
       Alert.alert('Required Field', 'Please enter a title for your reminder');
       return;
@@ -138,33 +250,99 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       Alert.alert('Required Field', 'Please select a date');
       return;
     }
+    if (!selectedColor) {
+      Alert.alert('Required Field', 'Please select a color for your reminder');
+      return;
+    }
     if (isDateBeforeToday(date)) {
       Alert.alert('Invalid Date', 'Cannot create reminder for past dates');
       return;
     }
-    
-    let hour24 = parseInt(selectedHour);
-    if (selectedPeriod === 'PM' && hour24 !== 12) hour24 += 12;
-    else if (selectedPeriod === 'AM' && hour24 === 12) hour24 = 0;
-    
-    const timeString = `${hour24.toString().padStart(2, '0')}:${selectedMinute}:00`;
 
-    const newReminder: ReminderItem = {
-      id: Date.now(),
-      title: title.trim(),
-      description: description.trim(),
-      reminder_date: date,
-      reminder_time: timeString,
-      is_completed: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      also_share_with: [],
-      created_by: { employee_id: '001', full_name: 'You' }
-    };
+    const timeString = `${selectedHour}:${selectedMinute}:00`;
+    const employeeIds = selectedEmployees.map(emp => emp.employee_id);
 
-    setReminders([...reminders, newReminder]);
-    setShowCreateModal(false);
-    resetForm();
+    setSubmitting(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/createReminder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          title: title.trim(),
+          description: description.trim(),
+          date,
+          time: timeString,
+          employee_ids: employeeIds,
+          color: getColorName(selectedColor),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setReminders([...reminders, result.data]);
+        setShowCreateModal(false);
+        resetForm();
+        Alert.alert('Success', 'Reminder created successfully');
+      } else {
+        throw new Error(result.message || 'Failed to create reminder');
+      }
+    } catch (error) {
+      console.error('Error creating reminder:', error);
+      Alert.alert('Error', 'Failed to create reminder. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateReminder = async () => {
+    if (!selectedReminder || !title.trim() || !date || !selectedColor) {
+      Alert.alert('Required Fields', 'Please fill all required fields');
+      return;
+    }
+
+    const timeString = `${selectedHour}:${selectedMinute}:00`;
+    const employeeIds = selectedEmployees.map(emp => emp.employee_id);
+
+    setSubmitting(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/updateReminder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          reminder_id: selectedReminder.id,
+          title: title.trim(),
+          description: description.trim(),
+          date,
+          time: timeString,
+          employee_ids: employeeIds,
+          color: getColorName(selectedColor),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setReminders(reminders.map(r => r.id === selectedReminder.id ? result.data : r));
+        setShowCreateModal(false);
+        setShowDetailModal(false);
+        resetForm();
+        Alert.alert('Success', 'Reminder updated successfully');
+      } else {
+        throw new Error(result.message || 'Failed to update reminder');
+      }
+    } catch (error) {
+      console.error('Error updating reminder:', error);
+      Alert.alert('Error', 'Failed to update reminder. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDeleteReminder = (reminderId: number) => {
@@ -176,10 +354,33 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            setReminders(reminders.filter(r => r.id !== reminderId));
-            setShowDetailModal(false);
-            setSelectedReminder(null);
+          onPress: async () => {
+            try {
+              const response = await fetch(`${BACKEND_URL}/core/deleteReminder`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  token,
+                  reminder_id: reminderId,
+                }),
+              });
+
+              const result = await response.json();
+
+              if (response.ok) {
+                setReminders(reminders.filter(r => r.id !== reminderId));
+                setShowDetailModal(false);
+                setSelectedReminder(null);
+                Alert.alert('Success', 'Reminder deleted successfully');
+              } else {
+                throw new Error(result.message || 'Failed to delete reminder');
+              }
+            } catch (error) {
+              console.error('Error deleting reminder:', error);
+              Alert.alert('Error', 'Failed to delete reminder. Please try again.');
+            }
           },
         },
       ]
@@ -189,6 +390,23 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const openDetailModal = (reminder: ReminderItem) => {
     setSelectedReminder(reminder);
     setShowDetailModal(true);
+  };
+
+  const openEditMode = () => {
+    if (!selectedReminder) return;
+    
+    setTitle(selectedReminder.title);
+    setDescription(selectedReminder.description);
+    setDate(selectedReminder.reminder_date.split('T')[0]);
+    
+    const [hours, minutes] = selectedReminder.reminder_time.split(':');
+    setSelectedHour(hours);
+    setSelectedMinute(minutes);
+    
+    setSelectedColor(getColorValue(selectedReminder.color));
+    setIsEditMode(true);
+    setShowDetailModal(false);
+    setShowCreateModal(true);
   };
 
   const openCreateModalForDate = (dateObj: Date) => {
@@ -213,10 +431,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
   const formatTime = (timeString: string): string => {
     const [hours, minutes] = timeString.split(':');
-    const h = parseInt(hours);
-    const period = h >= 12 ? 'PM' : 'AM';
-    const displayHour = h % 12 || 12;
-    return `${displayHour}:${minutes} ${period}`;
+    return `${hours}:${minutes}`;
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -232,7 +447,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
   const getRemindersForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
-    return reminders.filter(r => r.reminder_date.startsWith(dateStr));
+    return reminders.filter(r => r.reminder_date.split('T')[0] === dateStr);
   };
 
   const changeMonth = (direction: number) => {
@@ -275,6 +490,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               openCreateModalForDate(date);
             }
           }}
+          onLongPress={() => openCreateModalForDate(date)}
           activeOpacity={0.7}
         >
           <View style={[styles.dayNumberContainer, isToday && styles.dayNumberToday]}>
@@ -284,14 +500,14 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           </View>
           {dayReminders.length > 0 && (
             <View style={styles.dayEventsContainer}>
-              {dayReminders.slice(0, 2).map((reminder) => (
+              {dayReminders.slice(0, 3).map((reminder) => (
                 <View
                   key={reminder.id}
-                  style={[styles.dayEventDot, { backgroundColor: eventColors[reminder.id % eventColors.length] }]}
+                  style={[styles.dayEventDot, { backgroundColor: getColorValue(reminder.color) }]}
                 />
               ))}
-              {dayReminders.length > 2 && (
-                <Text style={styles.moreEventsText}>+{dayReminders.length - 2}</Text>
+              {dayReminders.length > 3 && (
+                <Text style={styles.moreEventsText}>+{dayReminders.length - 3}</Text>
               )}
             </View>
           )}
@@ -316,17 +532,18 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
   const AgendaView = () => {
     const sortedReminders = [...filteredReminders].sort((a, b) => {
-      const dateA = new Date(`${a.reminder_date}T${a.reminder_time}`);
-      const dateB = new Date(`${b.reminder_date}T${b.reminder_time}`);
+      const dateA = new Date(`${a.reminder_date.split('T')[0]}T${a.reminder_time}`);
+      const dateB = new Date(`${b.reminder_date.split('T')[0]}T${b.reminder_time}`);
       return dateA.getTime() - dateB.getTime();
     });
 
     const groupedReminders: { [key: string]: ReminderItem[] } = {};
     sortedReminders.forEach(reminder => {
-      if (!groupedReminders[reminder.reminder_date]) {
-        groupedReminders[reminder.reminder_date] = [];
+      const dateKey = reminder.reminder_date.split('T')[0];
+      if (!groupedReminders[dateKey]) {
+        groupedReminders[dateKey] = [];
       }
-      groupedReminders[reminder.reminder_date].push(reminder);
+      groupedReminders[dateKey].push(reminder);
     });
 
     return (
@@ -348,13 +565,18 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                   onPress={() => openDetailModal(reminder)}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.agendaItemAccent, { backgroundColor: eventColors[reminder.id % eventColors.length] }]} />
+                  <View style={[styles.agendaItemAccent, { backgroundColor: getColorValue(reminder.color) }]} />
                   <View style={styles.agendaItemContent}>
                     <Text style={styles.agendaItemTitle}>{reminder.title}</Text>
                     <Text style={styles.agendaItemTime}>{formatTime(reminder.reminder_time)}</Text>
                     {reminder.description && (
                       <Text style={styles.agendaItemDesc} numberOfLines={2}>
                         {reminder.description}
+                      </Text>
+                    )}
+                    {reminder.also_share_with.length > 0 && (
+                      <Text style={styles.agendaItemShared}>
+                        Shared with {reminder.also_share_with.length} {reminder.also_share_with.length === 1 ? 'person' : 'people'}
                       </Text>
                     )}
                   </View>
@@ -450,6 +672,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         )}
       </View>
 
+      {/* Detail Modal */}
       <Modal
         visible={showDetailModal}
         animationType="slide"
@@ -463,15 +686,20 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 <Text style={styles.modalHeaderButton}>Done</Text>
               </TouchableOpacity>
               <Text style={styles.modalHeaderTitle}>Reminder Details</Text>
-              <TouchableOpacity
-                onPress={() => handleDeleteReminder(selectedReminder.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalHeaderDelete}>Delete</Text>
-              </TouchableOpacity>
+              <View style={styles.modalHeaderActions}>
+                <TouchableOpacity onPress={openEditMode} activeOpacity={0.7} style={styles.editButton}>
+                  <Text style={styles.modalHeaderEdit}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDeleteReminder(selectedReminder.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalHeaderDelete}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <ScrollView style={styles.modalContent}>
-              <View style={[styles.modalColorBar, { backgroundColor: eventColors[selectedReminder.id % eventColors.length] }]} />
+              <View style={[styles.modalColorBar, { backgroundColor: getColorValue(selectedReminder.color) }]} />
               <Text style={styles.modalTitle}>{selectedReminder.title}</Text>
               
               <View style={styles.modalSection}>
@@ -491,11 +719,21 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                   <Text style={styles.modalDescription}>{selectedReminder.description}</Text>
                 </View>
               )}
+
+              {selectedReminder.also_share_with.length > 0 && (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>Shared With</Text>
+                  {selectedReminder.also_share_with.map((empId, idx) => (
+                    <Text key={idx} style={styles.modalText}>• {empId}</Text>
+                  ))}
+                </View>
+              )}
             </ScrollView>
           </SafeAreaView>
         )}
       </Modal>
 
+      {/* Create/Edit Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
@@ -516,9 +754,15 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
             >
               <Text style={styles.modalHeaderButton}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle}>New Reminder</Text>
-            <TouchableOpacity onPress={handleCreateReminder} disabled={submitting} activeOpacity={0.7}>
-              <Text style={[styles.modalHeaderButton, styles.modalHeaderButtonPrimary]}>Add</Text>
+            <Text style={styles.modalHeaderTitle}>{isEditMode ? 'Edit Reminder' : 'New Reminder'}</Text>
+            <TouchableOpacity 
+              onPress={isEditMode ? handleUpdateReminder : handleCreateReminder} 
+              disabled={submitting} 
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.modalHeaderButton, styles.modalHeaderButtonPrimary]}>
+                {submitting ? 'Saving...' : isEditMode ? 'Update' : 'Add'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -554,7 +798,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               >
                 <Text style={styles.inputLabel}>Time</Text>
                 <Text style={styles.inputValue}>
-                  {selectedHour}:{selectedMinute} {selectedPeriod}
+                  {selectedHour}:{selectedMinute}
                 </Text>
               </TouchableOpacity>
 
@@ -608,28 +852,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                         ))}
                       </ScrollView>
                     </View>
-
-                    <View style={styles.timePickerColumn}>
-                      <Text style={styles.timePickerLabel}>Period</Text>
-                      {['AM', 'PM'].map(period => (
-                        <TouchableOpacity
-                          key={period}
-                          style={[
-                            styles.timePickerOption,
-                            selectedPeriod === period && styles.timePickerOptionActive
-                          ]}
-                          onPress={() => setSelectedPeriod(period as 'AM' | 'PM')}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[
-                            styles.timePickerOptionText,
-                            selectedPeriod === period && styles.timePickerOptionTextActive
-                          ]}>
-                            {period}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
                   </View>
                 </View>
               )}
@@ -649,23 +871,99 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               />
             </View>
 
+            {/* Employee Selection */}
+            <View style={styles.employeeSection}>
+              <Text style={styles.sectionTitle}>Share With Employees</Text>
+              
+              {selectedEmployees.length > 0 && (
+                <View style={styles.selectedEmployeesContainer}>
+                  {selectedEmployees.map((emp) => (
+                    <View key={emp.employee_id} style={styles.employeeChip}>
+                      <Text style={styles.employeeChipText}>{emp.full_name}</Text>
+                      <TouchableOpacity
+                        onPress={() => removeEmployee(emp.employee_id)}
+                        activeOpacity={0.7}
+                        style={styles.employeeChipRemove}
+                      >
+                        <Text style={styles.employeeChipRemoveText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.addEmployeeButton}
+                onPress={() => setShowEmployeeSearch(!showEmployeeSearch)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.addEmployeeButtonText}>+ Add Employee</Text>
+              </TouchableOpacity>
+
+              {showEmployeeSearch && (
+                <View style={styles.employeeSearchContainer}>
+                  <TextInput
+                    style={styles.employeeSearchInput}
+                    placeholder="Search by name..."
+                    value={employeeSearchQuery}
+                    onChangeText={setEmployeeSearchQuery}
+                    placeholderTextColor={colors.textTertiary}
+                    autoFocus
+                  />
+                  
+                  {searchingEmployees ? (
+                    <View style={styles.employeeSearchLoading}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    </View>
+                  ) : employeeSearchResults.length > 0 ? (
+                    <ScrollView style={styles.employeeSearchResults} nestedScrollEnabled>
+                      {employeeSearchResults.map((emp) => (
+                        <TouchableOpacity
+                          key={emp.employee_id}
+                          style={styles.employeeSearchItem}
+                          onPress={() => addEmployee(emp)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.employeeSearchItemInfo}>
+                            <Text style={styles.employeeSearchItemName}>{emp.full_name}</Text>
+                            <Text style={styles.employeeSearchItemRole}>
+                              {emp.role} • {emp.employee_id}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  ) : employeeSearchQuery.trim() ? (
+                    <View style={styles.employeeSearchEmpty}>
+                      <Text style={styles.employeeSearchEmptyText}>No employees found</Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
+            </View>
+
+            {/* Color Picker */}
             <View style={styles.colorPickerSection}>
-              <Text style={styles.inputLabel}>Color</Text>
+              <Text style={styles.sectionTitle}>
+                Color {!selectedColor && <Text style={styles.requiredStar}>*</Text>}
+              </Text>
               <View style={styles.colorPickerRow}>
                 {eventColors.map(color => (
                   <TouchableOpacity
-                    key={color}
+                    key={color.name}
                     style={[
                       styles.colorOption,
-                      { backgroundColor: color },
-                      selectedColor === color && styles.colorOptionSelected
+                      { backgroundColor: color.value },
+                      selectedColor === color.value && styles.colorOptionSelected
                     ]}
-                    onPress={() => setSelectedColor(color)}
+                    onPress={() => setSelectedColor(color.value)}
                     activeOpacity={0.7}
                   />
                 ))}
               </View>
             </View>
+
+            <View style={{ height: 40 }} />
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -965,6 +1263,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
+    marginBottom: 4,
+  },
+  agendaItemShared: {
+    fontSize: 12,
+    color: colors.accent,
+    fontWeight: '500',
+    marginTop: 4,
   },
   modalContainer: {
     flex: 1,
@@ -994,12 +1299,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
   },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  editButton: {
+    marginRight: 4,
+  },
+  modalHeaderEdit: {
+    fontSize: 17,
+    color: colors.accent,
+    fontWeight: '600',
+  },
   modalHeaderDelete: {
     fontSize: 17,
     color: colors.error,
     fontWeight: '600',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
   modalContent: {
     flex: 1,
@@ -1137,6 +1452,118 @@ const styles = StyleSheet.create({
   timePickerOptionTextActive: {
     color: colors.surface,
     fontWeight: '600',
+  },
+  employeeSection: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  requiredStar: {
+    color: colors.error,
+  },
+  selectedEmployeesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  employeeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: 20,
+    paddingLeft: 14,
+    paddingRight: 8,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  employeeChipText: {
+    fontSize: 14,
+    color: colors.surface,
+    fontWeight: '500',
+  },
+  employeeChipRemove: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  employeeChipRemoveText: {
+    fontSize: 18,
+    color: colors.surface,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  addEmployeeButton: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderStyle: 'dashed',
+  },
+  addEmployeeButtonText: {
+    fontSize: 15,
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  employeeSearchContainer: {
+    marginTop: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  employeeSearchInput: {
+    fontSize: 16,
+    color: colors.text,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  employeeSearchLoading: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  employeeSearchResults: {
+    maxHeight: 200,
+  },
+  employeeSearchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  employeeSearchItemInfo: {
+    flex: 1,
+  },
+  employeeSearchItemName: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  employeeSearchItemRole: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  employeeSearchEmpty: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  employeeSearchEmptyText: {
+    fontSize: 15,
+    color: colors.textSecondary,
   },
   colorPickerSection: {
     paddingHorizontal: 16,

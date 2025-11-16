@@ -1233,10 +1233,10 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
         header: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: spacing?.lg || 16,
-            paddingVertical: spacing?.sm || 8,
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+            paddingVertical: 16,
             backgroundColor: colors.primary,
-            marginBottom: spacing?.sm || 8,
         },
         headerSpacer: {
             width: 32,

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
   Dimensions, KeyboardAvoidingView, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -141,7 +140,7 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
   const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
@@ -154,7 +153,7 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.contentContainer}>
+      <View style={styles.contentContainerBorder}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -225,7 +224,7 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
           </View>
         </KeyboardAvoidingView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -275,7 +274,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
@@ -288,7 +287,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.contentContainer}>
+      <View style={styles.contentContainerBorder}>
         {loadingDetails ? (
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -405,7 +404,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
           </ScrollView>
         ) : null}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -812,7 +811,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
@@ -942,7 +941,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -954,10 +953,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: colors.primary,
-    marginBottom: spacing.sm,
   },
   backButton: {
     padding: spacing.xs,
@@ -984,7 +983,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    width: 32,
+    width: 40,
   },
   tabBar: {
     flexDirection: 'row',
@@ -992,12 +991,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
     gap: spacing.xs,
+    borderTopLeftRadius: 28,   
+    borderTopRightRadius: 28
   },
   tabButton: {
     flex: 1,
     paddingVertical: spacing.md,
     alignItems: 'center',
-    borderRadius: borderRadius.lg,
+    borderRadius: 28,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: spacing.sm,
@@ -1021,6 +1022,15 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
+    
+    paddingTop: spacing.lg,
+  },
+  contentContainerBorder: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+    
     paddingTop: spacing.lg,
   },
   listScrollView: {
@@ -1239,13 +1249,13 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   submitFooter: {
-    backgroundColor: colors.white,
+    // backgroundColor: colors.white,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    // paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    ...shadows.lg,
+    // borderTopWidth: 1,
+    // // borderTopColor: colors.border,
+    // ...shadows.lg,
   },
   submitButton: {
     backgroundColor: colors.primary,

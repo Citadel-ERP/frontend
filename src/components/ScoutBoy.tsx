@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Modal, TextInput, Dimensions, ActivityIndicator,
   Image, RefreshControl
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
 import CreateSite from './CreateSite';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -330,8 +331,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   // Visit Detail View
   if (viewMode === 'visit-detail' && selectedVisit) {
     const site = selectedVisit.site;
+    const insets = useSafeAreaInsets();
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
@@ -469,7 +471,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             />
           </View>
         </Modal>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -486,10 +488,10 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       />
     );
   }
-
+  const insets = useSafeAreaInsets();
   // Default view: Visits List
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -659,7 +661,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -762,10 +764,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: colors.primary,
-    marginBottom: spacing.sm,
   },
   backButton: {
     padding: spacing.xs,
@@ -993,6 +995,8 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     backgroundColor: colors.backgroundSecondary,
   },
   siteHeader: {

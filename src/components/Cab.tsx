@@ -1323,8 +1323,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   }, arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.textSecondary },
-  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs },
-  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2 },
+  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs,borderTopRightRadius:28,borderTopLeftRadius:28 },
+  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2,borderTopRightRadius:28,borderTopLeftRadius:28  },
   activeTab: { borderBottomWidth: 3, borderBottomColor: colors.primary, backgroundColor: colors.backgroundSecondary },
   tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
   activeTabText: { color: colors.primary, fontWeight: '600' },
