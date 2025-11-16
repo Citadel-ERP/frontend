@@ -3,14 +3,13 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
   StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert, FlatList
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Import these from your config
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
 const TOKEN_KEY = 'token_2';
-
 
 const colors = {
   primary: '#161b34',
@@ -31,6 +30,26 @@ const colors = {
   pink: '#FF2D55',
   yellow: '#FFCC00',
 };
+
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+  </View>
+);
+
+const EditIcon = () => (
+  <View style={styles.iconContainer}>
+    <View style={styles.editIconPencil} />
+    <View style={styles.editIconLine} />
+  </View>
+);
+
+const DeleteIcon = () => (
+  <View style={styles.iconContainer}>
+    <View style={styles.deleteIconLine1} />
+    <View style={styles.deleteIconLine2} />
+  </View>
+);
 
 interface ReminderProps {
   onBack: () => void;
@@ -81,20 +100,20 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [date, setDate] = useState('');
   const [selectedHour, setSelectedHour] = useState('12');
   const [selectedMinute, setSelectedMinute] = useState('00');
+  const [selectedPeriod, setSelectedPeriod] = useState('AM');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Employee selection states
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
   const [employeeSearchResults, setEmployeeSearchResults] = useState<Employee[]>([]);
   const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
   const [searchingEmployees, setSearchingEmployees] = useState(false);
 
-  // Generate hours (00-23) and minutes (00-59)
-  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+  const periods = ['AM', 'PM'];
   
   const eventColors = [
     { name: 'blue', value: colors.blue },
@@ -105,7 +124,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     { name: 'yellow', value: colors.yellow },
   ];
 
-  // Get token on mount
+  const insets = useSafeAreaInsets();
+
   useEffect(() => {
     const getToken = async () => {
       try {
@@ -119,7 +139,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     getToken();
   }, []);
 
-  // Fetch reminders when token is available
   useEffect(() => {
     if (token) {
       fetchReminders();
@@ -172,7 +191,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       const result = await response.json();
       
       if (response.ok && result.data) {
-        // Filter out already selected employees
         const filtered = result.data.filter(
           (emp: Employee) => !selectedEmployees.some(sel => sel.employee_id === emp.employee_id)
         );
@@ -212,6 +230,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setDate('');
     setSelectedHour('12');
     setSelectedMinute('00');
+    setSelectedPeriod('AM');
     setSelectedColor('');
     setSelectedDate(null);
     setShowTimePicker(false);
@@ -241,6 +260,66 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     return colorObj ? colorObj.value : colors.blue;
   };
 
+  const convertTo24Hour = (hour: string, period: string): string => {
+    let hourNum = parseInt(hour);
+    if (period === 'PM' && hourNum !== 12) {
+      hourNum += 12;
+    } else if (period === 'AM' && hourNum === 12) {
+      hourNum = 0;
+    }
+    return hourNum.toString().padStart(2, '0');
+  };
+
+  const convertTo12Hour = (time24: string): { hour: string; minute: string; period: string } => {
+    const [hours, minutes] = time24.split(':');
+    let hourNum = parseInt(hours);
+    const period = hourNum >= 12 ? 'PM' : 'AM';
+    
+    if (hourNum === 0) {
+      hourNum = 12;
+    } else if (hourNum > 12) {
+      hourNum -= 12;
+    }
+    
+    return {
+      hour: hourNum.toString().padStart(2, '0'),
+      minute: minutes,
+      period
+    };
+  };
+
+  const handleToggleComplete = async (reminderId: number, currentStatus: boolean) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/updateReminderStatus`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          reminder_id: reminderId,
+          is_completed: !currentStatus,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setReminders(reminders.map(r => 
+          r.id === reminderId ? { ...r, is_completed: !currentStatus } : r
+        ));
+        if (selectedReminder && selectedReminder.id === reminderId) {
+          setSelectedReminder({ ...selectedReminder, is_completed: !currentStatus });
+        }
+      } else {
+        throw new Error(result.message || 'Failed to update reminder status');
+      }
+    } catch (error) {
+      console.error('Error updating reminder status:', error);
+      Alert.alert('Error', 'Failed to update reminder status. Please try again.');
+    }
+  };
+
   const handleCreateReminder = async () => {
     if (!title.trim()) {
       Alert.alert('Required Field', 'Please enter a title for your reminder');
@@ -259,7 +338,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       return;
     }
 
-    const timeString = `${selectedHour}:${selectedMinute}:00`;
+    const hour24 = convertTo24Hour(selectedHour, selectedPeriod);
+    const timeString = `${hour24}:${selectedMinute}:00`;
     const employeeIds = selectedEmployees.map(emp => emp.employee_id);
 
     setSubmitting(true);
@@ -304,7 +384,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       return;
     }
 
-    const timeString = `${selectedHour}:${selectedMinute}:00`;
+    const hour24 = convertTo24Hour(selectedHour, selectedPeriod);
+    const timeString = `${hour24}:${selectedMinute}:00`;
     const employeeIds = selectedEmployees.map(emp => emp.employee_id);
 
     setSubmitting(true);
@@ -399,14 +480,22 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setDescription(selectedReminder.description);
     setDate(selectedReminder.reminder_date.split('T')[0]);
     
-    const [hours, minutes] = selectedReminder.reminder_time.split(':');
-    setSelectedHour(hours);
-    setSelectedMinute(minutes);
+    const time12 = convertTo12Hour(selectedReminder.reminder_time);
+    setSelectedHour(time12.hour);
+    setSelectedMinute(time12.minute);
+    setSelectedPeriod(time12.period);
     
     setSelectedColor(getColorValue(selectedReminder.color));
     setIsEditMode(true);
     setShowDetailModal(false);
     setShowCreateModal(true);
+  };
+
+  const formatDateToYYYYMMDD = (dateObj: Date): string => {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const openCreateModalForDate = (dateObj: Date) => {
@@ -420,18 +509,18 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     }
 
     setSelectedDate(dateObj);
-    setDate(dateObj.toISOString().split('T')[0]);
+    setDate(formatDateToYYYYMMDD(dateObj));
     setShowCreateModal(true);
   };
 
   const formatDate = (dateString: string): string => {
-    const d = new Date(dateString);
+    const d = new Date(dateString + 'T00:00:00');
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const formatTime = (timeString: string): string => {
-    const [hours, minutes] = timeString.split(':');
-    return `${hours}:${minutes}`;
+    const time12 = convertTo12Hour(timeString);
+    return `${time12.hour}:${time12.minute} ${time12.period}`;
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -445,8 +534,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     return { daysInMonth, startingDayOfWeek, year, month };
   };
 
-  const getRemindersForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+  const getRemindersForDate = (dateObj: Date) => {
+    const dateStr = formatDateToYYYYMMDD(dateObj);
     return reminders.filter(r => r.reminder_date.split('T')[0] === dateStr);
   };
 
@@ -485,7 +574,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           style={styles.calendarDay}
           onPress={() => {
             if (dayReminders.length > 0) {
-              openDetailModal(dayReminders[0]);
+              setSelectedDate(date);
             } else {
               openCreateModalForDate(date);
             }
@@ -531,7 +620,14 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   };
 
   const AgendaView = () => {
-    const sortedReminders = [...filteredReminders].sort((a, b) => {
+    let displayReminders = filteredReminders;
+    
+    if (selectedDate) {
+      const selectedDateStr = formatDateToYYYYMMDD(selectedDate);
+      displayReminders = filteredReminders.filter(r => r.reminder_date.split('T')[0] === selectedDateStr);
+    }
+
+    const sortedReminders = [...displayReminders].sort((a, b) => {
       const dateA = new Date(`${a.reminder_date.split('T')[0]}T${a.reminder_time}`);
       const dateB = new Date(`${b.reminder_date.split('T')[0]}T${b.reminder_time}`);
       return dateA.getTime() - dateB.getTime();
@@ -547,56 +643,140 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     });
 
     return (
-      <ScrollView style={styles.agendaView} showsVerticalScrollIndicator={false}>
-        {Object.keys(groupedReminders).length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📅</Text>
-            <Text style={styles.emptyStateTitle}>No Reminders</Text>
-            <Text style={styles.emptyStateSubtitle}>Tap any date to create one</Text>
+      <View style={styles.agendaView}>
+        {selectedDate && (
+          <View style={styles.selectedDateHeader}>
+            <TouchableOpacity
+              style={styles.backToAllButton}
+              onPress={() => {
+                setSelectedDate(null);
+                setViewMode('agenda');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backToAllButtonText}>← All Reminders</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          Object.keys(groupedReminders).map(dateKey => (
-            <View key={dateKey} style={styles.agendaSection}>
-              <Text style={styles.agendaDateHeader}>{formatDate(dateKey)}</Text>
-              {groupedReminders[dateKey].map((reminder) => (
-                <TouchableOpacity
-                  key={reminder.id}
-                  style={styles.agendaItem}
-                  onPress={() => openDetailModal(reminder)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.agendaItemAccent, { backgroundColor: getColorValue(reminder.color) }]} />
-                  <View style={styles.agendaItemContent}>
-                    <Text style={styles.agendaItemTitle}>{reminder.title}</Text>
-                    <Text style={styles.agendaItemTime}>{formatTime(reminder.reminder_time)}</Text>
-                    {reminder.description && (
-                      <Text style={styles.agendaItemDesc} numberOfLines={2}>
-                        {reminder.description}
-                      </Text>
-                    )}
-                    {reminder.also_share_with.length > 0 && (
-                      <Text style={styles.agendaItemShared}>
-                        Shared with {reminder.also_share_with.length} {reminder.also_share_with.length === 1 ? 'person' : 'people'}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))
         )}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {Object.keys(groupedReminders).length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>📅</Text>
+              <Text style={styles.emptyStateTitle}>No Reminders</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {selectedDate ? 'No reminders for this date' : 'Tap any date to create one'}
+              </Text>
+            </View>
+          ) : (
+            Object.keys(groupedReminders).map(dateKey => (
+              <View key={dateKey} style={styles.agendaSection}>
+                <View style={styles.agendaDateHeaderContainer}>
+                  <Text style={styles.agendaDateHeader}>{formatDate(dateKey)}</Text>
+                  <TouchableOpacity
+                    style={styles.addReminderButton}
+                    onPress={() => {
+                      const [year, month, day] = dateKey.split('-').map(Number);
+                      const dateObj = new Date(year, month - 1, day);
+                      openCreateModalForDate(dateObj);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.addReminderButtonText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
+                {groupedReminders[dateKey].map((reminder) => (
+                  <TouchableOpacity
+                    key={reminder.id}
+                    style={styles.agendaItem}
+                    onPress={() => openDetailModal(reminder)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.agendaItemAccent, { backgroundColor: getColorValue(reminder.color) }]} />
+                    <View style={styles.agendaItemContent}>
+                      <View style={styles.agendaItemHeader}>
+                        <Text style={[
+                          styles.agendaItemTitle,
+                          reminder.is_completed && styles.agendaItemTitleCompleted
+                        ]}>
+                          {reminder.title}
+                        </Text>
+                        <View style={styles.agendaItemActions}>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setSelectedReminder(reminder);
+                              openEditMode();
+                            }}
+                            activeOpacity={0.7}
+                            style={styles.agendaActionButton}
+                          >
+                            <EditIcon />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDeleteReminder(reminder.id);
+                            }}
+                            activeOpacity={0.7}
+                            style={styles.agendaActionButton}
+                          >
+                            <DeleteIcon />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <Text style={styles.agendaItemTime}>{formatTime(reminder.reminder_time)}</Text>
+                      {reminder.description && (
+                        <Text style={styles.agendaItemDesc} numberOfLines={2}>
+                          {reminder.description}
+                        </Text>
+                      )}
+                      {reminder.also_share_with.length > 0 && (
+                        <Text style={styles.agendaItemShared}>
+                          Shared with {reminder.also_share_with.length} {reminder.also_share_with.length === 1 ? 'person' : 'people'}
+                        </Text>
+                      )}
+                      <TouchableOpacity
+                        style={styles.completeButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleToggleComplete(reminder.id, reminder.is_completed);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.checkbox,
+                          reminder.is_completed && styles.checkboxCompleted
+                        ]}>
+                          {reminder.is_completed && (
+                            <Text style={styles.checkmark}>✓</Text>
+                          )}
+                        </View>
+                        <Text style={[
+                          styles.completeButtonText,
+                          reminder.is_completed && styles.completeButtonTextCompleted
+                        ]}>
+                          {reminder.is_completed ? 'Completed' : 'Mark as Complete'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))
+          )}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <Text style={styles.backButtonText}>←</Text>
+          <BackIcon />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Calendar</Text>
         <TouchableOpacity
@@ -604,7 +784,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           onPress={() => setShowSearch(!showSearch)}
           activeOpacity={0.7}
         >
-          <Text style={styles.searchButtonText}>⌕</Text>
+          <Text style={styles.searchButtonIcon}>🔍</Text>
         </TouchableOpacity>
       </View>
 
@@ -621,17 +801,15 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       )}
 
       <View style={styles.toolbar}>
-        <TouchableOpacity style={styles.todayButton} onPress={goToToday} activeOpacity={0.7}>
-          <Text style={styles.todayButtonText}>Today</Text>
-        </TouchableOpacity>
-
         <View style={styles.monthNavigation}>
           <TouchableOpacity onPress={() => changeMonth(-1)} activeOpacity={0.7} style={styles.navButton}>
             <Text style={styles.navArrow}>‹</Text>
           </TouchableOpacity>
-          <Text style={styles.monthYearText}>
-            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </Text>
+          <TouchableOpacity onPress={goToToday} activeOpacity={0.7}>
+            <Text style={styles.monthYearText}>
+              {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => changeMonth(1)} activeOpacity={0.7} style={styles.navButton}>
             <Text style={styles.navArrow}>›</Text>
           </TouchableOpacity>
@@ -640,7 +818,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         <View style={styles.viewToggle}>
           <TouchableOpacity
             style={[styles.viewToggleButton, viewMode === 'month' && styles.viewToggleButtonActive]}
-            onPress={() => setViewMode('month')}
+            onPress={() => {
+              setViewMode('month');
+              setSelectedDate(null);
+            }}
             activeOpacity={0.7}
           >
             <Text style={[styles.viewToggleText, viewMode === 'month' && styles.viewToggleTextActive]}>
@@ -667,12 +848,11 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         ) : (
           <>
             {viewMode === 'month' && <MonthView />}
-            {viewMode === 'agenda' && <AgendaView />}
+            {(viewMode === 'agenda' || selectedDate) && <AgendaView />}
           </>
         )}
       </View>
 
-      {/* Detail Modal */}
       <Modal
         visible={showDetailModal}
         animationType="slide"
@@ -698,7 +878,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 </TouchableOpacity>
               </View>
             </View>
-            <ScrollView style={styles.modalContent}>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={[styles.modalColorBar, { backgroundColor: getColorValue(selectedReminder.color) }]} />
               <Text style={styles.modalTitle}>{selectedReminder.title}</Text>
               
@@ -728,12 +908,34 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                   ))}
                 </View>
               )}
+
+              <View style={styles.modalSection}>
+                <TouchableOpacity
+                  style={styles.completeButtonModal}
+                  onPress={() => handleToggleComplete(selectedReminder.id, selectedReminder.is_completed)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.checkboxModal,
+                    selectedReminder.is_completed && styles.checkboxCompletedModal
+                  ]}>
+                    {selectedReminder.is_completed && (
+                      <Text style={styles.checkmarkModal}>✓</Text>
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.completeButtonTextModal,
+                    selectedReminder.is_completed && styles.completeButtonTextCompletedModal
+                  ]}>
+                    {selectedReminder.is_completed ? 'Completed' : 'Mark as Complete'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </SafeAreaView>
         )}
       </Modal>
 
-      {/* Create/Edit Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
@@ -766,7 +968,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
+          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <TextInput
               style={styles.inputTitle}
               placeholder="Title"
@@ -798,7 +1000,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               >
                 <Text style={styles.inputLabel}>Time</Text>
                 <Text style={styles.inputValue}>
-                  {selectedHour}:{selectedMinute}
+                  {selectedHour}:{selectedMinute} {selectedPeriod}
                 </Text>
               </TouchableOpacity>
 
@@ -815,7 +1017,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                               styles.timePickerOption,
                               selectedHour === hour && styles.timePickerOptionActive
                             ]}
-                            onPress={() => setSelectedHour(hour)}
+                            onPress={() => {
+                              setSelectedHour(hour);
+                              setShowTimePicker(false);
+                            }}
                             activeOpacity={0.7}
                           >
                             <Text style={[
@@ -839,7 +1044,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                               styles.timePickerOption,
                               selectedMinute === minute && styles.timePickerOptionActive
                             ]}
-                            onPress={() => setSelectedMinute(minute)}
+                            onPress={() => {
+                              setSelectedMinute(minute);
+                              setShowTimePicker(false);
+                            }}
                             activeOpacity={0.7}
                           >
                             <Text style={[
@@ -847,6 +1055,33 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                               selectedMinute === minute && styles.timePickerOptionTextActive
                             ]}>
                               {minute}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    <View style={styles.timePickerColumn}>
+                      <Text style={styles.timePickerLabel}>Period</Text>
+                      <ScrollView style={styles.timePickerScroll} showsVerticalScrollIndicator={false}>
+                        {periods.map(period => (
+                          <TouchableOpacity
+                            key={period}
+                            style={[
+                              styles.timePickerOption,
+                              selectedPeriod === period && styles.timePickerOptionActive
+                            ]}
+                            onPress={() => {
+                              setSelectedPeriod(period);
+                              setShowTimePicker(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.timePickerOptionText,
+                              selectedPeriod === period && styles.timePickerOptionTextActive
+                            ]}>
+                              {period}
                             </Text>
                           </TouchableOpacity>
                         ))}
@@ -871,7 +1106,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               />
             </View>
 
-            {/* Employee Selection */}
             <View style={styles.employeeSection}>
               <Text style={styles.sectionTitle}>Share With Employees</Text>
               
@@ -942,7 +1176,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               )}
             </View>
 
-            {/* Color Picker */}
             <View style={styles.colorPickerSection}>
               <Text style={styles.sectionTitle}>
                 Color {!selectedColor && <Text style={styles.requiredStar}>*</Text>}
@@ -985,38 +1218,87 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   backButton: {
-    width: 32,
-    height: 32,
+    padding: 4,
+  },
+  backIcon: {
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backButtonText: {
-    fontSize: 24,
-    color: colors.surface,
-    fontWeight: '300',
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: colors.surface,
+    transform: [{ rotate: '-45deg' }],
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.surface,
+    flex: 1,
+    textAlign: 'center',
   },
   searchButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchButtonText: {
-    fontSize: 22,
-    color: colors.surface,
-    fontWeight: '400',
+  searchButtonIcon: {
+    fontSize: 20,
+  },
+  iconContainer: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editIconPencil: {
+    width: 10,
+    height: 10,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    borderRadius: 2,
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    transform: [{ rotate: '45deg' }],
+  },
+  editIconLine: {
+    width: 12,
+    height: 1.5,
+    backgroundColor: colors.accent,
+    position: 'absolute',
+    bottom: 2,
+    left: 4,
+    transform: [{ rotate: '45deg' }],
+  },
+  deleteIconLine1: {
+    width: 14,
+    height: 2,
+    backgroundColor: colors.error,
+    position: 'absolute',
+    transform: [{ rotate: '45deg' }],
+  },
+  deleteIconLine2: {
+    width: 14,
+    height: 2,
+    backgroundColor: colors.error,
+    position: 'absolute',
+    transform: [{ rotate: '-45deg' }],
   },
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: colors.primaryLight,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   searchInput: {
+    flex: 1,
     height: 40,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 10,
@@ -1031,19 +1313,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-  },
-  todayButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  todayButtonText: {
-    fontSize: 12,
-    color: colors.surface,
-    fontWeight: '600',
   },
   monthNavigation: {
     flexDirection: 'row',
@@ -1197,6 +1466,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  selectedDateHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  backToAllButton: {
+    paddingVertical: 4,
+  },
+  backToAllButtonText: {
+    fontSize: 16,
+    color: colors.accent,
+    fontWeight: '600',
+  },
   emptyState: {
     alignItems: 'center',
     paddingTop: 120,
@@ -1221,12 +1505,28 @@ const styles = StyleSheet.create({
   agendaSection: {
     marginTop: 20,
   },
+  agendaDateHeaderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
   agendaDateHeader: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  },
+  addReminderButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  addReminderButtonText: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: '600',
   },
   agendaItem: {
     flexDirection: 'row',
@@ -1248,11 +1548,29 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  agendaItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
   agendaItemTitle: {
     fontSize: 17,
     color: colors.text,
     fontWeight: '600',
-    marginBottom: 6,
+    flex: 1,
+    marginRight: 8,
+  },
+  agendaItemTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: colors.textSecondary,
+  },
+  agendaItemActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  agendaActionButton: {
+    padding: 4,
   },
   agendaItemTime: {
     fontSize: 14,
@@ -1270,6 +1588,42 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '500',
     marginTop: 4,
+    marginBottom: 8,
+  },
+  completeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    marginTop: 8,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.textTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxCompleted: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  checkmark: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  completeButtonText: {
+    fontSize: 15,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  completeButtonTextCompleted: {
+    color: colors.success,
   },
   modalContainer: {
     flex: 1,
@@ -1362,6 +1716,42 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 24,
   },
+  completeButtonModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  checkboxModal: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.textTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  checkboxCompletedModal: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  checkmarkModal: {
+    color: colors.surface,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  completeButtonTextModal: {
+    fontSize: 17,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  completeButtonTextCompletedModal: {
+    color: colors.success,
+  },
   inputTitle: {
     fontSize: 28,
     fontWeight: '700',
@@ -1420,7 +1810,7 @@ const styles = StyleSheet.create({
   timePickerRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 8,
   },
   timePickerColumn: {
     flex: 1,
