@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
+    View, Text, StyleSheet, TouchableOpacity, ScrollView,
     StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
-    Image
+    Image, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { BACKEND_URL } from '../config/config';
@@ -158,32 +159,55 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     };
 
     const requestPermissions = async () => {
-        const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-        const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        
-        if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
-            Alert.alert(
-                'Permissions Required',
-                'Camera and gallery permissions are required to upload photos.'
-            );
+        try {
+            const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+            const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            
+            if (cameraPermission.status !== 'granted' || mediaPermission.status !== 'granted') {
+                Alert.alert(
+                    'Permissions Required',
+                    'Camera and gallery permissions are required to upload photos. Please enable them in Settings.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Open Settings', onPress: () => {
+                            if (Platform.OS === 'ios') {
+                                ImagePicker.requestMediaLibraryPermissionsAsync();
+                            }
+                        }}
+                    ]
+                );
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error('Permission request error:', error);
+            Alert.alert('Error', 'Failed to request permissions');
             return false;
         }
-        return true;
     };
 
-    const handleAddPhoto = async () => {
-        const hasPermissions = await requestPermissions();
-        if (!hasPermissions) return;
-        
+    const handleAddPhoto = () => {
         setShowImageSourceModal(true);
     };
 
     const pickImageFromCamera = async () => {
         setShowImageSourceModal(false);
         
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         try {
+            const { status } = await ImagePicker.getCameraPermissionsAsync();
+            
+            if (status !== 'granted') {
+                const { status: newStatus } = await ImagePicker.requestCameraPermissionsAsync();
+                if (newStatus !== 'granted') {
+                    Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+                    return;
+                }
+            }
+
             const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [4, 3],
                 quality: 0.8,
@@ -196,7 +220,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                     uri: asset.uri,
                     type: asset.type || 'image/jpeg'
                 };
-                setBuildingPhotos([...buildingPhotos, newPhoto]);
+                setBuildingPhotos(prev => [...prev, newPhoto]);
             }
         } catch (error) {
             console.error('Camera error:', error);
@@ -207,13 +231,23 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     const pickImageFromGallery = async () => {
         setShowImageSourceModal(false);
         
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         try {
+            const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
+            
+            if (status !== 'granted') {
+                const { status: newStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (newStatus !== 'granted') {
+                    Alert.alert('Permission Denied', 'Gallery permission is required to select photos. Please enable it in Settings.');
+                    return;
+                }
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [4, 3],
+                mediaTypes: ['images'],
+                allowsEditing: false,
                 quality: 0.8,
-                allowsMultipleSelection: false,
             });
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -223,11 +257,11 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                     uri: asset.uri,
                     type: asset.type || 'image/jpeg'
                 };
-                setBuildingPhotos([...buildingPhotos, newPhoto]);
+                setBuildingPhotos(prev => [...prev, newPhoto]);
             }
         } catch (error) {
             console.error('Gallery error:', error);
-            Alert.alert('Error', 'Failed to pick image from gallery');
+            Alert.alert('Error', 'Failed to pick image from gallery. Please try again.');
         }
     };
 
@@ -257,7 +291,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 longitude: parseFloat(locationData.longitude),
             };
 
-            // Add optional fields only if they have values
             if (newSite.location) siteData.location = newSite.location;
             if (newSite.landmark) siteData.landmark = newSite.landmark;
             if (newSite.rent) siteData.rent = parseCurrency(newSite.rent);
@@ -266,34 +299,28 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
             if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
 
-            // Car parking ratio - only add if both values exist
             if (newSite.car_parking_ratio_left && newSite.car_parking_ratio_right) {
                 siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
             }
 
-            // Contact information
             if (newSite.contact_person_name) siteData.contact_person_name = newSite.contact_person_name;
             if (newSite.contact_person_number) siteData.contact_person_number = newSite.contact_person_number;
             if (newSite.contact_person_email) siteData.contact_person_email = newSite.contact_person_email;
             if (newSite.contact_person_designation) siteData.contact_person_designation = newSite.contact_person_designation;
 
-            // Building details
             if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
             if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
             if (newSite.floor_condition) siteData.floor_condition = newSite.floor_condition;
 
-            // Parking
             if (newSite.car_parking_charges) siteData.car_parking_charges = parseCurrency(newSite.car_parking_charges);
             if (newSite.car_parking_slots) siteData.car_parking_slots = newSite.car_parking_slots;
             if (newSite.two_wheeler_slots) siteData.two_wheeler_slots = newSite.two_wheeler_slots;
             if (newSite.two_wheeler_charges) siteData.two_wheeler_charges = parseCurrency(newSite.two_wheeler_charges);
 
-            // Financial
             if (newSite.cam) siteData.cam = parseCurrency(newSite.cam);
             if (newSite.cam_deposit) siteData.cam_deposit = parseCurrency(newSite.cam_deposit);
             if (newSite.security_deposit) siteData.security_deposit = parseCurrency(newSite.security_deposit);
 
-            // Boolean fields - only add if explicitly set
             if (newSite.oc !== undefined && newSite.oc !== null) {
                 siteData.oc = newSite.oc ? 'True' : 'False';
             }
@@ -301,25 +328,20 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 siteData.will_developer_do_fitouts = newSite.will_developer_do_fitouts ? 'True' : 'False';
             }
 
-            // Percentage fields
             if (newSite.rental_escalation) siteData.rental_escalation = newSite.rental_escalation;
             if (newSite.efficiency) siteData.efficiency = newSite.efficiency;
 
-            // Terms
             if (newSite.notice_period) siteData.notice_period = newSite.notice_period;
             if (newSite.lease_term) siteData.lease_term = newSite.lease_term;
             if (newSite.lock_in_period) siteData.lock_in_period = newSite.lock_in_period;
 
-            // Utilities
             if (newSite.power) siteData.power = newSite.power;
             if (newSite.power_backup) siteData.power_backup = newSite.power_backup;
 
-            // Facilities count
             if (newSite.number_of_cabins) siteData.number_of_cabins = newSite.number_of_cabins;
             if (newSite.number_of_workstations) siteData.number_of_workstations = newSite.number_of_workstations;
             if (newSite.size_of_workstation) siteData.size_of_workstation = newSite.size_of_workstation;
 
-            // Amenities
             if (newSite.server_room) siteData.server_room = newSite.server_room;
             if (newSite.training_room) siteData.training_room = newSite.training_room;
             if (newSite.pantry) siteData.pantry = newSite.pantry;
@@ -329,7 +351,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             if (newSite.discussion_room) siteData.discussion_room = newSite.discussion_room;
             if (newSite.meeting_room) siteData.meeting_room = newSite.meeting_room;
 
-            // Additional info
             if (newSite.remarks) siteData.remarks = newSite.remarks;
             if (newSite.building_owner_name) siteData.building_owner_name = newSite.building_owner_name;
             if (newSite.building_owner_contact) siteData.building_owner_contact = newSite.building_owner_contact;
@@ -1120,18 +1141,18 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     );
 
     return (
-        <SafeAreaView style={styles(colors).container}>
+        <SafeAreaView style={styles(colors).container} edges={['top', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
             
             <View style={styles(colors, spacing).header}>
-                <TouchableOpacity style={styles(colors, spacing, borderRadius).backButton} onPress={onBack}>
+                <TouchableOpacity style={styles(colors, spacing).backButton} onPress={onBack}>
                     <BackIcon />
                 </TouchableOpacity>
                 <Text style={styles(colors, fontSize).headerTitle}>Create New Site</Text>
                 <View style={styles(colors).headerSpacer} />
             </View>
 
-            <View style={styles(colors, spacing, borderRadius).createSiteContainer}>
+            <View style={styles(colors, spacing, borderRadius).contentContainer}>
                 {renderStepIndicator()}
 
                 <ScrollView style={styles(colors).scrollView} showsVerticalScrollIndicator={false}>
@@ -1213,15 +1234,15 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: spacing?.lg || 16,
-            paddingVertical: spacing?.md || 12,
+            paddingVertical: spacing?.sm || 8,
             backgroundColor: colors.primary,
+            marginBottom: spacing?.sm || 8,
         },
         headerSpacer: {
-            width: 40,
+            width: 32,
         },
         backButton: {
-            padding: spacing?.sm || 8,
-            borderRadius: borderRadius?.sm || 4,
+            padding: spacing?.xs || 4,
         },
         backIcon: {
             width: 24,
@@ -1248,12 +1269,12 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
             flex: 1,
             backgroundColor: colors.backgroundSecondary,
         },
-        createSiteContainer: {
+        contentContainer: {
             flex: 1,
             backgroundColor: colors.backgroundSecondary,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            marginTop: -16,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            marginTop: 0,
         },
         stepIndicator: {
             flexDirection: 'row',

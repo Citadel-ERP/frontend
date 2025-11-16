@@ -103,14 +103,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState('');
   
-  // Comment state
-  const [newComment, setNewComment] = useState('');
-  const [addingComment, setAddingComment] = useState(false);
-  const [loadingComments, setLoadingComments] = useState(false);
-  const [commentsPage, setCommentsPage] = useState(1);
-  const [hasMoreComments, setHasMoreComments] = useState(false);
-  const [allComments, setAllComments] = useState<any[]>([]);
-  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
@@ -201,7 +193,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         id: visit.id,
         site: { ...visit.site },
         status: visit.status,
-        comments: visit.comments || [],
         collaborators: visit.collaborators || [],
         assigned_by: visit.assigned_by,
         created_at: visit.created_at,
@@ -271,7 +262,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         id: visit.id,
         site: { ...visit.site },
         status: visit.status,
-        comments: visit.comments || [],
         collaborators: visit.collaborators || [],
         assigned_by: visit.assigned_by,
         created_at: visit.created_at,
@@ -291,17 +281,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
   const handleVisitPress = (visit: any) => {
     setSelectedVisit(visit);
-    setAllComments(visit.comments || []);
-    setCommentsPage(1);
-    fetchVisitComments(visit.id, 1, false);
     setViewMode('visit-detail');
   };
 
   const handleBackToList = () => {
     setViewMode('visits-list');
     setSelectedVisit(null);
-    setNewComment('');
-    setAllComments([]);
   };
 
   const handleCreateSiteClick = () => {
@@ -311,95 +296,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const handleBackFromCreateSite = () => {
     setViewMode('visits-list');
     handleRefresh();
-  };
-
-  // Fetch visit comments with pagination
-  const fetchVisitComments = async (visitId: number, page: number, append: boolean) => {
-    try {
-      setLoadingComments(true);
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!storedToken) return;
-
-      const response = await fetch(`${BACKEND_URL}/employee/getVisitComments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token: storedToken, 
-          visit_id: visitId,
-          page: page 
-        }),
-      });
-
-      const data = await response.json();
-      console.log(data)
-      console.log(visitId)
-      const formattedComments = data.comments.map((sc: any) => ({
-        id: sc.id,
-        user: sc.user,
-        content: sc.content,
-        documents: sc.documents,
-        created_at: sc.created_at,
-        updated_at: sc.updated_at,
-      }));
-
-      if (append) {
-        setAllComments(prev => [...prev, ...formattedComments]);
-      } else {
-        setAllComments(formattedComments);
-      }
-
-      setHasMoreComments(data.pagination.has_next);
-      setCommentsPage(page);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-
-  // Add comment
-  const handleAddComment = async () => {
-    if (!newComment.trim() || !selectedVisit) return;
-
-    try {
-      setAddingComment(true);
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!storedToken) return;
-
-      const response = await fetch(`${BACKEND_URL}/employee/addVisitComment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: storedToken,
-          visit_id: selectedVisit.id,
-          comment: newComment,
-        }),
-      });
-
-      const data = await response.json();
-      const newCommentObj = {
-        id: data.comment.id,
-        user: data.comment.user,
-        content: data.comment.content,
-        documents: data.comment.documents,
-        created_at: data.comment.created_at,
-        updated_at: data.comment.updated_at,
-      };
-
-      setAllComments(prev => [newCommentObj, ...prev]);
-      setNewComment('');
-    } catch (error) {
-      console.error('Error adding comment:', error);
-    } finally {
-      setAddingComment(false);
-    }
-  };
-
-  // Load more comments
-  const handleLoadMoreComments = () => {
-    if (selectedVisit && hasMoreComments && !loadingComments) {
-      fetchVisitComments(selectedVisit.id, commentsPage + 1, true);
-    }
   };
 
   // Mark visit as completed
@@ -528,75 +424,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
                   <Text style={styles.remarksText}>{site.remarks}</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Comments ({allComments.length})</Text>
-              
-              {/* Add Comment Section */}
-              <View style={styles.addCommentContainer}>
-                <TextInput
-                  style={styles.commentInput}
-                  placeholder="Add a comment..."
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  multiline
-                  placeholderTextColor={colors.textSecondary}
-                />
-                <TouchableOpacity
-                  style={[styles.addCommentButton, (!newComment.trim() || addingComment) && styles.addCommentButtonDisabled]}
-                  onPress={handleAddComment}
-                  disabled={!newComment.trim() || addingComment}
-                >
-                  {addingComment ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <Text style={styles.addCommentButtonText}>Post</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {allComments.length > 0 ? (
-                <>
-                  <View style={styles.commentsContainer}>
-                    {allComments.map((comment: any) => (
-                      <View key={comment.id} style={styles.commentCard}>
-                        <View style={styles.commentHeader}>
-                          <View style={styles.commentAvatar}>
-                            <Text style={styles.commentAvatarText}>
-                              {comment.user.full_name.split(' ').map((n: string) => n[0]).join('')}
-                            </Text>
-                          </View>
-                          <View style={styles.commentHeaderContent}>
-                            <Text style={styles.commentAuthor}>{comment.user.full_name}</Text>
-                            <Text style={styles.commentDate}>{formatDate(comment.created_at)}</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.commentContent}>{comment.content}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  
-                  {hasMoreComments && (
-                    <TouchableOpacity
-                      style={styles.loadMoreButton}
-                      onPress={handleLoadMoreComments}
-                      disabled={loadingComments}
-                    >
-                      {loadingComments ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      ) : (
-                        <Text style={styles.loadMoreText}>Load More Comments</Text>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateIcon}>💬</Text>
-                  <Text style={styles.emptyStateText}>No comments yet. Be the first to comment!</Text>
                 </View>
               )}
             </View>
@@ -803,11 +630,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                               <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
                             </View>
                           )}
-                          {visit.comments.length > 0 && (
-                            <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>💬 {visit.comments.length}</Text>
-                            </View>
-                          )}
                         </View>
 
                         <View style={styles.visitCardFooter}>
@@ -941,12 +763,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: colors.primary,
+    marginBottom: spacing.sm,
   },
   backButton: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
+    padding: spacing.xs,
   },
   backIcon: {
     width: 24,
@@ -970,20 +792,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    width: 40,
+    width: 32,
   },
   contentContainer: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: 0,
+    paddingTop: spacing.lg,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
@@ -1007,6 +829,7 @@ const styles = StyleSheet.create({
   createButtonWrapper: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
   createSiteButton: {
     backgroundColor: colors.primary,
@@ -1023,7 +846,6 @@ const styles = StyleSheet.create({
   },
   listScrollView: {
     flex: 1,
-    marginTop: spacing.md,
   },
   listContainer: {
     paddingHorizontal: spacing.lg,
@@ -1355,53 +1177,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: borderRadius.md,
   },
-  commentsContainer: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  commentCard: {
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
-  commentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  commentAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  commentAvatarText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-  },
-  commentHeaderContent: {
-    flex: 1,
-  },
-  commentAuthor: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  commentDate: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  commentContent: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: 20,
-  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
@@ -1413,49 +1188,6 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-  },
-  addCommentContainer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  commentInput: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    minHeight: 44,
-    maxHeight: 100,
-  },
-  addCommentButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 70,
-  },
-  addCommentButtonDisabled: {
-    backgroundColor: colors.textLight,
-  },
-  addCommentButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  loadMoreButton: {
-    backgroundColor: colors.backgroundSecondary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  loadMoreText: {
-    color: colors.primary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
   },
   markCompleteButton: {
     backgroundColor: colors.success,
