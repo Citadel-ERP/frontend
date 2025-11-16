@@ -32,6 +32,12 @@ const OTHER_OPTION: RequestNature = {
   description: 'Any other option not listed above'
 };
 
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+  </View>
+);
+
 interface DropdownModalProps {
   visible: boolean;
   onClose: () => void;
@@ -70,6 +76,7 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <View style={styles.dropdownContainer}>
             <View style={styles.searchContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
@@ -133,14 +140,8 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  const BackIcon = () => (
-    <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
-    </View>
-  );
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
@@ -153,7 +154,7 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.mainContent}>
+      <View style={styles.contentContainer}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -186,9 +187,6 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
                   </Text>
                   <Text style={styles.selectArrow}>▼</Text>
                 </TouchableOpacity>
-                <Text style={styles.inputHint}>
-                  Choose the category that best describes your {activeTab.slice(0, -1)}
-                </Text>
               </View>
 
               <View style={styles.inputGroup}>
@@ -203,14 +201,11 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
                   numberOfLines={6}
                   textAlignVertical="top"
                 />
-                <Text style={styles.inputHint}>
-                  Provide as much detail as possible to help us understand and address your {activeTab.slice(0, -1)}
-                </Text>
               </View>
             </View>
           </ScrollView>
 
-          <View style={[styles.submitFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={styles.submitFooter}>
             <TouchableOpacity
               style={[
                 styles.submitButton,
@@ -230,7 +225,7 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
           </View>
         </KeyboardAvoidingView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -271,32 +266,16 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
 
   const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'resolved': return '#A7F3D0';
-      case 'rejected': return '#FBCFE8';
-      case 'in_progress': return '#DDD6FE';
-      case 'pending': return '#FED7AA';
+      case 'resolved': return '#28A745';
+      case 'rejected': return '#DC3545';
+      case 'in_progress': return '#3B82F6';
+      case 'pending': return '#FFC107';
       default: return colors.textSecondary;
     }
   };
 
-  const getStatusTextColor = (status: string): string => {
-    switch (status) {
-      case 'resolved': return '#047857';
-      case 'rejected': return '#BE185D';
-      case 'in_progress': return '#5B21B6';
-      case 'pending': return '#C2410C';
-      default: return colors.white;
-    }
-  };
-
-  const BackIcon = () => (
-    <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
-    </View>
-  );
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
@@ -309,7 +288,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.mainContent}>
+      <View style={styles.contentContainer}>
         {loadingDetails ? (
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -327,24 +306,21 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                 <View style={styles.detailInfo}>
                   <Text style={styles.detailNature}>{item.nature}</Text>
                   <Text style={styles.detailDate}>
-                    Created: {formatDate(item.created_at)}
+                    Created {formatDate(item.created_at)}
                   </Text>
                 </View>
                 <View style={[
                   styles.detailStatusBadge,
                   { backgroundColor: getStatusColor(item.status) }
                 ]}>
-                  <Text style={[
-                    styles.detailStatusText,
-                    { color: getStatusTextColor(item.status) }
-                  ]}>
+                  <Text style={styles.detailStatusText}>
                     {item.status.replace('_', ' ')}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.descriptionSection}>
-                <Text style={styles.sectionLabel}>Description:</Text>
+                <Text style={styles.sectionLabel}>Description</Text>
                 <Text style={styles.descriptionText}>
                   {item.description || item.issue}
                 </Text>
@@ -352,7 +328,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
             </View>
 
             <View style={styles.commentsCard}>
-              <Text style={styles.commentsHeader}>Comments</Text>
+              <Text style={styles.commentsHeader}>Discussion</Text>
               
               {item.comments && item.comments.length > 0 ? (
                 item.comments.map((comment) => (
@@ -361,12 +337,27 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                     comment.is_hr_comment && styles.hrCommentBubble
                   ]}>
                     <View style={styles.commentTop}>
-                      <Text style={[
-                        styles.commentAuthor,
-                        comment.is_hr_comment && styles.hrCommentAuthor
-                      ]}>
-                        {comment.created_by_name} {comment.is_hr_comment && '(HR)'}
-                      </Text>
+                      <View style={styles.commentAuthorRow}>
+                        <View style={[
+                          styles.commentAvatar,
+                          comment.is_hr_comment && styles.hrCommentAvatar
+                        ]}>
+                          <Text style={styles.commentAvatarText}>
+                            {comment.created_by_name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={[
+                            styles.commentAuthor,
+                            comment.is_hr_comment && styles.hrCommentAuthor
+                          ]}>
+                            {comment.created_by_name}
+                          </Text>
+                          {comment.is_hr_comment && (
+                            <Text style={styles.hrBadge}>HR Team</Text>
+                          )}
+                        </View>
+                      </View>
                       <Text style={styles.commentTime}>
                         {formatDateTime(comment.created_at)}
                       </Text>
@@ -375,11 +366,15 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                   </View>
                 ))
               ) : (
-                <Text style={styles.noComments}>No comments yet</Text>
+                <View style={styles.noCommentsContainer}>
+                  <Text style={styles.noCommentsIcon}>💬</Text>
+                  <Text style={styles.noComments}>No comments yet</Text>
+                  <Text style={styles.noCommentsSubtext}>Be the first to add a comment</Text>
+                </View>
               )}
 
               <View style={styles.addCommentBox}>
-                <Text style={styles.addCommentLabel}>Add Comment:</Text>
+                <Text style={styles.addCommentLabel}>Add Your Comment</Text>
                 <TextInput
                   style={styles.commentTextArea}
                   value={newComment}
@@ -401,15 +396,16 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                   {loading ? (
                     <ActivityIndicator color={colors.white} size="small" />
                   ) : (
-                    <Text style={styles.commentButtonText}>Add Comment</Text>
+                    <Text style={styles.commentButtonText}>Post Comment</Text>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
+            <View style={{ height: 24 }} />
           </ScrollView>
         ) : null}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -754,29 +750,23 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'resolved': return '#A7F3D0';
-      case 'rejected': return '#FBCFE8';
-      case 'in_progress': return '#DDD6FE';
-      case 'pending': return '#FED7AA';
+      case 'resolved': return '#28A745';
+      case 'rejected': return '#DC3545';
+      case 'in_progress': return '#3B82F6';
+      case 'pending': return '#FFC107';
       default: return colors.textSecondary;
     }
   };
 
-  const getStatusTextColor = (status: string): string => {
+  const getStatusIcon = (status: string): string => {
     switch (status) {
-      case 'resolved': return '#047857';
-      case 'rejected': return '#BE185D';
-      case 'in_progress': return '#5B21B6';
-      case 'pending': return '#C2410C';
-      default: return colors.white;
+      case 'resolved': return '✓';
+      case 'rejected': return '✗';
+      case 'in_progress': return '⏳';
+      case 'pending': return '⏱';
+      default: return '•';
     }
   };
-
-  const BackIcon = () => (
-    <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
-    </View>
-  );
 
   if (viewMode === 'itemDetail') {
     return (
@@ -821,100 +811,21 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     );
   }
 
-  const renderContent = () => (
-    <ScrollView 
-      style={styles.scrollView} 
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.mainScrollContent}
-    >
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Raise New {activeTab === 'requests' ? 'Request' : 'Grievance'}
-        </Text>
-        <TouchableOpacity
-          style={styles.newButton}
-          onPress={handleNewItemPress}
-          activeOpacity={0.7}
-        >
-          <View style={styles.newButtonIcon}>
-            <Text style={styles.newButtonIconText}>+</Text>
-          </View>
-          <Text style={styles.newButtonText}>
-            Submit New {activeTab === 'requests' ? 'Request' : 'Grievance'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Previous {activeTab === 'requests' ? 'Requests' : 'Grievances'}
-        </Text>
-        {currentItems.length > 0 ? (
-          currentItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.itemCard}
-              onPress={() => handleItemPress(item)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.itemCardHeader}>
-                <View style={styles.itemCardInfo}>
-                  <Text style={styles.itemCardNature}>{item.nature}</Text>
-                  <Text style={styles.itemCardDate}>{formatDate(item.created_at)}</Text>
-                </View>
-                <View style={[
-                  styles.itemCardBadge,
-                  { backgroundColor: getStatusColor(item.status) }
-                ]}>
-                  <Text style={[
-                    styles.itemCardBadgeText,
-                    { color: getStatusTextColor(item.status) }
-                  ]}>
-                    {item.status.replace('_', ' ')}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.itemCardDescription} numberOfLines={2}>
-                {item.description || item.issue}
-              </Text>
-              <View style={styles.itemCardFooter}>
-                <Text style={styles.itemCardComments}>
-                  {item.comments?.length || 0} comment(s)
-                </Text>
-                <Text style={styles.itemCardTap}>Tap to view →</Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyCardText}>
-              No {activeTab} found
-            </Text>
-            <Text style={styles.emptyCardSubtext}>
-              Submit your first {activeTab.slice(0, -1)} using the button above
-            </Text>
-          </View>
-        )}
-      </View>
-    </ScrollView>
-  );
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
           <BackIcon />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>HR Module</Text>
+        <Text style={styles.headerTitle}>HR Portal</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.tabBar}>
         {[
-          { key: 'requests' as const, label: 'Requests' },
-          { key: 'grievances' as const, label: 'Grievances' }
+          { key: 'requests' as const, label: 'Requests', icon: '📝' },
+          { key: 'grievances' as const, label: 'Grievances', icon: '⚖️' }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -922,6 +833,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
           >
+            <Text style={styles.tabIcon}>{tab.icon}</Text>
             <Text style={[
               styles.tabButtonText,
               activeTab === tab.key && styles.tabButtonTextActive
@@ -932,594 +844,677 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         ))}
       </View>
 
-      <View style={styles.mainContent}>
-        {renderContent()}
+      <View style={styles.contentContainer}>
+        <ScrollView
+          style={styles.listScrollView}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.createButtonWrapper}>
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={handleNewItemPress}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.createButtonText}>
+                + Create New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <View style={styles.emptyListContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.emptyListSubtitle}>Loading {activeTab}...</Text>
+            </View>
+          ) : (
+            <View style={styles.listContainer}>
+              <View style={styles.listHeader}>
+                <Text style={styles.listTitle}>
+                  Your {activeTab === 'requests' ? 'Requests' : 'Grievances'}
+                </Text>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{currentItems.length}</Text>
+                </View>
+              </View>
+
+              {currentItems.length > 0 ? (
+                currentItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.itemCard}
+                    onPress={() => handleItemPress(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.itemCardContent}>
+                      <View style={styles.itemCardHeader}>
+                        <Text style={styles.itemCardTitle} numberOfLines={1}>
+                          {item.nature}
+                        </Text>
+                        <View style={[
+                          styles.itemStatusBadge,
+                          { backgroundColor: getStatusColor(item.status) }
+                        ]}>
+                          <Text style={styles.itemStatusText}>
+                            {getStatusIcon(item.status)} {item.status.replace('_', ' ')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.itemCardDescription} numberOfLines={2}>
+                        {item.description || item.issue}
+                      </Text>
+
+                      <View style={styles.itemCardFooter}>
+                        <View style={styles.itemMetaRow}>
+                          <View style={styles.itemMetaItem}>
+                            <Text style={styles.itemMetaIcon}>📅</Text>
+                            <Text style={styles.itemMetaText}>{formatDate(item.created_at)}</Text>
+                          </View>
+                          <View style={styles.itemMetaItem}>
+                            <Text style={styles.itemMetaIcon}>💬</Text>
+                            <Text style={styles.itemMetaText}>
+                              {item.comments?.length || 0}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.itemArrow}>→</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptyListContainer}>
+                  <Text style={styles.emptyListIcon}>
+                    {activeTab === 'requests' ? '📋' : '🤝'}
+                  </Text>
+                  <Text style={styles.emptyListTitle}>
+                    No {activeTab} yet
+                  </Text>
+                  <Text style={styles.emptyListSubtitle}>
+                    {activeTab === 'requests' 
+                      ? 'Your requests will appear here once submitted'
+                      : 'Your grievances will appear here once submitted'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+          <View style={{ height: 24 }} />
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.primary 
-  },
-  header: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 20,
-    paddingVertical: 16, 
+  container: {
+    flex: 1,
     backgroundColor: colors.primary,
   },
-  backButton: { 
-    padding: 8, 
-    borderRadius: 4 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary,
+    marginBottom: spacing.sm,
   },
-  backIcon: { 
-    width: 24, 
-    height: 24, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  backButton: {
+    padding: spacing.xs,
+  },
+  backIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backArrow: {
-    width: 12, 
-    height: 12, 
-    borderLeftWidth: 2, 
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
     borderTopWidth: 2,
-    borderColor: colors.white, 
+    borderColor: colors.white,
     transform: [{ rotate: '-45deg' }],
   },
   headerTitle: {
-    fontSize: 20, 
-    fontWeight: '600', 
+    fontSize: fontSize.xl,
+    fontWeight: '700',
     color: colors.white,
-    flex: 1, 
+    flex: 1,
     textAlign: 'center',
-    letterSpacing: -0.5,
   },
-  headerSpacer: { 
-    width: 40 
+  headerSpacer: {
+    width: 32,
   },
   tabBar: {
-    flexDirection: 'row', 
-    backgroundColor: colors.white, 
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    gap: 4,
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
   },
   tabButton: {
-    flex: 1, 
-    paddingVertical: 12, 
+    flex: 1,
+    paddingVertical: spacing.md,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: borderRadius.lg,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
   },
   tabButtonActive: {
     backgroundColor: colors.backgroundSecondary,
+    ...shadows.sm,
   },
-  tabButtonText: { 
-    fontSize: 14, 
-    color: colors.textSecondary, 
-    fontWeight: '500' 
+  tabIcon: {
+    fontSize: fontSize.lg,
   },
-  tabButtonTextActive: { 
-    color: colors.primary, 
-    fontWeight: '600' 
-  },
-  mainContent: { 
-    flex: 1, 
-    backgroundColor: colors.backgroundSecondary,
-    marginTop: -10,
-  },
-  scrollView: { 
-    flex: 1 
-  },
-  mainScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
-  },
-  section: { 
-    marginBottom: 32 
-  },
-  sectionTitle: {
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: colors.text, 
-    marginBottom: 16,
-    letterSpacing: -0.5,
-  },
-  newButton: {
-    backgroundColor: colors.white, 
-    borderRadius: 20, 
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    flexDirection: 'row',
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  newButtonIcon: {
-    width: 40, 
-    height: 40, 
-    borderRadius: 20, 
-    backgroundColor: colors.primary,
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginRight: 12,
-  },
-  newButtonIconText: { 
-    color: colors.white, 
-    fontSize: 24, 
-    fontWeight: '600' 
-  },
-  newButtonText: { 
-    fontSize: 15, 
-    fontWeight: '600', 
-    color: colors.text 
-  },
-  itemCard: {
-    backgroundColor: colors.white, 
-    padding: 16, 
-    borderRadius: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  itemCardHeader: {
-    flexDirection: 'row', 
-    justifyContent: 'space-between',
-    alignItems: 'flex-start', 
-    marginBottom: 8,
-  },
-  itemCardInfo: { 
-    flex: 1, 
-    marginRight: 8 
-  },
-  itemCardNature: {
-    fontSize: 16, 
-    fontWeight: '600', 
-    color: colors.text, 
-    marginBottom: 4,
-  },
-  itemCardDate: { 
-    fontSize: 12, 
-    color: colors.textSecondary 
-  },
-  itemCardBadge: {
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 12,
-    minWidth: 90, 
-    alignItems: 'center',
-  },
-  itemCardBadgeText: {
-    fontSize: 11, 
-    fontWeight: '700', 
-    textTransform: 'capitalize',
-  },
-  itemCardDescription: {
-    fontSize: 14, 
-    color: colors.textSecondary, 
-    lineHeight: 20, 
-    marginBottom: 8,
-  },
-  itemCardFooter: {
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center',
-    paddingTop: 8, 
-    borderTopWidth: 1, 
-    borderTopColor: colors.border,
-  },
-  itemCardComments: { 
-    fontSize: 12, 
-    color: colors.info, 
-    fontWeight: '500' 
-  },
-  itemCardTap: { 
-    fontSize: 12, 
-    color: colors.textSecondary, 
-    fontWeight: '500' 
-  },
-  emptyCard: {
-    backgroundColor: colors.white, 
-    borderRadius: 20, 
-    padding: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyCardText: {
-    fontSize: 16, 
-    color: colors.textSecondary, 
-    textAlign: 'center', 
-    marginBottom: 8,
+  tabButtonText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
     fontWeight: '600',
   },
-  emptyCardSubtext: {
-    fontSize: 14, 
-    color: colors.textSecondary, 
-    textAlign: 'center', 
-    fontStyle: 'italic',
+  tabButtonTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+    paddingTop: spacing.lg,
+  },
+  listScrollView: {
+    flex: 1,
+  },
+  createButtonWrapper: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  createButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  createButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  listContainer: {
+    paddingHorizontal: spacing.lg,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  listTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  countBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  countText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  itemCard: {
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  itemCardContent: {
+    padding: spacing.md,
+  },
+  itemCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  itemCardTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  itemStatusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  itemStatusText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  itemCardDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
+  itemCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  itemMetaRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  itemMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  itemMetaIcon: {
+    fontSize: fontSize.sm,
+  },
+  itemMetaText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  itemArrow: {
+    fontSize: fontSize.md,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  emptyListContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl * 2,
+  },
+  emptyListIcon: {
+    fontSize: 60,
+    marginBottom: spacing.md,
+  },
+  emptyListTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  emptyListSubtitle: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: spacing.xxl * 2,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
     color: colors.textSecondary,
-    textAlign: 'center',
+    fontWeight: '600',
+  },
+  scrollView: {
+    flex: 1,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 24,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   formCard: {
     backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.md,
   },
   formDescription: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
-    marginBottom: 24,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
-  inputGroup: { 
-    marginBottom: 20 
+  inputGroup: {
+    marginBottom: spacing.lg,
   },
-  inputLabel: { 
-    fontSize: 14, 
-    color: colors.text, 
-    marginBottom: 8, 
-    fontWeight: '600' 
+  inputLabel: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    fontWeight: '700',
   },
   selectButton: {
-    borderWidth: 1, 
-    borderColor: colors.border, 
-    borderRadius: 12,
-    paddingHorizontal: 16, 
-    paddingVertical: 14, 
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     backgroundColor: colors.white,
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    ...shadows.sm,
   },
-  selectButtonText: { 
-    fontSize: 15, 
-    color: colors.text, 
-    flex: 1 
+  selectButtonText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    flex: 1,
   },
-  selectPlaceholder: { 
-    color: colors.textSecondary, 
-    fontStyle: 'italic' 
-  },
-  selectArrow: { 
-    fontSize: 12, 
-    color: colors.textSecondary, 
-    marginLeft: 8 
-  },
-  inputHint: {
-    fontSize: 12,
+  selectPlaceholder: {
     color: colors.textSecondary,
-    marginTop: 6,
-    fontStyle: 'italic',
-    lineHeight: 16,
+  },
+  selectArrow: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginLeft: spacing.sm,
   },
   textArea: {
-    borderWidth: 1, 
-    borderColor: colors.border, 
-    borderRadius: 12, 
-    padding: 16,
-    backgroundColor: colors.white, 
-    fontSize: 15, 
-    color: colors.text, 
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    backgroundColor: colors.white,
+    fontSize: fontSize.md,
+    color: colors.text,
     minHeight: 150,
     textAlignVertical: 'top',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    ...shadows.sm,
   },
   submitFooter: {
     backgroundColor: colors.white,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    ...shadows.lg,
   },
   submitButton: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadows.md,
   },
-  submitButtonDisabled: { 
-    backgroundColor: colors.textSecondary, 
-    shadowOpacity: 0.1 
+  submitButtonDisabled: {
+    backgroundColor: colors.textLight,
   },
   submitButtonText: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: fontSize.md,
+    fontWeight: '700',
   },
-  detailScrollContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: 24, 
-    paddingBottom: 24 
+  detailScrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   detailCard: {
     backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
   },
   detailHeader: {
-    flexDirection: 'row', 
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start', 
-    marginBottom: 16,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
   },
-  detailInfo: { 
-    flex: 1, 
-    marginRight: 8 
+  detailInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   detailNature: {
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: colors.text, 
-    marginBottom: 6,
-    letterSpacing: -0.5,
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
   },
-  detailDate: { 
-    fontSize: 13, 
-    color: colors.textSecondary 
+  detailDate: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
   },
   detailStatusBadge: {
-    paddingHorizontal: 14, 
-    paddingVertical: 8,
-    borderRadius: 12, 
-    alignItems: 'center', 
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
     minWidth: 100,
+    alignItems: 'center',
   },
   detailStatusText: {
-    fontSize: 12, 
-    fontWeight: '700', 
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.white,
     textTransform: 'capitalize',
   },
   descriptionSection: {
-    paddingTop: 16,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  sectionLabel: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: colors.text, 
-    marginBottom: 8 
+  sectionLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   descriptionText: {
-    fontSize: 15, 
-    color: colors.textSecondary, 
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   commentsCard: {
     backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.md,
   },
-  commentsHeader: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: colors.text, 
-    marginBottom: 16,
-    letterSpacing: -0.5,
+  commentsHeader: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
   },
   commentBubble: {
     backgroundColor: colors.backgroundSecondary,
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 10,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
   hrCommentBubble: {
-    backgroundColor: colors.primary + '10', 
-    borderLeftWidth: 3, 
+    backgroundColor: colors.primaryLight + '20',
+    borderLeftWidth: 3,
     borderLeftColor: colors.primary,
   },
   commentTop: {
-    flexDirection: 'row', 
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center', 
-    marginBottom: 6,
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
   },
-  commentAuthor: { 
-    fontSize: 13, 
-    fontWeight: '600', 
-    color: colors.text, 
-    flex: 1 
+  commentAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
   },
-  hrCommentAuthor: { 
-    color: colors.primary 
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  commentTime: { 
-    fontSize: 11, 
-    color: colors.textSecondary 
+  hrCommentAvatar: {
+    backgroundColor: colors.primary,
   },
-  commentContent: { 
-    fontSize: 14, 
-    color: colors.text, 
-    lineHeight: 20 
+  commentAvatarText: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  commentAuthor: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  hrCommentAuthor: {
+    color: colors.primary,
+  },
+  hrBadge: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+  },
+  commentTime: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  commentContent: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  noCommentsContainer: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+  },
+  noCommentsIcon: {
+    fontSize: 40,
+    marginBottom: spacing.sm,
   },
   noComments: {
-    fontSize: 14, 
-    color: colors.textSecondary, 
-    textAlign: 'center',
-    fontStyle: 'italic', 
-    paddingVertical: 20,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  noCommentsSubtext: {
+    fontSize: fontSize.sm,
+    color: colors.textLight,
   },
   addCommentBox: {
-    marginTop: 16, 
-    paddingTop: 16,
-    borderTopWidth: 1, 
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  addCommentLabel: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: colors.text, 
-    marginBottom: 8 
+  addCommentLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   commentTextArea: {
-    borderWidth: 1, 
-    borderColor: colors.border, 
-    borderRadius: 12, 
-    padding: 14,
-    backgroundColor: colors.white, 
-    fontSize: 14, 
-    color: colors.text, 
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    backgroundColor: colors.white,
+    fontSize: fontSize.sm,
+    color: colors.text,
     minHeight: 90,
-    marginBottom: 12, 
+    marginBottom: spacing.sm,
     textAlignVertical: 'top',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    ...shadows.sm,
   },
   commentButton: {
-    backgroundColor: colors.primary, 
-    paddingVertical: 14, 
-    paddingHorizontal: 20,
-    borderRadius: 14, 
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.3, 
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadows.md,
   },
-  commentButtonDisabled: { 
-    backgroundColor: colors.textSecondary, 
-    shadowOpacity: 0.1 
+  commentButtonDisabled: {
+    backgroundColor: colors.textLight,
   },
-  commentButtonText: { 
-    color: colors.white, 
-    fontSize: 15, 
-    fontWeight: '600' 
+  commentButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
   },
   dropdownOverlay: {
-    flex: 1, 
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
   },
   dropdownContainer: {
-    backgroundColor: colors.white, 
-    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
     maxHeight: screenHeight * 0.6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
+    ...shadows.lg,
   },
   searchContainer: {
-    padding: 16, 
-    borderBottomWidth: 1, 
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  searchInput: {
-    borderWidth: 1, 
-    borderColor: colors.border, 
-    borderRadius: 12,
-    paddingHorizontal: 16, 
-    paddingVertical: 12,
-    fontSize: 15, 
-    color: colors.text, 
-    backgroundColor: colors.backgroundSecondary,
+  searchIcon: {
+    fontSize: fontSize.lg,
+    marginRight: spacing.sm,
   },
-  dropdownList: { 
-    maxHeight: screenHeight * 0.4 
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.md,
+    color: colors.text,
+    paddingVertical: spacing.sm,
+  },
+  dropdownList: {
+    maxHeight: screenHeight * 0.4,
   },
   dropdownItem: {
-    paddingHorizontal: 16, 
-    paddingVertical: 14,
-    borderBottomWidth: 1, 
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   dropdownItemText: {
-    fontSize: 15, 
-    fontWeight: '600', 
-    color: colors.text, 
-    marginBottom: 4,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
   },
-  dropdownItemDescription: { 
-    fontSize: 13, 
-    color: colors.textSecondary, 
-    lineHeight: 18 
+  dropdownItemDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
-  emptyDropdown: { 
-    padding: 32, 
-    alignItems: 'center' 
+  emptyDropdown: {
+    padding: spacing.xxl,
+    alignItems: 'center',
   },
-  emptyDropdownText: { 
-    fontSize: 15, 
-    color: colors.textSecondary, 
-    textAlign: 'center' 
+  emptyDropdownText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });
 

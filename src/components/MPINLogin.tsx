@@ -113,45 +113,34 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const hasEnteredDigits = mpin.some(digit => digit !== '');
   const isMPINComplete = mpin.every(digit => digit !== '') && mpin.join('').length === 6;
 
-  // Check biometric capabilities on component mount
   useEffect(() => {
     checkBiometricCapabilities();
   }, []);
 
-  // Attempt biometric authentication after capabilities are checked
   useEffect(() => {
     if (biometricCapabilities && !biometricAttempted && !showMPINSection) {
       attemptBiometricAuthentication();
     }
   }, [biometricCapabilities, biometricAttempted, showMPINSection]);
+
   const debugBiometrics = useCallback(async () => {
     const permissionResult = await requestBiometricPermissions();
-    console.log('=== BIOMETRIC DEBUG ===');
-    console.log('Permission result:', permissionResult);
 
     if (permissionResult.granted) {
       const types = getBiometricType(permissionResult.supportedTypes);
-      console.log('Detected types:', types);
-
       const messages = getBiometricPromptMessage(permissionResult.supportedTypes);
-      console.log('Prompt messages:', messages);
     }
-    console.log('=====================');
   }, []);
 
-  // Call this in useEffect for testing
   useEffect(() => {
     debugBiometrics();
   }, []);
+
   const checkBiometricCapabilities = useCallback(async () => {
     try {
-      console.log('Checking biometric capabilities with permissions...');
-
-      // Use the enhanced permission checker
       const permissionResult = await requestBiometricPermissions();
 
       if (!permissionResult.granted) {
-        console.log('Biometric permissions not granted:', permissionResult.error);
         setBiometricCapabilities({
           hasHardware: permissionResult.hasHardware,
           isEnrolled: permissionResult.isEnrolled,
@@ -163,7 +152,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         return;
       }
 
-      // Get biometric types
       const biometricTypes = getBiometricType(permissionResult.supportedTypes);
 
       const capabilities: BiometricCapabilities = {
@@ -175,10 +163,8 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       };
 
       setBiometricCapabilities(capabilities);
-      console.log('Enhanced biometric capabilities set:', capabilities);
 
     } catch (error) {
-      console.error('Error checking enhanced biometric capabilities:', error);
       setBiometricCapabilities({
         hasHardware: false,
         isEnrolled: false,
@@ -193,8 +179,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const overrideLoginAPI = useCallback(async (token: string): Promise<LoginResponse> => {
     try {
       const backend = getBackendUrl();
-      console.log('Calling override login API...');
-      console.log(`${backend}/core/overrideLogin`)
       const response = await fetch(`${backend}/core/overrideLogin`, {
         method: 'POST',
         headers: {
@@ -224,21 +208,17 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const attemptBiometricAuthentication = useCallback(async () => {
     if (!biometricCapabilities || !biometricCapabilities.isEnrolled || biometricAttempted) {
-      console.log('Biometric authentication not available or already attempted');
       setShowMPINSection(true);
       return;
     }
 
-    // Check if user has previously disabled biometric authentication
     try {
       const biometricPreference = await AsyncStorage.getItem(BIOMETRIC_PREFERENCE_KEY);
       if (biometricPreference === 'false') {
-        console.log('User has disabled biometric authentication');
         setShowMPINSection(true);
         return;
       }
     } catch (error) {
-      console.warn('Could not check biometric preference:', error);
     }
 
     setBiometricAttempted(true);
@@ -246,10 +226,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     setBiometricError('');
 
     try {
-      console.log('Attempting biometric authentication...');
-      console.log('Available biometric types:', biometricCapabilities.supportedTypes);
-
-      // Determine authentication prompt based on available biometric types
       let promptMessage = 'Authenticate to login';
       let fallbackLabel = 'Use MPIN instead';
 
@@ -261,7 +237,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         promptMessage = Platform.OS === 'ios' ? 'Use Touch ID to login' : 'Use Fingerprint to login';
       }
 
-      // Platform-specific authentication options
       const authOptions = Platform.OS === 'ios'
         ? {
           promptMessage,
@@ -278,63 +253,47 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           requireConfirmation: false,
         };
 
-      console.log('Auth options:', authOptions);
-
       const authResult = await LocalAuthentication.authenticateAsync(authOptions);
 
-      console.log('Biometric authentication result:', authResult);
-
       if (authResult.success) {
-        console.log('Biometric authentication successful, calling override login...');
-
-        // Get stored token for override login
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!storedToken) {
           throw new Error('No authentication token found');
         }
 
-        // Call override login API
         const response = await overrideLoginAPI(storedToken);
-        console.log('Override login successful:', response.message);
 
-        // Since override login succeeded, directly call onBiometricLogin
         if (onBiometricLogin) {
           await onBiometricLogin(storedToken);
         } else {
-          console.warn('onBiometricLogin callback not provided, falling back to onMPINLogin');
           await onMPINLogin('__BIOMETRIC_SUCCESS__');
         }
+        
+        if (onDashboardRedirect) {
+          onDashboardRedirect();
+        }
+        
         return;
       } else {
-        // Handle authentication failures/cancellations
-        // The authResult.error property contains error information
-        console.log('Biometric authentication failed:', authResult.error);
-
-        // Check if user cancelled or chose fallback
         if (authResult.error === 'user_cancel' || authResult.error === 'user_fallback') {
-          console.log('User cancelled biometric authentication or chose fallback');
           setShowMPINSection(true);
         } else if (authResult.error === 'system_cancel') {
-          console.log('System cancelled biometric authentication');
           setShowMPINSection(true);
         } else if (authResult.error === 'app_cancel') {
-          console.log('App cancelled biometric authentication');
           setShowMPINSection(true);
         } else {
-          console.log('Biometric authentication failed with error:', authResult.error);
           setBiometricError('Biometric authentication failed. Please try again or use MPIN.');
           setShowMPINSection(true);
         }
       }
 
     } catch (error) {
-      console.error('Biometric authentication error:', error);
       setBiometricError('Biometric authentication unavailable. Please use MPIN.');
       setShowMPINSection(true);
     } finally {
       setIsBiometricAuthenticating(false);
     }
-  }, [biometricCapabilities, biometricAttempted, overrideLoginAPI, onBiometricLogin, onMPINLogin]);
+  }, [biometricCapabilities, biometricAttempted, overrideLoginAPI, onBiometricLogin, onMPINLogin, onDashboardRedirect]);
 
   const handleRetryBiometric = useCallback(() => {
     setBiometricAttempted(false);
@@ -345,10 +304,8 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
 
   const handleRedirectToLogin = useCallback(() => {
     try {
-      console.log('Redirecting to login page due to exceeded MPIN attempts');
       onUsePassword();
     } catch (e) {
-      console.error('Error during redirect to login:', e);
       setTimeout(() => onUsePassword(), 100);
     }
   }, [onUsePassword]);
@@ -356,16 +313,11 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const handleForgotMPIN = useCallback(() => {
     try {
       if (onForgotMPIN) {
-        console.log('Navigating to forgot MPIN page');
         onForgotMPIN();
       } else {
-        console.log('Forgot MPIN callback not provided, redirecting to email login');
-        // Fallback to email login if forgot MPIN callback is not provided
         onUsePassword();
       }
     } catch (e) {
-      console.error('Error during forgot MPIN navigation:', e);
-      // Retry the navigation after a short delay
       setTimeout(() => {
         if (onForgotMPIN) {
           onForgotMPIN();
@@ -402,28 +354,6 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       throw new Error('Network error occurred during MPIN login');
     }
   }, [getBackendUrl]);
-
-  const handleMPINChange = useCallback((value: string, index: number) => {
-    if (isBlocked) return;
-    if (value.length > 1) return;
-
-    const newMPin = [...mpin];
-    newMPin[index] = value;
-    setMPin(newMPin);
-    setError('');
-
-    if (value !== '' && index < 5) {
-      setCurrentIndex(index + 1);
-      inputRefs.current[index + 1]?.focus();
-    } else if (value === '' && index > 0) {
-      setCurrentIndex(index - 1);
-      inputRefs.current[index - 1]?.focus();
-    }
-
-    if (index === 5 && value !== '') {
-      inputRefs.current[index]?.blur();
-    }
-  }, [isBlocked, mpin]);
 
   const handleKeyPress = useCallback((e: any, index: number) => {
     if (isBlocked) return;
@@ -476,7 +406,13 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       console.log('MPIN login successful, clearing attempt data');
       setAttemptCount(0);
       setIsBlocked(false);
+      
       await onMPINLogin(completeMPin);
+
+      if (onDashboardRedirect) {
+        console.log('Redirecting to dashboard after MPIN login');
+        onDashboardRedirect();
+      }
 
       console.log('MPIN login successful:', response.message);
     } catch (e: any) {
@@ -492,7 +428,35 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [isBlocked, mpin, mpinLoginAPI, onMPINLogin, isAuthenticationError, handleRedirectToLogin]);
+  }, [isBlocked, mpin, mpinLoginAPI, onMPINLogin, onDashboardRedirect, isAuthenticationError, handleRedirectToLogin]);
+
+  const handleMPINChange = useCallback((value: string, index: number) => {
+    if (isBlocked) return;
+    if (value.length > 1) return;
+
+    const newMPin = [...mpin];
+    newMPin[index] = value;
+    setMPin(newMPin);
+    setError('');
+
+    if (value !== '' && index < 5) {
+      setCurrentIndex(index + 1);
+      inputRefs.current[index + 1]?.focus();
+    } else if (value === '' && index > 0) {
+      setCurrentIndex(index - 1);
+      inputRefs.current[index - 1]?.focus();
+    }
+
+    if (index === 5 && value !== '') {
+      inputRefs.current[index]?.blur();
+      const completeMPin = [...newMPin.slice(0, 5), value].join('');
+      if (completeMPin.length === 6) {
+        setTimeout(() => {
+          handleSubmit(completeMPin);
+        }, 300);
+      }
+    }
+  }, [isBlocked, mpin, handleSubmit]);
 
   const clearMPIN = useCallback(() => {
     if (isBlocked) return;
@@ -514,12 +478,10 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     return `${maskedUsername}@${domain}`;
   }, [userEmail]);
 
-  // Improved keyboard handling
   const handleInputFocus = useCallback((index: number) => {
     setCurrentIndex(index);
     setTimeout(() => {
       if (scrollViewRef.current) {
-        // Calculate scroll position based on input position and screen size
         const baseScrollY = isSmallDevice ? 80 : 100;
         const keyboardOffset = Platform.OS === 'ios' ? 0 : 50;
         const scrollY = baseScrollY + keyboardOffset;
@@ -962,7 +924,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: 12,
     height: isTablet ? 56 : 52,
-    width: '110%',
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -992,7 +954,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Forgot MPIN link - centered like the login page
+  // Forgot MPIN link
   forgotMPINLink: {
     alignSelf: 'flex-end',
     paddingVertical: 1,
@@ -1006,7 +968,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // Clear link - positioned at bottom center
+  // Clear link
   clearLink: {
     alignSelf: 'center',
     paddingVertical: 8,
