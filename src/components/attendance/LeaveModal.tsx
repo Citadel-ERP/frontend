@@ -1,4 +1,3 @@
-// LeaveModal.tsx - Clean Leave Application Modal with UI DatePicker
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -14,8 +13,34 @@ import {
   Keyboard,
 } from 'react-native';
 import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../../styles/theme';
-import { LeaveForm } from './types';
+
+// Mock theme for demo
+const colors = {
+  primary: '#007AFF',
+  white: '#FFFFFF',
+  text: '#000000',
+  textSecondary: '#666666',
+  backgroundSecondary: '#F5F5F5',
+  border: '#E0E0E0',
+  success: '#34C759',
+  error: '#FF3B30',
+};
+
+const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const fontSize = { xs: 11, sm: 13, md: 15, lg: 17, xl: 20 };
+const borderRadius = { sm: 6, lg: 12, xl: 16, full: 9999 };
+const shadows = {
+  lg: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 },
+  md: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  none: {},
+};
+
+interface LeaveForm {
+  startDate: string;
+  endDate: string;
+  leaveType: string;
+  reason: string;
+}
 
 interface LeaveModalProps {
   visible: boolean;
@@ -25,6 +50,8 @@ interface LeaveModalProps {
   onSubmit: () => void;
   loading: boolean;
 }
+
+type DateEditMode = 'none' | 'start' | 'end';
 
 const LeaveModal: React.FC<LeaveModalProps> = ({
   visible,
@@ -42,8 +69,8 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     startDate: undefined,
     endDate: undefined,
   });
+  const [editMode, setEditMode] = useState<DateEditMode>('none');
 
-  // Keyboard event listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
       setKeyboardVisible(true);
@@ -51,23 +78,25 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardVisible(false);
     });
-
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
   }, []);
 
-  // Initialize dates when form data changes
   useEffect(() => {
     if (leaveForm.startDate && leaveForm.endDate) {
+      const startParts = leaveForm.startDate.split('-');
+      const endParts = leaveForm.endDate.split('-');
+      
       setDateRange({
-        startDate: new Date(leaveForm.startDate),
-        endDate: new Date(leaveForm.endDate),
+        startDate: new Date(parseInt(startParts[0]), parseInt(startParts[1]) - 1, parseInt(startParts[2]), 12, 0, 0),
+        endDate: new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, parseInt(endParts[2]), 12, 0, 0),
       });
     } else if (leaveForm.startDate) {
+      const startParts = leaveForm.startDate.split('-');
       setDateRange({
-        startDate: new Date(leaveForm.startDate),
+        startDate: new Date(parseInt(startParts[0]), parseInt(startParts[1]) - 1, parseInt(startParts[2]), 12, 0, 0),
         endDate: undefined,
       });
     } else {
@@ -87,17 +116,114 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     });
   };
 
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const handleDateChange = (params: { startDate: DateType; endDate: DateType }) => {
-    setDateRange(params);
-    
-    const startDateString = params.startDate ? new Date(params.startDate).toISOString().split('T')[0] : '';
-    const endDateString = params.endDate ? new Date(params.endDate).toISOString().split('T')[0] : '';
-    
+    const newStartDate = params.startDate ? new Date(params.startDate) : undefined;
+    const newEndDate = params.endDate ? new Date(params.endDate) : undefined;
+
+    // Smart date selection logic
+    if (editMode === 'start' && newStartDate) {
+      // Editing start date
+      const startStr = formatDateToString(newStartDate);
+      
+      // If we have an end date, check if new start is after it
+      if (dateRange.endDate) {
+        const existingEnd = new Date(dateRange.endDate);
+        if (newStartDate > existingEnd) {
+          // New start is after end, so make both the same
+          setDateRange({ startDate: newStartDate, endDate: newStartDate });
+          onFormChange({
+            ...leaveForm,
+            startDate: startStr,
+            endDate: startStr,
+          });
+        } else {
+          // Valid range
+          setDateRange({ startDate: newStartDate, endDate: dateRange.endDate });
+          onFormChange({
+            ...leaveForm,
+            startDate: startStr,
+          });
+        }
+      } else {
+        setDateRange({ startDate: newStartDate, endDate: undefined });
+        onFormChange({
+          ...leaveForm,
+          startDate: startStr,
+        });
+      }
+      setEditMode('none');
+    } else if (editMode === 'end' && newEndDate) {
+      // Editing end date
+      const endStr = formatDateToString(newEndDate);
+      
+      if (dateRange.startDate) {
+        const existingStart = new Date(dateRange.startDate);
+        if (newEndDate < existingStart) {
+          // New end is before start, so make both the same
+          setDateRange({ startDate: newEndDate, endDate: newEndDate });
+          onFormChange({
+            ...leaveForm,
+            startDate: endStr,
+            endDate: endStr,
+          });
+        } else {
+          // Valid range
+          setDateRange({ startDate: dateRange.startDate, endDate: newEndDate });
+          onFormChange({
+            ...leaveForm,
+            endDate: endStr,
+          });
+        }
+      } else {
+        setDateRange({ startDate: newEndDate, endDate: newEndDate });
+        onFormChange({
+          ...leaveForm,
+          startDate: endStr,
+          endDate: endStr,
+        });
+      }
+      setEditMode('none');
+    } else {
+      // Normal range selection (default behavior)
+      setDateRange(params);
+      
+      const startDateString = newStartDate ? formatDateToString(newStartDate) : '';
+      const endDateString = newEndDate ? formatDateToString(newEndDate) : '';
+      
+      onFormChange({
+        ...leaveForm,
+        startDate: startDateString,
+        endDate: endDateString,
+      });
+    }
+  };
+
+  const handleClearDates = () => {
+    setDateRange({
+      startDate: undefined,
+      endDate: undefined,
+    });
     onFormChange({
       ...leaveForm,
-      startDate: startDateString,
-      endDate: endDateString,
+      startDate: '',
+      endDate: '',
     });
+    setEditMode('none');
+  };
+
+  const handleEditStartDate = () => {
+    setEditMode('start');
+  };
+
+  const handleEditEndDate = () => {
+    setEditMode('end');
   };
 
   const isFormValid = () => {
@@ -109,8 +235,8 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
 
   const getDaysCount = () => {
     if (leaveForm.startDate && leaveForm.endDate) {
-      const start = new Date(leaveForm.startDate);
-      const end = new Date(leaveForm.endDate);
+      const start = new Date(leaveForm.startDate + 'T12:00:00');
+      const end = new Date(leaveForm.endDate + 'T12:00:00');
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       return diffDays;
@@ -118,17 +244,20 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     return 0;
   };
 
-  // DatePicker theme configuration
-  const datePickerTheme = {
-    selectedItemColor: colors.primary || '#007AFF',
-    selectedRangeBackgroundColor: (colors.primary || '#007AFF') + '30',
-    selectedTextColor: colors.white || '#FFFFFF',
-    todayTextColor: colors.primary || '#007AFF',
-    calendarBackground: 'transparent',
-    dayTextColor: colors.text || '#000000',
-    monthTextColor: colors.text || '#000000',
-    yearTextColor: colors.text || '#000000',
-    headerButtonColor: colors.primary || '#007AFF',
+  const getHelperText = () => {
+    if (editMode === 'start') {
+      return '📍 Select a new start date';
+    }
+    if (editMode === 'end') {
+      return '📍 Select a new end date';
+    }
+    if (!dateRange.startDate) {
+      return '💡 Tip: Tap a date to set start, then tap another date for end';
+    }
+    if (dateRange.startDate && !dateRange.endDate) {
+      return '✓ Start date set. Now select your end date';
+    }
+    return '✓ Date range selected. Tap dates above to edit individually';
   };
 
   const renderContent = () => (
@@ -151,78 +280,133 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
 
       {/* Date Selection Section */}
       <View style={styles.dateSection}>
-        <Text style={styles.sectionTitle}>Select Leave Dates</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Select Leave Dates</Text>
+          {(dateRange.startDate || dateRange.endDate) && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={handleClearDates}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.clearButtonText}>Clear Selection</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         
-        {/* Selected Dates Display */}
+        {/* Selected Dates Display - Now Clickable */}
         <View style={styles.selectedDatesContainer}>
           <View style={styles.dateDisplayRow}>
-            <View style={styles.dateDisplayItem}>
-              <Text style={styles.dateLabel}>Start Date</Text>
+            <TouchableOpacity 
+              style={[
+                styles.dateDisplayItem,
+                editMode === 'start' && styles.dateDisplayItemActive
+              ]}
+              onPress={handleEditStartDate}
+              disabled={!dateRange.startDate}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dateLabel}>Start Date {dateRange.startDate && '✏️'}</Text>
               <Text style={[
                 styles.dateValue,
-                !dateRange.startDate && styles.placeholderText
+                !dateRange.startDate && styles.placeholderText,
+                editMode === 'start' && styles.dateValueActive
               ]}>
-                {dateRange.startDate ? formatDate(new Date(dateRange.startDate)) : 'Not selected'}
+                {dateRange.startDate ? formatDate(new Date(dateRange.startDate)) : 'Tap calendar below'}
               </Text>
-            </View>
+            </TouchableOpacity>
             
             <View style={styles.dateSeparator}>
-              <Text style={styles.dateSeparatorText}>to</Text>
+              <Text style={styles.dateSeparatorText}>→</Text>
             </View>
             
-            <View style={styles.dateDisplayItem}>
-              <Text style={styles.dateLabel}>End Date</Text>
+            <TouchableOpacity 
+              style={[
+                styles.dateDisplayItem,
+                editMode === 'end' && styles.dateDisplayItemActive
+              ]}
+              onPress={handleEditEndDate}
+              disabled={!dateRange.endDate}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dateLabel}>End Date {dateRange.endDate && '✏️'}</Text>
               <Text style={[
                 styles.dateValue,
-                !dateRange.endDate && styles.placeholderText
+                !dateRange.endDate && styles.placeholderText,
+                editMode === 'end' && styles.dateValueActive
               ]}>
-                {dateRange.endDate ? formatDate(new Date(dateRange.endDate)) : 'Not selected'}
+                {dateRange.endDate ? formatDate(new Date(dateRange.endDate)) : 'Select end date'}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
           
           {/* Duration Display */}
           {leaveForm.startDate && leaveForm.endDate && (
             <View style={styles.durationBadge}>
               <Text style={styles.durationText}>
-                Duration: {getDaysCount()} {getDaysCount() === 1 ? 'day' : 'days'}
+                📅 {getDaysCount()} {getDaysCount() === 1 ? 'day' : 'days'} selected
               </Text>
             </View>
           )}
+
+          {/* Dynamic Helper Text */}
+          <View style={styles.helperTextContainer}>
+            <Text style={[
+              styles.helperText,
+              editMode !== 'none' && styles.helperTextActive
+            ]}>
+              {getHelperText()}
+            </Text>
+          </View>
         </View>
 
-        {/* Date Picker - Multiple approaches for better compatibility */}
-        <View style={styles.datePickerContainer}>
+        {/* Date Picker with Enhanced Visual Feedback */}
+        <View style={[
+          styles.datePickerContainer,
+          editMode !== 'none' && styles.datePickerContainerActive
+        ]}>
           <DateTimePicker
             mode="range"
             startDate={dateRange.startDate}
             endDate={dateRange.endDate}
             onChange={handleDateChange}
-            minDate={new Date()}
-            // Primary styling approach - using individual props
-            selectedItemColor={colors.primary || '#007AFF'}
-            selectedRangeBackgroundColor={(colors.primary || '#007AFF') + '30'}
-            headerButtonColor={colors.primary || '#007AFF'}
-            // Alternative: using theme object (comment out above if using this)
-            // theme={datePickerTheme}
-            // Text styling
-            weekDaysTextStyle={[styles.weekDaysText, { color: colors.textSecondary || '#666' }]}
-            calendarTextStyle={[styles.calendarText, { color: colors.text || '#000' }]}
-            headerTextStyle={[styles.headerText, { color: colors.text || '#000' }]}
-            selectedTextStyle={{ color: colors.white || '#FFFFFF', fontWeight: 'bold' }}
+            timePicker={false}
+            
+            // Enhanced styling for better visibility
+            selectedItemColor={colors.primary}
+            selectedRangeBackgroundColor={colors.primary + '35'}
+            headerButtonColor={colors.primary}
+            
+            // Text styling with better contrast
+            weekDaysTextStyle={[styles.weekDaysText, { color: colors.textSecondary }]}
+            calendarTextStyle={[styles.calendarText, { color: colors.text }]}
+            headerTextStyle={[styles.headerText, { color: colors.text }]}
+            selectedTextStyle={{ 
+              color: colors.white, 
+              fontWeight: 'bold',
+              fontSize: fontSize.md 
+            }}
             todayContainerStyle={[styles.todayContainer, { 
-              borderColor: colors.primary || '#007AFF',
-              borderWidth: 1 
+              borderColor: colors.success,
+              borderWidth: 2,
+              backgroundColor: colors.success + '15'
             }]}
+            
             // Navigation buttons
             buttonPrevIcon={<Text style={styles.navButton}>‹</Text>}
             buttonNextIcon={<Text style={styles.navButton}>›</Text>}
-            // Additional props for better styling
-            firstDayOfWeek={0} // Start from Sunday
+            
+            // Additional props
+            firstDayOfWeek={0}
             displayFullDays={true}
-            // Custom styling container
             containerStyle={styles.datePickerInner}
           />
+          
+          {/* Retroactive Leave Notice */}
+          <View style={styles.retroNotice}>
+            <Text style={styles.retroNoticeText}>
+              ℹ️ You can select past dates for retroactive leave applications
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -331,7 +515,6 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Main Modal Styles
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -348,11 +531,9 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     width: '95%',
     maxWidth: 500,
-    maxHeight: '90%',
+    maxHeight: '95%',
     ...shadows.lg,
   },
-  
-  // Header Styles
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -377,16 +558,30 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
-
-  // Date Section
   dateSection: {
     marginBottom: spacing.xl,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: spacing.md,
+  },
+  clearButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.error + '15',
+    borderRadius: borderRadius.sm,
+  },
+  clearButtonText: {
+    fontSize: fontSize.xs,
+    color: colors.error,
+    fontWeight: '600',
   },
   selectedDatesContainer: {
     backgroundColor: colors.backgroundSecondary,
@@ -404,6 +599,15 @@ const styles = StyleSheet.create({
   dateDisplayItem: {
     flex: 1,
     alignItems: 'center',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'transparent',
+  },
+  dateDisplayItemActive: {
+    backgroundColor: colors.primary + '15',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
   },
   dateLabel: {
     fontSize: fontSize.sm,
@@ -415,22 +619,27 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.text,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  dateValueActive: {
+    color: colors.primary,
   },
   placeholderText: {
     color: colors.textSecondary,
     fontStyle: 'italic',
     fontWeight: '400',
+    fontSize: fontSize.sm,
   },
   dateSeparator: {
     paddingHorizontal: spacing.md,
   },
   dateSeparatorText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    fontSize: fontSize.lg,
+    color: colors.primary,
+    fontWeight: '600',
   },
   durationBadge: {
-    backgroundColor: colors.primary + '20',
+    backgroundColor: colors.success + '20',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.full,
@@ -439,64 +648,82 @@ const styles = StyleSheet.create({
   },
   durationText: {
     fontSize: fontSize.sm,
-    color: colors.primary,
+    color: colors.success,
     fontWeight: '600',
   },
-
-  // Date Picker Container
+  helperTextContainer: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  helperText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  helperTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontStyle: 'normal',
+  },
   datePickerContainer: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
     overflow: 'hidden',
     padding: spacing.sm,
+  },
+  datePickerContainerActive: {
+    borderColor: colors.primary,
+    borderWidth: 3,
+    backgroundColor: colors.primary + '05',
   },
   datePickerInner: {
     backgroundColor: 'transparent',
   },
-
-  // Enhanced Date Picker Styles
-  selectedDateText: {
-    color: colors.white || '#FFFFFF',
-    fontWeight: '700',
+  retroNotice: {
+    backgroundColor: colors.primary + '10',
+    padding: spacing.md,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
   },
-  todayText: {
-    color: colors.primary || '#007AFF',
-    fontWeight: '600',
+  retroNoticeText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   todayContainer: {
     backgroundColor: 'transparent',
-    borderColor: colors.primary || '#007AFF',
+    borderColor: colors.success,
     borderWidth: 2,
-    borderRadius: borderRadius.sm,
-  },
-  headerButton: {
-    backgroundColor: colors.backgroundSecondary,
     borderRadius: borderRadius.sm,
   },
   headerText: {
     fontSize: fontSize.lg,
     fontWeight: '600',
-    color: colors.text || '#000000',
+    color: colors.text,
   },
   weekDaysText: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.textSecondary || '#666666',
+    color: colors.textSecondary,
   },
   calendarText: {
     fontSize: fontSize.md,
-    color: colors.text || '#000000',
+    color: colors.text,
   },
   navButton: {
-    fontSize: fontSize.xl,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: colors.primary || '#007AFF',
-    paddingHorizontal: spacing.sm,
+    color: colors.primary,
+    paddingHorizontal: spacing.md,
   },
-  
-  // Form Input Styles
   inputGroup: {
     marginBottom: spacing.xl,
   },
@@ -506,8 +733,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
-  
-  // Leave Type Styles
   leaveTypeRow: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -539,8 +764,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-  
-  // Reason Input
   reasonInput: {
     borderWidth: 2,
     borderColor: colors.border,
@@ -558,13 +781,11 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: spacing.xs,
   },
-  
-  // Button Row
   buttonRow: {
     flexDirection: 'row',
     gap: spacing.lg,
     marginTop: spacing.xl,
-    marginBottom: 70
+    marginBottom: 70,
   },
   cancelButton: {
     flex: 1,
@@ -595,7 +816,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: fontSize.md,
     color: colors.white,
-    fontWeight: '700'
+    fontWeight: '700',
   },
   loadingContainer: {
     flexDirection: 'row',

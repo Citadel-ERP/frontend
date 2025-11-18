@@ -73,6 +73,7 @@ interface ApiResponse {
   }>;
   user: any;
   upcoming_birthdays: any[];
+  is_driver: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
@@ -133,6 +134,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           setUserData(transformedUserData);
           setModules(data.modules);
           setUpcomingBirthdays(data.upcoming_birthdays || []);
+          
+          // Save driver field to AsyncStorage
+          try {
+            await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
+            console.log('Driver status saved:', data.is_driver);
+          } catch (storageError) {
+            console.error('Error saving driver status to storage:', storageError);
+          }
         } else {
           throw new Error(data.message || 'Failed to fetch user data');
         }

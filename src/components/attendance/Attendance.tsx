@@ -15,14 +15,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { BACKEND_URL } from '../../config/config';
 import LeaveInfoScreen from './LeaveInfoScreen';
-
 import {
   AttendanceProps,
   LeaveBalance,
@@ -32,7 +31,6 @@ import {
   LeaveForm,
   TabType
 } from './types';
-
 import AttendanceTab from './AttendanceTab';
 import LeaveTab from './LeaveTab';
 import CalendarTab from './CalendarTab';
@@ -44,15 +42,13 @@ const TOKEN_2_KEY = 'token_2';
 
 const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-
   const [token, setToken] = useState<string | null>(null);
+  const [isDriver, setIsDriver] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TabType>('attendance');
   const [loading, setLoading] = useState(false);
-
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
-
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     casual_leaves: 0,
@@ -66,32 +62,45 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     leaveType: 'casual',
     reason: ''
   });
-
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
-
   const [showLeaveInfo, setShowLeaveInfo] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveApplication | null>(null);
-
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [attendanceDescription, setAttendanceDescription] = useState('');
+  const [showCheckOutTimeModal, setShowCheckOutTimeModal] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
       try {
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+        const driverStatus = await AsyncStorage.getItem('is_driver');
+
         console.log('Stored token:', storedToken);
+        console.log('Driver status from storage:', driverStatus);
 
         if (storedToken) {
           setToken(storedToken);
+
+          // Parse and set driver status
+          if (driverStatus) {
+            try {
+              const isDriverBool = JSON.parse(driverStatus);
+              setIsDriver(isDriverBool);
+              console.log('User is driver:', isDriverBool);
+            } catch (parseError) {
+              console.error('Error parsing driver status:', parseError);
+              setIsDriver(false);
+            }
+          }
+
           await fetchInitialData(storedToken);
           await initializeLocationPermission();
         } else {
@@ -101,9 +110,32 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         console.error('Error initializing app:', error);
       }
     };
-
     initializeApp();
   }, []);
+
+  /**
+   * Converts current time to IST and returns in ISO format
+   * IST is UTC+5:30
+   */
+  const getCurrentTimeInIST = (): string => {
+    const now = new Date();
+
+    // Get current UTC time
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+
+    // IST is UTC + 5 hours 30 minutes (19800000 milliseconds)
+    const istTime = new Date(utcTime + (19800000));
+
+    // Format: YYYY-MM-DDTHH:MM:SSZ
+    const year = istTime.getFullYear();
+    const month = String(istTime.getMonth() + 1).padStart(2, '0');
+    const day = String(istTime.getDate()).padStart(2, '0');
+    const hours = String(istTime.getHours()).padStart(2, '0');
+    const minutes = String(istTime.getMinutes()).padStart(2, '0');
+    const seconds = String(istTime.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}Z`;
+  };
 
   const initializeLocationPermission = async () => {
     try {
@@ -124,17 +156,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const getCurrentLocation = async (timeoutMs: number = 10000) => {
     try {
       if (!locationPermission) return null;
-
       const locationPromise = Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Location request timed out')), timeoutMs);
       });
-
       const location = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
-
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -160,7 +188,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const markAttendance = async (description) => {
+  const markAttendance = async (description?: string) => {
     if (!token) {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
@@ -175,22 +203,26 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         return;
       }
 
-      console.log('Token:', token);
-      console.log('Location:', location);
-
-      // Create request body - only include description if it's provided and is a string
-      const requestBody = {
+      // Create request body
+      const requestBody: any = {
         token,
         latitude: location.latitude.toString(),
         longitude: location.longitude.toString(),
       };
 
-      // Only add description if it's a valid string (not an event object)
+      // For drivers, automatically capture current time in IST
+      if (isDriver) {
+        const checkInTimeIST = getCurrentTimeInIST();
+        requestBody.check_in_time = checkInTimeIST;
+        console.log('Driver check-in time (IST):', checkInTimeIST);
+      }
+
+      // Add description if provided
       if (description && typeof description === 'string' && description.trim()) {
         requestBody.description = description.trim();
       }
 
-      console.log('Request body:', requestBody);
+      console.log('Marking attendance with payload:', requestBody);
 
       const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
         method: 'POST',
@@ -206,16 +238,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         setShowDescriptionModal(false);
         setAttendanceDescription('');
 
-        // Real-time update: immediately update today's attendance
+        // Real-time update
         const today = new Date().toISOString().split('T')[0];
-        const currentTime = new Date().toLocaleTimeString('en-US', {
+        const currentTime = isDriver ? requestBody.check_in_time : new Date().toLocaleTimeString('en-US', {
           hour12: false,
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit'
         });
 
-        // Update today's attendance record immediately
         const newTodayAttendance = {
           date: today,
           status: 'Present',
@@ -225,25 +256,21 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
         setTodayAttendance(newTodayAttendance);
 
-        // Update attendance records array
         setAttendanceRecords(prevRecords => {
           const updatedRecords = prevRecords.filter(record => record.date !== today);
           return [newTodayAttendance, ...updatedRecords];
         });
 
-        // Still fetch from server to ensure data consistency
         await fetchAttendanceRecords();
         setLoading(false);
       } else if (response.status === 400) {
         if (data.message === 'Mark attendance failed, You are not in office' ||
           data.message === 'description is required if you are not at office') {
-          // Only show modal if this is the first attempt (no description provided)
           if (!description || typeof description !== 'string') {
             setShowDescriptionModal(true);
             setLoading(false);
             return;
           } else {
-            // This is the second attempt with description but still failed
             Alert.alert('Error', 'Failed to mark remote attendance. Please try again.');
           }
         } else if (data.message === 'Attendance already marked') {
@@ -262,6 +289,71 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
+  const markCheckout = async () => {
+    if (!token) {
+      Alert.alert('Error', 'Authentication token not found. Please login again.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Auto-capture checkout time in IST
+      const checkOutTimeIST = getCurrentTimeInIST();
+      console.log('Driver checkout time (IST):', checkOutTimeIST);
+
+      const response = await fetch(`${BACKEND_URL}/core/markCheckoutTime`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          checkout_time: checkOutTimeIST
+        }),
+      });
+
+      const responseText = await response.text();
+      const data = responseText ? JSON.parse(responseText) : {};
+
+      if (response.status === 200) {
+        Alert.alert('Success', 'Checkout time marked successfully!');
+        setShowCheckOutTimeModal(false);
+
+        // Update today's attendance with checkout time
+        const today = new Date().toISOString().split('T')[0];
+        setTodayAttendance(prev => {
+          if (prev && prev.date === today) {
+            return {
+              ...prev,
+              check_out_time: checkOutTimeIST
+            };
+          }
+          return prev;
+        });
+
+        // Update attendance records
+        setAttendanceRecords(prevRecords => {
+          return prevRecords.map(record => {
+            if (record.date === today) {
+              return {
+                ...record,
+                check_out_time: checkOutTimeIST
+              };
+            }
+            return record;
+          });
+        });
+
+        await fetchAttendanceRecords();
+      } else {
+        Alert.alert('Error', data.message || 'Failed to mark checkout time.');
+      }
+    } catch (error) {
+      console.error('Error marking checkout:', error);
+      Alert.alert('Error', 'Network error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchLeaveBalance = async (token?: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/core/getLeaves`, {
@@ -269,16 +361,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-
       if (response.ok) {
         const data = await response.json();
-        console.log(data)
+        console.log(data);
         setLeaveBalance({
           casual_leaves: data.casual_leaves || 0,
           sick_leaves: data.sick_leaves || 0,
           earned_leaves: data.earned_leaves || 0
         });
-
         if (data.leaves && Array.isArray(data.leaves)) {
           const formattedLeaveApplications = data.leaves.map((leave: any) => ({
             id: leave.id,
@@ -308,7 +398,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
-
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/applyLeave`, {
@@ -322,7 +411,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           reason: leaveForm.reason
         }),
       });
-
       if (response.ok) {
         Alert.alert('Success', 'Leave application submitted successfully!');
         setIsLeaveModalVisible(false);
@@ -346,12 +434,10 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (city) {
         url += `?city=${encodeURIComponent(city)}`;
       }
-
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-
       if (response.ok) {
         const data = await response.json();
         setHolidays(data.holidays || []);
@@ -368,7 +454,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-
       if (response.ok) {
         const data = await response.json();
         if (data.attendances && Array.isArray(data.attendances)) {
@@ -378,12 +463,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             check_in_time: attendance.check_in_time,
             check_out_time: attendance.check_out_time
           }));
-
           setAttendanceRecords(formattedRecords);
-
           const today = new Date().toISOString().split('T')[0];
           const todaysRecord = data.attendances.find((attendance: any) => attendance.date === today);
-
           if (todaysRecord) {
             setTodayAttendance({
               date: todaysRecord.date,
@@ -404,172 +486,201 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const downloadAttendanceReport = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/core/getAttendanceReport`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          month: selectedMonth.toString().padStart(2, '0'),
-          year: selectedYear.toString(),
-        }),
-      });
+  setLoading(true);
+  try {
+    const response = await fetch(`${BACKEND_URL}/core/getAttendanceReport`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        month: selectedMonth.toString().padStart(2, '0'),
+        year: selectedYear.toString(),
+      }),
+    });
 
-      if (response.ok) {
-        const pdfBlob = await response.blob();
-        const reader = new FileReader();
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to generate report');
+    }
 
-        reader.onloadend = async () => {
-          if (reader.result) {
-            const base64data = (reader.result as string).split(',')[1];
-            const monthNames = [
-              'January', 'February', 'March', 'April', 'May', 'June',
-              'July', 'August', 'September', 'October', 'November', 'December'
-            ];
-            const monthName = monthNames[selectedMonth - 1];
-            const filename = `attendance_report_${monthName}_${selectedYear}.pdf`;
-            const fileUri = FileSystem.documentDirectory + filename;
+    const data = await response.json();
 
+    if (!data.file_url) {
+      throw new Error('Invalid response from server');
+    }
+
+    const fileUrl = data.file_url;
+    const filename = data.filename || `attendance_report_${selectedMonth}_${selectedYear}.pdf`;
+
+    // Show options to user
+    Alert.alert(
+      'Download Report',
+      'Choose how you want to access your attendance report:',
+      [
+        {
+          text: 'Open in Browser',
+          onPress: async () => {
+            await WebBrowser.openBrowserAsync(fileUrl);
+          },
+        },
+        {
+          text: 'Download & Share',
+          onPress: async () => {
             try {
-              await FileSystem.writeAsStringAsync(fileUri, base64data, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
+              setLoading(true);
+              
+              // Fetch the PDF file
+              const pdfResponse = await fetch(fileUrl);
+              if (!pdfResponse.ok) {
+                throw new Error('Failed to fetch PDF from server');
+              }
 
-              Alert.alert('Report Generated', 'Your attendance report has been generated!', [
-                {
-                  text: 'Open PDF',
-                  onPress: () => {
-                    sharePDF(fileUri, filename);
-                  }
-                },
-                {
-                  text: 'Save to Downloads',
-                  onPress: async () => {
-                    try {
-                      if (Platform.OS === 'android') {
-                        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-                        if (permissions.granted) {
-                          const base64Data = await FileSystem.readAsStringAsync(fileUri, {
-                            encoding: FileSystem.EncodingType.Base64,
-                          });
+              // Get the blob and convert to base64
+              const blob = await pdfResponse.blob();
+              const reader = new FileReader();
+              
+              reader.onloadend = async () => {
+                try {
+                  const base64data = reader.result as string;
+                  // Remove the data URL prefix (data:application/pdf;base64,)
+                  const base64Content = base64data.split(',')[1];
+                  
+                  // Save to local file system
+                  const fileUri = FileSystem.documentDirectory + filename;
+                  await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+                    encoding: FileSystem.EncodingType.Base64,
+                  });
 
-                          await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, filename, 'application/pdf')
-                            .then(async (uri) => {
-                              await FileSystem.writeAsStringAsync(uri, base64Data, {
-                                encoding: FileSystem.EncodingType.Base64,
-                              });
-                              Alert.alert('Success', 'PDF saved to Downloads folder!');
-                            });
-                        } else {
-                          Alert.alert('Permission Denied', 'Cannot save to Downloads folder without permission.');
-                        }
-                      } else {
-                        Alert.alert('Info', 'PDF is saved in the app directory and can be shared using the share option.');
-                      }
-                    } catch (error) {
-                      console.error('Error saving to downloads:', error);
-                      Alert.alert('Error', 'Could not save to Downloads folder.');
-                    }
+                  // Share the file
+                  const canShare = await Sharing.isAvailableAsync();
+                  if (canShare) {
+                    await Sharing.shareAsync(fileUri, {
+                      mimeType: 'application/pdf',
+                      dialogTitle: 'Share Attendance Report',
+                      UTI: 'com.adobe.pdf',
+                    });
+                    Alert.alert(
+                      'Success',
+                      'Report downloaded successfully! You can now share it.'
+                    );
+                  } else {
+                    Alert.alert('Info', 'File saved to app directory');
                   }
-                },
-                { text: 'Cancel', style: 'cancel' }
-              ]);
-            } catch (fileError) {
-              console.error('Error saving file:', fileError);
-              Alert.alert('Error', 'Failed to save the report file.');
+                } catch (shareError) {
+                  console.error('Share error:', shareError);
+                  Alert.alert('Error', 'Failed to share PDF');
+                } finally {
+                  setLoading(false);
+                }
+              };
+
+              reader.onerror = () => {
+                console.error('FileReader error');
+                Alert.alert('Error', 'Failed to process PDF');
+                setLoading(false);
+              };
+
+              reader.readAsDataURL(blob);
+              
+            } catch (err) {
+              console.error('Download error:', err);
+              Alert.alert('Error', 'Failed to download PDF');
+              setLoading(false);
             }
-          }
-        };
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
 
-        reader.readAsDataURL(pdfBlob);
-      } else {
-        const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to generate report');
-      }
-    } catch (error) {
-      console.error('Error downloading report:', error);
-      Alert.alert('Error', 'Network error occurred while generating report');
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (error: any) {
+    console.error('Error downloading report:', error);
+    Alert.alert(
+      'Error',
+      error.message || 'Failed to generate report. Please try again.'
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const openPDF = async (fileUri: string) => {
-    try {
-      if (Platform.OS === 'ios') {
-        await WebBrowser.openBrowserAsync(fileUri);
-      } else {
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Open PDF',
-            UTI: 'com.adobe.pdf'
-          });
-        } else {
-          await WebBrowser.openBrowserAsync(fileUri);
-        }
-      }
-    } catch (error) {
-      console.error('Error opening PDF:', error);
-      Alert.alert('Error', 'Could not open PDF file. You can try sharing it to a PDF viewer app instead.');
-    }
-  };
-
-  const openPDFAlternative = async (fileUri: string) => {
-    try {
-      if (Platform.OS === 'ios') {
-        await WebBrowser.openBrowserAsync(fileUri);
-      } else {
-        const filename = fileUri.split('/').pop() || 'attendance_report.pdf';
-        const cacheUri = FileSystem.cacheDirectory + filename;
-
-        await FileSystem.copyAsync({
-          from: fileUri,
-          to: cacheUri
-        });
-
-        try {
-          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-            data: cacheUri,
-            flags: 1,
-            type: 'application/pdf',
-          });
-        } catch (intentError) {
-          const isAvailable = await Sharing.isAvailableAsync();
-          if (isAvailable) {
-            await Sharing.shareAsync(cacheUri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Open PDF with...',
-              UTI: 'com.adobe.pdf'
-            });
-          } else {
-            throw new Error('No PDF viewer available');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error opening PDF:', error);
-      Alert.alert('Error', 'Could not open PDF file. Please install a PDF viewer app or try the share option.');
-    }
-  };
-
+  // Helper function to share PDF
   const sharePDF = async (fileUri: string, filename: string) => {
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/pdf',
-          dialogTitle: `Share ${filename}`,
-          UTI: 'com.adobe.pdf'
+          dialogTitle: 'Share Attendance Report',
+          UTI: 'com.adobe.pdf',
         });
       } else {
-        Alert.alert('Error', 'Sharing is not available on this device');
+        Alert.alert('Info', 'Sharing is not available on this device');
       }
     } catch (error) {
       console.error('Error sharing PDF:', error);
-      Alert.alert('Error', 'Could not share PDF file');
+      Alert.alert('Error', 'Could not open the PDF file.');
+    }
+  };
+
+  const saveToDownloads = async (
+    fileUri: string,
+    filename: string,
+    base64Data: string
+  ) => {
+    try {
+      if (Platform.OS === 'android') {
+        // Request directory permissions on Android using new API
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+
+        if (!permissions.granted) {
+          Alert.alert(
+            'Permission Denied',
+            'Cannot save to Downloads folder without permission.'
+          );
+          return;
+        }
+
+        // Create file in selected directory
+        const uri = await FileSystem.StorageAccessFramework.createFileAsync(
+          permissions.directoryUri,
+          filename,
+          'application/pdf'
+        );
+
+        // Write base64 data to the file
+        await FileSystem.writeAsStringAsync(uri, base64Data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        Alert.alert('Success', 'PDF saved to Downloads folder successfully!');
+
+      } else if (Platform.OS === 'ios') {
+        // For iOS, use share sheet as direct Downloads access is restricted
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Save Attendance Report',
+            UTI: 'com.adobe.pdf',
+          });
+          Alert.alert(
+            'Info',
+            'Use the share menu to save the PDF to Files app or other locations.'
+          );
+        } else {
+          Alert.alert(
+            'Info',
+            'PDF is saved in the app directory. Use the "Open PDF" option to share it.'
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error saving to downloads:', error);
+      Alert.alert('Error', 'Could not save to Downloads folder. Please try again.');
     }
   };
 
@@ -577,10 +688,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const currentDate = selectedDate || startDate;
     setShowStartDatePicker(false);
     setStartDate(currentDate);
-
     const formattedDate = currentDate.toISOString().split('T')[0];
     setLeaveForm(prev => ({ ...prev, startDate: formattedDate }));
-
     if (endDate < currentDate) {
       setEndDate(currentDate);
       setLeaveForm(prev => ({ ...prev, startDate: formattedDate, endDate: formattedDate }));
@@ -591,7 +700,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const currentDate = selectedDate || endDate;
     setShowEndDatePicker(false);
     setEndDate(currentDate);
-
     const formattedDate = currentDate.toISOString().split('T')[0];
     setLeaveForm(prev => ({ ...prev, endDate: formattedDate }));
   };
@@ -638,24 +746,34 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     setShowLeaveInfo(false);
     setSelectedLeave(null);
   };
+
   const handleHolidaysUpdate = (updatedHolidays: Holiday[]) => {
     setHolidays(updatedHolidays);
   };
-  // Fixed remote attendance submit handler
+
   const handleRemoteAttendanceSubmit = () => {
     if (!attendanceDescription.trim()) {
       Alert.alert('Error', 'Please enter a description for remote attendance.');
       return;
     }
-    // Pass the actual description string, not an event
     markAttendance(attendanceDescription.trim());
   };
 
-  // Fixed close modal handler
   const handleCloseDescriptionModal = () => {
     setShowDescriptionModal(false);
     setAttendanceDescription('');
     setLoading(false);
+  };
+
+  const handleCheckout = () => {
+    Alert.alert(
+      'Confirm Checkout',
+      'Are you sure you want to mark checkout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Checkout', onPress: markCheckout }
+      ]
+    );
   };
 
   if (showLeaveInfo && selectedLeave) {
@@ -676,7 +794,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             attendanceRecords={attendanceRecords}
             loading={loading}
             locationPermission={locationPermission}
-            markAttendance={markAttendance}
+            onMarkAttendance={() => markAttendance()}
+            onCheckout={handleCheckout}
+            isDriver={isDriver}
           />
         );
       case 'leave':
@@ -715,12 +835,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Attendance</Text>
+        <Text style={styles.headerTitle}>
+          Attendance {isDriver && '(Driver)'}
+        </Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -784,6 +905,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         onSelect={handleYearChange}
       />
 
+      {/* Remote Attendance Description Modal */}
       <Modal
         visible={showDescriptionModal}
         transparent={true}
@@ -796,7 +918,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             <Text style={styles.modalSubtitle}>
               You're not at the office location. Please provide a description for remote attendance:
             </Text>
-
             <TextInput
               style={styles.descriptionInput}
               placeholder="Enter description (e.g., Working from home, Client meeting, etc.)"
@@ -806,7 +927,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               numberOfLines={3}
               maxLength={200}
             />
-
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -814,7 +934,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
                 onPress={handleRemoteAttendanceSubmit}
@@ -972,294 +1091,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.white,
     fontWeight: '600',
-  },
-  // Loading overlay styles
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  // Error state styles
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  errorText: {
-    fontSize: fontSize.md,
-    color: colors.error || colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    lineHeight: 20,
-  },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  retryButtonText: {
-    fontSize: fontSize.md,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  // Empty state styles
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  emptyText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  // Additional utility styles
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  spaceBetween: {
-    justifyContent: 'space-between',
-  },
-  centered: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shadow: {
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  // Form styles (if needed by child components)
-  formContainer: {
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    margin: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  formRow: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    backgroundColor: colors.white,
-  },
-  inputError: {
-    borderColor: colors.error || '#FF6B6B',
-  },
-  errorMessage: {
-    fontSize: fontSize.sm,
-    color: colors.error || '#FF6B6B',
-    marginTop: spacing.xs,
-  },
-  // Button variants
-  primaryButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  outlineButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  disabledButton: {
-    backgroundColor: colors.disabled || '#E0E0E0',
-    borderColor: colors.disabled || '#E0E0E0',
-  },
-  primaryButtonText: {
-    fontSize: fontSize.md,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  secondaryButtonText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  outlineButtonText: {
-    fontSize: fontSize.md,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  disabledButtonText: {
-    color: colors.textSecondary,
-  },
-  // Card styles (for various content containers)
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cardHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: spacing.md,
-    marginBottom: spacing.md,
-  },
-  cardTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  cardSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  // List item styles
-  listItem: {
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  listItemContent: {
-    flex: 1,
-  },
-  listItemTitle: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  listItemSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  listItemAction: {
-    marginLeft: spacing.md,
-  },
-  // Badge/Status styles
-  badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    alignSelf: 'flex-start',
-  },
-  badgeSuccess: {
-    backgroundColor: '#E8F5E8',
-    borderColor: '#4CAF50',
-  },
-  badgeWarning: {
-    backgroundColor: '#FFF3CD',
-    borderColor: '#FFC107',
-  },
-  badgeError: {
-    backgroundColor: '#FFEBEE',
-    borderColor: '#F44336',
-  },
-  badgeInfo: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#2196F3',
-  },
-  badgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  badgeTextSuccess: {
-    color: '#2E7D32',
-  },
-  badgeTextWarning: {
-    color: '#F57C00',
-  },
-  badgeTextError: {
-    color: '#C62828',
-  },
-  badgeTextInfo: {
-    color: '#1565C0',
-  },
-  // Divider styles
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.md,
-  },
-  verticalDivider: {
-    width: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
-  },
-  // Section styles
-  section: {
-    marginBottom: spacing.xl,
-  },
-  sectionHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background,
-  },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  sectionContent: {
-    backgroundColor: colors.white,
   },
 });
 
