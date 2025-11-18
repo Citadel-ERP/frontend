@@ -1233,6 +1233,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                 </View>
                 <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
                 <Text style={styles.leadDate}>Created: {formatDateTime(selectedLead.created_at || selectedLead.createdAt)}</Text>
+                <Text style={styles.leadDate}>Updated: {formatDateTime(selectedLead.updated_at)}</Text>
               </View>
             </View>
           </View>
