@@ -74,6 +74,14 @@ interface ApiResponse {
   user: any;
   upcoming_birthdays: any[];
   is_driver: boolean;
+  upcoming_anniversary: any[];
+}
+
+interface UpcomingEvent {
+  full_name: string;
+  date: string;
+  type: 'birthday' | 'anniversary';
+  years?: number;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
@@ -97,6 +105,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [modules, setModules] = useState<any[]>([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
+  const [upcomingAnniversaries, setUpcomingAnniversaries] = useState<any[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +122,74 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
     getToken();
   }, []);
+
+  // Function to calculate years that will be completed on the anniversary date
+  const calculateYearsOnAnniversary = (dateString: string): number => {
+    const joiningDate = new Date(dateString);
+    const today = new Date();
+    
+    // Get this year's anniversary date
+    let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
+    
+    // If this year's anniversary has passed, check next year
+    if (anniversaryThisYear < today) {
+      anniversaryThisYear = new Date(today.getFullYear() + 1, joiningDate.getMonth(), joiningDate.getDate());
+    }
+    
+    // Calculate years from joining to the upcoming anniversary
+    const years = anniversaryThisYear.getFullYear() - joiningDate.getFullYear();
+    return years;
+  };
+
+  // Function to get upcoming events (birthdays and anniversaries)
+  const getUpcomingEvents = (birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
+    const events: UpcomingEvent[] = [];
+    const today = new Date();
+
+    // Add birthdays
+    birthdays.forEach(user => {
+      if (user.birth_date) {
+        events.push({
+          full_name: user.full_name,
+          date: user.birth_date,
+          type: 'birthday'
+        });
+      }
+    });
+
+    // Add work anniversaries
+    anniversaries.forEach(user => {
+      if (user.joining_date) {
+        const years = calculateYearsOnAnniversary(user.joining_date);
+        // Show all anniversaries including first year (1 year)
+        events.push({
+          full_name: user.full_name,
+          date: user.joining_date,
+          type: 'anniversary',
+          years: years
+        });
+      }
+    });
+
+    // Sort events by date (soonest first)
+    events.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      const today = new Date();
+      
+      // Get this year's occurrence
+      const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
+      const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
+      
+      // If already passed this year, use next year
+      const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
+      const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
+      
+      return eventDateA.getTime() - eventDateB.getTime();
+    });
+
+    return events;
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -142,6 +220,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           } catch (storageError) {
             console.error('Error saving driver status to storage:', storageError);
           }
+          setUpcomingAnniversaries(data.upcoming_anniversary || []);
+          
+          // Generate upcoming events (birthdays + anniversaries)
+          const birthdays = data.upcoming_birthdays || [];
+          const anniversaries = data.upcoming_anniversary || [];
+          const events = getUpcomingEvents(birthdays, anniversaries);
+          setUpcomingEvents(events);
         } else {
           throw new Error(data.message || 'Failed to fetch user data');
         }
@@ -436,19 +521,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     name: string;
     date: string;
     initials: string;
+    type: 'birthday' | 'anniversary';
+    years?: number;
   }
 
-  const EventAvatar: React.FC<EventAvatarProps> = ({ name, date, initials }) => (
+  const EventAvatar: React.FC<EventAvatarProps> = ({ name, date, initials, type, years }) => (
     <View style={styles.eventContainer}>
       <View style={styles.avatarContainer}>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, type === 'anniversary' && styles.avatarAnniversary]}>
           <Text style={styles.avatarInitials}>{initials}</Text>
         </View>
-        <View style={styles.dateBadge}>
+        <View style={[styles.dateBadge, type === 'anniversary' && styles.dateBadgeAnniversary]}>
           <Text style={styles.dateText}>{date}</Text>
         </View>
+        {type === 'anniversary' && years !== undefined && (
+          <View style={styles.anniversaryBadge}>
+            <Text style={styles.anniversaryText}>🎉 {years}yr{years !== 1 ? 's' : ''}</Text>
+          </View>
+        )}
       </View>
       <Text style={styles.eventName} numberOfLines={2}>{name}</Text>
+      <Text style={styles.eventType}>{type === 'birthday' ? '🎂 Birthday' : '💼 Anniversary'}</Text>
     </View>
   );
 
@@ -598,19 +691,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </View>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Upcoming Events</Text>
-                {upcomingBirthdays.length > 0 ? (
+                {upcomingEvents.length > 0 ? (
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.eventsScroll}
                     contentContainerStyle={styles.eventsScrollContent}
                   >
-                    {upcomingBirthdays.map((person, index) => (
+                    {upcomingEvents.map((event, index) => (
                       <EventAvatar
                         key={index}
-                        name={person.full_name}
-                        date={formatDate(person.birth_date)}
-                        initials={getInitials(person.full_name)}
+                        name={event.full_name}
+                        date={formatDate(event.date)}
+                        initials={getInitials(event.full_name)}
+                        type={event.type}
+                        years={event.years}
                       />
                     ))}
                   </ScrollView>
@@ -886,16 +981,20 @@ const styles = StyleSheet.create({
   },
   eventsScrollContent: {
     paddingRight: 16,
-    gap: 16
+    gap: 16,
+    paddingTop: 4,
+    paddingBottom: 4
   },
   eventContainer: {
     alignItems: 'center',
-    width: 80
+    width: 90,
+    paddingTop: 12
   },
   avatarContainer: {
     position: 'relative',
     alignItems: 'center',
-    marginBottom: 12
+    marginBottom: 12,
+    marginTop: 8
   },
   avatar: {
     width: 68,
@@ -914,6 +1013,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3
+  },
+  avatarAnniversary: {
+    backgroundColor: '#8B5CF6'
   },
   avatarInitials: {
     color: colors.white,
@@ -938,9 +1040,34 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3
   },
+  dateBadgeAnniversary: {
+    backgroundColor: '#7C3AED'
+  },
   dateText: {
     color: colors.white,
     fontSize: 11,
+    fontWeight: '700'
+  },
+  anniversaryBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    backgroundColor: '#FCD34D',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3
+  },
+  anniversaryText: {
+    color: '#78350F',
+    fontSize: 10,
     fontWeight: '700'
   },
   eventName: {
@@ -948,7 +1075,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
-    fontWeight: '500'
+    fontWeight: '500',
+    marginBottom: 4
+  },
+  eventType: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontWeight: '600',
+    opacity: 0.7
   },
   noEventsContainer: {
     alignItems: 'center',

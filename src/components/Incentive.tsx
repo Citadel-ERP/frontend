@@ -88,7 +88,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
 
   // Form states
   const [grossIncome, setGrossIncome] = useState('');
-  const [yourSharePercentage, setYourSharePercentage] = useState('7');
   
   // Expense selection states
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
@@ -181,12 +180,30 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
         const data = await response.json();
         setIncentiveData(data.incentive);
         setGrossIncome(formatNumberWithCommas(data.incentive.gross_income_recieved.toString()));
-        setExpenseValues({
-          referral: formatNumberWithCommas(data.incentive.referral_amt.toString()),
-          bd_expenses: formatNumberWithCommas(data.incentive.bdt_expenses.toString()),
-          goodwill: formatNumberWithCommas(data.incentive.goodwill.toString()),
-        });
-        setSelectedExpenses(new Set(['referral', 'bd_expenses', 'goodwill']));
+        
+        // Set expense values and selected expenses based on what's available
+        const newSelectedExpenses = new Set<string>();
+        const newExpenseValues: { [key: string]: string } = {
+          referral: '',
+          bd_expenses: '',
+          goodwill: '',
+        };
+
+        if (data.incentive.referral_amt > 0) {
+          newSelectedExpenses.add('referral');
+          newExpenseValues.referral = formatNumberWithCommas(data.incentive.referral_amt.toString());
+        }
+        if (data.incentive.bdt_expenses > 0) {
+          newSelectedExpenses.add('bd_expenses');
+          newExpenseValues.bd_expenses = formatNumberWithCommas(data.incentive.bdt_expenses.toString());
+        }
+        if (data.incentive.goodwill > 0) {
+          newSelectedExpenses.add('goodwill');
+          newExpenseValues.goodwill = formatNumberWithCommas(data.incentive.goodwill.toString());
+        }
+
+        setExpenseValues(newExpenseValues);
+        setSelectedExpenses(newSelectedExpenses);
         setIntercityDeals(data.incentive.intercity_deals ? 'Yes' : 'No');
         if (data.incentive.city) {
           setSelectedCity(data.incentive.city);
@@ -211,8 +228,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
   const createIncentive = async () => {
     try {
       if (!token) return;
-      if (!grossIncome || selectedExpenses.size === 0 || !yourSharePercentage) {
-        Alert.alert('Error', 'Please fill all required fields');
+      if (!grossIncome) {
+        Alert.alert('Error', 'Please enter gross income');
         return;
       }
 
@@ -251,10 +268,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
           intercity_deals: isIntercity,
           intercity_amount: calculated.intercityAmount,
           net_company_earning: calculated.netCompanyEarning,
-          bdt_share: calculated.bdtShare,
+          bdt_share: null,
           tds_deducted: null,
           less_tax: null,
-          final_amount_payable: calculated.netAmount,
+          final_amount_payable: null,
           city: isIntercity ? cityToSend : null,
         })
       });
@@ -354,10 +371,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
     const netCompanyEarning = gross - totalExpenses;
     const isIntercity = intercityDeals === 'Yes';
     const intercityAmount = isIntercity ? netCompanyEarning * 0.5 : netCompanyEarning;
-    
-    const sharePercentage = parseFloat(yourSharePercentage) || 7;
-    const bdtShare = (intercityAmount * sharePercentage) / 100;
-    const netAmount = bdtShare;
 
     return {
       gross,
@@ -366,15 +379,13 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
       goodwillAmt,
       totalExpenses,
       netCompanyEarning,
-      intercityAmount,
-      bdtShare,
-      netAmount
+      intercityAmount
     };
   };
 
   const handleContinue = () => {
-    if (!grossIncome || selectedExpenses.size === 0 || !yourSharePercentage) {
-      Alert.alert('Missing Fields', 'Please fill all required fields before continuing');
+    if (!grossIncome) {
+      Alert.alert('Missing Fields', 'Please enter gross income');
       return;
     }
 
@@ -517,13 +528,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                   <Text style={styles.summaryValue}>{formatCurrency(calculated.goodwillAmt)}</Text>
                 </View>
               )}
-
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Your Share</Text>
-                  <Text style={styles.summaryValue}>{yourSharePercentage}%</Text>
-                </View>
-              </View>
             </View>
 
             <View style={styles.card}>
@@ -572,21 +576,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                 </View>
               )}
 
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Your Share ({yourSharePercentage}%)</Text>
-                <Text style={styles.calculationValue}>{formatCurrency(calculated.bdtShare)}</Text>
-              </View>
-
               <View style={[styles.calculationRow, styles.finalRow]}>
-                <Text style={styles.finalLabel}>Net Amount (before TDS)</Text>
-                <Text style={styles.finalValue}>{formatCurrency(calculated.netAmount)}</Text>
-              </View>
-
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Less: TDS</Text>
-                <Text style={[styles.calculationValue, styles.tdsPlaceholder]}>
-                  - will be added
-                </Text>
+                <Text style={styles.finalLabel}>Your earning will be told by BUP</Text>
               </View>
             </View>
 
@@ -639,8 +630,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Expenses *</Text>
-            <Text style={styles.expenseInfoText}>Select expenses and enter amounts. Unselected items will be set to ₹0</Text>
+            <Text style={styles.cardTitle}>Expenses (Optional)</Text>
+            <Text style={styles.expenseInfoText}>Select expenses and enter amounts if applicable</Text>
             
             {EXPENSE_OPTIONS.map((expense) => (
               <View key={expense.key} style={styles.expenseItem}>
@@ -764,19 +755,9 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
             </View>
           )}
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Your Share</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Percentage (%) *</Text>
-              <TextInput
-                style={styles.input}
-                value={yourSharePercentage}
-                onChangeText={setYourSharePercentage}
-                placeholder="7"
-                keyboardType="decimal-pad"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>ℹ️ Note</Text>
+            <Text style={styles.infoCardText}>Your earning will be told by BUP</Text>
           </View>
 
           <TouchableOpacity
@@ -842,18 +823,24 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
             <Text style={styles.infoLabel}>Gross Income:</Text>
             <Text style={styles.infoValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Referral Amount:</Text>
-            <Text style={styles.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Goodwill:</Text>
-            <Text style={styles.infoValue}>{formatCurrency(incentiveData.goodwill)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>BD Expenses:</Text>
-            <Text style={styles.infoValue}>{formatCurrency(incentiveData.bdt_expenses)}</Text>
-          </View>
+          {incentiveData.referral_amt > 0 && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Referral Amount:</Text>
+              <Text style={styles.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
+            </View>
+          )}
+          {incentiveData.goodwill > 0 && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Goodwill:</Text>
+              <Text style={styles.infoValue}>{formatCurrency(incentiveData.goodwill)}</Text>
+            </View>
+          )}
+          {incentiveData.bdt_expenses > 0 && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>BD Expenses:</Text>
+              <Text style={styles.infoValue}>{formatCurrency(incentiveData.bdt_expenses)}</Text>
+            </View>
+          )}
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Deal Type:</Text>
             <View style={incentiveData.intercity_deals ? styles.intercityBadgeYes : styles.intercityBadgeNo}>
@@ -875,24 +862,30 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
             <Text style={styles.calculationLabel}>Brokerage Amount (Gross)</Text>
             <Text style={styles.calculationValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
           </View>
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less: Referral Fee</Text>
-            <Text style={[styles.calculationValue, styles.negativeValue]}>
-              - {formatCurrency(incentiveData.referral_amt)}
-            </Text>
-          </View>
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less: BD Expenses</Text>
-            <Text style={[styles.calculationValue, styles.negativeValue]}>
-              - {formatCurrency(incentiveData.bdt_expenses)}
-            </Text>
-          </View>
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less: Goodwill</Text>
-            <Text style={[styles.calculationValue, styles.negativeValue]}>
-              - {formatCurrency(incentiveData.goodwill)}
-            </Text>
-          </View>
+          {incentiveData.referral_amt > 0 && (
+            <View style={styles.calculationRow}>
+              <Text style={styles.calculationLabel}>Less: Referral Fee</Text>
+              <Text style={[styles.calculationValue, styles.negativeValue]}>
+                - {formatCurrency(incentiveData.referral_amt)}
+              </Text>
+            </View>
+          )}
+          {incentiveData.bdt_expenses > 0 && (
+            <View style={styles.calculationRow}>
+              <Text style={styles.calculationLabel}>Less: BD Expenses</Text>
+              <Text style={[styles.calculationValue, styles.negativeValue]}>
+                - {formatCurrency(incentiveData.bdt_expenses)}
+              </Text>
+            </View>
+          )}
+          {incentiveData.goodwill > 0 && (
+            <View style={styles.calculationRow}>
+              <Text style={styles.calculationLabel}>Less: Goodwill</Text>
+              <Text style={[styles.calculationValue, styles.negativeValue]}>
+                - {formatCurrency(incentiveData.goodwill)}
+              </Text>
+            </View>
+          )}
           <View style={[styles.calculationRow, styles.highlightRow]}>
             <Text style={styles.calculationLabelBold}>Net Company Earnings</Text>
             <Text style={styles.calculationValueBold}>
@@ -905,20 +898,31 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
               <Text style={styles.calculationValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
             </View>
           )}
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Your Share (7%)</Text>
-            <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
-          </View>
-          <View style={[styles.calculationRow, styles.finalRow]}>
-            <Text style={styles.finalLabel}>Net Amount (before TDS)</Text>
-            <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
-          </View>
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less: TDS</Text>
-            <Text style={[styles.calculationValue, styles.tdsPlaceholder]}>
-              - will be added
-            </Text>
-          </View>
+          {incentiveData.bdt_share !== null && (
+            <>
+              <View style={styles.calculationRow}>
+                <Text style={styles.calculationLabel}>Your Share</Text>
+                <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
+              </View>
+              {incentiveData.final_amount_payable !== null && (
+                <View style={[styles.calculationRow, styles.finalRow]}>
+                  <Text style={styles.finalLabel}>Net Amount (before TDS)</Text>
+                  <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
+                </View>
+              )}
+              <View style={styles.calculationRow}>
+                <Text style={styles.calculationLabel}>Less: TDS</Text>
+                <Text style={[styles.calculationValue, styles.tdsPlaceholder]}>
+                  - will be added
+                </Text>
+              </View>
+            </>
+          )}
+          {(incentiveData.bdt_share === null || incentiveData.final_amount_payable === null) && (
+            <View style={[styles.calculationRow, styles.finalRow]}>
+              <Text style={styles.finalLabel}>Your earning will be told by BUP</Text>
+            </View>
+          )}
         </View>
         {incentiveData.remarks.length > 0 && (
           <View style={styles.card}>
@@ -1282,24 +1286,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   finalRow: {
-    backgroundColor: colors.success + '15',
+    backgroundColor: colors.info + '15',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
     marginTop: spacing.md,
     borderWidth: 2,
-    borderColor: colors.success,
+    borderColor: colors.info,
   },
   finalLabel: {
-    fontSize: fontSize.lg,
-    color: colors.success,
+    fontSize: fontSize.md,
+    color: colors.info,
     fontWeight: '700',
     flex: 1,
+    textAlign: 'center',
   },
   finalValue: {
     fontSize: fontSize.xl,
     color: colors.success,
     fontWeight: '700',
+  },
+  infoCard: {
+    backgroundColor: colors.info + '15',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.info,
+  },
+  infoCardTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.info,
+    marginBottom: spacing.xs,
+  },
+  infoCardText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
   },
   continueButton: {
     backgroundColor: colors.primary,
