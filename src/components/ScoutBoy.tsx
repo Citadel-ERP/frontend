@@ -1,13 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Modal, TextInput, Dimensions, ActivityIndicator,
-  Image, RefreshControl
+  Image, RefreshControl, PanResponder, Animated
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BACKEND_URL } from '../config/config';
-import CreateSite from './CreateSite';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -86,18 +82,14 @@ const BackIcon = () => (
   </View>
 );
 
-interface ScoutBoyProps {
-  onBack: () => void;
-}
-
-const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
+const ScoutBoy = ({ onBack }) => {
   const [viewMode, setViewMode] = useState('visits-list');
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [visits, setVisits] = useState<any[]>([]);
-  const [loadingVisits, setLoadingVisits] = useState(true);
-  const [visitsError, setVisitsError] = useState<string | null>(null);
-  const [selectedVisit, setSelectedVisit] = useState<any>(null);
+  const [visits, setVisits] = useState([]);
+  const [loadingVisits, setLoadingVisits] = useState(false);
+  const [visitsError, setVisitsError] = useState(null);
+  const [selectedVisitIndex, setSelectedVisitIndex] = useState(0);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   
   // Photo modal state
@@ -112,18 +104,179 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   // Mark complete state
   const [markingComplete, setMarkingComplete] = useState(false);
 
-  const TOKEN_KEY = 'token_2';
+  // Swipe animation
+  const translateX = useRef(new Animated.Value(0)).current;
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Mock data for demo
+  useEffect(() => {
+    const mockVisits = [
+      {
+        id: 1,
+        site: {
+          building_name: 'Tech Tower Plaza',
+          location: 'Sector 62, Noida, Uttar Pradesh',
+          landmark: 'Near Metro Station',
+          building_status: 'Completed',
+          floor_condition: 'Excellent',
+          total_floors: '10',
+          number_of_basements: '2',
+          availble_floors: '5, 6, 7',
+          total_area: '50000',
+          area_per_floor: '5000',
+          efficiency: '85%',
+          oc: 'Yes',
+          will_developer_do_fitouts: 'Yes',
+          rent: '150000',
+          cam: '25000',
+          cam_deposit: '50000',
+          security_deposit: '450000',
+          lease_term: '3 years',
+          lock_in_period: '1 year',
+          notice_period: '3 months',
+          rental_escalation: '10% yearly',
+          car_parking_ratio: '1:1000',
+          car_parking_slots: '50',
+          car_parking_charges: '5000',
+          two_wheeler_slots: '100',
+          two_wheeler_charges: '1000',
+          power: '24x7',
+          power_backup: '100%',
+          number_of_cabins: '15',
+          number_of_workstations: '200',
+          size_of_workstation: '60 sq ft',
+          meeting_room: 'Yes',
+          discussion_room: 'Yes',
+          server_room: 'Yes',
+          training_room: 'Yes',
+          pantry: 'Yes',
+          cafeteria: 'Yes',
+          electrical_ups_room: 'Yes',
+          gym: 'Yes',
+          building_owner_name: 'Mr. Sharma',
+          building_owner_contact: '9876543210',
+          contact_person_name: 'Rajesh Kumar',
+          contact_person_number: '9876543211',
+          contact_person_email: 'rajesh@techplaza.com',
+          contact_person_designation: 'Property Manager',
+          remarks: 'Premium commercial property with excellent connectivity and amenities.',
+          updated_at: '2025-01-15T10:30:00Z'
+        },
+        status: 'pending',
+        assigned_by: { full_name: 'Admin User' },
+        created_at: '2025-01-10T09:00:00Z',
+        updated_at: '2025-01-15T10:30:00Z',
+        scout_completed_at: null,
+        building_photos: [
+          { id: 1, file_url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400' },
+          { id: 2, file_url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400' },
+        ],
+        photos: [
+          { id: 1, file_url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400' },
+          { id: 2, file_url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400' },
+        ],
+      },
+      {
+        id: 2,
+        site: {
+          building_name: 'Business Park Avenue',
+          location: 'Sector 18, Gurgaon, Haryana',
+          landmark: 'Near Cyber Hub',
+          building_status: 'Under Construction',
+          floor_condition: 'Good',
+          total_floors: '15',
+          number_of_basements: '3',
+          availble_floors: '8, 9, 10',
+          total_area: '75000',
+          area_per_floor: '5000',
+          efficiency: '80%',
+          oc: 'Pending',
+          will_developer_do_fitouts: 'No',
+          rent: '200000',
+          cam: '30000',
+          cam_deposit: '60000',
+          security_deposit: '600000',
+          lease_term: '5 years',
+          lock_in_period: '2 years',
+          notice_period: '6 months',
+          rental_escalation: '12% yearly',
+          building_owner_name: 'Mrs. Patel',
+          building_owner_contact: '9876543220',
+          contact_person_name: 'Amit Singh',
+          contact_person_number: '9876543221',
+          contact_person_email: 'amit@businesspark.com',
+          contact_person_designation: 'Leasing Manager',
+          remarks: 'Modern business park with great amenities.',
+          updated_at: '2025-01-14T14:20:00Z'
+        },
+        status: 'scout_completed',
+        assigned_by: { full_name: 'Admin User' },
+        created_at: '2025-01-08T11:00:00Z',
+        updated_at: '2025-01-14T14:20:00Z',
+        scout_completed_at: '2025-01-14T14:20:00Z',
+        building_photos: [
+          { id: 3, file_url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400' },
+        ],
+        photos: [
+          { id: 3, file_url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400' },
+        ],
+      },
+      {
+        id: 3,
+        site: {
+          building_name: 'Corporate Heights',
+          location: 'Connaught Place, New Delhi',
+          landmark: 'Central Delhi',
+          building_status: 'Completed',
+          floor_condition: 'Excellent',
+          total_floors: '12',
+          number_of_basements: '2',
+          availble_floors: '3, 4, 5, 6',
+          total_area: '60000',
+          area_per_floor: '5000',
+          efficiency: '90%',
+          oc: 'Yes',
+          will_developer_do_fitouts: 'Yes',
+          rent: '300000',
+          cam: '40000',
+          cam_deposit: '80000',
+          security_deposit: '900000',
+          lease_term: '3 years',
+          lock_in_period: '1 year',
+          notice_period: '3 months',
+          rental_escalation: '10% yearly',
+          building_owner_name: 'Mr. Gupta',
+          building_owner_contact: '9876543230',
+          contact_person_name: 'Priya Sharma',
+          contact_person_number: '9876543231',
+          contact_person_email: 'priya@corporateheights.com',
+          contact_person_designation: 'Senior Manager',
+          remarks: 'Prime location in heart of Delhi.',
+          updated_at: '2025-01-16T16:45:00Z'
+        },
+        status: 'admin_completed',
+        assigned_by: { full_name: 'Admin User' },
+        created_at: '2025-01-05T08:30:00Z',
+        updated_at: '2025-01-16T16:45:00Z',
+        scout_completed_at: '2025-01-12T10:00:00Z',
+        building_photos: [],
+        photos: [],
+      },
+    ];
+    setVisits(mockVisits);
+    setLoadingVisits(false);
+  }, []);
 
   // Utility functions
-  const beautifyName = (name: string): string => {
+  const beautifyName = (name) => {
     if (!name) return '-';
     return name
       .split('_')
-      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   };
 
-  const formatDate = (dateString?: string): string => {
+  const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
       const d = new Date(dateString);
@@ -136,7 +289,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  const getStatusColor = (status: string): string => {
+  const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return '#FFC107';
       case 'scout_completed': return '#ffcc92ff';
@@ -146,7 +299,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  const getStatusIcon = (status: string): string => {
+  const getStatusIcon = (status) => {
     switch (status) {
       case 'pending': return '⏳';
       case 'scout_completed': return '✓';
@@ -156,300 +309,232 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  // Fetch visits from API with pagination
-  const fetchVisits = async (page: number = 1, append: boolean = false) => {
-    try {
-      if (!append) {
-        setLoadingVisits(true);
-      } else {
-        setLoadingMore(true);
-      }
-      setVisitsError(null);
-      
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!storedToken) {
-        setVisitsError('Token not found. Please login again.');
-        setLoadingVisits(false);
-        return;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/employee/getAssignedVisits`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: storedToken,
-          page: page,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch visits: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      const formattedVisits = data.visits.map((visit: any) => ({
-        id: visit.id,
-        site: { ...visit.site },
-        status: visit.status,
-        collaborators: visit.collaborators || [],
-        assigned_by: visit.assigned_by,
-        created_at: visit.created_at,
-        updated_at: visit.updated_at,
-        scout_completed_at: visit.scout_completed_at,
-        building_photos: visit.building_photos || [],
-        photos: visit.building_photos || [],
-      }));
-
-      if (append) {
-        setVisits(prev => [...prev, ...formattedVisits]);
-      } else {
-        setVisits(formattedVisits);
-      }
-      
-      setCurrentPage(data.pagination.current_page);
-      setHasNextPage(data.pagination.has_next);
-      setLoadingVisits(false);
-      setLoadingMore(false);
-    } catch (error) {
-      console.error('Error fetching visits:', error);
-      setVisitsError(error instanceof Error ? error.message : 'Failed to load visits');
-      setLoadingVisits(false);
-      setLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchVisits(1, false);
-  }, []);
-
-  // Handle refresh
   const handleRefresh = async () => {
     setRefreshing(true);
-    setCurrentPage(1);
-    await fetchVisits(1, false);
-    setRefreshing(false);
+    // Simulate refresh
+    setTimeout(() => setRefreshing(false), 1000);
   };
 
-  // Load more visits
-  const loadMoreVisits = () => {
-    if (hasNextPage && !loadingMore) {
-      fetchVisits(currentPage + 1, true);
-    }
-  };
-
-  // Search visits
-  const handleSearch = async (query: string) => {
-    if (!query.trim()) {
-      fetchVisits(1, false);
-      return;
-    }
-
-    try {
-      setLoadingVisits(true);
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!storedToken) return;
-
-      const response = await fetch(`${BACKEND_URL}/employee/searchVisits`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: storedToken, query }),
-      });
-
-      const data = await response.json();
-      const formattedVisits = data.visits.map((visit: any) => ({
-        id: visit.id,
-        site: { ...visit.site },
-        status: visit.status,
-        collaborators: visit.collaborators || [],
-        assigned_by: visit.assigned_by,
-        created_at: visit.created_at,
-        updated_at: visit.updated_at,
-        scout_completed_at: visit.scout_completed_at,
-        building_photos: visit.building_photos || [],
-        photos: visit.building_photos || [],
-      }));
-
-      setVisits(formattedVisits);
-    } catch (error) {
-      console.error('Error searching visits:', error);
-    } finally {
-      setLoadingVisits(false);
-    }
-  };
-
-  const handleVisitPress = (visit: any) => {
-    setSelectedVisit(visit);
+  const handleVisitPress = (visit, index) => {
+    setSelectedVisitIndex(index);
     setViewMode('visit-detail');
   };
 
   const handleBackToList = () => {
     setViewMode('visits-list');
-    setSelectedVisit(null);
+    translateX.setValue(0);
   };
 
   const handleCreateSiteClick = () => {
     setViewMode('create-site');
   };
 
-  const handleBackFromCreateSite = () => {
-    setViewMode('visits-list');
-    handleRefresh();
-  };
-
-  // Mark visit as completed
   const handleMarkComplete = async () => {
-    if (!selectedVisit) return;
-
-    try {
-      setMarkingComplete(true);
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!storedToken) return;
-
-      const response = await fetch(`${BACKEND_URL}/employee/markVisitCompleted`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: storedToken,
-          visit_id: selectedVisit.id,
-        }),
-      });
-
-      if (response.ok) {
-        setSelectedVisit({ ...selectedVisit, status: 'scout_completed' });
-        handleRefresh();
-      }
-    } catch (error) {
-      console.error('Error marking visit complete:', error);
-    } finally {
+    setMarkingComplete(true);
+    setTimeout(() => {
+      const updatedVisits = [...visits];
+      updatedVisits[selectedVisitIndex].status = 'scout_completed';
+      setVisits(updatedVisits);
       setMarkingComplete(false);
-    }
+    }, 1000);
   };
+
+  // Swipe handlers
+  const navigateToVisit = (direction) => {
+    if (isTransitioning) return;
+
+    const newIndex = selectedVisitIndex + direction;
+    if (newIndex < 0 || newIndex >= visits.length) return;
+
+    setIsTransitioning(true);
+    
+    Animated.timing(translateX, {
+      toValue: -direction * screenWidth,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setSelectedVisitIndex(newIndex);
+      translateX.setValue(0);
+      setIsTransitioning(false);
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (!isTransitioning) {
+          translateX.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (isTransitioning) return;
+
+        if (Math.abs(gestureState.dx) > screenWidth * 0.3) {
+          const direction = gestureState.dx > 0 ? -1 : 1;
+          navigateToVisit(direction);
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Visit Detail View
-  if (viewMode === 'visit-detail' && selectedVisit) {
+  if (viewMode === 'visit-detail' && visits[selectedVisitIndex]) {
+    const selectedVisit = visits[selectedVisitIndex];
     const site = selectedVisit.site;
-    const insets = useSafeAreaInsets();
+    
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
             <BackIcon />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Visit Details</Text>
+          <Text style={styles.headerTitle}>
+            Visit {selectedVisitIndex + 1} of {visits.length}
+          </Text>
           <View style={styles.headerSpacer} />
         </View>
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          <View style={styles.detailContainer}>
-            <View style={styles.card}>
-              <View style={styles.siteHeader}>
-                <View style={styles.siteHeaderContent}>
-                  <Text style={styles.siteName}>{site.building_name}</Text>
-                  <View style={styles.statusBadgeContainer}>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVisit.status) }]}>
-                      <Text style={styles.statusBadgeText}>
-                        {getStatusIcon(selectedVisit.status)} {beautifyName(selectedVisit.status)}
-                      </Text>
+
+        <View style={styles.swipeIndicators}>
+          {selectedVisitIndex > 0 && (
+            <TouchableOpacity 
+              style={[styles.swipeButton, styles.swipeButtonLeft]}
+              onPress={() => navigateToVisit(-1)}
+            >
+              <Text style={styles.swipeButtonText}>‹</Text>
+            </TouchableOpacity>
+          )}
+          {selectedVisitIndex < visits.length - 1 && (
+            <TouchableOpacity 
+              style={[styles.swipeButton, styles.swipeButtonRight]}
+              onPress={() => navigateToVisit(1)}
+            >
+              <Text style={styles.swipeButtonText}>›</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Animated.View
+          style={[
+            styles.animatedContainer,
+            { transform: [{ translateX }] }
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <View style={styles.detailContainer}>
+              <View style={styles.card}>
+                <View style={styles.siteHeader}>
+                  <View style={styles.siteHeaderContent}>
+                    <Text style={styles.siteName}>{site.building_name}</Text>
+                    <View style={styles.statusBadgeContainer}>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVisit.status) }]}>
+                        <Text style={styles.statusBadgeText}>
+                          {getStatusIcon(selectedVisit.status)} {beautifyName(selectedVisit.status)}
+                        </Text>
+                      </View>
                     </View>
+                  </View>
+                </View>
+
+                {site.location && (
+                  <View style={styles.locationContainer}>
+                    <Text style={styles.locationIcon}>📍</Text>
+                    <Text style={styles.locationText}>{site.location}</Text>
+                  </View>
+                )}
+
+                <View style={styles.metaGrid}>
+                  <View style={styles.metaItem}>
+                    <Text style={styles.metaLabel}>Assigned by</Text>
+                    <Text style={styles.metaValue}>{selectedVisit.assigned_by.full_name}</Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Text style={styles.metaLabel}>Site Updated</Text>
+                    <Text style={styles.metaValue}>{formatDate(site.updated_at)}</Text>
                   </View>
                 </View>
               </View>
 
-              {site.location && (
-                <View style={styles.locationContainer}>
-                  <Text style={styles.locationIcon}>📍</Text>
-                  <Text style={styles.locationText}>{site.location}</Text>
+              {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Photos ({selectedVisit.building_photos.length})</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.photoScroll}
+                  >
+                    {selectedVisit.building_photos.map((photo, index) => (
+                      <TouchableOpacity
+                        key={photo.id}
+                        style={styles.photoThumbnail}
+                        onPress={() => {
+                          setSelectedPhotoIndex(index);
+                          setSelectedPhotoUrl(photo.file_url);
+                          setShowPhotoModal(true);
+                        }}
+                      >
+                        <Image
+                          source={{ uri: photo.file_url }}
+                          style={styles.photoImage}
+                        />
+                        <View style={styles.photoNumberBadge}>
+                          <Text style={styles.photoNumber}>{index + 1}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : (
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Photos</Text>
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateIcon}>📷</Text>
+                    <Text style={styles.emptyStateText}>No photos available</Text>
+                  </View>
                 </View>
               )}
 
-              <View style={styles.metaGrid}>
-                <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Assigned by</Text>
-                  <Text style={styles.metaValue}>{selectedVisit.assigned_by.full_name}</Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Site Updated</Text>
-                  <Text style={styles.metaValue}>{formatDate(site.updated_at)}</Text>
-                </View>
-              </View>
-            </View>
-
-            {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
               <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Photos ({selectedVisit.building_photos.length})</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.photoScroll}
-                >
-                  {selectedVisit.building_photos.map((photo: any, index: number) => (
-                    <TouchableOpacity
-                      key={photo.id}
-                      style={styles.photoThumbnail}
-                      onPress={() => {
-                        setSelectedPhotoIndex(index);
-                        setSelectedPhotoUrl(photo.file_url);
-                        setShowPhotoModal(true);
-                      }}
-                    >
-                      <Image
-                        source={{ uri: photo.file_url }}
-                        style={styles.photoImage}
-                      />
-                      <View style={styles.photoNumberBadge}>
-                        <Text style={styles.photoNumber}>{index + 1}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : (
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Photos</Text>
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateIcon}>📷</Text>
-                  <Text style={styles.emptyStateText}>No photos available</Text>
-                </View>
-              </View>
-            )}
+                <Text style={styles.sectionTitle}>Property Details</Text>
+                <DetailSection title="📋 Basic Information" site={site} />
+                <DetailSection title="💰 Commercial Details" site={site} />
+                <DetailSection title="👤 Contact Information" site={site} />
 
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Property Details</Text>
-              <DetailSection title="📋 Basic Information" site={site} />
-              <DetailSection title="💰 Financial Details" site={site} />
-              <DetailSection title="👤 Contact Information" site={site} />
-
-              {site.remarks && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
-                  <Text style={styles.remarksText}>{site.remarks}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Mark Complete Button */}
-            {selectedVisit.status === 'pending' && (
-              <TouchableOpacity
-                style={[styles.markCompleteButton, markingComplete && styles.markCompleteButtonDisabled]}
-                onPress={handleMarkComplete}
-                disabled={markingComplete}
-              >
-                {markingComplete ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <>
-                    <Text style={styles.markCompleteButtonText}>✓ Mark Visit as Completed</Text>
-                  </>
+                {site.remarks && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
+                    <Text style={styles.remarksText}>{site.remarks}</Text>
+                  </View>
                 )}
-              </TouchableOpacity>
-            )}
+              </View>
 
-            <View style={{ height: 24 }} />
-          </View>
-        </ScrollView>
+              {selectedVisit.status === 'pending' && (
+                <TouchableOpacity
+                  style={[styles.markCompleteButton, markingComplete && styles.markCompleteButtonDisabled]}
+                  onPress={handleMarkComplete}
+                  disabled={markingComplete}
+                >
+                  {markingComplete ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.markCompleteButtonText}>✓ Mark Visit as Completed</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 24 }} />
+            </View>
+          </ScrollView>
+        </Animated.View>
 
         <Modal
           visible={showPhotoModal}
@@ -478,20 +563,26 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   // Create Site View
   if (viewMode === 'create-site') {
     return (
-      <CreateSite
-        onBack={handleBackFromCreateSite}
-        colors={colors}
-        spacing={spacing}
-        fontSize={fontSize}
-        borderRadius={borderRadius}
-        shadows={shadows}
-      />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setViewMode('visits-list')}>
+            <BackIcon />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create New Site</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.contentContainer}>
+          <Text style={styles.emptyListTitle}>Create Site Form</Text>
+          <Text style={styles.emptyListSubtitle}>Form implementation goes here</Text>
+        </View>
+      </View>
     );
   }
-  const insets = useSafeAreaInsets();
+
   // Default view: Visits List
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -508,13 +599,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             style={styles.searchInput}
             placeholder="Search visits..."
             value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              if (text.length > 2 || text.length === 0) {
-                handleSearch(text);
-              }
-            }}
-            returnKeyType="search"
+            onChangeText={setSearchQuery}
             placeholderTextColor={colors.textSecondary}
           />
           {searchQuery ? (
@@ -543,30 +628,11 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               tintColor={colors.primary}
             />
           }
-          onScroll={({ nativeEvent }) => {
-            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
-            if (isCloseToBottom && !loadingMore) {
-              loadMoreVisits();
-            }
-          }}
-          scrollEventThrottle={400}
         >
           {loadingVisits ? (
             <View style={styles.emptyListContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.emptyListSubtitle}>Loading visits...</Text>
-            </View>
-          ) : visitsError ? (
-            <View style={styles.emptyListContainer}>
-              <Text style={styles.emptyStateIcon}>⚠️</Text>
-              <Text style={styles.emptyListTitle}>{visitsError}</Text>
-              <TouchableOpacity
-                style={styles.createSiteButton}
-                onPress={handleRefresh}
-              >
-                <Text style={styles.createSiteButtonText}>Retry</Text>
-              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.listContainer}>
@@ -578,77 +644,67 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               </View>
 
               {visits.length > 0 ? (
-                <>
-                  {visits.map((visit) => (
-                    <TouchableOpacity
-                      key={visit.id}
-                      style={styles.visitCard}
-                      onPress={() => handleVisitPress(visit)}
-                      activeOpacity={0.7}
-                    >
-                      {/* Photo Section */}
-                      <View style={styles.visitCardImage}>
-                        {visit.building_photos && visit.building_photos.length > 0 ? (
-                          <Image
-                            source={{ uri: visit.building_photos[0].file_url }}
-                            style={styles.visitImage}
-                          />
-                        ) : (
-                          <View style={styles.visitImagePlaceholder}>
-                            <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.visitCardContent}>
-                        <View style={styles.visitCardHeader}>
-                          <Text style={styles.visitCardTitle} numberOfLines={1}>
-                            {visit.site.building_name}
-                          </Text>
-                          <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
-                            <Text style={styles.visitStatusText}>
-                              {getStatusIcon(visit.status)} {beautifyName(visit.status)}
-                            </Text>
-                          </View>
+                visits.map((visit, index) => (
+                  <TouchableOpacity
+                    key={visit.id}
+                    style={styles.visitCard}
+                    onPress={() => handleVisitPress(visit, index)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.visitCardImage}>
+                      {visit.building_photos && visit.building_photos.length > 0 ? (
+                        <Image
+                          source={{ uri: visit.building_photos[0].file_url }}
+                          style={styles.visitImage}
+                        />
+                      ) : (
+                        <View style={styles.visitImagePlaceholder}>
+                          <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
                         </View>
-
-                        {visit.site.location && (
-                          <View style={styles.visitLocationRow}>
-                            <Text style={styles.visitLocationIcon}>📍</Text>
-                            <Text style={styles.visitLocationText} numberOfLines={1}>
-                              {visit.site.location}
-                            </Text>
-                          </View>
-                        )}
-
-                        <View style={styles.visitMetaRow}>
-                          {visit.site.rent && (
-                            <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>₹{visit.site.rent}/mo</Text>
-                            </View>
-                          )}
-                          {visit.photos && visit.photos.length > 0 && (
-                            <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <View style={styles.visitCardFooter}>
-                          <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
-                          <Text style={styles.visitArrow}>→</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                  
-                  {loadingMore && (
-                    <View style={styles.loadingMoreContainer}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                      <Text style={styles.loadingMoreText}>Loading more visits...</Text>
+                      )}
                     </View>
-                  )}
-                </>
+
+                    <View style={styles.visitCardContent}>
+                      <View style={styles.visitCardHeader}>
+                        <Text style={styles.visitCardTitle} numberOfLines={1}>
+                          {visit.site.building_name}
+                        </Text>
+                        <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
+                          <Text style={styles.visitStatusText}>
+                            {getStatusIcon(visit.status)} {beautifyName(visit.status)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {visit.site.location && (
+                        <View style={styles.visitLocationRow}>
+                          <Text style={styles.visitLocationIcon}>📍</Text>
+                          <Text style={styles.visitLocationText} numberOfLines={1}>
+                            {visit.site.location}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.visitMetaRow}>
+                        {visit.site.rent && (
+                          <View style={styles.visitMetaItem}>
+                            <Text style={styles.visitMetaText}>₹{visit.site.rent}/mo</Text>
+                          </View>
+                        )}
+                        {visit.photos && visit.photos.length > 0 && (
+                          <View style={styles.visitMetaItem}>
+                            <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.visitCardFooter}>
+                        <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
+                        <Text style={styles.visitArrow}>→</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
               ) : (
                 <View style={styles.emptyListContainer}>
                   <Text style={styles.emptyListIcon}>📋</Text>
@@ -666,7 +722,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 };
 
 // Helper component for detail sections
-const DetailSection = ({ title, site }: { title: string; site: any }) => {
+const DetailSection = ({ title, site }) => {
   const getDetailItems = () => {
     switch (title) {
       case '📋 Basic Information':
@@ -683,7 +739,7 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
           { label: 'OC Available', value: site.oc },
           { label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
         ];
-      case '💰 Financial Details':
+      case '💰 Commercial Details':
         return [
           { label: 'Monthly Rent', value: site.rent ? `₹${site.rent}` : '-' },
           { label: 'CAM', value: site.cam ? `₹${site.cam}` : '-' },
@@ -693,36 +749,6 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
           { label: 'Lock-in Period', value: site.lock_in_period },
           { label: 'Notice Period', value: site.notice_period },
           { label: 'Rental Escalation', value: site.rental_escalation },
-        ];
-      case '🚗 Parking Details':
-        return [
-          { label: 'Car Parking Ratio', value: site.car_parking_ratio },
-          { label: 'Car Parking Slots', value: site.car_parking_slots },
-          { label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
-          { label: '2-Wheeler Slots', value: site.two_wheeler_slots },
-          { label: '2-Wheeler Charges', value: site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-' },
-        ];
-      case '⚡ Utilities':
-        return [
-          { label: 'Power', value: site.power },
-          { label: 'Power Backup', value: site.power_backup },
-        ];
-      case '🏢 Workspace Configuration':
-        return [
-          { label: 'Number of Cabins', value: site.number_of_cabins },
-          { label: 'Workstations', value: site.number_of_workstations },
-          { label: 'Workstation Size', value: site.size_of_workstation },
-        ];
-      case '🎯 Amenities & Facilities':
-        return [
-          { label: 'Meeting Room', value: site.meeting_room },
-          { label: 'Discussion Room', value: site.discussion_room },
-          { label: 'Server Room', value: site.server_room },
-          { label: 'Training Room', value: site.training_room },
-          { label: 'Pantry', value: site.pantry },
-          { label: 'Cafeteria', value: site.cafeteria },
-          { label: 'UPS Room', value: site.electrical_ups_room },
-          { label: 'Gym', value: site.gym },
         ];
       case '👤 Contact Information':
         return [
@@ -767,6 +793,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingTop: 50,
     backgroundColor: colors.primary,
   },
   backButton: {
@@ -992,6 +1019,40 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  swipeIndicators: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xs,
+    pointerEvents: 'box-none',
+  },
+  swipeButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.lg,
+  },
+  swipeButtonLeft: {
+    marginLeft: spacing.xs,
+  },
+  swipeButtonRight: {
+    marginRight: spacing.xs,
+  },
+  swipeButtonText: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  animatedContainer: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
