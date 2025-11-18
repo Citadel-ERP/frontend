@@ -51,6 +51,12 @@ const DeleteIcon = () => (
   </View>
 );
 
+const DropdownIcon = () => (
+  <View style={styles.dropdownIcon}>
+    <View style={styles.dropdownArrow} />
+  </View>
+);
+
 interface ReminderProps {
   onBack: () => void;
 }
@@ -81,6 +87,16 @@ interface ReminderItem {
 
 type ViewMode = 'month' | 'agenda';
 
+const reminderTypes = [
+  { label: 'Meeting', value: 'meeting', icon: '👥' },
+  { label: 'Call', value: 'call', icon: '📞' },
+  { label: 'Task', value: 'task', icon: '✓' },
+  { label: 'Event', value: 'event', icon: '📅' },
+  { label: 'Follow-up', value: 'followup', icon: '🔄' },
+  { label: 'Deadline', value: 'deadline', icon: '⏰' },
+  { label: 'Other', value: 'other', icon: '📝' },
+];
+
 const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -104,6 +120,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+
+  const [selectedType, setSelectedType] = useState('');
+  const [customType, setCustomType] = useState('');
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
 
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
@@ -239,6 +259,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setEmployeeSearchResults([]);
     setShowEmployeeSearch(false);
     setIsEditMode(false);
+    setSelectedType('');
+    setCustomType('');
+    setShowTypeDropdown(false);
   };
 
   const isDateBeforeToday = (dateStr: string): boolean => {
@@ -288,6 +311,17 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     };
   };
 
+  const getDisplayTitle = () => {
+    if (selectedType === 'other' && customType.trim()) {
+      return customType.trim();
+    }
+    if (selectedType) {
+      const typeObj = reminderTypes.find(t => t.value === selectedType);
+      return typeObj ? typeObj.label : '';
+    }
+    return '';
+  };
+
   const handleToggleComplete = async (reminderId: number, currentStatus: boolean) => {
     try {
       const response = await fetch(`${BACKEND_URL}/core/updateReminderStatus`, {
@@ -321,8 +355,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   };
 
   const handleCreateReminder = async () => {
-    if (!title.trim()) {
-      Alert.alert('Required Field', 'Please enter a title for your reminder');
+    const finalTitle = title.trim() || getDisplayTitle();
+    
+    if (!finalTitle) {
+      Alert.alert('Required Field', 'Please enter a title or select a type for your reminder');
       return;
     }
     if (!date) {
@@ -351,7 +387,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         },
         body: JSON.stringify({
           token,
-          title: title.trim(),
+          title: finalTitle,
           description: description.trim(),
           date,
           time: timeString,
@@ -379,7 +415,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   };
 
   const handleUpdateReminder = async () => {
-    if (!selectedReminder || !title.trim() || !date || !selectedColor) {
+    const finalTitle = title.trim() || getDisplayTitle();
+    
+    if (!selectedReminder || !finalTitle || !date || !selectedColor) {
       Alert.alert('Required Fields', 'Please fill all required fields');
       return;
     }
@@ -398,7 +436,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         body: JSON.stringify({
           token,
           reminder_id: selectedReminder.id,
-          title: title.trim(),
+          title: finalTitle,
           description: description.trim(),
           date,
           time: timeString,
@@ -969,14 +1007,89 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           </View>
 
           <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <TextInput
-              style={styles.inputTitle}
-              placeholder="Title"
-              value={title}
-              onChangeText={setTitle}
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-            />
+            
+            <View style={styles.typeSection}>
+              <Text style={styles.sectionTitle}>Type</Text>
+              <TouchableOpacity
+                style={styles.typeDropdownButton}
+                onPress={() => setShowTypeDropdown(!showTypeDropdown)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.typeDropdownContent}>
+                  {selectedType ? (
+                    <>
+                      <Text style={styles.typeDropdownIcon}>
+                        {reminderTypes.find(t => t.value === selectedType)?.icon}
+                      </Text>
+                      <Text style={styles.typeDropdownText}>
+                        {selectedType === 'other' && customType.trim() 
+                          ? customType 
+                          : reminderTypes.find(t => t.value === selectedType)?.label}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={styles.typeDropdownPlaceholder}>Select reminder type</Text>
+                  )}
+                </View>
+                <DropdownIcon />
+              </TouchableOpacity>
+
+              {showTypeDropdown && (
+                <View style={styles.typeDropdownList}>
+                  <ScrollView style={styles.typeDropdownScroll} nestedScrollEnabled>
+                    {reminderTypes.map((type) => (
+                      <TouchableOpacity
+                        key={type.value}
+                        style={[
+                          styles.typeDropdownItem,
+                          selectedType === type.value && styles.typeDropdownItemActive
+                        ]}
+                        onPress={() => {
+                          setSelectedType(type.value);
+                          if (type.value !== 'other') {
+                            setCustomType('');
+                          }
+                          setShowTypeDropdown(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.typeDropdownItemIcon}>{type.icon}</Text>
+                        <Text style={[
+                          styles.typeDropdownItemText,
+                          selectedType === type.value && styles.typeDropdownItemTextActive
+                        ]}>
+                          {type.label}
+                        </Text>
+                        {selectedType === type.value && (
+                          <Text style={styles.typeDropdownItemCheck}>✓</Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {selectedType === 'other' && !showTypeDropdown && (
+                <TextInput
+                  style={styles.customTypeInput}
+                  placeholder="Enter custom type"
+                  value={customType}
+                  onChangeText={setCustomType}
+                  placeholderTextColor={colors.textTertiary}
+                  autoFocus
+                />
+              )}
+            </View>
+
+            {/* {selectedType !== 'other' && (
+              <TextInput
+                style={styles.inputTitle}
+                placeholder="Title (optional if type selected)"
+                value={title}
+                onChangeText={setTitle}
+                placeholderTextColor={colors.textTertiary}
+              />
+            )} */}
 
             <View style={styles.inputGroup}>
               <View style={styles.inputRow}>
@@ -1289,6 +1402,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
     position: 'absolute',
     transform: [{ rotate: '-45deg' }],
+  },
+  dropdownIcon: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: colors.textSecondary,
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -1751,6 +1880,92 @@ const styles = StyleSheet.create({
   },
   completeButtonTextCompletedModal: {
     color: colors.success,
+  },
+  typeSection: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  typeDropdownButton: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  typeDropdownContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  typeDropdownIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  typeDropdownText: {
+    fontSize: 17,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  typeDropdownPlaceholder: {
+    fontSize: 17,
+    color: colors.textTertiary,
+  },
+  typeDropdownList: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.divider,
+    maxHeight: 280,
+  },
+  typeDropdownScroll: {
+    maxHeight: 280,
+  },
+  typeDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  typeDropdownItemActive: {
+    backgroundColor: colors.background,
+  },
+  typeDropdownItemIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    width: 28,
+  },
+  typeDropdownItemText: {
+    fontSize: 17,
+    color: colors.text,
+    flex: 1,
+  },
+  typeDropdownItemTextActive: {
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  typeDropdownItemCheck: {
+    fontSize: 18,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  customTypeInput: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 17,
+    color: colors.text,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
   },
   inputTitle: {
     fontSize: 28,
