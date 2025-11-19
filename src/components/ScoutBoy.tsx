@@ -861,6 +861,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                 <Text style={styles.sectionTitle}>Property Details</Text>
                 <DetailSection title="📋 Basic Information" site={site} />
                 <DetailSection title="💰 Commercial Details" site={site} />
+                <DetailSection title="🚗 Vehicle Information" site={site} />
                 <DetailSection title="👤 Contact Information" site={site} />
                 {site.remarks && (
                   <View style={styles.detailSection}>
@@ -1248,13 +1249,13 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
           { label: 'Total Area', value: site.total_area ? `${site.total_area} sq ft` : '-' },
           { label: 'Area per Floor', value: site.area_per_floor ? `${site.area_per_floor} sq ft` : '-' },
           { label: 'Efficiency', value: site.efficiency },
-          { label: 'OC Available', value: site.oc },
+          { label: 'Area Offered', value: site.area_offered },
           { label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
         ];
       case '💰 Commercial Details':
         return [
           { label: 'Rent Per SQ/FT', value: site.rent && site.total_area ? `₹${(site.rent / site.total_area).toFixed(2)}` : '-' },
-          { label: 'CAM', value: site.cam ? `₹${site.cam}` : '-' },
+          { label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
           { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
           { label: 'Security Deposit', value: site.security_deposit ? `₹${site.security_deposit}` : '-' },
           { label: 'Lease Term', value: site.lease_term },
@@ -1262,6 +1263,13 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
           { label: 'Notice Period', value: site.notice_period },
           { label: 'Rental Escalation', value: site.rental_escalation },
         ];
+      case '🚗 Vehicle Information':
+        return [
+          { label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
+          { label: 'Car Parking Slots', value: site.car_parking_slots },
+          { label: 'Car Parking Ratio', value: site.car_parking_ratio },
+          { label: 'Two Wheeler Parking', value: site.two_wheeler_charges },
+        ];  
       case '👤 Contact Information':
         return [
           { label: 'Building Owner', value: site.building_owner_name },
@@ -1277,18 +1285,16 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
   };
 
   const items = getDetailItems();
-
+  
   return (
     <View style={styles.detailSection}>
       <Text style={styles.detailSectionTitle}>{title}</Text>
       <View style={styles.detailGrid}>
         {items.map((item, idx) => (
-          item.value && (
-            <View key={idx} style={styles.detailItem}>
-              <Text style={styles.detailLabel}>{item.label}</Text>
-              <Text style={styles.detailValue}>{item.value || '-'}</Text>
-            </View>
-          )
+          <View key={`${title}-${idx}`} style={styles.detailItem}>
+            <Text style={styles.detailLabel}>{item.label}</Text>
+            <Text style={styles.detailValue}>{item.value || '-'}</Text>
+          </View>
         ))}
       </View>
     </View>

@@ -88,6 +88,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         remarks: '',
         building_owner_name: '',
         building_owner_contact: '',
+        area_offered: '',
+        maintenance_rate : ''
     });
 
     const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
@@ -326,6 +328,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             if (newSite.total_area) siteData.total_area = parseCurrency(newSite.total_area);
             if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
             if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
+            if (newSite.area_offered) siteData.area_offered = newSite.area_offered;
 
             if (newSite.car_parking_ratio_left && newSite.car_parking_ratio_right) {
                 siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
@@ -360,6 +363,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             if (newSite.efficiency) siteData.efficiency = newSite.efficiency;
 
             if (newSite.notice_period) siteData.notice_period = newSite.notice_period;
+            if (newSite.maintenance_rate) siteData.maintenance_rate = newSite.maintenance_rate;
             if (newSite.lease_term) siteData.lease_term = newSite.lease_term;
             if (newSite.lock_in_period) siteData.lock_in_period = newSite.lock_in_period;
 
@@ -582,6 +586,17 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             </View>
 
             <View style={styles(colors, spacing).formGroup}>
+                <Text style={styles(colors, fontSize).formLabel}>Area Offered</Text>
+                <TextInput
+                    style={styles(colors, spacing, borderRadius).input}
+                    value={newSite.area_offered}
+                    onChangeText={(val) => setNewSite({ ...newSite, area_offered: val })}
+                    placeholder="11000"
+                    placeholderTextColor={colors.textSecondary}
+                />
+            </View>
+
+            <View style={styles(colors, spacing).formGroup}>
                 <Text style={styles(colors, fontSize).formLabel}>Efficiency (%)</Text>
                 <TextInput
                     style={styles(colors, spacing, borderRadius).input}
@@ -705,6 +720,19 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                         onChangeText={(val) => setNewSite({ ...newSite, rental_escalation: val })}
                         placeholder="5"
                         keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                    />
+                </View>
+            </View>
+
+            <View style={styles(colors, spacing).row}>
+                <View style={styles(colors, spacing).halfWidth}>
+                    <Text style={styles(colors, fontSize).formLabel}>Maintenance rate</Text>
+                    <TextInput
+                        style={styles(colors, spacing, borderRadius).input}
+                        value={newSite.maintenance_rate}
+                        onChangeText={(val) => setNewSite({ ...newSite, maintenance_rate: val })}
+                        placeholder="12"
                         placeholderTextColor={colors.textSecondary}
                     />
                 </View>
