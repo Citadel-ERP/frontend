@@ -20,6 +20,12 @@ interface CreateSiteProps {
     shadows: any;
 }
 
+interface OtherAmenity {
+    id: string;
+    key: string;
+    value: string;
+}
+
 const CreateSite: React.FC<CreateSiteProps> = ({
     onBack,
     colors,
@@ -85,6 +91,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     });
 
     const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
+    const [otherAmenities, setOtherAmenities] = useState<OtherAmenity[]>([]);
 
     const TOKEN_KEY = 'token_2';
 
@@ -120,6 +127,27 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
     const parseCurrency = (formatted: string): string => {
         return formatted.replace(/,/g, '');
+    };
+
+    const addOtherAmenity = () => {
+        const newAmenity: OtherAmenity = {
+            id: Date.now().toString(),
+            key: '',
+            value: ''
+        };
+        setOtherAmenities(prev => [...prev, newAmenity]);
+    };
+
+    const updateOtherAmenity = (id: string, field: 'key' | 'value', text: string) => {
+        setOtherAmenities(prev => 
+            prev.map(amenity => 
+                amenity.id === id ? { ...amenity, [field]: text } : amenity
+            )
+        );
+    };
+
+    const removeOtherAmenity = (id: string) => {
+        setOtherAmenities(prev => prev.filter(amenity => amenity.id !== id));
     };
 
     const captureLocation = async () => {
@@ -319,7 +347,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
             if (newSite.cam) siteData.cam = parseCurrency(newSite.cam);
             if (newSite.cam_deposit) siteData.cam_deposit = parseCurrency(newSite.cam_deposit);
-            if (newSite.security_deposit) siteData.security_deposit = parseCurrency(newSite.security_deposit);
+            if (newSite.security_deposit) siteData.security_deposit = newSite.security_deposit; // Now it's number of months
 
             if (newSite.oc !== undefined && newSite.oc !== null) {
                 siteData.oc = newSite.oc ? 'True' : 'False';
@@ -350,6 +378,14 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             if (newSite.gym) siteData.gym = newSite.gym;
             if (newSite.discussion_room) siteData.discussion_room = newSite.discussion_room;
             if (newSite.meeting_room) siteData.meeting_room = newSite.meeting_room;
+
+            // Add other amenities to the site data
+            otherAmenities.forEach((amenity, index) => {
+                if (amenity.key && amenity.value) {
+                    siteData[`other_amenity_${index + 1}_key`] = amenity.key;
+                    siteData[`other_amenity_${index + 1}_value`] = amenity.value;
+                }
+            });
 
             if (newSite.remarks) siteData.remarks = newSite.remarks;
             if (newSite.building_owner_name) siteData.building_owner_name = newSite.building_owner_name;
@@ -615,12 +651,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                     />
                 </View>
                 <View style={styles(colors, spacing).halfWidth}>
-                    <Text style={styles(colors, fontSize).formLabel}>Security Deposit (₹)</Text>
+                    <Text style={styles(colors, fontSize).formLabel}>Security Deposit (Months)</Text>
                     <TextInput
                         style={styles(colors, spacing, borderRadius).input}
                         value={newSite.security_deposit}
-                        onChangeText={(val) => setNewSite({ ...newSite, security_deposit: formatCurrency(val) })}
-                        placeholder="10,00,000"
+                        onChangeText={(val) => setNewSite({ ...newSite, security_deposit: val })}
+                        placeholder="3"
                         keyboardType="numeric"
                         placeholderTextColor={colors.textSecondary}
                     />
@@ -946,6 +982,50 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                     />
                 </View>
             </View>
+
+            {/* Other Amenities Section */}
+            <Text style={styles(colors, fontSize).subSectionTitle}>Other Amenities</Text>
+            <Text style={styles(colors, fontSize).stepDescription}>Add custom amenities not listed above</Text>
+
+            {otherAmenities.map((amenity) => (
+                <View key={amenity.id} style={styles(colors, spacing).otherAmenityContainer}>
+                    <View style={styles(colors, spacing).otherAmenityRow}>
+                        <View style={styles(colors, spacing).otherAmenityInputContainer}>
+                            <Text style={styles(colors, fontSize).formLabel}>Amenity Name</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={amenity.key}
+                                onChangeText={(text) => updateOtherAmenity(amenity.id, 'key', text)}
+                                placeholder="e.g., Meditation Room"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                        <View style={styles(colors, spacing).otherAmenityInputContainer}>
+                            <Text style={styles(colors, fontSize).formLabel}>Details</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={amenity.value}
+                                onChangeText={(text) => updateOtherAmenity(amenity.id, 'value', text)}
+                                placeholder="e.g., 1 unit"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                        <TouchableOpacity
+                            style={styles(colors, spacing, borderRadius).removeAmenityButton}
+                            onPress={() => removeOtherAmenity(amenity.id)}
+                        >
+                            <Text style={styles(colors, fontSize).removeAmenityText}>×</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            ))}
+
+            <TouchableOpacity
+                style={styles(colors, spacing, borderRadius, shadows).addOtherAmenityButton}
+                onPress={addOtherAmenity}
+            >
+                <Text style={styles(colors, fontSize).addOtherAmenityText}>+ Add Other Amenity</Text>
+            </TouchableOpacity>
         </View>
     );
 
@@ -1504,6 +1584,49 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
             fontSize: 18,
             fontWeight: '700',
             color: colors.text,
+        },
+        // Other Amenities Styles
+        otherAmenityContainer: {
+            marginBottom: spacing?.md || 12,
+        },
+        otherAmenityRow: {
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            gap: spacing?.sm || 8,
+        },
+        otherAmenityInputContainer: {
+            flex: 1,
+        },
+        removeAmenityButton: {
+            width: 40,
+            height: 40,
+            borderRadius: borderRadius?.md || 8,
+            backgroundColor: colors.error,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: spacing?.xs || 4,
+        },
+        removeAmenityText: {
+            color: colors.white,
+            fontSize: 20,
+            fontWeight: '700',
+        },
+        addOtherAmenityButton: {
+            backgroundColor: colors.success,
+            paddingVertical: spacing?.md || 12,
+            paddingHorizontal: spacing?.lg || 16,
+            borderRadius: borderRadius?.md || 8,
+            alignItems: 'center',
+            marginTop: spacing?.sm || 8,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: spacing?.sm || 8,
+            ...shadows?.md,
+        },
+        addOtherAmenityText: {
+            color: colors.white,
+            fontSize: 14,
+            fontWeight: '700',
         },
         addPhotoButton: {
             backgroundColor: colors.primary,

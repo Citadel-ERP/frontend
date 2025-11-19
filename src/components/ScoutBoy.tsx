@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Modal, TextInput, Dimensions, ActivityIndicator,
-  Image, RefreshControl, PanResponder, Animated
+  Image, RefreshControl, Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_URL } from '../config/config';
+import CreateSite from './CreateSite';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -82,201 +88,64 @@ const BackIcon = () => (
   </View>
 );
 
-const ScoutBoy = ({ onBack }) => {
+const NavigationArrow = ({ direction }: { direction: 'left' | 'right' }) => (
+  <View style={styles.navArrowIcon}>
+    <View style={[
+      styles.navArrow,
+      direction === 'right' && styles.navArrowRight
+    ]} />
+  </View>
+);
+
+interface ScoutBoyProps {
+  onBack: () => void;
+}
+
+const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [viewMode, setViewMode] = useState('visits-list');
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [visits, setVisits] = useState([]);
-  const [loadingVisits, setLoadingVisits] = useState(false);
-  const [visitsError, setVisitsError] = useState(null);
-  const [selectedVisitIndex, setSelectedVisitIndex] = useState(0);
+  const [visits, setVisits] = useState<any[]>([]);
+  const [loadingVisits, setLoadingVisits] = useState(true);
+  const [visitsError, setVisitsError] = useState<string | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState<any>(null);
+  const [currentVisitIndex, setCurrentVisitIndex] = useState(0);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
-  
+
   // Photo modal state
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState('');
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  
+
   // Mark complete state
   const [markingComplete, setMarkingComplete] = useState(false);
 
-  // Swipe animation
-  const translateX = useRef(new Animated.Value(0)).current;
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  // Comments state
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [commentDocuments, setCommentDocuments] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [addingComment, setAddingComment] = useState(false);
+  const [commentsCurrentPage, setCommentsCurrentPage] = useState(1);
+  const [commentsHasNextPage, setCommentsHasNextPage] = useState(false);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
 
-  // Mock data for demo
-  useEffect(() => {
-    const mockVisits = [
-      {
-        id: 1,
-        site: {
-          building_name: 'Tech Tower Plaza',
-          location: 'Sector 62, Noida, Uttar Pradesh',
-          landmark: 'Near Metro Station',
-          building_status: 'Completed',
-          floor_condition: 'Excellent',
-          total_floors: '10',
-          number_of_basements: '2',
-          availble_floors: '5, 6, 7',
-          total_area: '50000',
-          area_per_floor: '5000',
-          efficiency: '85%',
-          oc: 'Yes',
-          will_developer_do_fitouts: 'Yes',
-          rent: '150000',
-          cam: '25000',
-          cam_deposit: '50000',
-          security_deposit: '450000',
-          lease_term: '3 years',
-          lock_in_period: '1 year',
-          notice_period: '3 months',
-          rental_escalation: '10% yearly',
-          car_parking_ratio: '1:1000',
-          car_parking_slots: '50',
-          car_parking_charges: '5000',
-          two_wheeler_slots: '100',
-          two_wheeler_charges: '1000',
-          power: '24x7',
-          power_backup: '100%',
-          number_of_cabins: '15',
-          number_of_workstations: '200',
-          size_of_workstation: '60 sq ft',
-          meeting_room: 'Yes',
-          discussion_room: 'Yes',
-          server_room: 'Yes',
-          training_room: 'Yes',
-          pantry: 'Yes',
-          cafeteria: 'Yes',
-          electrical_ups_room: 'Yes',
-          gym: 'Yes',
-          building_owner_name: 'Mr. Sharma',
-          building_owner_contact: '9876543210',
-          contact_person_name: 'Rajesh Kumar',
-          contact_person_number: '9876543211',
-          contact_person_email: 'rajesh@techplaza.com',
-          contact_person_designation: 'Property Manager',
-          remarks: 'Premium commercial property with excellent connectivity and amenities.',
-          updated_at: '2025-01-15T10:30:00Z'
-        },
-        status: 'pending',
-        assigned_by: { full_name: 'Admin User' },
-        created_at: '2025-01-10T09:00:00Z',
-        updated_at: '2025-01-15T10:30:00Z',
-        scout_completed_at: null,
-        building_photos: [
-          { id: 1, file_url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400' },
-          { id: 2, file_url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400' },
-        ],
-        photos: [
-          { id: 1, file_url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400' },
-          { id: 2, file_url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400' },
-        ],
-      },
-      {
-        id: 2,
-        site: {
-          building_name: 'Business Park Avenue',
-          location: 'Sector 18, Gurgaon, Haryana',
-          landmark: 'Near Cyber Hub',
-          building_status: 'Under Construction',
-          floor_condition: 'Good',
-          total_floors: '15',
-          number_of_basements: '3',
-          availble_floors: '8, 9, 10',
-          total_area: '75000',
-          area_per_floor: '5000',
-          efficiency: '80%',
-          oc: 'Pending',
-          will_developer_do_fitouts: 'No',
-          rent: '200000',
-          cam: '30000',
-          cam_deposit: '60000',
-          security_deposit: '600000',
-          lease_term: '5 years',
-          lock_in_period: '2 years',
-          notice_period: '6 months',
-          rental_escalation: '12% yearly',
-          building_owner_name: 'Mrs. Patel',
-          building_owner_contact: '9876543220',
-          contact_person_name: 'Amit Singh',
-          contact_person_number: '9876543221',
-          contact_person_email: 'amit@businesspark.com',
-          contact_person_designation: 'Leasing Manager',
-          remarks: 'Modern business park with great amenities.',
-          updated_at: '2025-01-14T14:20:00Z'
-        },
-        status: 'scout_completed',
-        assigned_by: { full_name: 'Admin User' },
-        created_at: '2025-01-08T11:00:00Z',
-        updated_at: '2025-01-14T14:20:00Z',
-        scout_completed_at: '2025-01-14T14:20:00Z',
-        building_photos: [
-          { id: 3, file_url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400' },
-        ],
-        photos: [
-          { id: 3, file_url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400' },
-        ],
-      },
-      {
-        id: 3,
-        site: {
-          building_name: 'Corporate Heights',
-          location: 'Connaught Place, New Delhi',
-          landmark: 'Central Delhi',
-          building_status: 'Completed',
-          floor_condition: 'Excellent',
-          total_floors: '12',
-          number_of_basements: '2',
-          availble_floors: '3, 4, 5, 6',
-          total_area: '60000',
-          area_per_floor: '5000',
-          efficiency: '90%',
-          oc: 'Yes',
-          will_developer_do_fitouts: 'Yes',
-          rent: '300000',
-          cam: '40000',
-          cam_deposit: '80000',
-          security_deposit: '900000',
-          lease_term: '3 years',
-          lock_in_period: '1 year',
-          notice_period: '3 months',
-          rental_escalation: '10% yearly',
-          building_owner_name: 'Mr. Gupta',
-          building_owner_contact: '9876543230',
-          contact_person_name: 'Priya Sharma',
-          contact_person_number: '9876543231',
-          contact_person_email: 'priya@corporateheights.com',
-          contact_person_designation: 'Senior Manager',
-          remarks: 'Prime location in heart of Delhi.',
-          updated_at: '2025-01-16T16:45:00Z'
-        },
-        status: 'admin_completed',
-        assigned_by: { full_name: 'Admin User' },
-        created_at: '2025-01-05T08:30:00Z',
-        updated_at: '2025-01-16T16:45:00Z',
-        scout_completed_at: '2025-01-12T10:00:00Z',
-        building_photos: [],
-        photos: [],
-      },
-    ];
-    setVisits(mockVisits);
-    setLoadingVisits(false);
-  }, []);
+  const TOKEN_KEY = 'token_2';
 
   // Utility functions
-  const beautifyName = (name) => {
+  const beautifyName = (name: string): string => {
     if (!name) return '-';
     return name
       .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString?: string): string => {
     if (!dateString) return '-';
     try {
       const d = new Date(dateString);
@@ -289,7 +158,7 @@ const ScoutBoy = ({ onBack }) => {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'pending': return '#FFC107';
       case 'scout_completed': return '#ffcc92ff';
@@ -299,7 +168,7 @@ const ScoutBoy = ({ onBack }) => {
     }
   };
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: string): string => {
     switch (status) {
       case 'pending': return '⏳';
       case 'scout_completed': return '✓';
@@ -309,159 +178,644 @@ const ScoutBoy = ({ onBack }) => {
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    // Simulate refresh
-    setTimeout(() => setRefreshing(false), 1000);
+  // Gallery navigation functions
+  const navigateToPreviousVisit = () => {
+    if (currentVisitIndex > 0) {
+      const newIndex = currentVisitIndex - 1;
+      setCurrentVisitIndex(newIndex);
+      setSelectedVisit(visits[newIndex]);
+      // Reset comments when navigating to different visit
+      setComments([]);
+      setCommentsCurrentPage(1);
+    }
   };
 
-  const handleVisitPress = (visit, index) => {
-    setSelectedVisitIndex(index);
+  const navigateToNextVisit = () => {
+    if (currentVisitIndex < visits.length - 1) {
+      const newIndex = currentVisitIndex + 1;
+      setCurrentVisitIndex(newIndex);
+      setSelectedVisit(visits[newIndex]);
+      // Reset comments when navigating to different visit
+      setComments([]);
+      setCommentsCurrentPage(1);
+    }
+  };
+
+  // Fetch visits from API with pagination
+  const fetchVisits = async (page: number = 1, append: boolean = false) => {
+    try {
+      if (!append) {
+        setLoadingVisits(true);
+      } else {
+        setLoadingMore(true);
+      }
+      setVisitsError(null);
+
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) {
+        setVisitsError('Token not found. Please login again.');
+        setLoadingVisits(false);
+        return;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/getAssignedVisits`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: storedToken,
+          page: page,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch visits: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const formattedVisits = data.visits.map((visit: any) => ({
+        id: visit.id,
+        site: { ...visit.site },
+        status: visit.status,
+        collaborators: visit.collaborators || [],
+        assigned_by: visit.assigned_by,
+        created_at: visit.created_at,
+        updated_at: visit.updated_at,
+        scout_completed_at: visit.scout_completed_at,
+        building_photos: visit.building_photos || [],
+        photos: visit.building_photos || [],
+      }));
+
+      if (append) {
+        setVisits(prev => [...prev, ...formattedVisits]);
+      } else {
+        setVisits(formattedVisits);
+      }
+
+      setCurrentPage(data.pagination.current_page);
+      setHasNextPage(data.pagination.has_next);
+      setLoadingVisits(false);
+      setLoadingMore(false);
+    } catch (error) {
+      console.error('Error fetching visits:', error);
+      setVisitsError(error instanceof Error ? error.message : 'Failed to load visits');
+      setLoadingVisits(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVisits(1, false);
+  }, []);
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setCurrentPage(1);
+    await fetchVisits(1, false);
+    setRefreshing(false);
+  };
+
+  // Load more visits
+  const loadMoreVisits = () => {
+    if (hasNextPage && !loadingMore) {
+      fetchVisits(currentPage + 1, true);
+    }
+  };
+
+  // Search visits
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      fetchVisits(1, false);
+      return;
+    }
+
+    try {
+      setLoadingVisits(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) return;
+
+      const response = await fetch(`${BACKEND_URL}/employee/searchVisits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: storedToken, query }),
+      });
+
+      const data = await response.json();
+      const formattedVisits = data.visits.map((visit: any) => ({
+        id: visit.id,
+        site: { ...visit.site },
+        status: visit.status,
+        collaborators: visit.collaborators || [],
+        assigned_by: visit.assigned_by,
+        created_at: visit.created_at,
+        updated_at: visit.updated_at,
+        scout_completed_at: visit.scout_completed_at,
+        building_photos: visit.building_photos || [],
+        photos: visit.building_photos || [],
+      }));
+
+      setVisits(formattedVisits);
+    } catch (error) {
+      console.error('Error searching visits:', error);
+    } finally {
+      setLoadingVisits(false);
+    }
+  };
+
+  // Fetch comments for a visit
+  const fetchComments = async (visitId: number, page: number = 1, append: boolean = false) => {
+    if (!visitId) return;
+
+    try {
+      if (!append) {
+        setLoadingComments(true);
+      } else {
+        setLoadingMoreComments(true);
+      }
+
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) {
+        console.error('Token not found');
+        setLoadingComments(false);
+        setLoadingMoreComments(false);
+        return;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/getVisitComments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: storedToken,
+          visit_id: visitId,
+          page: page,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch comments: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Check if comments exists and is an array
+      if (!data.comments || !Array.isArray(data.comments)) {
+        console.error('Invalid response format:', data);
+        setLoadingComments(false);
+        setLoadingMoreComments(false);
+        return;
+      }
+      console.log(data.comments)
+      const formattedComments = data.comments.map((item: any) => ({
+        commentId: item.id,
+        user: item.user,
+        content: item.content,
+        documents: item.documents || [],
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+      }));
+
+      if (append) {
+        setComments(prev => [...prev, ...formattedComments]);
+      } else {
+        setComments(formattedComments);
+      }
+
+      setCommentsCurrentPage(data.pagination?.current_page || 1);
+      setCommentsHasNextPage(data.pagination?.has_next || false);
+
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      Alert.alert('Error', 'Failed to load comments');
+    } finally {
+      setLoadingComments(false);
+      setLoadingMoreComments(false);
+    }
+  };
+
+  // Add a new comment
+  const handleAddComment = async () => {
+    if (!commentText.trim() && commentDocuments.length === 0) {
+      Alert.alert('Error', 'Please enter a comment or attach a file');
+      return;
+    }
+    if (!selectedVisit) return;
+
+    try {
+      setAddingComment(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) {
+        Alert.alert('Error', 'Authentication token not found');
+        setAddingComment(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('token', storedToken);
+      formData.append('visit_id', selectedVisit.id.toString());
+
+      if (commentText.trim()) {
+        formData.append('comment', commentText.trim());
+      }
+
+      // Append documents if any
+      commentDocuments.forEach((doc, index) => {
+        formData.append('documents', {
+          uri: doc.uri,
+          type: doc.mimeType || 'application/octet-stream',
+          name: doc.name || `document_${index}`,
+        } as any);
+      });
+
+      const response = await fetch(`${BACKEND_URL}/employee/addVisitComment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to add comment: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Check if the response has the expected structure
+      if (!data.comment) {
+        console.error('Invalid response format:', data);
+        Alert.alert('Error', 'Invalid response from server');
+        setAddingComment(false);
+        return;
+      }
+
+      // Add new comment to the top of the list
+      const newComment = {
+        commentId: data.comment.id,
+        user: data.comment.user,
+        content: data.comment.content,
+        documents: data.comment.documents || [],
+        created_at: data.comment.created_at,
+        updated_at: data.comment.updated_at,
+      };
+
+      setComments(prev => [newComment, ...prev]);
+      setCommentText('');
+      setCommentDocuments([]);
+
+      Alert.alert('Success', 'Comment added successfully');
+
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      Alert.alert('Error', 'Failed to add comment. Please try again.');
+    } finally {
+      setAddingComment(false);
+    }
+  };
+
+  // Load more comments
+  const loadMoreComments = () => {
+    if (commentsHasNextPage && !loadingMoreComments && selectedVisit) {
+      fetchComments(selectedVisit.id, commentsCurrentPage + 1, true);
+    }
+  };
+
+  // Handle document/image attachment
+  const handleAttachFile = async () => {
+    try {
+      Alert.alert(
+        'Attach File',
+        'Choose attachment type',
+        [
+          {
+            text: 'Take Photo',
+            onPress: handleTakePhoto,
+          },
+          {
+            text: 'Choose from Gallery',
+            onPress: handlePickImage,
+          },
+          {
+            text: 'Choose Document',
+            onPress: handlePickDocument,
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error attaching file:', error);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Camera permission is required to take photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setCommentDocuments(prev => [...prev, {
+          uri: asset.uri,
+          name: `photo_${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+          type: 'image'
+        }]);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+    }
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsMultipleSelection: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setCommentDocuments(prev => [...prev, {
+          uri: asset.uri,
+          name: `image_${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+          type: 'image'
+        }]);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+    }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        setCommentDocuments(prev => [...prev, {
+          uri: asset.uri,
+          name: asset.name,
+          mimeType: asset.mimeType,
+          type: 'document',
+          size: asset.size
+        }]);
+      }
+    } catch (error) {
+      console.error('Error picking document:', error);
+    }
+  };
+
+  // Remove attached file
+  const handleRemoveDocument = (index: number) => {
+    setCommentDocuments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Format comment date
+  const formatCommentDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+      if (diffInHours < 24) {
+        return date.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+      } else {
+        return date.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+      }
+    } catch {
+      return '-';
+    }
+  };
+
+  const handleVisitPress = (visit: any, index: number) => {
+    setSelectedVisit(visit);
+    setCurrentVisitIndex(index);
     setViewMode('visit-detail');
+    // Reset comments when opening new visit
+    setComments([]);
+    setCommentsCurrentPage(1);
   };
 
   const handleBackToList = () => {
     setViewMode('visits-list');
-    translateX.setValue(0);
+    setSelectedVisit(null);
+    setCurrentVisitIndex(0);
+    setComments([]);
+    setCommentsCurrentPage(1);
   };
 
   const handleCreateSiteClick = () => {
     setViewMode('create-site');
   };
 
+  const handleBackFromCreateSite = () => {
+    setViewMode('visits-list');
+    handleRefresh();
+  };
+
+  // Mark visit as completed
   const handleMarkComplete = async () => {
-    setMarkingComplete(true);
-    setTimeout(() => {
-      const updatedVisits = [...visits];
-      updatedVisits[selectedVisitIndex].status = 'scout_completed';
-      setVisits(updatedVisits);
+    if (!selectedVisit) return;
+
+    try {
+      setMarkingComplete(true);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!storedToken) return;
+
+      const response = await fetch(`${BACKEND_URL}/employee/markVisitCompleted`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: storedToken,
+          visit_id: selectedVisit.id,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedVisit = { ...selectedVisit, status: 'scout_completed' };
+        setSelectedVisit(updatedVisit);
+        // Update the visit in the visits array
+        const updatedVisits = [...visits];
+        updatedVisits[currentVisitIndex] = updatedVisit;
+        setVisits(updatedVisits);
+        Alert.alert('Success', 'Visit marked as completed');
+      }
+    } catch (error) {
+      console.error('Error marking visit complete:', error);
+      Alert.alert('Error', 'Failed to mark visit as complete');
+    } finally {
       setMarkingComplete(false);
-    }, 1000);
+    }
   };
 
-  // Swipe handlers
-  const navigateToVisit = (direction) => {
-    if (isTransitioning) return;
+  // Fetch comments when visit detail is opened
+  useEffect(() => {
+    if (viewMode === 'visit-detail' && selectedVisit) {
+      fetchComments(selectedVisit.id, 1, false);
+    }
+  }, [viewMode, selectedVisit]);
 
-    const newIndex = selectedVisitIndex + direction;
-    if (newIndex < 0 || newIndex >= visits.length) return;
-
-    setIsTransitioning(true);
-    
-    Animated.timing(translateX, {
-      toValue: -direction * screenWidth,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setSelectedVisitIndex(newIndex);
-      translateX.setValue(0);
-      setIsTransitioning(false);
-    });
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (!isTransitioning) {
-          translateX.setValue(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (isTransitioning) return;
-
-        if (Math.abs(gestureState.dx) > screenWidth * 0.3) {
-          const direction = gestureState.dx > 0 ? -1 : 1;
-          navigateToVisit(direction);
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  // Visit Detail View
-  if (viewMode === 'visit-detail' && visits[selectedVisitIndex]) {
-    const selectedVisit = visits[selectedVisitIndex];
+  // Visit Detail View with Comments Section
+  if (viewMode === 'visit-detail' && selectedVisit) {
     const site = selectedVisit.site;
-    
+    const insets = useSafeAreaInsets();
+    const hasPrevious = currentVisitIndex > 0;
+    const hasNext = currentVisitIndex < visits.length - 1;
+
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+
+        {/* Header with Gallery Counter */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
             <BackIcon />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            Visit {selectedVisitIndex + 1} of {visits.length}
-          </Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Visit Details</Text>
+            <Text style={styles.headerSubtitle}>
+              {currentVisitIndex + 1} of {visits.length}
+            </Text>
+          </View>
           <View style={styles.headerSpacer} />
         </View>
 
-        <View style={styles.swipeIndicators}>
-          {selectedVisitIndex > 0 && (
-            <TouchableOpacity 
-              style={[styles.swipeButton, styles.swipeButtonLeft]}
-              onPress={() => navigateToVisit(-1)}
-            >
-              <Text style={styles.swipeButtonText}>‹</Text>
-            </TouchableOpacity>
-          )}
-          {selectedVisitIndex < visits.length - 1 && (
-            <TouchableOpacity 
-              style={[styles.swipeButton, styles.swipeButtonRight]}
-              onPress={() => navigateToVisit(1)}
-            >
-              <Text style={styles.swipeButtonText}>›</Text>
-            </TouchableOpacity>
-          )}
+        {/* Gallery Navigation Arrows */}
+        <View style={styles.galleryNavigationContainer}>
+          <TouchableOpacity
+            style={[
+              styles.galleryNavButton,
+              styles.galleryNavButtonLeft,
+              !hasPrevious && styles.galleryNavButtonDisabled
+            ]}
+            onPress={navigateToPreviousVisit}
+            disabled={!hasPrevious}
+            activeOpacity={0.7}
+          >
+            <NavigationArrow direction="left" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.galleryNavButton,
+              styles.galleryNavButtonRight,
+              !hasNext && styles.galleryNavButtonDisabled
+            ]}
+            onPress={navigateToNextVisit}
+            disabled={!hasNext}
+            activeOpacity={0.7}
+          >
+            <NavigationArrow direction="right" />
+          </TouchableOpacity>
         </View>
 
-        <Animated.View
-          style={[
-            styles.animatedContainer,
-            { transform: [{ translateX }] }
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-            <View style={styles.detailContainer}>
-              <View style={styles.card}>
-                <View style={styles.siteHeader}>
-                  <View style={styles.siteHeaderContent}>
-                    <Text style={styles.siteName}>{site.building_name}</Text>
-                    <View style={styles.statusBadgeContainer}>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVisit.status) }]}>
-                        <Text style={styles.statusBadgeText}>
-                          {getStatusIcon(selectedVisit.status)} {beautifyName(selectedVisit.status)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.detailContainer}>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
 
-                {site.location && (
-                  <View style={styles.locationContainer}>
-                    <Text style={styles.locationIcon}>📍</Text>
-                    <Text style={styles.locationText}>{site.location}</Text>
+              {/* Comments List - FIXED HEIGHT AND VISIBILITY */}
+              <View style={styles.commentsContainer}>
+                {loadingComments ? (
+                  <View style={styles.commentsLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.commentsLoadingText}>Loading comments...</Text>
+                  </View>
+                ) : comments.length > 0 ? (
+                  <ScrollView
+                    style={styles.commentsList}
+                    contentContainerStyle={styles.commentsListContent}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                    onScroll={({ nativeEvent }) => {
+                      const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                      const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+                      if (isCloseToBottom && !loadingMoreComments && commentsHasNextPage) {
+                        loadMoreComments();
+                      }
+                    }}
+                    scrollEventThrottle={400}
+                  >
+                    {comments.map((comment, index) => (
+                      <View key={`comment-${comment.commentId}-${index}`} style={styles.commentItem}>
+                        <View style={styles.commentHeader}>
+                          <Text style={styles.commentAuthor}>
+                            {comment.user?.full_name || 'Unknown User'}
+                          </Text>
+                          <Text style={styles.commentTime}>
+                            {formatCommentDate(comment.created_at)}
+                          </Text>
+                        </View>
+                        {comment.content && (
+                          <Text style={styles.commentContent}>
+                            {comment.content}
+                          </Text>
+                        )}
+                        {comment.documents && comment.documents.length > 0 && (
+                          <View style={styles.commentDocuments}>
+                            {comment.documents.map((doc: any, docIndex: number) => (
+                              <TouchableOpacity
+                                key={`doc-${docIndex}`}
+                                style={styles.commentDocument}
+                                onPress={() => {
+                                  // Handle document opening if needed
+                                  Alert.alert('Document', doc.name || 'Document attached');
+                                }}
+                              >
+                                <Text style={styles.commentDocumentText}>
+                                  📎 {doc.name || 'Document'}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                        {index < comments.length - 1 && <View style={styles.commentSeparator} />}
+                      </View>
+                    ))}
+
+                    {loadingMoreComments && (
+                      <View style={styles.loadingMoreComments}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={styles.loadingMoreCommentsText}>Loading older comments...</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.emptyComments}>
+                    <Text style={styles.emptyCommentsIcon}>💬</Text>
+                    <Text style={styles.emptyCommentsText}>No comments yet</Text>
+                    <Text style={styles.emptyCommentsSubtext}>Be the first to add a comment</Text>
                   </View>
                 )}
-
-                <View style={styles.metaGrid}>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaLabel}>Assigned by</Text>
-                    <Text style={styles.metaValue}>{selectedVisit.assigned_by.full_name}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaLabel}>Site Updated</Text>
-                    <Text style={styles.metaValue}>{formatDate(site.updated_at)}</Text>
-                  </View>
-                </View>
               </View>
 
               {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
@@ -472,7 +826,7 @@ const ScoutBoy = ({ onBack }) => {
                     showsHorizontalScrollIndicator={false}
                     style={styles.photoScroll}
                   >
-                    {selectedVisit.building_photos.map((photo, index) => (
+                    {selectedVisit.building_photos.map((photo: any, index: number) => (
                       <TouchableOpacity
                         key={photo.id}
                         style={styles.photoThumbnail}
@@ -508,7 +862,6 @@ const ScoutBoy = ({ onBack }) => {
                 <DetailSection title="📋 Basic Information" site={site} />
                 <DetailSection title="💰 Commercial Details" site={site} />
                 <DetailSection title="👤 Contact Information" site={site} />
-
                 {site.remarks && (
                   <View style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
@@ -517,6 +870,131 @@ const ScoutBoy = ({ onBack }) => {
                 )}
               </View>
 
+              {/* Comments Section */}
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
+
+                {/* Comments List with Fixed Height */}
+                <View style={styles.commentsContainer}>
+                  {loadingComments ? (
+                    <View style={styles.commentsLoading}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.commentsLoadingText}>Loading comments...</Text>
+                    </View>
+                  ) : comments.length > 0 ? (
+                    <ScrollView
+                      style={styles.commentsList}
+                      showsVerticalScrollIndicator={false}
+                      onScroll={({ nativeEvent }) => {
+                        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                        const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+                        if (isCloseToBottom && !loadingMoreComments) {
+                          loadMoreComments();
+                        }
+                      }}
+                      scrollEventThrottle={400}
+                    >
+                      {comments.map((comment, index) => (
+                        <View key={`${comment.commentId}`} style={styles.commentItem}>
+                          <View style={styles.commentHeader}>
+                            <Text style={styles.commentAuthor}>
+                              {comment.user?.full_name || 'Unknown User'}
+                            </Text>
+                            <Text style={styles.commentTime}>
+                              {formatCommentDate(comment.created_at)}
+                            </Text>
+                          </View>
+                          <Text style={styles.commentContent}>
+                            {comment.content}
+                          </Text>
+                          {comment.documents && comment.documents.length > 0 && (
+                            <View style={styles.commentDocuments}>
+                              {comment.documents.map((doc: any, docIndex: number) => (
+                                <TouchableOpacity key={docIndex} style={styles.commentDocument}>
+                                  <Text style={styles.commentDocumentText}>📎 {doc.name || 'Document'}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+                          {index < comments.length - 1 && <View style={styles.commentSeparator} />}
+                        </View>
+                      ))}
+
+                      {loadingMoreComments && (
+                        <View style={styles.loadingMoreComments}>
+                          <ActivityIndicator size="small" color={colors.primary} />
+                          <Text style={styles.loadingMoreCommentsText}>Loading older comments...</Text>
+                        </View>
+                      )}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.emptyComments}>
+                      <Text style={styles.emptyCommentsIcon}>💬</Text>
+                      <Text style={styles.emptyCommentsText}>No comments yet</Text>
+                      <Text style={styles.emptyCommentsSubtext}>Be the first to add a comment</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Add Comment Section */}
+                <View style={styles.addCommentContainer}>
+                  {/* Attached Files Preview */}
+                  {commentDocuments.length > 0 && (
+                    <View style={styles.attachedFilesContainer}>
+                      <Text style={styles.attachedFilesTitle}>Attached files:</Text>
+                      {commentDocuments.map((doc, index) => (
+                        <View key={index} style={styles.attachedFile}>
+                          <Text style={styles.attachedFileName} numberOfLines={1}>
+                            {doc.type === 'image' ? '📷' : '📄'} {doc.name}
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveDocument(index)}
+                            style={styles.removeFileButton}
+                          >
+                            <Text style={styles.removeFileText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={styles.commentInputContainer}>
+                    <TextInput
+                      style={styles.commentInput}
+                      placeholder="Add a comment..."
+                      value={commentText}
+                      onChangeText={setCommentText}
+                      multiline
+                      maxLength={500}
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                    <TouchableOpacity
+                      style={styles.attachButton}
+                      onPress={handleAttachFile}
+                    >
+                      <Text style={styles.attachButtonText}>📎</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.addCommentButton,
+                      (!commentText.trim() && commentDocuments.length === 0) && styles.addCommentButtonDisabled,
+                      addingComment && styles.addCommentButtonDisabled
+                    ]}
+                    onPress={handleAddComment}
+                    disabled={(!commentText.trim() && commentDocuments.length === 0) || addingComment}
+                  >
+                    {addingComment ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : (
+                      <Text style={styles.addCommentButtonText}>Add Comment</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Mark Complete Button */}
               {selectedVisit.status === 'pending' && (
                 <TouchableOpacity
                   style={[styles.markCompleteButton, markingComplete && styles.markCompleteButtonDisabled]}
@@ -526,15 +1004,17 @@ const ScoutBoy = ({ onBack }) => {
                   {markingComplete ? (
                     <ActivityIndicator size="small" color={colors.white} />
                   ) : (
-                    <Text style={styles.markCompleteButtonText}>✓ Mark Visit as Completed</Text>
+                    <>
+                      <Text style={styles.markCompleteButtonText}>✓ Mark Visit as Completed</Text>
+                    </>
                   )}
                 </TouchableOpacity>
               )}
 
               <View style={{ height: 24 }} />
             </View>
-          </ScrollView>
-        </Animated.View>
+          </View>
+        </ScrollView>
 
         <Modal
           visible={showPhotoModal}
@@ -563,27 +1043,24 @@ const ScoutBoy = ({ onBack }) => {
   // Create Site View
   if (viewMode === 'create-site') {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setViewMode('visits-list')}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create New Site</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.contentContainer}>
-          <Text style={styles.emptyListTitle}>Create Site Form</Text>
-          <Text style={styles.emptyListSubtitle}>Form implementation goes here</Text>
-        </View>
-      </View>
+      <CreateSite
+        onBack={handleBackFromCreateSite}
+        colors={colors}
+        spacing={spacing}
+        fontSize={fontSize}
+        borderRadius={borderRadius}
+        shadows={shadows}
+      />
     );
   }
 
+  const insets = useSafeAreaInsets();
+
   // Default view: Visits List
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
@@ -599,7 +1076,13 @@ const ScoutBoy = ({ onBack }) => {
             style={styles.searchInput}
             placeholder="Search visits..."
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (text.length > 2 || text.length === 0) {
+                handleSearch(text);
+              }
+            }}
+            returnKeyType="search"
             placeholderTextColor={colors.textSecondary}
           />
           {searchQuery ? (
@@ -628,11 +1111,30 @@ const ScoutBoy = ({ onBack }) => {
               tintColor={colors.primary}
             />
           }
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+            if (isCloseToBottom && !loadingMore) {
+              loadMoreVisits();
+            }
+          }}
+          scrollEventThrottle={400}
         >
           {loadingVisits ? (
             <View style={styles.emptyListContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.emptyListSubtitle}>Loading visits...</Text>
+            </View>
+          ) : visitsError ? (
+            <View style={styles.emptyListContainer}>
+              <Text style={styles.emptyStateIcon}>⚠️</Text>
+              <Text style={styles.emptyListTitle}>{visitsError}</Text>
+              <TouchableOpacity
+                style={styles.createSiteButton}
+                onPress={handleRefresh}
+              >
+                <Text style={styles.createSiteButtonText}>Retry</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.listContainer}>
@@ -644,67 +1146,76 @@ const ScoutBoy = ({ onBack }) => {
               </View>
 
               {visits.length > 0 ? (
-                visits.map((visit, index) => (
-                  <TouchableOpacity
-                    key={visit.id}
-                    style={styles.visitCard}
-                    onPress={() => handleVisitPress(visit, index)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.visitCardImage}>
-                      {visit.building_photos && visit.building_photos.length > 0 ? (
-                        <Image
-                          source={{ uri: visit.building_photos[0].file_url }}
-                          style={styles.visitImage}
-                        />
-                      ) : (
-                        <View style={styles.visitImagePlaceholder}>
-                          <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.visitCardContent}>
-                      <View style={styles.visitCardHeader}>
-                        <Text style={styles.visitCardTitle} numberOfLines={1}>
-                          {visit.site.building_name}
-                        </Text>
-                        <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
-                          <Text style={styles.visitStatusText}>
-                            {getStatusIcon(visit.status)} {beautifyName(visit.status)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {visit.site.location && (
-                        <View style={styles.visitLocationRow}>
-                          <Text style={styles.visitLocationIcon}>📍</Text>
-                          <Text style={styles.visitLocationText} numberOfLines={1}>
-                            {visit.site.location}
-                          </Text>
-                        </View>
-                      )}
-
-                      <View style={styles.visitMetaRow}>
-                        {visit.site.rent && (
-                          <View style={styles.visitMetaItem}>
-                            <Text style={styles.visitMetaText}>₹{visit.site.rent}/mo</Text>
-                          </View>
-                        )}
-                        {visit.photos && visit.photos.length > 0 && (
-                          <View style={styles.visitMetaItem}>
-                            <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
+                <>
+                  {visits.map((visit, index) => (
+                    <TouchableOpacity
+                      key={visit.id}
+                      style={styles.visitCard}
+                      onPress={() => handleVisitPress(visit, index)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.visitCardImage}>
+                        {visit.building_photos && visit.building_photos.length > 0 ? (
+                          <Image
+                            source={{ uri: visit.building_photos[0].file_url }}
+                            style={styles.visitImage}
+                          />
+                        ) : (
+                          <View style={styles.visitImagePlaceholder}>
+                            <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
                           </View>
                         )}
                       </View>
 
-                      <View style={styles.visitCardFooter}>
-                        <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
-                        <Text style={styles.visitArrow}>→</Text>
+                      <View style={styles.visitCardContent}>
+                        <View style={styles.visitCardHeader}>
+                          <Text style={styles.visitCardTitle} numberOfLines={1}>
+                            {visit.site.building_name}
+                          </Text>
+                          <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
+                            <Text style={styles.visitStatusText}>
+                              {getStatusIcon(visit.status)} {beautifyName(visit.status)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {visit.site.location && (
+                          <View style={styles.visitLocationRow}>
+                            <Text style={styles.visitLocationIcon}>📍</Text>
+                            <Text style={styles.visitLocationText} numberOfLines={1}>
+                              {visit.site.location}
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.visitMetaRow}>
+                          {visit.site.rent && visit.site.total_area && (
+                            <View style={styles.visitMetaItem}>
+                              <Text style={styles.visitMetaText}>₹{(visit.site.rent / visit.site.total_area).toFixed(2)}/sq-ft</Text>
+                            </View>
+                          )}
+                          {visit.photos && visit.photos.length > 0 && (
+                            <View style={styles.visitMetaItem}>
+                              <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.visitCardFooter}>
+                          <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
+                          <Text style={styles.visitArrow}>→</Text>
+                        </View>
                       </View>
+                    </TouchableOpacity>
+                  ))}
+
+                  {loadingMore && (
+                    <View style={styles.loadingMoreContainer}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.loadingMoreText}>Loading more visits...</Text>
                     </View>
-                  </TouchableOpacity>
-                ))
+                  )}
+                </>
               ) : (
                 <View style={styles.emptyListContainer}>
                   <Text style={styles.emptyListIcon}>📋</Text>
@@ -714,6 +1225,7 @@ const ScoutBoy = ({ onBack }) => {
               )}
             </View>
           )}
+
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
@@ -722,7 +1234,7 @@ const ScoutBoy = ({ onBack }) => {
 };
 
 // Helper component for detail sections
-const DetailSection = ({ title, site }) => {
+const DetailSection = ({ title, site }: { title: string; site: any }) => {
   const getDetailItems = () => {
     switch (title) {
       case '📋 Basic Information':
@@ -741,7 +1253,7 @@ const DetailSection = ({ title, site }) => {
         ];
       case '💰 Commercial Details':
         return [
-          { label: 'Monthly Rent', value: site.rent ? `₹${site.rent}` : '-' },
+          { label: 'Rent Per SQ/FT', value: site.rent && site.total_area ? `₹${(site.rent / site.total_area).toFixed(2)}` : '-' },
           { label: 'CAM', value: site.cam ? `₹${site.cam}` : '-' },
           { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
           { label: 'Security Deposit', value: site.security_deposit ? `₹${site.security_deposit}` : '-' },
@@ -765,6 +1277,7 @@ const DetailSection = ({ title, site }) => {
   };
 
   const items = getDetailItems();
+
   return (
     <View style={styles.detailSection}>
       <Text style={styles.detailSectionTitle}>{title}</Text>
@@ -793,7 +1306,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingTop: 50,
     backgroundColor: colors.primary,
   },
   backButton: {
@@ -813,15 +1325,55 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
     transform: [{ rotate: '-45deg' }],
   },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.white,
-    flex: 1,
-    textAlign: 'center',
-  },
   headerSpacer: {
     width: 32,
+  },
+  galleryNavigationContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    zIndex: 10,
+    pointerEvents: 'box-none',
+  },
+  galleryNavButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.lg,
+  },
+  galleryNavButtonLeft: {
+    marginLeft: 0,
+  },
+  galleryNavButtonRight: {
+    marginRight: 0,
+  },
+  galleryNavButtonDisabled: {
+    backgroundColor: colors.backgroundSecondary,
+    opacity: 0.5,
+  },
+  navArrowIcon: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navArrow: {
+    width: 10,
+    height: 10,
+    borderLeftWidth: 2.5,
+    borderTopWidth: 2.5,
+    borderColor: colors.primary,
+    transform: [{ rotate: '-45deg' }],
+  },
+  navArrowRight: {
+    transform: [{ rotate: '135deg' }],
   },
   contentContainer: {
     flex: 1,
@@ -1020,40 +1572,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  swipeIndicators: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    pointerEvents: 'box-none',
-  },
-  swipeButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.lg,
-  },
-  swipeButtonLeft: {
-    marginLeft: spacing.xs,
-  },
-  swipeButtonRight: {
-    marginRight: spacing.xs,
-  },
-  swipeButtonText: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  animatedContainer: {
-    flex: 1,
-  },
   scrollView: {
     flex: 1,
     borderTopLeftRadius: 28,
@@ -1176,6 +1694,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.white,
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoModalCloseText: {
     fontSize: fontSize.xl,
     fontWeight: '700',
@@ -1280,6 +1816,190 @@ const styles = StyleSheet.create({
   loadingMoreText: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
+  },
+   commentsContainer: {
+    minHeight: 150,
+    maxHeight: 300,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  commentsList: {
+    flex: 1,
+  },
+  commentsListContent: {
+    padding: spacing.md,
+    flexGrow: 1,
+  },
+  commentsLoading: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  commentsLoadingText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+  },
+  commentItem: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  commentAuthor: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  commentTime: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  commentContent: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  commentDocuments: {
+    marginTop: spacing.sm,
+  },
+  commentDocument: {
+    backgroundColor: colors.white,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  commentDocumentText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  commentSeparator: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  loadingMoreComments: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  loadingMoreCommentsText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
+  },
+  emptyComments: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+  },
+  emptyCommentsIcon: {
+    fontSize: 32,
+    marginBottom: spacing.sm,
+  },
+  emptyCommentsText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  emptyCommentsSubtext: {
+    fontSize: fontSize.sm,
+    color: colors.textLight,
+  },
+  addCommentContainer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+    backgroundColor: colors.white,
+  },
+  attachedFilesContainer: {
+    marginBottom: spacing.md,
+  },
+  attachedFilesTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  attachedFile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.backgroundSecondary,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.xs,
+  },
+  attachedFileName: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    flex: 1,
+  },
+  removeFileButton: {
+    padding: spacing.xs,
+  },
+  removeFileText: {
+    color: colors.error,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    minHeight: 40,
+    maxHeight: 100,
+    textAlignVertical: 'top',
+    backgroundColor: colors.white,
+  },
+  attachButton: {
+    padding: spacing.sm,
+    marginLeft: spacing.sm,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+  },
+  attachButtonText: {
+    fontSize: fontSize.lg,
+  },
+  addCommentButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+  },
+  addCommentButtonDisabled: {
+    backgroundColor: colors.textLight,
+  },
+  addCommentButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
 });
 
