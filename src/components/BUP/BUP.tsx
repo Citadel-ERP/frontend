@@ -81,7 +81,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const [addingComment, setAddingComment] = useState(false);
 
   const [potentialCollaborators, setPotentialCollaborators] = useState<PotentialCollaborator[]>([]);
-  const [potentialBDTs, setPotentialBDTs] = useState<PotentialCollaborator[]>([]);
   const [showPotentialCollaborators, setShowPotentialCollaborators] = useState(false);
   const [loadingPotentialCollaborators, setLoadingPotentialCollaborators] = useState(false);
   const [collaboratorSearchTimeout, setCollaboratorSearchTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -97,6 +96,9 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const [newEmailInput, setNewEmailInput] = useState('');
   const [newPhoneInput, setNewPhoneInput] = useState('');
   const [creatingLead, setCreatingLead] = useState(false);
+  const [potentialBDTs, setPotentialBDTs] = useState<PotentialCollaborator[]>([]);
+  const [showPotentialBDTs, setShowPotentialBDTs] = useState(false);
+  const [bdtSearchTimeout, setBdtSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
   const [editingEmails, setEditingEmails] = useState<string[]>([]);
   const [editingPhones, setEditingPhones] = useState<string[]>([]);
@@ -416,6 +418,51 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     }
   };
 
+  const handleFilterSelection = (filterType: string) => {
+    setFilterBy(filterType);
+    if (!filterType) {
+      setFilterValue('');
+      setSelectedPhase('');
+    } else {
+      setTimeout(() => {
+        if (filterType === 'status') {
+          setActiveDropdown('status');
+        } else if (filterType === 'phase') {
+          setActiveDropdown('filter-phase');
+        } else if (filterType === 'subphase') {
+          if (allPhases.length > 0) {
+            setActiveDropdown('filter-phase');
+          }
+        } else if (filterType === 'bdt') {
+          setActiveDropdown('filter-bdt');
+        }
+      }, 300);
+    }
+  };
+
+  const handlePhaseSelectionForFilter = (phase: string) => {
+    setSelectedPhase(phase);
+    if (filterBy === 'phase') {
+      setFilterValue(phase);
+    } else if (filterBy === 'subphase') {
+      fetchSubphases(phase);
+      setTimeout(() => {
+        setActiveDropdown('filter-subphase');
+      }, 300);
+    }
+  };
+
+  const getFilterLabel = (filterKey: string, value: string): string => {
+    let choices: FilterOption[] = [];
+    switch (filterKey) {
+      case 'status': choices = STATUS_CHOICES; break;
+      case 'phase': choices = allPhases; break;
+      case 'subphase': choices = allSubphases; break;
+    }
+    const option = choices.find(choice => choice.value === value);
+    return option ? option.label : beautifyName(value);
+  };
+
   if (viewMode === 'default-comments') {
     return (
       <DefaultCommentsView
@@ -536,13 +583,13 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.white} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Leads</Text>
+        <Text style={styles.headerTitle}>BUP Module</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.iconButton}
@@ -561,7 +608,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search leads..."
+            placeholder="Search leads... (Press Enter)"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={() => searchLeads(searchQuery)}
@@ -574,6 +621,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           onPress={() => setActiveDropdown('filter')}
         >
           <Text style={styles.filterIcon}>⚙️</Text>
+          <Text style={styles.filterText}>Filter</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.createButton}
@@ -586,7 +634,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       {filterBy && filterValue && (
         <View style={styles.activeFilterContainer}>
           <Text style={styles.activeFilterText}>
-            {filterBy === 'bdt' ? filterValue : beautifyName(filterValue)}
+            {filterBy === 'bdt' ? filterValue : getFilterLabel(filterBy, filterValue)}
           </Text>
           <TouchableOpacity onPress={() => { 
             setFilterBy(''); 
@@ -594,7 +642,22 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             setSelectedPhase('');
             if (!isSearchMode) fetchLeads(1);
           }}>
-            <Text style={styles.clearFilterText}>✕</Text>
+            <Text style={styles.clearFilterText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {isSearchMode && (
+        <View style={styles.searchModeIndicator}>
+          <Text style={styles.searchModeText}>
+            Search results for: "{searchQuery}"
+          </Text>
+          <TouchableOpacity onPress={() => {
+            setSearchQuery('');
+            setIsSearchMode(false);
+            fetchLeads(1);
+          }}>
+            <Text style={styles.clearSearchText}>Clear Search</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -615,46 +678,60 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           />
         }
       >
-        {loading && leads.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading leads...</Text>
-          </View>
-        ) : filteredLeads.length > 0 ? (
-          <>
-            {filteredLeads.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} onPress={() => handleLeadPress(lead)} />
-            ))}
-            
-            {loadingMore && (
-              <View style={styles.loadMoreContainer}>
-                <ActivityIndicator size="small" color={colors.primary} />
-              </View>
-            )}
-          </>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📋</Text>
-            <Text style={styles.emptyStateText}>No leads found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {searchQuery || filterValue ? 'Try adjusting your search' : 'Create your first lead'}
-            </Text>
-          </View>
-        )}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Leads ({filteredLeads.length}
+            {pagination && !isSearchMode && ` of ${pagination.total_items}`})
+            {isSearchMode && ' - Search Results'}
+          </Text>
+
+          {loading && leads.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading leads...</Text>
+            </View>
+          ) : filteredLeads.length > 0 ? (
+            <>
+              {filteredLeads.map((lead) => (
+                <LeadCard key={lead.id} lead={lead} onPress={() => handleLeadPress(lead)} />
+              ))}
+              
+              {loadingMore && (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.loadMoreText}>Loading more leads...</Text>
+                </View>
+              )}
+
+              {pagination && !pagination.has_next && !isSearchMode && leads.length > 0 && (
+                <View style={styles.endOfListContainer}>
+                  <Text style={styles.endOfListText}>
+                    You've reached the end of the list
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                {searchQuery || filterValue ? 'No leads match your criteria' : 'No leads found'}
+              </Text>
+              <Text style={styles.emptyStateSubtext}>
+                {searchQuery || filterValue 
+                  ? 'Try adjusting your search or filters' 
+                  : 'Your leads will appear here when they are created'}
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       <DropdownModal
         visible={activeDropdown === 'filter'}
         onClose={() => setActiveDropdown(null)}
         options={FILTER_OPTIONS}
-        onSelect={(value) => {
-          setFilterBy(value);
-          if (!value) {
-            setFilterValue('');
-            setSelectedPhase('');
-          }
-        }}
-        title="Filter By"
+        onSelect={handleFilterSelection}
+        title="Filter Options"
       />
 
       <DropdownModal
@@ -669,15 +746,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         visible={activeDropdown === 'filter-phase'}
         onClose={() => setActiveDropdown(null)}
         options={allPhases}
-        onSelect={(phase) => {
-          setSelectedPhase(phase);
-          if (filterBy === 'phase') setFilterValue(phase);
-          else if (filterBy === 'subphase') {
-            fetchSubphases(phase);
-            setTimeout(() => setActiveDropdown('filter-subphase'), 300);
-          }
-        }}
-        title="Select Phase"
+        onSelect={handlePhaseSelectionForFilter}
+        title={filterBy === 'subphase' ? "Select Phase (for Subphase)" : "Select Phase"}
       />
       
       <DropdownModal
@@ -701,131 +771,75 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.primary },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md, backgroundColor: colors.primary,
   },
   backButton: { padding: spacing.sm },
   headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.text,
-    flex: 1,
-    marginLeft: spacing.md,
+    fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, marginLeft: spacing.md,
   },
   headerActions: { flexDirection: 'row', gap: spacing.sm },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center', justifyContent: 'center',
   },
   iconButtonText: { fontSize: fontSize.lg },
   searchFilterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.white,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row', paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    backgroundColor: colors.primary, gap: spacing.sm,
   },
   searchContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing.md,
-    height: 44,
+    flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white,
+    borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, height: 44,
   },
   searchIcon: { fontSize: fontSize.md, marginRight: spacing.sm },
   searchInput: { flex: 1, fontSize: fontSize.md, color: colors.text },
   filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 70, height: 44, borderRadius: borderRadius.lg, backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.xs,
   },
   filterIcon: { fontSize: fontSize.md },
+  filterText: { fontSize: fontSize.xs, color: colors.text, fontWeight: '500' },
   createButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 44, height: 44, borderRadius: borderRadius.lg, backgroundColor: colors.success,
+    alignItems: 'center', justifyContent: 'center',
   },
-  createButtonText: {
-    fontSize: 24,
-    color: colors.white,
-    fontWeight: '300',
-  },
+  createButtonText: { fontSize: 24, color: colors.white, fontWeight: '300' },
   activeFilterContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.info + '15',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.info + '20',
   },
-  activeFilterText: {
-    fontSize: fontSize.sm,
-    color: colors.info,
-    fontWeight: '600',
+  activeFilterText: { fontSize: fontSize.sm, color: colors.info, fontWeight: '600' },
+  clearFilterText: { fontSize: fontSize.sm, color: colors.error, fontWeight: '600' },
+  searchModeIndicator: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.success + '20',
   },
-  clearFilterText: {
-    fontSize: fontSize.lg,
-    color: colors.error,
-    fontWeight: '400',
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.lg,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-  },
+  searchModeText: { color: colors.success, fontWeight: '500', flex: 1 },
+  clearSearchText: { color: colors.error, fontWeight: '500' },
+  contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary, paddingHorizontal: spacing.lg },
+  section: { marginTop: spacing.lg, marginBottom: spacing.xl },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  loadingContainer: { alignItems: 'center', paddingVertical: spacing.xxl },
+  loadingText: { marginTop: spacing.md, color: colors.textSecondary, fontSize: fontSize.sm },
   loadMoreContainer: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.lg,
   },
+  loadMoreText: { marginLeft: spacing.sm, color: colors.textSecondary },
+  endOfListContainer: { alignItems: 'center', paddingVertical: spacing.lg },
+  endOfListText: { color: colors.textSecondary, fontStyle: 'italic' },
   emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
+    backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.xl,
+    alignItems: 'center', ...shadows.md,
   },
   emptyStateText: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs,
   },
   emptyStateSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
+    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic',
   },
 });
+
 export default BUP;
