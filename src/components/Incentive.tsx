@@ -900,14 +900,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
           )}
           {incentiveData.bdt_share !== null && (
             <>
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Your Share</Text>
-                <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
-              </View>
               {incentiveData.final_amount_payable !== null && (
                 <View style={[styles.calculationRow, styles.finalRow]}>
                   <Text style={styles.finalLabel}>Net Amount (before TDS)</Text>
-                  <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
+                  <Text style={styles.finalValue}>To be Calculated</Text>
                 </View>
               )}
               <View style={styles.calculationRow}>
