@@ -17,6 +17,8 @@ import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';
 import Reminder from './Reminder';
+import BUP from './BUP/BUP';
+
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -96,6 +98,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showScoutBoy, setShowScoutBoy] = useState(false);
   const [showCreateSite, setShowCreateSite] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
+  const [showBUP, setShowBUP] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -127,15 +130,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const calculateYearsOnAnniversary = (dateString: string): number => {
     const joiningDate = new Date(dateString);
     const today = new Date();
-    
+
     // Get this year's anniversary date
     let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
-    
+
     // If this year's anniversary has passed, check next year
     if (anniversaryThisYear < today) {
       anniversaryThisYear = new Date(today.getFullYear() + 1, joiningDate.getMonth(), joiningDate.getDate());
     }
-    
+
     // Calculate years from joining to the upcoming anniversary
     const years = anniversaryThisYear.getFullYear() - joiningDate.getFullYear();
     return years;
@@ -176,15 +179,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
       const today = new Date();
-      
+
       // Get this year's occurrence
       const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
       const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
-      
+
       // If already passed this year, use next year
       const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
       const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
-      
+
       return eventDateA.getTime() - eventDateB.getTime();
     });
 
@@ -212,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           setUserData(transformedUserData);
           setModules(data.modules);
           setUpcomingBirthdays(data.upcoming_birthdays || []);
-          
+
           // Save driver field to AsyncStorage
           try {
             await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
@@ -221,7 +224,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             console.error('Error saving driver status to storage:', storageError);
           }
           setUpcomingAnniversaries(data.upcoming_anniversary || []);
-          
+
           // Generate upcoming events (birthdays + anniversaries)
           const birthdays = data.upcoming_birthdays || [];
           const anniversaries = data.upcoming_anniversary || [];
@@ -423,6 +426,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setShowScoutBoy(true);
     } else if (moduleUniqueName === 'reminder' || module.toLowerCase().includes('reminder')) {
       setShowReminder(true);
+    } else if (moduleUniqueName === 'bup' || module.toLowerCase().includes('bup') || module.toLowerCase().includes('business update')) {
+      setShowBUP(true);
     } else {
       Alert.alert('Coming Soon', `${module} module will be available soon!`);
     }
@@ -470,6 +475,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleBackFromReminder = () => {
     setShowReminder(false);
+    setActiveMenuItem('Dashboard');
+  };
+
+  const handleBackFromBUP = () => {
+    setShowBUP(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -550,7 +560,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     iconUrl: string;
     onPress: () => void;
   }
-  
+
   const ModuleItem: React.FC<ModuleItemProps> = ({ title, iconUrl, onPress }) => (
     <TouchableOpacity style={styles.moduleItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.moduleIconContainer}>
@@ -627,6 +637,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         />
       ) : showReminder ? (
         <Reminder onBack={handleBackFromReminder} />
+      ) : showBUP ? (
+        <BUP onBack={handleBackFromBUP} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
