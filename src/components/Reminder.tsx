@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert, FlatList
+  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert, Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -1006,7 +1006,12 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.modalContent} 
+            keyboardShouldPersistTaps="handled" 
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+          >
             
             <View style={styles.typeSection}>
               <Text style={styles.sectionTitle}>Type</Text>
@@ -1036,7 +1041,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
               {showTypeDropdown && (
                 <View style={styles.typeDropdownList}>
-                  <ScrollView style={styles.typeDropdownScroll} nestedScrollEnabled>
+                  <ScrollView style={styles.typeDropdownScroll} nestedScrollEnabled={true}>
                     {reminderTypes.map((type) => (
                       <TouchableOpacity
                         key={type.value}
@@ -1081,16 +1086,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               )}
             </View>
 
-            {/* {selectedType !== 'other' && (
-              <TextInput
-                style={styles.inputTitle}
-                placeholder="Title (optional if type selected)"
-                value={title}
-                onChangeText={setTitle}
-                placeholderTextColor={colors.textTertiary}
-              />
-            )} */}
-
             <View style={styles.inputGroup}>
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Date</Text>
@@ -1122,7 +1117,11 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                   <View style={styles.timePickerRow}>
                     <View style={styles.timePickerColumn}>
                       <Text style={styles.timePickerLabel}>Hour</Text>
-                      <ScrollView style={styles.timePickerScroll} showsVerticalScrollIndicator={false}>
+                      <ScrollView 
+                        style={styles.timePickerScroll} 
+                        showsVerticalScrollIndicator={false}
+                        nestedScrollEnabled={true}
+                      >
                         {hours.map(hour => (
                           <TouchableOpacity
                             key={hour}
@@ -1149,7 +1148,11 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
                     <View style={styles.timePickerColumn}>
                       <Text style={styles.timePickerLabel}>Min</Text>
-                      <ScrollView style={styles.timePickerScroll} showsVerticalScrollIndicator={false}>
+                      <ScrollView 
+                        style={styles.timePickerScroll} 
+                        showsVerticalScrollIndicator={false}
+                        nestedScrollEnabled={true}
+                      >
                         {minutes.map(minute => (
                           <TouchableOpacity
                             key={minute}
@@ -1176,7 +1179,11 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
                     <View style={styles.timePickerColumn}>
                       <Text style={styles.timePickerLabel}>Period</Text>
-                      <ScrollView style={styles.timePickerScroll} showsVerticalScrollIndicator={false}>
+                      <ScrollView 
+                        style={styles.timePickerScroll} 
+                        showsVerticalScrollIndicator={false}
+                        nestedScrollEnabled={true}
+                      >
                         {periods.map(period => (
                           <TouchableOpacity
                             key={period}
@@ -1263,7 +1270,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                       <ActivityIndicator size="small" color={colors.primary} />
                     </View>
                   ) : employeeSearchResults.length > 0 ? (
-                    <ScrollView style={styles.employeeSearchResults} nestedScrollEnabled>
+                    <ScrollView style={styles.employeeSearchResults} nestedScrollEnabled={true}>
                       {employeeSearchResults.map((emp) => (
                         <TouchableOpacity
                           key={emp.employee_id}
