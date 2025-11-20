@@ -178,13 +178,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  // Gallery navigation functions
+  // Gallery navigation
   const navigateToPreviousVisit = () => {
     if (currentVisitIndex > 0) {
       const newIndex = currentVisitIndex - 1;
       setCurrentVisitIndex(newIndex);
       setSelectedVisit(visits[newIndex]);
-      // Reset comments when navigating to different visit
       setComments([]);
       setCommentsCurrentPage(1);
     }
@@ -195,13 +194,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       const newIndex = currentVisitIndex + 1;
       setCurrentVisitIndex(newIndex);
       setSelectedVisit(visits[newIndex]);
-      // Reset comments when navigating to different visit
       setComments([]);
       setCommentsCurrentPage(1);
     }
   };
 
-  // Fetch visits from API with pagination
+  // Fetch visits
   const fetchVisits = async (page: number = 1, append: boolean = false) => {
     try {
       if (!append) {
@@ -269,8 +267,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   useEffect(() => {
     fetchVisits(1, false);
   }, []);
-
-  // Handle refresh
+  // Refresh visits
   const handleRefresh = async () => {
     setRefreshing(true);
     setCurrentPage(1);
@@ -362,14 +359,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
       const data = await response.json();
 
-      // Check if comments exists and is an array
       if (!data.comments || !Array.isArray(data.comments)) {
-        console.error('Invalid response format:', data);
         setLoadingComments(false);
         setLoadingMoreComments(false);
         return;
       }
-      console.log(data.comments)
+
       const formattedComments = data.comments.map((item: any) => ({
         commentId: item.id,
         user: item.user,
@@ -389,7 +384,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       setCommentsHasNextPage(data.pagination?.has_next || false);
 
     } catch (error) {
-      console.error('Error fetching comments:', error);
       Alert.alert('Error', 'Failed to load comments');
     } finally {
       setLoadingComments(false);
@@ -397,7 +391,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  // Add a new comment
+  // Add Comment
   const handleAddComment = async () => {
     if (!commentText.trim() && commentDocuments.length === 0) {
       Alert.alert('Error', 'Please enter a comment or attach a file');
@@ -422,7 +416,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         formData.append('comment', commentText.trim());
       }
 
-      // Append documents if any
       commentDocuments.forEach((doc, index) => {
         formData.append('documents', {
           uri: doc.uri,
@@ -439,21 +432,11 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to add comment: ${response.status}`);
-      }
+      if (!response.ok) throw new Error();
 
       const data = await response.json();
+      if (!data.comment) throw new Error();
 
-      // Check if the response has the expected structure
-      if (!data.comment) {
-        console.error('Invalid response format:', data);
-        Alert.alert('Error', 'Invalid response from server');
-        setAddingComment(false);
-        return;
-      }
-
-      // Add new comment to the top of the list
       const newComment = {
         commentId: data.comment.id,
         user: data.comment.user,
@@ -468,9 +451,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       setCommentDocuments([]);
 
       Alert.alert('Success', 'Comment added successfully');
-
     } catch (error) {
-      console.error('Error adding comment:', error);
       Alert.alert('Error', 'Failed to add comment. Please try again.');
     } finally {
       setAddingComment(false);
@@ -484,36 +465,19 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   };
 
-  // Handle document/image attachment
+  // Attachments
   const handleAttachFile = async () => {
-    try {
-      Alert.alert(
-        'Attach File',
-        'Choose attachment type',
-        [
-          {
-            text: 'Take Photo',
-            onPress: handleTakePhoto,
-          },
-          {
-            text: 'Choose from Gallery',
-            onPress: handlePickImage,
-          },
-          {
-            text: 'Choose Document',
-            onPress: handlePickDocument,
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('Error attaching file:', error);
-    }
+    Alert.alert(
+      'Attach File',
+      'Choose attachment type',
+      [
+        { text: 'Take Photo', onPress: handleTakePhoto },
+        { text: 'Choose from Gallery', onPress: handlePickImage },
+        { text: 'Choose Document', onPress: handlePickDocument },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
-
   const handleTakePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -537,9 +501,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           type: 'image'
         }]);
       }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-    }
+    } catch (error) {}
   };
 
   const handlePickImage = async () => {
@@ -559,9 +521,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           type: 'image'
         }]);
       }
-    } catch (error) {
-      console.error('Error picking image:', error);
-    }
+    } catch (error) {}
   };
 
   const handlePickDocument = async () => {
@@ -581,24 +541,20 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           size: asset.size
         }]);
       }
-    } catch (error) {
-      console.error('Error picking document:', error);
-    }
+    } catch (error) {}
   };
 
-  // Remove attached file
   const handleRemoveDocument = (index: number) => {
     setCommentDocuments(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Format comment date
   const formatCommentDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
       const now = new Date();
-      const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+      const diff = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
-      if (diffInHours < 24) {
+      if (diff < 24) {
         return date.toLocaleTimeString('en-IN', {
           hour: '2-digit',
           minute: '2-digit',
@@ -620,7 +576,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     setSelectedVisit(visit);
     setCurrentVisitIndex(index);
     setViewMode('visit-detail');
-    // Reset comments when opening new visit
     setComments([]);
     setCommentsCurrentPage(1);
   };
@@ -642,7 +597,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     handleRefresh();
   };
 
-  // Mark visit as completed
   const handleMarkComplete = async () => {
     if (!selectedVisit) return;
 
@@ -662,29 +616,29 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
       if (response.ok) {
         const updatedVisit = { ...selectedVisit, status: 'scout_completed' };
-        setSelectedVisit(updatedVisit);
-        // Update the visit in the visits array
         const updatedVisits = [...visits];
         updatedVisits[currentVisitIndex] = updatedVisit;
+        setSelectedVisit(updatedVisit);
         setVisits(updatedVisits);
         Alert.alert('Success', 'Visit marked as completed');
       }
     } catch (error) {
-      console.error('Error marking visit complete:', error);
       Alert.alert('Error', 'Failed to mark visit as complete');
     } finally {
       setMarkingComplete(false);
     }
   };
 
-  // Fetch comments when visit detail is opened
   useEffect(() => {
     if (viewMode === 'visit-detail' && selectedVisit) {
       fetchComments(selectedVisit.id, 1, false);
     }
   }, [viewMode, selectedVisit]);
 
-  // Visit Detail View with Comments Section
+
+  // ---------------------------
+  //   VISIT DETAIL SCREEN
+  // ---------------------------
   if (viewMode === 'visit-detail' && selectedVisit) {
     const site = selectedVisit.site;
     const insets = useSafeAreaInsets();
@@ -695,7 +649,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
-        {/* Header with Gallery Counter */}
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
             <BackIcon />
@@ -709,7 +663,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           <View style={styles.headerSpacer} />
         </View>
 
-        {/* Gallery Navigation Arrows */}
+        {/* Navigation arrows */}
         <View style={styles.galleryNavigationContainer}>
           <TouchableOpacity
             style={[
@@ -719,7 +673,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             ]}
             onPress={navigateToPreviousVisit}
             disabled={!hasPrevious}
-            activeOpacity={0.7}
           >
             <NavigationArrow direction="left" />
           </TouchableOpacity>
@@ -732,7 +685,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             ]}
             onPress={navigateToNextVisit}
             disabled={!hasNext}
-            activeOpacity={0.7}
           >
             <NavigationArrow direction="right" />
           </TouchableOpacity>
@@ -741,86 +693,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.detailContainer}>
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
-
-              {/* Comments List - FIXED HEIGHT AND VISIBILITY */}
-              <View style={styles.commentsContainer}>
-                {loadingComments ? (
-                  <View style={styles.commentsLoading}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.commentsLoadingText}>Loading comments...</Text>
-                  </View>
-                ) : comments.length > 0 ? (
-                  <ScrollView
-                    style={styles.commentsList}
-                    contentContainerStyle={styles.commentsListContent}
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
-                    onScroll={({ nativeEvent }) => {
-                      const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-                      const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
-                      if (isCloseToBottom && !loadingMoreComments && commentsHasNextPage) {
-                        loadMoreComments();
-                      }
-                    }}
-                    scrollEventThrottle={400}
-                  >
-                    {comments.map((comment, index) => (
-                      <View key={`comment-${comment.commentId}-${index}`} style={styles.commentItem}>
-                        <View style={styles.commentHeader}>
-                          <Text style={styles.commentAuthor}>
-                            {comment.user?.full_name || 'Unknown User'}
-                          </Text>
-                          <Text style={styles.commentTime}>
-                            {formatCommentDate(comment.created_at)}
-                          </Text>
-                        </View>
-                        {comment.content && (
-                          <Text style={styles.commentContent}>
-                            {comment.content}
-                          </Text>
-                        )}
-                        {comment.documents && comment.documents.length > 0 && (
-                          <View style={styles.commentDocuments}>
-                            {comment.documents.map((doc: any, docIndex: number) => (
-                              <TouchableOpacity
-                                key={`doc-${docIndex}`}
-                                style={styles.commentDocument}
-                                onPress={() => {
-                                  // Handle document opening if needed
-                                  Alert.alert('Document', doc.name || 'Document attached');
-                                }}
-                              >
-                                <Text style={styles.commentDocumentText}>
-                                  📎 {doc.name || 'Document'}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        )}
-                        {index < comments.length - 1 && <View style={styles.commentSeparator} />}
-                      </View>
-                    ))}
-
-                    {loadingMoreComments && (
-                      <View style={styles.loadingMoreComments}>
-                        <ActivityIndicator size="small" color={colors.primary} />
-                        <Text style={styles.loadingMoreCommentsText}>Loading older comments...</Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                ) : (
-                  <View style={styles.emptyComments}>
-                    <Text style={styles.emptyCommentsIcon}>💬</Text>
-                    <Text style={styles.emptyCommentsText}>No comments yet</Text>
-                    <Text style={styles.emptyCommentsSubtext}>Be the first to add a comment</Text>
-                  </View>
-                )}
-              </View>
-
+              {/* FIRST Comments block was here — REMOVED completely */}
+              {/* Photos */}
               {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
                 <View style={styles.card}>
                   <Text style={styles.sectionTitle}>Photos ({selectedVisit.building_photos.length})</Text>
+
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -857,12 +735,15 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                 </View>
               )}
 
+              {/* Property Details */}
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Property Details</Text>
+
                 <DetailSection title="📋 Basic Information" site={site} />
                 <DetailSection title="💰 Commercial Details" site={site} />
                 <DetailSection title="🚗 Vehicle Information" site={site} />
                 <DetailSection title="👤 Contact Information" site={site} />
+
                 {site.remarks && (
                   <View style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
@@ -871,11 +752,13 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                 )}
               </View>
 
-              {/* Comments Section */}
+              {/* --------------------------------------------- */}
+              {/* ONLY COMMENTS SECTION (Section B) — This stays */}
+              {/* --------------------------------------------- */}
+
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
 
-                {/* Comments List with Fixed Height */}
                 <View style={styles.commentsContainer}>
                   {loadingComments ? (
                     <View style={styles.commentsLoading}>
@@ -888,7 +771,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                       showsVerticalScrollIndicator={false}
                       onScroll={({ nativeEvent }) => {
                         const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-                        const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+                        const isCloseToBottom =
+                          layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
                         if (isCloseToBottom && !loadingMoreComments) {
                           loadMoreComments();
                         }
@@ -905,19 +789,26 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                               {formatCommentDate(comment.created_at)}
                             </Text>
                           </View>
-                          <Text style={styles.commentContent}>
-                            {comment.content}
-                          </Text>
+
+                          {comment.content ? (
+                            <Text style={styles.commentContent}>{comment.content}</Text>
+                          ) : null}
+
                           {comment.documents && comment.documents.length > 0 && (
                             <View style={styles.commentDocuments}>
                               {comment.documents.map((doc: any, docIndex: number) => (
                                 <TouchableOpacity key={docIndex} style={styles.commentDocument}>
-                                  <Text style={styles.commentDocumentText}>📎 {doc.name || 'Document'}</Text>
+                                  <Text style={styles.commentDocumentText}>
+                                    📎 {doc.name || 'Document'}
+                                  </Text>
                                 </TouchableOpacity>
                               ))}
                             </View>
                           )}
-                          {index < comments.length - 1 && <View style={styles.commentSeparator} />}
+
+                          {index < comments.length - 1 && (
+                            <View style={styles.commentSeparator} />
+                          )}
                         </View>
                       ))}
 
@@ -937,9 +828,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                   )}
                 </View>
 
-                {/* Add Comment Section */}
+                {/* Add Comment */}
                 <View style={styles.addCommentContainer}>
-                  {/* Attached Files Preview */}
                   {commentDocuments.length > 0 && (
                     <View style={styles.attachedFilesContainer}>
                       <Text style={styles.attachedFilesTitle}>Attached files:</Text>
@@ -995,19 +885,22 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                 </View>
               </View>
 
-              {/* Mark Complete Button */}
+              {/* Mark Complete CTA */}
               {selectedVisit.status === 'pending' && (
                 <TouchableOpacity
-                  style={[styles.markCompleteButton, markingComplete && styles.markCompleteButtonDisabled]}
+                  style={[
+                    styles.markCompleteButton,
+                    markingComplete && styles.markCompleteButtonDisabled
+                  ]}
                   onPress={handleMarkComplete}
                   disabled={markingComplete}
                 >
                   {markingComplete ? (
                     <ActivityIndicator size="small" color={colors.white} />
                   ) : (
-                    <>
-                      <Text style={styles.markCompleteButtonText}>✓ Mark Visit as Completed</Text>
-                    </>
+                    <Text style={styles.markCompleteButtonText}>
+                      ✓ Mark Visit as Completed
+                    </Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -1017,6 +910,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           </View>
         </ScrollView>
 
+        {/* Photo Modal */}
         <Modal
           visible={showPhotoModal}
           transparent
@@ -1030,6 +924,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             >
               <Text style={styles.photoModalCloseText}>✕</Text>
             </TouchableOpacity>
+
             <Image
               source={{ uri: selectedPhotoUrl }}
               style={styles.photoModalImage}
@@ -1040,8 +935,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       </View>
     );
   }
-
-  // Create Site View
+  // -----------------------
+  //   CREATE SITE SCREEN
+  // -----------------------
   if (viewMode === 'create-site') {
     return (
       <CreateSite
@@ -1057,7 +953,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
   const insets = useSafeAreaInsets();
 
-  // Default view: Visits List
+  // -----------------------
+  //   VISITS LIST SCREEN
+  // -----------------------
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
@@ -1071,6 +969,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       </View>
 
       <View style={styles.contentContainer}>
+        {/* Search */}
         <View style={styles.searchContainer}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
@@ -1093,6 +992,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           ) : null}
         </View>
 
+        {/* create site */}
         <View style={styles.createButtonWrapper}>
           <TouchableOpacity
             style={styles.createSiteButton}
@@ -1102,19 +1002,17 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Visits List */}
         <ScrollView
           style={styles.listScrollView}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.primary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
           onScroll={({ nativeEvent }) => {
             const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+            const isCloseToBottom =
+              layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
             if (isCloseToBottom && !loadingMore) {
               loadMoreVisits();
             }
@@ -1156,7 +1054,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                       activeOpacity={0.7}
                     >
                       <View style={styles.visitCardImage}>
-                        {visit.building_photos && visit.building_photos.length > 0 ? (
+                        {visit.building_photos?.length > 0 ? (
                           <Image
                             source={{ uri: visit.building_photos[0].file_url }}
                             style={styles.visitImage}
@@ -1173,7 +1071,10 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                           <Text style={styles.visitCardTitle} numberOfLines={1}>
                             {visit.site.building_name}
                           </Text>
-                          <View style={[styles.visitStatusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
+                          <View style={[
+                            styles.visitStatusBadge,
+                            { backgroundColor: getStatusColor(visit.status) }
+                          ]}>
                             <Text style={styles.visitStatusText}>
                               {getStatusIcon(visit.status)} {beautifyName(visit.status)}
                             </Text>
@@ -1192,12 +1093,17 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                         <View style={styles.visitMetaRow}>
                           {visit.site.rent && visit.site.total_area && (
                             <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>₹{(visit.site.rent / visit.site.total_area).toFixed(2)}/sq-ft</Text>
+                              <Text style={styles.visitMetaText}>
+                                ₹{(visit.site.rent / visit.site.total_area).toFixed(2)}/sq-ft
+                              </Text>
                             </View>
                           )}
-                          {visit.photos && visit.photos.length > 0 && (
+
+                          {visit.photos?.length > 0 && (
                             <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>📷 {visit.photos.length}</Text>
+                              <Text style={styles.visitMetaText}>
+                                📷 {visit.photos.length}
+                              </Text>
                             </View>
                           )}
                         </View>
@@ -1234,7 +1140,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   );
 };
 
-// Helper component for detail sections
+// ---------------------------------------
+//   Detail Section Component
+// ---------------------------------------
 const DetailSection = ({ title, site }: { title: string; site: any }) => {
   const getDetailItems = () => {
     switch (title) {
@@ -1269,7 +1177,7 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
           { label: 'Car Parking Slots', value: site.car_parking_slots },
           { label: 'Car Parking Ratio', value: site.car_parking_ratio },
           { label: 'Two Wheeler Parking', value: site.two_wheeler_charges },
-        ];  
+        ];
       case '👤 Contact Information':
         return [
           { label: 'Building Owner', value: site.building_owner_name },
@@ -1285,7 +1193,7 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
   };
 
   const items = getDetailItems();
-  
+
   return (
     <View style={styles.detailSection}>
       <Text style={styles.detailSectionTitle}>{title}</Text>
@@ -1300,6 +1208,11 @@ const DetailSection = ({ title, site }: { title: string; site: any }) => {
     </View>
   );
 };
+
+
+export default ScoutBoy;
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -2009,4 +1922,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ScoutBoy;
