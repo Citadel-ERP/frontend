@@ -1,4 +1,4 @@
-package com.citadel.app
+package com.citadelnetinc.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

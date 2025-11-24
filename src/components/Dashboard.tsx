@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar,
   Alert, Modal, Animated, KeyboardAvoidingView, Platform, Dimensions, Image, ActivityIndicator,
@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import Attendance from './attendance/Attendance';
 import Profile from './Profile';
 import HR from './HR';
@@ -19,8 +22,18 @@ import CreateSite from './CreateSite';
 import Reminder from './Reminder';
 import BUP from './BUP/BUP';
 
-
 const { width: screenWidth } = Dimensions.get('window');
+
+// Configure notification handler
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 interface DashboardProps {
   onLogout: () => void;
@@ -88,6 +101,11 @@ interface UpcomingEvent {
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [token, setToken] = useState<string | null>(null);
+  const [expoPushToken, setExpoPushToken] = useState<string>('');
+  const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
+  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined)
+  const responseListener = useRef<Notifications.Subscription | undefined>(undefined)
+  
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
@@ -113,6 +131,167 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  // Function to register for push notifications
+  async function registerForPushNotificationsAsync() {
+    let token;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2D3748',
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Push notifications are disabled. Please enable them in your device settings to receive important updates.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      try {
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+        
+        if (!projectId) {
+          console.error('Project ID not found');
+          return;
+        }
+        
+        token = (await Notifications.getExpoPushTokenAsync({
+          projectId
+        })).data;
+        
+        console.log('Expo Push Token:', token);
+      } catch (error) {
+        console.error('Error getting push token:', error);
+        Alert.alert('Error', 'Failed to get push notification token ' + (error as Error).message);
+      }
+    } else {
+      Alert.alert('Notice', 'Push notifications require a physical device');
+    }
+
+    return token;
+  }
+
+  // Function to send token to backend
+  const sendTokenToBackend = async (expoToken: string, userToken: string) => {
+    if (!expoToken || !userToken) {
+      console.error('Missing tokens:', { expoToken, userToken });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: userToken,
+          expo_token: expoToken,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        console.log('Push token registered successfully:', data.message);
+        // Save locally to avoid re-registering
+        await AsyncStorage.setItem('expo_push_token', expoToken);
+      } else {
+        console.error('Failed to register push token:', data.message);
+      }
+    } catch (error) {
+      console.error('Error sending push token to backend:', error);
+    }
+  };
+
+  // Setup push notifications
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupNotifications = async () => {
+      if (!token) return;
+
+      try {
+        // Check if token is already registered
+        const savedToken = await AsyncStorage.getItem('expo_push_token');
+        
+        const pushToken = await registerForPushNotificationsAsync();
+        
+        if (pushToken && isMounted) {
+          setExpoPushToken(pushToken);
+          
+          // Only send to backend if token is new or different
+          if (savedToken !== pushToken) {
+            await sendTokenToBackend(pushToken, token);
+          }
+        }
+
+        // Listener for notifications received while app is foregrounded
+        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+          console.log('Notification received in foreground:', notification);
+          setNotification(notification);
+        });
+
+        // Listener for when user taps on notification
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+          console.log('Notification tapped:', response);
+          
+          const data = response.notification.request.content.data;
+          
+          // Handle navigation based on notification data
+          if (data?.screen) {
+            switch (data.screen) {
+              case 'attendance':
+                setShowAttendance(true);
+                break;
+              case 'hr':
+                setShowHR(true);
+                break;
+              case 'cab':
+                setShowCab(true);
+                break;
+              case 'profile':
+                setShowProfile(true);
+                break;
+              // Add more cases as needed
+              default:
+                console.log('Unknown screen:', data.screen);
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error setting up notifications:', error);
+      }
+    };
+
+    setupNotifications();
+
+    return () => {
+      isMounted = false;
+      if (notificationListener.current) {
+        notificationListener.current?.remove();
+      }
+      if (responseListener.current) {
+        responseListener.current?.remove();
+      }
+    };
+  }, [token]);
 
   useEffect(() => {
     const getToken = async () => {

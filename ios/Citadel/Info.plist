@@ -28,7 +28,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>citadel</string>
-				<string>com.citadel.app</string>
+				<string>com.citadelnetinc.app</string>
 			</array>
 		</dict>
 		<dict>

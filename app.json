@@ -18,13 +18,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.citadel.app",
+      "bundleIdentifier": "com.citadelnetinc.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
         "NSCameraUsageDescription": "This app uses the camera for Face ID authentication.",
         "UIBackgroundModes": [
           "fetch",
-          "location"
+          "location",
+          "remote-notification"
         ],
         "NSLocationWhenInUseUsageDescription": "This app needs location access to mark attendance when you're at the office.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to automatically mark your attendance.",
@@ -35,7 +36,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.citadel.app",
+      "package": "com.citadelnetinc.app",
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -71,6 +72,14 @@
           "locationWhenInUsePermission": "Allow Citadel to use your location for attendance marking."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#2D3748",
+          "sounds": ["./assets/notification-sound.wav"]
+        }
+      ],
       "expo-task-manager",
       "expo-web-browser"
     ],
@@ -78,6 +87,10 @@
       "eas": {
         "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f"
       }
+    },
+    "notification": {
+      "icon": "./assets/images/logo.png",
+      "color": "#2D3748"
     }
   }
 }

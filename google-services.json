@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "231385589622",
+    "project_id": "citadel-28710",
+    "storage_bucket": "citadel-28710.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:231385589622:android:898b319c7503d73f3ebc57",
+        "android_client_info": {
+          "package_name": "com.citadelnetinc.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGH8-EY8H2j1RcRovR5vK-7bj5vTL2vJI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
