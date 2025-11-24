@@ -37,6 +37,8 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.citadelnetinc.app",
+      "googleServicesFile": "./google-services.json",
+      "useNextNotificationsApi": true,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
