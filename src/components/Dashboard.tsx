@@ -105,7 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined)
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined)
-  
+
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
@@ -136,55 +136,147 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   async function registerForPushNotificationsAsync() {
     let token;
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2D3748',
-      });
-    }
+    try {
+      console.log('[Line 1] Starting notification registration...');
+      console.log('[Line 2] Platform:', Platform.OS);
+      console.log('[Line 3] Is Device:', Device.isDevice);
 
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      
-      if (finalStatus !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Push notifications are disabled. Please enable them in your device settings to receive important updates.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-      
-      try {
-        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-        
-        if (!projectId) {
-          console.error('Project ID not found');
-          return;
+      if (Platform.OS === 'android') {
+        try {
+          console.log('[Line 4] Setting up Android notification channel...');
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#2D3748',
+          });
+          console.log('[Line 5] Android notification channel created successfully');
+        } catch (channelError) {
+          console.error('[Line 6] Error creating notification channel:', channelError);
+          Alert.alert(
+            'Channel Error',
+            `Failed to create notification channel at Line 6:\n${(channelError as Error).message}\n\nStack: ${(channelError as Error).stack}`
+          );
+          throw channelError;
         }
-        
-        token = (await Notifications.getExpoPushTokenAsync({
-          projectId
-        })).data;
-        
-        console.log('Expo Push Token:', token);
-      } catch (error) {
-        console.error('Error getting push token:', error);
-        Alert.alert('Error', 'Failed to get push notification token ' + (error as Error).message);
       }
-    } else {
-      Alert.alert('Notice', 'Push notifications require a physical device');
-    }
 
-    return token;
+      if (Device.isDevice) {
+        try {
+          console.log('[Line 7] Checking existing permissions...');
+          const { status: existingStatus } = await Notifications.getPermissionsAsync();
+          console.log('[Line 8] Existing permission status:', existingStatus);
+          let finalStatus = existingStatus;
+
+          if (existingStatus !== 'granted') {
+            console.log('[Line 9] Requesting permissions...');
+            const { status } = await Notifications.requestPermissionsAsync();
+            finalStatus = status;
+            console.log('[Line 10] Permission request result:', finalStatus);
+          }
+
+          if (finalStatus !== 'granted') {
+            console.log('[Line 11] Permission denied by user');
+            Alert.alert(
+              'Permission Required',
+              'Push notifications are disabled. Please enable them in your device settings to receive important updates.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+
+          console.log('[Line 12] Permissions granted, proceeding to get token...');
+
+          try {
+            console.log('[Line 13] Getting project ID...');
+            const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+            console.log('[Line 14] Project ID:', projectId);
+
+            if (!projectId) {
+              const errorMsg = 'Project ID not found in Constants';
+              console.error('[Line 15]', errorMsg);
+              console.log('[Line 16] Constants.expoConfig:', JSON.stringify(Constants.expoConfig, null, 2));
+              console.log('[Line 17] Constants.easConfig:', JSON.stringify(Constants.easConfig, null, 2));
+              Alert.alert(
+                'Configuration Error',
+                `${errorMsg} at Line 15\n\nPlease check your app.json configuration.`
+              );
+              return;
+            }
+
+            console.log('[Line 18] Calling getExpoPushTokenAsync...');
+            const tokenData = await Notifications.getExpoPushTokenAsync({
+              projectId
+            });
+            console.log('[Line 19] Token data received:', tokenData);
+
+            token = tokenData.data;
+            console.log('[Line 20] Expo Push Token extracted:', token);
+
+          } catch (tokenError) {
+            console.error('[Line 21] Error getting Expo push token:', tokenError);
+            console.error('[Line 22] Error name:', (tokenError as Error).name);
+            console.error('[Line 23] Error message:', (tokenError as Error).message);
+            console.error('[Line 24] Error stack:', (tokenError as Error).stack);
+
+            // Check for specific Firebase error
+            const errorMessage = (tokenError as Error).message;
+            const errorStack = (tokenError as Error).stack || '';
+
+            let userFriendlyMessage = errorMessage;
+            let debugInfo = '';
+
+            if (errorMessage.includes('Firebase') || errorMessage.includes('firebase')) {
+              userFriendlyMessage = 'Firebase conflict detected. This app should not have Firebase installed.';
+              debugInfo += '\n\n🔧 Solution:\n1. Remove google-services.json\n2. Run: expo prebuild --clean\n3. Rebuild with: eas build --platform android --profile preview --clear-cache';
+            } else if (errorMessage.includes('No FCM token')) {
+              userFriendlyMessage = 'FCM token error - Firebase may still be configured';
+              debugInfo += '\n\n🔧 Check:\n1. Ensure google-services.json is removed\n2. Check if @react-native-firebase packages are installed';
+            }
+
+            Alert.alert(
+              'Token Error (Line 21-24)',
+              `${userFriendlyMessage}\n\nError at Line 21:\n${errorMessage}${debugInfo}\n\nFull Stack:\n${errorStack.substring(0, 200)}...`,
+              [
+                { text: 'Copy Error', onPress: () => console.log('Full error:', tokenError) },
+                { text: 'OK' }
+              ]
+            );
+            throw tokenError;
+          }
+
+        } catch (permissionError) {
+          console.error('[Line 25] Error in permission flow:', permissionError);
+          Alert.alert(
+            'Permission Error',
+            `Failed at Line 25 (Permission Flow):\n${(permissionError as Error).message}\n\nStack: ${(permissionError as Error).stack}`
+          );
+          throw permissionError;
+        }
+      } else {
+        console.log('[Line 26] Not a physical device');
+        Alert.alert('Notice', 'Push notifications require a physical device');
+      }
+
+      console.log('[Line 27] Registration completed. Token:', token);
+      return token;
+
+    } catch (mainError) {
+      console.error('[Line 28] Main function error:', mainError);
+      console.error('[Line 29] Error details:', {
+        name: (mainError as Error).name,
+        message: (mainError as Error).message,
+        stack: (mainError as Error).stack
+      });
+
+      Alert.alert(
+        'Notification Setup Failed',
+        `Fatal error at Line 28:\n${(mainError as Error).message}\n\nType: ${(mainError as Error).name}\n\nPlease check console logs for full details.`,
+        [{ text: 'OK' }]
+      );
+
+      return undefined;
+    }
   }
 
   // Function to send token to backend
@@ -207,7 +299,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
         console.log('Push token registered successfully:', data.message);
         // Save locally to avoid re-registering
@@ -230,16 +322,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       try {
         // Check if token is already registered
         const savedToken = await AsyncStorage.getItem('expo_push_token');
-        
+        console.log(savedToken)
         const pushToken = await registerForPushNotificationsAsync();
-        
+        console.log('Push token:', pushToken);
+        console.log('isMounted:', isMounted);
         if (pushToken && isMounted) {
           setExpoPushToken(pushToken);
-          
-          // Only send to backend if token is new or different
-          if (savedToken !== pushToken) {
+            console.log("sending")
             await sendTokenToBackend(pushToken, token);
-          }
         }
 
         // Listener for notifications received while app is foregrounded
@@ -251,9 +341,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         // Listener for when user taps on notification
         responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
           console.log('Notification tapped:', response);
-          
+
           const data = response.notification.request.content.data;
-          
+
           // Handle navigation based on notification data
           if (data?.screen) {
             switch (data.screen) {

@@ -50,6 +50,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
+  const [showCheckOutReasonModal, setShowCheckOutReasonModal] = useState(false);
+  const [checkoutReason, setCheckoutReason] = useState('');
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     casual_leaves: 0,
     sick_leaves: 0,
@@ -289,7 +291,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const markCheckout = async () => {
+  const markCheckout = async (reason?: string) => {
     if (!token) {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
@@ -297,17 +299,36 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
+      const location = await getCurrentLocation(10000);
+      if (!location) {
+        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+        setLoading(false);
+        return;
+      }
+
       // Auto-capture checkout time in IST
       const checkOutTimeIST = getCurrentTimeInIST();
-      console.log('Driver checkout time (IST):', checkOutTimeIST);
+      console.log('Checkout time (IST):', checkOutTimeIST);
+
+      // Create request body
+      const requestBody: any = {
+        token,
+        checkout_time: checkOutTimeIST,
+        latitude: location.latitude.toString(),
+        longitude: location.longitude.toString(),
+      };
+
+      // Add reason if provided
+      if (reason && typeof reason === 'string' && reason.trim()) {
+        requestBody.reason_not_in_office = reason.trim();
+      }
+
+      console.log('Marking checkout with payload:', requestBody);
 
       const response = await fetch(`${BACKEND_URL}/core/markCheckoutTime`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          checkout_time: checkOutTimeIST
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const responseText = await response.text();
@@ -315,7 +336,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       if (response.status === 200) {
         Alert.alert('Success', 'Checkout time marked successfully!');
-        setShowCheckOutTimeModal(false);
+        setShowCheckOutReasonModal(false);
+        setCheckoutReason('');
 
         // Update today's attendance with checkout time
         const today = new Date().toISOString().split('T')[0];
@@ -343,8 +365,21 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         });
 
         await fetchAttendanceRecords();
+        setLoading(false);
+      } else if (response.status === 400) {
+        if (data.message === 'Mark checkout failed, You are not in office add a reason too') {
+          if (!reason || typeof reason !== 'string') {
+            setShowCheckOutReasonModal(true);
+            setLoading(false);
+            return;
+          } else {
+            Alert.alert('Error', 'Failed to mark checkout. Please try again.');
+          }
+        } else {
+          Alert.alert('Error', data.message || 'Failed to mark checkout time.');
+        }
       } else {
-        Alert.alert('Error', data.message || 'Failed to mark checkout time.');
+        Alert.alert('Error', data.message || `Server error (${response.status}).`);
       }
     } catch (error) {
       console.error('Error marking checkout:', error);
@@ -486,126 +521,126 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const downloadAttendanceReport = async () => {
-  setLoading(true);
-  try {
-    const response = await fetch(`${BACKEND_URL}/core/getAttendanceReport`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token,
-        month: selectedMonth.toString().padStart(2, '0'),
-        year: selectedYear.toString(),
-      }),
-    });
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/getAttendanceReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          month: selectedMonth.toString().padStart(2, '0'),
+          year: selectedYear.toString(),
+        }),
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to generate report');
-    }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to generate report');
+      }
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!data.file_url) {
-      throw new Error('Invalid response from server');
-    }
+      if (!data.file_url) {
+        throw new Error('Invalid response from server');
+      }
 
-    const fileUrl = data.file_url;
-    const filename = data.filename || `attendance_report_${selectedMonth}_${selectedYear}.pdf`;
+      const fileUrl = data.file_url;
+      const filename = data.filename || `attendance_report_${selectedMonth}_${selectedYear}.pdf`;
 
-    // Show options to user
-    Alert.alert(
-      'Download Report',
-      'Choose how you want to access your attendance report:',
-      [
-        {
-          text: 'Open in Browser',
-          onPress: async () => {
-            await WebBrowser.openBrowserAsync(fileUrl);
+      // Show options to user
+      Alert.alert(
+        'Download Report',
+        'Choose how you want to access your attendance report:',
+        [
+          {
+            text: 'Open in Browser',
+            onPress: async () => {
+              await WebBrowser.openBrowserAsync(fileUrl);
+            },
           },
-        },
-        {
-          text: 'Download & Share',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              
-              // Fetch the PDF file
-              const pdfResponse = await fetch(fileUrl);
-              if (!pdfResponse.ok) {
-                throw new Error('Failed to fetch PDF from server');
-              }
+          {
+            text: 'Download & Share',
+            onPress: async () => {
+              try {
+                setLoading(true);
 
-              // Get the blob and convert to base64
-              const blob = await pdfResponse.blob();
-              const reader = new FileReader();
-              
-              reader.onloadend = async () => {
-                try {
-                  const base64data = reader.result as string;
-                  // Remove the data URL prefix (data:application/pdf;base64,)
-                  const base64Content = base64data.split(',')[1];
-                  
-                  // Save to local file system
-                  const fileUri = FileSystem.documentDirectory + filename;
-                  await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-                    encoding: FileSystem.EncodingType.Base64,
-                  });
-
-                  // Share the file
-                  const canShare = await Sharing.isAvailableAsync();
-                  if (canShare) {
-                    await Sharing.shareAsync(fileUri, {
-                      mimeType: 'application/pdf',
-                      dialogTitle: 'Share Attendance Report',
-                      UTI: 'com.adobe.pdf',
-                    });
-                    Alert.alert(
-                      'Success',
-                      'Report downloaded successfully! You can now share it.'
-                    );
-                  } else {
-                    Alert.alert('Info', 'File saved to app directory');
-                  }
-                } catch (shareError) {
-                  console.error('Share error:', shareError);
-                  Alert.alert('Error', 'Failed to share PDF');
-                } finally {
-                  setLoading(false);
+                // Fetch the PDF file
+                const pdfResponse = await fetch(fileUrl);
+                if (!pdfResponse.ok) {
+                  throw new Error('Failed to fetch PDF from server');
                 }
-              };
 
-              reader.onerror = () => {
-                console.error('FileReader error');
-                Alert.alert('Error', 'Failed to process PDF');
+                // Get the blob and convert to base64
+                const blob = await pdfResponse.blob();
+                const reader = new FileReader();
+
+                reader.onloadend = async () => {
+                  try {
+                    const base64data = reader.result as string;
+                    // Remove the data URL prefix (data:application/pdf;base64,)
+                    const base64Content = base64data.split(',')[1];
+
+                    // Save to local file system
+                    const fileUri = FileSystem.documentDirectory + filename;
+                    await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+
+                    // Share the file
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(fileUri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Share Attendance Report',
+                        UTI: 'com.adobe.pdf',
+                      });
+                      Alert.alert(
+                        'Success',
+                        'Report downloaded successfully! You can now share it.'
+                      );
+                    } else {
+                      Alert.alert('Info', 'File saved to app directory');
+                    }
+                  } catch (shareError) {
+                    console.error('Share error:', shareError);
+                    Alert.alert('Error', 'Failed to share PDF');
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+
+                reader.onerror = () => {
+                  console.error('FileReader error');
+                  Alert.alert('Error', 'Failed to process PDF');
+                  setLoading(false);
+                };
+
+                reader.readAsDataURL(blob);
+
+              } catch (err) {
+                console.error('Download error:', err);
+                Alert.alert('Error', 'Failed to download PDF');
                 setLoading(false);
-              };
-
-              reader.readAsDataURL(blob);
-              
-            } catch (err) {
-              console.error('Download error:', err);
-              Alert.alert('Error', 'Failed to download PDF');
-              setLoading(false);
-            }
+              }
+            },
           },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
 
-  } catch (error: any) {
-    console.error('Error downloading report:', error);
-    Alert.alert(
-      'Error',
-      error.message || 'Failed to generate report. Please try again.'
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error: any) {
+      console.error('Error downloading report:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to generate report. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Helper function to share PDF
   const sharePDF = async (fileUri: string, filename: string) => {
@@ -771,9 +806,22 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       'Are you sure you want to mark checkout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Checkout', onPress: markCheckout }
+        { text: 'Checkout', onPress: () => markCheckout() }
       ]
     );
+  };
+  const handleCheckoutReasonSubmit = () => {
+    if (!checkoutReason.trim()) {
+      Alert.alert('Error', 'Please enter a reason for early checkout.');
+      return;
+    }
+    markCheckout(checkoutReason.trim());
+  };
+
+  const handleCloseCheckoutReasonModal = () => {
+    setShowCheckOutReasonModal(false);
+    setCheckoutReason('');
+    setLoading(false);
   };
 
   if (showLeaveInfo && selectedLeave) {
@@ -796,7 +844,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             locationPermission={locationPermission}
             onMarkAttendance={() => markAttendance()}
             onCheckout={handleCheckout}
-            isDriver={isDriver}
+            isDriver={isDriver}  // Keep this for display purposes only
           />
         );
       case 'leave':
@@ -937,6 +985,51 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
                 onPress={handleRemoteAttendanceSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Checkout Reason Modal */}
+      <Modal
+        visible={showCheckOutReasonModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleCloseCheckoutReasonModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.descriptionModal}>
+            <Text style={styles.modalTitle}>Early Checkout</Text>
+            <Text style={styles.modalSubtitle}>
+              You're not at the office location. Please provide a reason for early checkout:
+            </Text>
+            <TextInput
+              style={styles.descriptionInput}
+              placeholder="Enter reason (e.g., Early leave, Personal work, etc.)"
+              value={checkoutReason}
+              onChangeText={setCheckoutReason}
+              multiline
+              numberOfLines={3}
+              maxLength={200}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCloseCheckoutReasonModal}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleCheckoutReasonSubmit}
                 disabled={loading}
               >
                 {loading ? (

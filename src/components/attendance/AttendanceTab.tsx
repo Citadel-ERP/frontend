@@ -20,7 +20,8 @@ const AttendanceTab: React.FC<AttendanceTabProps> = ({
   onCheckout,
   isDriver,
 }) => {
-  const canCheckout = isDriver && todayAttendance && todayAttendance.check_in_time && !todayAttendance.check_out_time;
+  // Show checkout button if user has checked in but not checked out
+  const canCheckout = todayAttendance && todayAttendance.check_in_time && !todayAttendance.check_out_time;
   const hasCheckedOut = todayAttendance && todayAttendance.check_out_time;
 
   return (
@@ -50,7 +51,7 @@ const AttendanceTab: React.FC<AttendanceTabProps> = ({
               </View>
             )}
 
-            {/* Checkout Button for Drivers */}
+            {/* Checkout Button for All Users */}
             {canCheckout && (
               <TouchableOpacity
                 style={styles.checkoutButton}
