@@ -37,8 +37,6 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.citadelnetinc.app",
-      "googleServicesFile": "./google-services.json",
-      "useNextNotificationsApi": true,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -60,14 +58,6 @@
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
-      [
-        "@react-native-firebase/app",
-        {
-          "android": {
-            "googleServicesFile": "./google-services.json"
-          }
-        }
-      ],
       [
         "expo-local-authentication",
         {
