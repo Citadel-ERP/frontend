@@ -61,6 +61,14 @@
       "expo-secure-store",
       "expo-dev-client",
       [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          }
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "This app uses Face ID to authenticate users and protect your sensitive data."
@@ -79,7 +87,9 @@
         {
           "icon": "./assets/images/logo.png",
           "color": "#2D3748",
-          "sounds": ["./assets/notification-sound.wav"]
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
         }
       ],
       "expo-task-manager",
