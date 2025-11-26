@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar,
   Alert, Modal, Animated, KeyboardAvoidingView, Platform, Dimensions, Image, ActivityIndicator,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
@@ -132,6 +133,70 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const TOKEN_2_KEY = 'token_2';
+  // Function to auto-mark attendance
+  const autoMarkAttendance = async () => {
+    console.log('🎯 AUTO-MARK ATTENDANCE: Starting automatic attendance marking...');
+    try {
+      console.log('Background attendance task started');
+
+      // Check if it's the right time (10:00 AM - 11:00 AM, Mon-Fri)
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+      // Check if it's Monday to Friday (1-5) and between 10:00-11:00 AM
+      // Get stored token
+      const token = await AsyncStorage.getItem(TOKEN_2_KEY);
+      if (!token) {
+        console.log('No token found');
+      }
+
+      // Request location permission and get current location
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Location permission denied');
+        // Try to get background location permission
+        const bgStatus = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus.status !== 'granted') {
+          console.log('Background location permission denied');
+        }
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        timeInterval: 5000,
+      });
+
+      // Make API call to mark attendance
+      const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          latitude: location.coords.latitude.toString(),
+          longitude: location.coords.longitude.toString(),
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Attendance marked successfully:', result);
+
+        // Store last attendance check time
+        await AsyncStorage.setItem('lastAttendanceCheck', now.toISOString());
+      } else {
+        console.log('Failed to mark attendance:', response.status);
+      }
+
+    } catch (error) {
+      console.error('Background attendance task error:', error);
+    }
+  };
+
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
     let token;
@@ -153,10 +218,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           console.log('[Line 5] Android notification channel created successfully');
         } catch (channelError) {
           console.error('[Line 6] Error creating notification channel:', channelError);
-          Alert.alert(
-            'Channel Error',
-            `Failed to create notification channel at Line 6:\n${(channelError as Error).message}\n\nStack: ${(channelError as Error).stack}`
-          );
           throw channelError;
         }
       }
@@ -219,7 +280,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             console.error('[Line 23] Error message:', (tokenError as Error).message);
             console.error('[Line 24] Error stack:', (tokenError as Error).stack);
 
-            // Check for specific Firebase error
             const errorMessage = (tokenError as Error).message;
             const errorStack = (tokenError as Error).stack || '';
 
@@ -302,7 +362,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       if (response.ok) {
         console.log('Push token registered successfully:', data.message);
-        // Save locally to avoid re-registering
         await AsyncStorage.setItem('expo_push_token', expoToken);
       } else {
         console.error('Failed to register push token:', data.message);
@@ -312,6 +371,55 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }
   };
 
+  const handleNotificationNavigation = (page: string) => {
+    console.log('Handling notification navigation for page:', page);
+
+    // Handle special actions that don't show UI
+    if (page === 'autoMarkAttendance') {
+      console.log('🎯 SPECIAL CODE: Auto-marking attendance...');
+      return; // Don't show any page
+    }
+
+    // Handle regular page navigation
+    switch (page.toLowerCase()) {
+      case 'attendance':
+        setShowAttendance(true);
+        break;
+      case 'hr':
+        setShowHR(true);
+        break;
+      case 'cab':
+        setShowCab(true);
+        break;
+      case 'profile':
+        setShowProfile(true);
+        break;
+      case 'driver':
+        setShowDriver(true);
+        break;
+      case 'bdt':
+        setShowBDT(true);
+        break;
+      case 'medical':
+      case 'mediclaim':
+        setShowMedical(true);
+        break;
+      case 'scoutboy':
+      case 'scout_boy':
+        setShowScoutBoy(true);
+        break;
+      case 'reminder':
+        setShowReminder(true);
+        break;
+      case 'bup':
+        setShowBUP(true);
+        break;
+      default:
+        console.log('Unknown page:', page);
+    }
+  };
+
+
   // Setup push notifications
   useEffect(() => {
     let isMounted = true;
@@ -320,51 +428,67 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       if (!token) return;
 
       try {
-        // Check if token is already registered
         const savedToken = await AsyncStorage.getItem('expo_push_token');
-        console.log(savedToken)
+        console.log('Saved token:', savedToken);
+
         const pushToken = await registerForPushNotificationsAsync();
         console.log('Push token:', pushToken);
         console.log('isMounted:', isMounted);
+
         if (pushToken && isMounted) {
           setExpoPushToken(pushToken);
-            console.log("sending")
-            await sendTokenToBackend(pushToken, token);
+          console.log("sending token to backend");
+          await sendTokenToBackend(pushToken, token);
         }
 
         // Listener for notifications received while app is foregrounded
         notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-          console.log('Notification received in foreground:', notification);
+          console.log('📱 Notification received in foreground:', notification);
           setNotification(notification);
+
+          // Handle auto-mark attendance immediately when notification is received
+          const data = notification.request.content.data;
+          if (data?.page === 'autoMarkAttendance') {
+            console.log('🎯 AUTO-MARK: Detected autoMarkAttendance in foreground notification');
+            autoMarkAttendance();
+          } else if (data?.page) {
+            console.log('Foreground notification with page:', data.page);
+          }
         });
 
         // Listener for when user taps on notification
         responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-          console.log('Notification tapped:', response);
+          console.log('👆 Notification tapped:', response);
 
           const data = response.notification.request.content.data;
+          console.log('Notification data:', data);
 
-          // Handle navigation based on notification data
-          if (data?.screen) {
-            switch (data.screen) {
-              case 'attendance':
-                setShowAttendance(true);
-                break;
-              case 'hr':
-                setShowHR(true);
-                break;
-              case 'cab':
-                setShowCab(true);
-                break;
-              case 'profile':
-                setShowProfile(true);
-                break;
-              // Add more cases as needed
-              default:
-                console.log('Unknown screen:', data.screen);
+          // Handle navigation based on page parameter
+          if (data?.page) {
+            console.log('Navigating to page:', data.page);
+            handleNotificationNavigation(data.page as string);
+          } else {
+            if (data?.screen) {
+              console.log('Using legacy screen parameter:', data.screen);
+              handleNotificationNavigation(data.screen as string);
+            } else {
+              console.log('No page or screen parameter found in notification data');
             }
           }
         });
+
+        // Check if app was opened from a notification (when app was closed)
+        const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastNotificationResponse) {
+          console.log('📬 App opened from notification:', lastNotificationResponse);
+          const data = lastNotificationResponse.notification.request.content.data;
+          if (data?.page) {
+            setTimeout(() => {
+              handleNotificationNavigation(data.page as string);
+            }, 500);
+          }
+        }
+
       } catch (error) {
         console.error('Error setting up notifications:', error);
       }
@@ -400,15 +524,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const joiningDate = new Date(dateString);
     const today = new Date();
 
-    // Get this year's anniversary date
     let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
 
-    // If this year's anniversary has passed, check next year
     if (anniversaryThisYear < today) {
       anniversaryThisYear = new Date(today.getFullYear() + 1, joiningDate.getMonth(), joiningDate.getDate());
     }
 
-    // Calculate years from joining to the upcoming anniversary
     const years = anniversaryThisYear.getFullYear() - joiningDate.getFullYear();
     return years;
   };
@@ -418,7 +539,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const events: UpcomingEvent[] = [];
     const today = new Date();
 
-    // Add birthdays
     birthdays.forEach(user => {
       if (user.birth_date) {
         events.push({
@@ -429,11 +549,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       }
     });
 
-    // Add work anniversaries
     anniversaries.forEach(user => {
       if (user.joining_date) {
         const years = calculateYearsOnAnniversary(user.joining_date);
-        // Show all anniversaries including first year (1 year)
         events.push({
           full_name: user.full_name,
           date: user.joining_date,
@@ -443,17 +561,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       }
     });
 
-    // Sort events by date (soonest first)
     events.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
       const today = new Date();
 
-      // Get this year's occurrence
       const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
       const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
 
-      // If already passed this year, use next year
       const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
       const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
 
