@@ -22,6 +22,8 @@ import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';
 import Reminder from './Reminder';
 import BUP from './BUP/BUP';
+import ChatScreen from './chat/ChatScreen';
+import ChatRoomScreen from './chat/ChatRoomScreen';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -132,6 +134,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+
+  // Add these state variables in your Dashboard component (around line 170-180)
+  const [showChat, setShowChat] = useState(false);
+  const [showChatRoom, setShowChatRoom] = useState(false);
+  const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
 
   const TOKEN_2_KEY = 'token_2';
   // Function to auto-mark attendance
@@ -867,9 +875,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setActiveMenuItem('Dashboard');
   };
 
+  const handleBackFromChat = () => {
+    setShowChat(false);
+    setActiveNavItem('home');
+  };
+
+  const handleOpenChatRoom = (chatRoom: any) => {
+    setSelectedChatRoom(chatRoom);
+    setShowChatRoom(true);
+  };
+
+  const handleBackFromChatRoom = () => {
+    setShowChatRoom(false);
+    setSelectedChatRoom(null);
+    setShowChat(true);
+  };
+
+  // Update the handleNavItemPress function (around line 700)
   const handleNavItemPress = (navItem: string) => {
     setActiveNavItem(navItem);
-    if (navItem !== 'home') {
+    if (navItem === 'message') {
+      setShowChat(true);
+    } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
     }
   };
@@ -994,7 +1021,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      {showAttendance ? (
+      {showChatRoom && selectedChatRoom ? (
+        <ChatRoomScreen
+          chatRoom={selectedChatRoom}
+          onBack={handleBackFromChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      ) : showChat ? (
+        <ChatScreen
+          onBack={handleBackFromChat}
+          onOpenChatRoom={handleOpenChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      ) : showAttendance ? (
         <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
       ) : showProfile ? (
         <Profile onBack={handleBackFromProfile} userData={userData} />
