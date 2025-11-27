@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BACKEND_URL } from '../../config/config';
+import { BACKEND_URL, BACKEND_URL_WEBSOCKET } from '../../config/config';
 
 const colors = {
   primary: '#2D3748',
@@ -74,16 +74,31 @@ interface ChatRoom {
   }>;
 }
 
+interface User {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
 interface Message {
   id: number;
   content: string;
   message_type: 'text' | 'image' | 'file' | 'contact';
-  sender: {
-    id: number;
-    first_name: string;
-    last_name: string;
-  };
+  sender: User;
   created_at: string;
+  is_edited?: boolean;
+  is_deleted?: boolean;
+}
+
+interface WebSocketMessage {
+  type: string;
+  message?: Message;
+  user_id?: number;
+  user_name?: string;
+  room_id?: number;
+  message_id?: string;
+  emoji?: string;
 }
 
 interface ChatRoomScreenProps {
@@ -137,41 +152,55 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   }, [chatRoom.id, token]);
 
   const connectWebSocket = () => {
-    // Replace with your actual WebSocket URL
-    const ws = new WebSocket(`ws://${BACKEND_URL.replace('http://', '').replace('https://', '')}/ws/chat/`);
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      ws.send(JSON.stringify({
-        action: 'join_room',
-        room_id: chatRoom.id,
-      }));
-    };
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      handleWebSocketMessage(data);
-    };
-    
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-    
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-    
-    setWebsocket(ws);
+    try {
+      // Remove protocol and construct proper WebSocket URL
+      const wsBaseUrl = BACKEND_URL_WEBSOCKET.replace('http://', '').replace('https://', '');
+      const wsUrl = `ws://${wsBaseUrl}/ws/chat/`;
+      
+      console.log('Connecting to WebSocket:', wsUrl);
+      const ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        ws.send(JSON.stringify({
+          action: 'join_room',
+          room_id: chatRoom.id,
+        }));
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data: WebSocketMessage = JSON.parse(event.data);
+          handleWebSocketMessage(data);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+      };
+      
+      setWebsocket(ws);
+    } catch (error) {
+      console.error('Error connecting to WebSocket:', error);
+    }
   };
 
-  const handleWebSocketMessage = (data: any) => {
+  const handleWebSocketMessage = (data: WebSocketMessage) => {
     switch (data.type) {
       case 'message':
-        setMessages(prev => [data.message, ...prev]);
+        if (data.message) {
+          setMessages(prev => [data.message!, ...prev]);
+        }
         break;
       case 'typing':
         setIsTyping(true);
-        setTypingUser(data.user_name);
+        setTypingUser(data.user_name || '');
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current);
         }
@@ -185,12 +214,16 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         setTypingUser('');
         break;
       case 'message_edited':
-        setMessages(prev => prev.map(msg => 
-          msg.id === data.message.id ? data.message : msg
-        ));
+        if (data.message) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === data.message!.id ? data.message! : msg
+          ));
+        }
         break;
       case 'message_deleted':
-        setMessages(prev => prev.filter(msg => msg.id !== data.message_id));
+        if (data.message_id) {
+          setMessages(prev => prev.filter(msg => msg.id.toString() !== data.message_id));
+        }
         break;
     }
   };
@@ -214,16 +247,33 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       const data = await response.json();
       
       if (response.ok) {
+        // Extract only the necessary message fields
+        const cleanMessages = (data.messages || []).map((msg: any) => ({
+          id: msg.id,
+          content: msg.content || '',
+          message_type: msg.message_type || 'text',
+          sender: {
+            id: msg.sender?.id || 0,
+            first_name: msg.sender?.first_name || '',
+            last_name: msg.sender?.last_name || '',
+            email: msg.sender?.email || '',
+          },
+          created_at: msg.created_at || new Date().toISOString(),
+          is_edited: msg.is_edited || false,
+          is_deleted: msg.is_deleted || false,
+        }));
+
         if (pageNum === 1) {
-          setMessages(data.messages || []);
+          setMessages(cleanMessages);
         } else {
-          setMessages(prev => [...prev, ...(data.messages || [])]);
+          setMessages(prev => [...prev, ...cleanMessages]);
         }
       } else {
         Alert.alert('Error', data.message || 'Failed to load messages');
       }
     } catch (error) {
       console.error('Error loading messages:', error);
+      Alert.alert('Error', 'Failed to load messages');
     } finally {
       setLoading(false);
     }
@@ -240,6 +290,7 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         id: currentUserId,
         first_name: 'You',
         last_name: '',
+        email: '',
       },
       created_at: new Date().toISOString(),
     };
@@ -264,13 +315,28 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
       const data = await response.json();
 
-      if (response.ok) {
-        // Update the temp message with the real one from server
+      if (response.ok && data.data) {
+        // Clean the message data
+        const cleanMessage: Message = {
+          id: data.data.id,
+          content: data.data.content || '',
+          message_type: data.data.message_type || 'text',
+          sender: {
+            id: data.data.sender?.id || currentUserId,
+            first_name: data.data.sender?.first_name || 'You',
+            last_name: data.data.sender?.last_name || '',
+            email: data.data.sender?.email || '',
+          },
+          created_at: data.data.created_at || new Date().toISOString(),
+          is_edited: data.data.is_edited || false,
+          is_deleted: data.data.is_deleted || false,
+        };
+
         setMessages(prev => prev.map(msg => 
-          msg.id === tempMessage.id ? data.data : msg
+          msg.id === tempMessage.id ? cleanMessage : msg
         ));
 
-        // Also send via WebSocket if connected
+        // Send via WebSocket if connected
         if (websocket && websocket.readyState === WebSocket.OPEN) {
           websocket.send(JSON.stringify({
             action: 'send_message',
@@ -280,12 +346,10 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           }));
         }
       } else {
-        // Remove temp message on error
         setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
         Alert.alert('Error', data.message || 'Failed to send message');
       }
     } catch (error) {
-      // Remove temp message on error
       setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message');
@@ -320,7 +384,7 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         quality: 0.8,
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         sendFileMessage(result.assets[0].uri, 'image');
       }
     } catch (error) {
@@ -334,7 +398,7 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         type: '*/*',
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         sendFileMessage(result.assets[0].uri, 'file');
       }
     } catch (error) {
@@ -362,7 +426,6 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       const uploadData = await uploadResponse.json();
       
       if (uploadResponse.ok) {
-        // Send message with uploaded file URL
         const response = await fetch(`${BACKEND_URL}/citadel_hub/sendMessage`, {
           method: 'POST',
           headers: {
@@ -378,10 +441,24 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
         const data = await response.json();
 
-        if (response.ok) {
-          setMessages(prev => [data.data, ...prev]);
+        if (response.ok && data.data) {
+          const cleanMessage: Message = {
+            id: data.data.id,
+            content: data.data.content || '',
+            message_type: data.data.message_type || messageType,
+            sender: {
+              id: data.data.sender?.id || currentUserId,
+              first_name: data.data.sender?.first_name || 'You',
+              last_name: data.data.sender?.last_name || '',
+              email: data.data.sender?.email || '',
+            },
+            created_at: data.data.created_at || new Date().toISOString(),
+            is_edited: data.data.is_edited || false,
+            is_deleted: data.data.is_deleted || false,
+          };
 
-          // Also send via WebSocket if connected
+          setMessages(prev => [cleanMessage, ...prev]);
+
           if (websocket && websocket.readyState === WebSocket.OPEN) {
             websocket.send(JSON.stringify({
               action: 'send_message',
@@ -411,23 +488,32 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   };
 
   const formatMessageTime = (timestamp: string): string => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return '';
+    }
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMyMessage = item.sender.id === currentUserId;
+    const isMyMessage = item.sender && item.sender.id === currentUserId;
+    const senderName = item.sender ? `${item.sender.first_name || ''} ${item.sender.last_name || ''}`.trim() || 'Unknown' : 'Unknown';
+    const messageTime = formatMessageTime(item.created_at);
     
     return (
       <View style={[
         styles.messageContainer,
         isMyMessage ? styles.myMessage : styles.theirMessage
       ]}>
+        {!isMyMessage && chatRoom.room_type === 'group' && (
+          <Text style={styles.senderName}>{senderName}</Text>
+        )}
         <View style={[
           styles.messageBubble,
           isMyMessage ? { backgroundColor: colors.primary } : { backgroundColor: colors.white }
         ]}>
-          {item.message_type === 'image' && (
+          {item.message_type === 'image' && item.content && (
             <Image 
               source={{ uri: item.content }} 
               style={styles.messageImage}
@@ -448,7 +534,7 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
               <Text style={styles.contactText}>Contact Shared</Text>
             </View>
           )}
-          {(item.message_type === 'text' || !item.message_type) && (
+          {(item.message_type === 'text' || !item.message_type) && item.content && (
             <Text style={[
               styles.messageText,
               isMyMessage ? { color: colors.white } : { color: colors.text }
@@ -456,17 +542,29 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
               {item.content}
             </Text>
           )}
-          <Text style={[
-            styles.messageTime,
-            isMyMessage ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.textLight }
-          ]}>
-            {formatMessageTime(item.created_at)}
-          </Text>
+          <View style={styles.messageFooter}>
+            {messageTime ? (
+              <Text style={[
+                styles.messageTime,
+                isMyMessage ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.textLight }
+              ]}>
+                {messageTime}
+              </Text>
+            ) : null}
+            {item.is_edited && (
+              <Text style={[
+                styles.editedLabel,
+                isMyMessage ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.textLight }
+              ]}>
+                • edited
+              </Text>
+            )}
+          </View>
         </View>
       </View>
     );
   };
-
+  console.log(chatRoom)
   return (
     <KeyboardAvoidingView 
       style={styles.container}
@@ -517,7 +615,6 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
               inverted
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.messagesList}
-              onContentSizeChange={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
               onEndReached={() => {
                 if (!loading) {
                   setPage(prev => prev + 1);
@@ -528,7 +625,7 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             />
             
             {/* Typing Indicator */}
-            {isTyping && (
+            {isTyping && typingUser && (
               <View style={styles.typingContainer}>
                 <Text style={styles.typingText}>
                   {typingUser} is typing...
@@ -695,6 +792,12 @@ const styles = StyleSheet.create({
   theirMessage: {
     alignSelf: 'flex-start',
   },
+  senderName: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    marginLeft: spacing.sm,
+  },
   messageBubble: {
     padding: spacing.md,
     borderRadius: borderRadius.lg,
@@ -704,9 +807,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     lineHeight: 20,
   },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
   messageTime: {
     fontSize: fontSize.xs,
-    marginTop: spacing.xs,
+  },
+  editedLabel: {
+    fontSize: fontSize.xs,
+    marginLeft: spacing.xs,
+    fontStyle: 'italic',
   },
   messageImage: {
     width: 200,

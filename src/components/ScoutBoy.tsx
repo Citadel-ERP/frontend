@@ -267,6 +267,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   useEffect(() => {
     fetchVisits(1, false);
   }, []);
+
   // Refresh visits
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -478,6 +479,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       ]
     );
   };
+
   const handleTakePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -635,6 +637,136 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [viewMode, selectedVisit]);
 
+  // ---------------------------------------
+  //   Detail Section Component
+  // ---------------------------------------
+  const DetailSection = ({ title, site }: { title: string; site: any }) => {
+    const isManagedProperty = site.managed_property === true;
+    
+    const getDetailItems = () => {
+      switch (title) {
+        case '📋 Basic Information':
+          if (isManagedProperty) {
+            // Managed property fields
+            return [
+              { label: 'Landmark', value: site.landmark },
+              { label: 'Building Status', value: site.building_status },
+              { label: 'Floor Condition', value: site.floor_condition },
+              { label: 'Total Floors', value: site.total_floors },
+              { label: 'Basements', value: site.number_of_basements },
+              { label: 'Total Seats', value: site.total_seats },
+              { label: 'Seats Available', value: site.seats_available },
+              { label: 'Number of Units', value: site.number_of_units },
+              { label: 'Seats Per Unit', value: site.number_of_seats_per_unit },
+              { label: 'Efficiency', value: site.efficiency },
+              { label: 'Business Hours', value: site.business_hours_of_operation },
+              { label: 'Premises Access', value: site.premises_access },
+              { label: 'Developer Fitouts', value: site.will_developer_do_fitouts ? 'Yes' : 'No' },
+            ];
+          } else {
+            // Conventional property fields
+            return [
+              { label: 'Landmark', value: site.landmark },
+              { label: 'Building Status', value: site.building_status },
+              { label: 'Floor Condition', value: site.floor_condition },
+              { label: 'Total Floors', value: site.total_floors },
+              { label: 'Basements', value: site.number_of_basements },
+              { label: 'Available Floors', value: site.availble_floors },
+              { label: 'Total Area', value: site.total_area ? `${site.total_area} sq ft` : '-' },
+              { label: 'Area per Floor', value: site.area_per_floor ? `${site.area_per_floor} sq ft` : '-' },
+              { label: 'Efficiency', value: site.efficiency },
+              { label: 'Area Offered', value: site.area_offered },
+              { label: 'Developer Fitouts', value: site.will_developer_do_fitouts ? 'Yes' : 'No' },
+            ];
+          }
+
+        case '💰 Commercial Details':
+          if (isManagedProperty) {
+            // Managed property financial fields
+            return [
+              { label: 'Rent Per Seat', value: site.rent_per_seat ? `₹${site.rent_per_seat}` : '-' },
+              { label: 'Total Monthly Rent', value: site.rent_per_seat && site.total_seats ? `₹${(parseFloat(site.rent_per_seat) * parseFloat(site.total_seats)).toLocaleString('en-IN')}` : '-' },
+              { label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
+              { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
+              { label: 'Security Deposit', value: site.security_deposit ? `${site.security_deposit} months` : '-' },
+              { label: 'Lease Term', value: site.lease_term },
+              { label: 'Lock-in Period', value: site.lock_in_period },
+              { label: 'Notice Period', value: site.notice_period },
+              { label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
+            ];
+          } else {
+            // Conventional property financial fields
+            return [
+              { label: 'Monthly Rent', value: site.rent ? `₹${site.rent}` : '-' },
+              { label: 'Rent Per SQ/FT', value: site.rent && site.total_area ? `₹${(parseFloat(site.rent) / parseFloat(site.total_area)).toFixed(2)}` : '-' },
+              { label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
+              { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
+              { label: 'Security Deposit', value: site.security_deposit ? `${site.security_deposit} months` : '-' },
+              { label: 'Lease Term', value: site.lease_term },
+              { label: 'Lock-in Period', value: site.lock_in_period },
+              { label: 'Notice Period', value: site.notice_period },
+              { label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
+            ];
+          }
+
+        case '🚗 Vehicle Information':
+          return [
+            { label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
+            { label: 'Car Parking Slots', value: site.car_parking_slots },
+            { label: 'Car Parking Ratio', value: site.car_parking_ratio },
+            { label: 'Two Wheeler Parking', value: site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-' },
+            { label: 'Two Wheeler Slots', value: site.two_wheeler_slots },
+          ];
+
+        case '👤 Contact Information':
+          const contactItems = [
+            { label: 'Building Owner', value: site.building_owner_name },
+            { label: 'Owner Contact', value: site.building_owner_contact },
+            { label: 'Contact Person', value: site.contact_person_name },
+            { label: 'Phone', value: site.contact_person_number },
+            { label: 'Email', value: site.contact_person_email },
+            { label: 'Designation', value: site.contact_person_designation },
+          ];
+          
+          // Add metro station for both types
+          if (site.nearest_metro_station) {
+            contactItems.unshift({
+              label: '🚇 Nearest Metro',
+              value: site.nearest_metro_station.name
+            });
+          }
+          
+          return contactItems;
+
+        default:
+          return [];
+      }
+    };
+
+    const items = getDetailItems();
+
+    return (
+      <View style={styles.detailSection}>
+        <Text style={styles.detailSectionTitle}>
+          {title}
+          {isManagedProperty && title === '📋 Basic Information' && (
+            <Text style={styles.propertyTypeBadge}> • Managed</Text>
+          )}
+          {!isManagedProperty && title === '📋 Basic Information' && (
+            <Text style={styles.propertyTypeBadge}> • Conventional</Text>
+          )}
+        </Text>
+        <View style={styles.detailGrid}>
+          {items.map((item, idx) => (
+            <View key={`${title}-${idx}`} style={styles.detailItem}>
+              <Text style={styles.detailLabel}>{item.label}</Text>
+              <Text style={styles.detailValue}>{item.value || '-'}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
 
   // ---------------------------
   //   VISIT DETAIL SCREEN
@@ -693,7 +825,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.detailContainer}>
             <View style={styles.card}>
-              {/* FIRST Comments block was here — REMOVED completely */}
               {/* Photos */}
               {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
                 <View style={styles.card}>
@@ -737,7 +868,25 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
               {/* Property Details */}
               <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Property Details</Text>
+                <Text style={styles.sectionTitle}>
+                  Property Details
+                  {site.managed_property && (
+                    <Text style={styles.managedBadge}> • Managed Office</Text>
+                  )}
+                  {site.conventional_property && (
+                    <Text style={styles.conventionalBadge}> • Conventional Office</Text>
+                  )}
+                </Text>
+
+                {/* Metro Station - Show for both types if available */}
+                {site.nearest_metro_station && (
+                  <View style={styles.metroStationContainer}>
+                    <Text style={styles.metroStationIcon}>🚇</Text>
+                    <Text style={styles.metroStationText}>
+                      Nearest Metro: {site.nearest_metro_station.name}
+                    </Text>
+                  </View>
+                )}
 
                 <DetailSection title="📋 Basic Information" site={site} />
                 <DetailSection title="💰 Commercial Details" site={site} />
@@ -752,10 +901,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
                 )}
               </View>
 
-              {/* --------------------------------------------- */}
-              {/* ONLY COMMENTS SECTION (Section B) — This stays */}
-              {/* --------------------------------------------- */}
-
+              {/* Comments Section */}
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
 
@@ -935,6 +1081,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       </View>
     );
   }
+
   // -----------------------
   //   CREATE SITE SCREEN
   // -----------------------
@@ -1046,75 +1193,99 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
               {visits.length > 0 ? (
                 <>
-                  {visits.map((visit, index) => (
-                    <TouchableOpacity
-                      key={visit.id}
-                      style={styles.visitCard}
-                      onPress={() => handleVisitPress(visit, index)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.visitCardImage}>
-                        {visit.building_photos?.length > 0 ? (
-                          <Image
-                            source={{ uri: visit.building_photos[0].file_url }}
-                            style={styles.visitImage}
-                          />
-                        ) : (
-                          <View style={styles.visitImagePlaceholder}>
-                            <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.visitCardContent}>
-                        <View style={styles.visitCardHeader}>
-                          <Text style={styles.visitCardTitle} numberOfLines={1}>
-                            {visit.site.building_name}
-                          </Text>
-                          <View style={[
-                            styles.visitStatusBadge,
-                            { backgroundColor: getStatusColor(visit.status) }
-                          ]}>
-                            <Text style={styles.visitStatusText}>
-                              {getStatusIcon(visit.status)} {beautifyName(visit.status)}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {visit.site.location && (
-                          <View style={styles.visitLocationRow}>
-                            <Text style={styles.visitLocationIcon}>📍</Text>
-                            <Text style={styles.visitLocationText} numberOfLines={1}>
-                              {visit.site.location}
-                            </Text>
-                          </View>
-                        )}
-
-                        <View style={styles.visitMetaRow}>
-                          {visit.site.rent && visit.site.total_area && (
-                            <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>
-                                ₹{(visit.site.rent / visit.site.total_area).toFixed(2)}/sq-ft
-                              </Text>
-                            </View>
-                          )}
-
-                          {visit.photos?.length > 0 && (
-                            <View style={styles.visitMetaItem}>
-                              <Text style={styles.visitMetaText}>
-                                📷 {visit.photos.length}
-                              </Text>
+                  {visits.map((visit, index) => {
+                    const site = visit.site;
+                    const isManaged = site.managed_property === true;
+                    
+                    return (
+                      <TouchableOpacity
+                        key={visit.id}
+                        style={styles.visitCard}
+                        onPress={() => handleVisitPress(visit, index)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.visitCardImage}>
+                          {visit.building_photos?.length > 0 ? (
+                            <Image
+                              source={{ uri: visit.building_photos[0].file_url }}
+                              style={styles.visitImage}
+                            />
+                          ) : (
+                            <View style={styles.visitImagePlaceholder}>
+                              <Text style={styles.visitImagePlaceholderIcon}>🏢</Text>
                             </View>
                           )}
                         </View>
 
-                        <View style={styles.visitCardFooter}>
-                          <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
-                          <Text style={styles.visitArrow}>→</Text>
+                        <View style={styles.visitCardContent}>
+                          <View style={styles.visitCardHeader}>
+                            <Text style={styles.visitCardTitle} numberOfLines={1}>
+                              {site.building_name}
+                            </Text>
+                            <View style={[
+                              styles.visitStatusBadge,
+                              { backgroundColor: getStatusColor(visit.status) }
+                            ]}>
+                              <Text style={styles.visitStatusText}>
+                                {getStatusIcon(visit.status)} {beautifyName(visit.status)}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {site.location && (
+                            <View style={styles.visitLocationRow}>
+                              <Text style={styles.visitLocationIcon}>📍</Text>
+                              <Text style={styles.visitLocationText} numberOfLines={1}>
+                                {site.location}
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.visitMetaRow}>
+                            {isManaged ? (
+                              // Managed property pricing
+                              site.rent_per_seat && (
+                                <View style={styles.visitMetaItem}>
+                                  <Text style={styles.visitMetaText}>
+                                    ₹{site.rent_per_seat}/seat
+                                  </Text>
+                                </View>
+                              )
+                            ) : (
+                              // Conventional property pricing
+                              site.rent && site.total_area && (
+                                <View style={styles.visitMetaItem}>
+                                  <Text style={styles.visitMetaText}>
+                                    ₹{(parseFloat(site.rent) / parseFloat(site.total_area)).toFixed(2)}/sq-ft
+                                  </Text>
+                                </View>
+                              )
+                            )}
+
+                            {visit.photos?.length > 0 && (
+                              <View style={styles.visitMetaItem}>
+                                <Text style={styles.visitMetaText}>
+                                  📷 {visit.photos.length}
+                                </Text>
+                              </View>
+                            )}
+
+                            {/* Property type indicator */}
+                            <View style={styles.visitMetaItem}>
+                              <Text style={styles.visitMetaText}>
+                                {isManaged ? '💼 Managed' : '🏛️ Conventional'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.visitCardFooter}>
+                            <Text style={styles.visitDate}>{formatDate(visit.created_at)}</Text>
+                            <Text style={styles.visitArrow}>→</Text>
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
 
                   {loadingMore && (
                     <View style={styles.loadingMoreContainer}>
@@ -1139,80 +1310,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     </View>
   );
 };
-
-// ---------------------------------------
-//   Detail Section Component
-// ---------------------------------------
-const DetailSection = ({ title, site }: { title: string; site: any }) => {
-  const getDetailItems = () => {
-    switch (title) {
-      case '📋 Basic Information':
-        return [
-          { label: 'Landmark', value: site.landmark },
-          { label: 'Building Status', value: site.building_status },
-          { label: 'Floor Condition', value: site.floor_condition },
-          { label: 'Total Floors', value: site.total_floors },
-          { label: 'Basements', value: site.number_of_basements },
-          { label: 'Available Floors', value: site.availble_floors },
-          { label: 'Total Area', value: site.total_area ? `${site.total_area} sq ft` : '-' },
-          { label: 'Area per Floor', value: site.area_per_floor ? `${site.area_per_floor} sq ft` : '-' },
-          { label: 'Efficiency', value: site.efficiency },
-          { label: 'Area Offered', value: site.area_offered },
-          { label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
-        ];
-      case '💰 Commercial Details':
-        return [
-          { label: 'Rent Per SQ/FT', value: site.rent && site.total_area ? `₹${(site.rent / site.total_area).toFixed(2)}` : '-' },
-          { label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
-          { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
-          { label: 'Security Deposit', value: site.security_deposit ? `₹${site.security_deposit}` : '-' },
-          { label: 'Lease Term', value: site.lease_term },
-          { label: 'Lock-in Period', value: site.lock_in_period },
-          { label: 'Notice Period', value: site.notice_period },
-          { label: 'Rental Escalation', value: site.rental_escalation },
-        ];
-      case '🚗 Vehicle Information':
-        return [
-          { label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
-          { label: 'Car Parking Slots', value: site.car_parking_slots },
-          { label: 'Car Parking Ratio', value: site.car_parking_ratio },
-          { label: 'Two Wheeler Parking', value: site.two_wheeler_charges },
-        ];
-      case '👤 Contact Information':
-        return [
-          { label: 'Building Owner', value: site.building_owner_name },
-          { label: 'Owner Contact', value: site.building_owner_contact },
-          { label: 'Contact Person', value: site.contact_person_name },
-          { label: 'Phone', value: site.contact_person_number },
-          { label: 'Email', value: site.contact_person_email },
-          { label: 'Designation', value: site.contact_person_designation },
-        ];
-      default:
-        return [];
-    }
-  };
-
-  const items = getDetailItems();
-
-  return (
-    <View style={styles.detailSection}>
-      <Text style={styles.detailSectionTitle}>{title}</Text>
-      <View style={styles.detailGrid}>
-        {items.map((item, idx) => (
-          <View key={`${title}-${idx}`} style={styles.detailItem}>
-            <Text style={styles.detailLabel}>{item.label}</Text>
-            <Text style={styles.detailValue}>{item.value || '-'}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-
-export default ScoutBoy;
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -1246,6 +1343,24 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32,
+  },
+  headerTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.white,
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   galleryNavigationContainer: {
     position: 'absolute',
@@ -1497,149 +1612,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     backgroundColor: colors.backgroundSecondary,
   },
-  siteHeader: {
-    marginBottom: spacing.md,
-  },
-  siteHeaderContent: {
-    flex: 1,
-  },
-  siteName: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  statusBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.lg,
-  },
-  statusBadgeText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  locationIcon: {
-    fontSize: fontSize.md,
-    marginRight: spacing.xs,
-  },
-  locationText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    flex: 1,
-    lineHeight: 20,
-  },
-  metaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  metaItem: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.backgroundSecondary,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  metaLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  metaValue: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  photoScroll: {
-    marginTop: spacing.sm,
-  },
-  photoThumbnail: {
-    marginRight: spacing.md,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    position: 'relative',
-    ...shadows.sm,
-  },
-  photoImage: {
-    width: 120,
-    height: 120,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  photoNumberBadge: {
-    position: 'absolute',
-    bottom: spacing.xs,
-    right: spacing.xs,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
-  photoNumber: {
-    color: colors.white,
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  photoModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoModalClose: {
-    position: 'absolute',
-    top: 60,
-    right: spacing.lg,
-    zIndex: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.white,
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoModalCloseText: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  photoModalImage: {
-    width: screenWidth * 0.9,
-    height: screenHeight * 0.7,
-  },
   detailContainer: {
     padding: spacing.lg,
   },
@@ -1736,7 +1708,63 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSize.sm,
   },
-   commentsContainer: {
+  photoScroll: {
+    marginTop: spacing.sm,
+  },
+  photoThumbnail: {
+    marginRight: spacing.md,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    position: 'relative',
+    ...shadows.sm,
+  },
+  photoImage: {
+    width: 120,
+    height: 120,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  photoNumberBadge: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  photoNumber: {
+    color: colors.white,
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  photoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 60,
+    right: spacing.lg,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalCloseText: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  photoModalImage: {
+    width: screenWidth * 0.9,
+    height: screenHeight * 0.7,
+  },
+  commentsContainer: {
     minHeight: 150,
     maxHeight: 300,
     marginBottom: spacing.md,
@@ -1747,10 +1775,6 @@ const styles = StyleSheet.create({
   },
   commentsList: {
     flex: 1,
-  },
-  commentsListContent: {
-    padding: spacing.md,
-    flexGrow: 1,
   },
   commentsLoading: {
     flex: 1,
@@ -1920,5 +1944,40 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
   },
+  // New styles for managed/conventional properties
+  propertyTypeBadge: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  managedBadge: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  conventionalBadge: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  metroStationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+  },
+  metroStationIcon: {
+    fontSize: fontSize.lg,
+    marginRight: spacing.sm,
+  },
+  metroStationText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+    flex: 1,
+  },
 });
 
+export default ScoutBoy;

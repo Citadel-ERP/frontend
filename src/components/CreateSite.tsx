@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
     StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
@@ -26,6 +26,12 @@ interface OtherAmenity {
     value: string;
 }
 
+interface MetroStation {
+    id: number;
+    name: string;
+    city: string;
+}
+
 const CreateSite: React.FC<CreateSiteProps> = ({
     onBack,
     colors,
@@ -34,12 +40,19 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     borderRadius,
     shadows,
 }) => {
-    const [currentStep, setCurrentStep] = useState(1);
+    const [currentStep, setCurrentStep] = useState(0);
     const [token, setToken] = useState<string | null>(null);
     const [creatingSite, setCreatingSite] = useState(false);
     const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
     const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
     const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+    const [siteType, setSiteType] = useState<'managed' | 'conventional' | null>(null);
+    const [metroStations, setMetroStations] = useState<MetroStation[]>([]);
+    const [showMetroDropdown, setShowMetroDropdown] = useState(false);
+    const [metroSearchQuery, setMetroSearchQuery] = useState('');
+    const [selectedMetroStation, setSelectedMetroStation] = useState<MetroStation | null>(null);
+    const [loadingMetroStations, setLoadingMetroStations] = useState(false);
+
     const [newSite, setNewSite] = useState({
         building_name: '',
         location: '',
@@ -89,13 +102,56 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         building_owner_name: '',
         building_owner_contact: '',
         area_offered: '',
-        maintenance_rate : ''
+        maintenance_rate: '',
+        // Managed office fields
+        total_seats: '',
+        rent_per_seat: '',
+        seats_available: '',
+        number_of_units: '',
+        number_of_seats_per_unit: '',
+        business_hours_of_operation: '',
+        premises_access: ''
     });
 
     const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
     const [otherAmenities, setOtherAmenities] = useState<OtherAmenity[]>([]);
 
     const TOKEN_KEY = 'token_2';
+
+    // Fetch metro stations
+    const fetchMetroStations = async (query: string) => {
+        if (!query || query.length < 2) {
+            setMetroStations([]);
+            return;
+        }
+
+        setLoadingMetroStations(true);
+        try {
+            const response = await fetch(`${BACKEND_URL}/core/getMetroStations?query=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            
+            if (data.message === "Success" && data.data) {
+                setMetroStations(data.data);
+            } else {
+                setMetroStations([]);
+            }
+        } catch (error) {
+            console.error('Error fetching metro stations:', error);
+            setMetroStations([]);
+        } finally {
+            setLoadingMetroStations(false);
+        }
+    };
+
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            if (metroSearchQuery) {
+                fetchMetroStations(metroSearchQuery);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [metroSearchQuery]);
 
     const BUILDING_STATUS_OPTIONS = [
         { label: 'Available', value: 'available' },
@@ -167,6 +223,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     };
 
     const validateStep = (step: number): boolean => {
+        if (step === 0) {
+            if (!siteType) {
+                Alert.alert('Required Field', 'Please select site type');
+                return false;
+            }
+        }
         if (step === 1) {
             if (!newSite.building_name || !newSite.location) {
                 Alert.alert('Required Fields', 'Please fill in Building Name and Location');
@@ -183,7 +245,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     };
 
     const handlePrevStep = () => {
-        if (currentStep > 1) {
+        if (currentStep > 0) {
             setCurrentStep(currentStep - 1);
         }
     };
@@ -319,38 +381,62 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 building_name: newSite.building_name,
                 latitude: parseFloat(locationData.latitude),
                 longitude: parseFloat(locationData.longitude),
+                site_type: siteType,
             };
 
-            if (newSite.location) siteData.location = newSite.location;
-            if (newSite.landmark) siteData.landmark = newSite.landmark;
-            if (newSite.rent) siteData.rent = parseCurrency(newSite.rent);
-            if (newSite.building_status) siteData.building_status = newSite.building_status;
-            if (newSite.total_area) siteData.total_area = parseCurrency(newSite.total_area);
-            if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
-            if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
-            if (newSite.area_offered) siteData.area_offered = newSite.area_offered;
-
-            if (newSite.car_parking_ratio_left && newSite.car_parking_ratio_right) {
-                siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
+            // Add metro station if selected
+            if (selectedMetroStation) {
+                siteData.nearest_metro_station = selectedMetroStation.id;
             }
 
+            // Common fields for both types
+            if (newSite.location) siteData.location = newSite.location;
+            if (newSite.landmark) siteData.landmark = newSite.landmark;
+            if (newSite.building_status) siteData.building_status = newSite.building_status;
+            if (newSite.floor_condition) siteData.floor_condition = newSite.floor_condition;
+
+            if (siteType === 'conventional') {
+                // Conventional office fields
+                if (newSite.rent) siteData.rent = parseCurrency(newSite.rent);
+                if (newSite.total_area) siteData.total_area = parseCurrency(newSite.total_area);
+                if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
+                if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
+                if (newSite.area_offered) siteData.area_offered = newSite.area_offered;
+            } else {
+                // Managed office fields
+                if (newSite.rent_per_seat) siteData.rent_per_seat = parseCurrency(newSite.rent_per_seat);
+                if (newSite.total_seats) siteData.total_seats = parseCurrency(newSite.total_seats);
+                if (newSite.number_of_seats_per_unit) siteData.number_of_seats_per_unit = parseCurrency(newSite.number_of_seats_per_unit);
+                if (newSite.seats_available) siteData.seats_available = parseCurrency(newSite.seats_available);
+                if (newSite.number_of_units) siteData.number_of_units = parseCurrency(newSite.number_of_units);
+                if (newSite.business_hours_of_operation) siteData.business_hours_of_operation = newSite.business_hours_of_operation;
+                if (newSite.premises_access) siteData.premises_access = newSite.premises_access;
+            }
+
+            // Common contact fields
             if (newSite.contact_person_name) siteData.contact_person_name = newSite.contact_person_name;
             if (newSite.contact_person_number) siteData.contact_person_number = newSite.contact_person_number;
             if (newSite.contact_person_email) siteData.contact_person_email = newSite.contact_person_email;
             if (newSite.contact_person_designation) siteData.contact_person_designation = newSite.contact_person_designation;
 
+            // Common property fields
             if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
             if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
-            if (newSite.floor_condition) siteData.floor_condition = newSite.floor_condition;
 
+            // Parking fields
             if (newSite.car_parking_charges) siteData.car_parking_charges = parseCurrency(newSite.car_parking_charges);
             if (newSite.car_parking_slots) siteData.car_parking_slots = newSite.car_parking_slots;
             if (newSite.two_wheeler_slots) siteData.two_wheeler_slots = newSite.two_wheeler_slots;
             if (newSite.two_wheeler_charges) siteData.two_wheeler_charges = parseCurrency(newSite.two_wheeler_charges);
 
+            if (newSite.car_parking_ratio_left && newSite.car_parking_ratio_right) {
+                siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
+            }
+
+            // Financial fields
             if (newSite.cam) siteData.cam = parseCurrency(newSite.cam);
             if (newSite.cam_deposit) siteData.cam_deposit = parseCurrency(newSite.cam_deposit);
-            if (newSite.security_deposit) siteData.security_deposit = newSite.security_deposit; // Now it's number of months
+            if (newSite.security_deposit) siteData.security_deposit = newSite.security_deposit;
 
             if (newSite.oc !== undefined && newSite.oc !== null) {
                 siteData.oc = newSite.oc ? 'True' : 'False';
@@ -361,19 +447,19 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
             if (newSite.rental_escalation) siteData.rental_escalation = newSite.rental_escalation;
             if (newSite.efficiency) siteData.efficiency = newSite.efficiency;
-
             if (newSite.notice_period) siteData.notice_period = newSite.notice_period;
             if (newSite.maintenance_rate) siteData.maintenance_rate = newSite.maintenance_rate;
             if (newSite.lease_term) siteData.lease_term = newSite.lease_term;
             if (newSite.lock_in_period) siteData.lock_in_period = newSite.lock_in_period;
 
+            // Power fields
             if (newSite.power) siteData.power = newSite.power;
             if (newSite.power_backup) siteData.power_backup = newSite.power_backup;
 
+            // Amenity fields
             if (newSite.number_of_cabins) siteData.number_of_cabins = newSite.number_of_cabins;
             if (newSite.number_of_workstations) siteData.number_of_workstations = newSite.number_of_workstations;
             if (newSite.size_of_workstation) siteData.size_of_workstation = newSite.size_of_workstation;
-
             if (newSite.server_room) siteData.server_room = newSite.server_room;
             if (newSite.training_room) siteData.training_room = newSite.training_room;
             if (newSite.pantry) siteData.pantry = newSite.pantry;
@@ -391,6 +477,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 }
             });
 
+            // Contact fields
             if (newSite.remarks) siteData.remarks = newSite.remarks;
             if (newSite.building_owner_name) siteData.building_owner_name = newSite.building_owner_name;
             if (newSite.building_owner_contact) siteData.building_owner_contact = newSite.building_owner_contact;
@@ -442,7 +529,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
     const renderStepIndicator = () => (
         <View style={styles(colors, spacing, borderRadius).stepIndicator}>
-            {[1, 2, 3, 4, 5, 6].map((step, index) => (
+            {[0, 1, 2, 3, 4, 5, 6].map((step, index) => (
                 <View key={step} style={styles(colors, spacing, borderRadius).stepIndicatorItem}>
                     <View style={[
                         styles(colors, spacing, borderRadius).stepCircle,
@@ -452,10 +539,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                             styles(colors, spacing, borderRadius).stepNumber,
                             currentStep >= step && styles(colors, spacing, borderRadius).stepNumberActive
                         ]}>
-                            {step}
+                            {step + 1}
                         </Text>
                     </View>
-                    {index < 5 && (
+                    {index < 6 && (
                         <View style={[
                             styles(colors, spacing, borderRadius).stepLine,
                             currentStep > step && styles(colors, spacing, borderRadius).stepLineActive
@@ -463,6 +550,70 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                     )}
                 </View>
             ))}
+        </View>
+    );
+
+    const renderStep0 = () => (
+        <View style={styles(colors, spacing, borderRadius).stepContent}>
+            <Text style={styles(colors, fontSize).stepTitle}>🏢 Select Site Type</Text>
+            <Text style={styles(colors, fontSize).stepDescription}>Choose the type of office space</Text>
+
+            <View style={styles(colors, spacing).siteTypeContainer}>
+                <TouchableOpacity
+                    style={[
+                        styles(colors, spacing, borderRadius, shadows).siteTypeCard,
+                        siteType === 'conventional' && styles(colors, spacing, borderRadius).siteTypeCardSelected
+                    ]}
+                    onPress={() => setSiteType('conventional')}
+                >
+                    <Text style={styles(colors, fontSize).siteTypeIcon}>🏛️</Text>
+                    <Text style={styles(colors, fontSize).siteTypeTitle}>Conventional Office</Text>
+                    <Text style={styles(colors, fontSize).siteTypeDescription}>
+                        Traditional office space with area-based pricing
+                    </Text>
+                    {siteType === 'conventional' && (
+                        <View style={styles(colors, spacing, borderRadius).siteTypeCheckmark}>
+                            <Text style={styles(colors, fontSize).siteTypeCheckmarkText}>✓</Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                        styles(colors, spacing, borderRadius, shadows).siteTypeCard,
+                        siteType === 'managed' && styles(colors, spacing, borderRadius).siteTypeCardSelected
+                    ]}
+                    onPress={() => setSiteType('managed')}
+                >
+                    <Text style={styles(colors, fontSize).siteTypeIcon}>💼</Text>
+                    <Text style={styles(colors, fontSize).siteTypeTitle}>Managed Office</Text>
+                    <Text style={styles(colors, fontSize).siteTypeDescription}>
+                        Flexible workspace with seat-based pricing and amenities
+                    </Text>
+                    {siteType === 'managed' && (
+                        <View style={styles(colors, spacing, borderRadius).siteTypeCheckmark}>
+                            <Text style={styles(colors, fontSize).siteTypeCheckmarkText}>✓</Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {/* Metro Station Field - Available for both types */}
+            <View style={styles(colors, spacing).formGroup}>
+                <Text style={styles(colors, fontSize).formLabel}>Nearest Metro Station</Text>
+                <TouchableOpacity
+                    style={styles(colors, spacing, borderRadius).dropdownButton}
+                    onPress={() => setShowMetroDropdown(true)}
+                >
+                    <Text style={[
+                        styles(colors, fontSize).dropdownButtonText,
+                        !selectedMetroStation && { color: colors.textSecondary }
+                    ]}>
+                        {selectedMetroStation ? selectedMetroStation.name : 'Search for metro station...'}
+                    </Text>
+                    <Text style={styles(colors, fontSize).dropdownButtonIcon}>▼</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 
@@ -508,8 +659,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
     const renderStep2 = () => (
         <View style={styles(colors, spacing, borderRadius).stepContent}>
-            <Text style={styles(colors, fontSize).stepTitle}>📐 Property Specifications</Text>
-            <Text style={styles(colors, fontSize).stepDescription}>Area and floor details</Text>
+            <Text style={styles(colors, fontSize).stepTitle}>
+                {siteType === 'conventional' ? '📐 Property Specifications' : '💺 Seat & Unit Details'}
+            </Text>
+            <Text style={styles(colors, fontSize).stepDescription}>
+                {siteType === 'conventional' ? 'Area and floor details' : 'Seat and unit configuration'}
+            </Text>
 
             <View style={styles(colors, spacing).row}>
                 <View style={styles(colors, spacing).halfWidth}>
@@ -549,52 +704,110 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 </TouchableOpacity>
             </View>
 
-            <View style={styles(colors, spacing).row}>
-                <View style={styles(colors, spacing).halfWidth}>
-                    <Text style={styles(colors, fontSize).formLabel}>Total Area (sq ft)</Text>
-                    <TextInput
-                        style={styles(colors, spacing, borderRadius).input}
-                        value={newSite.total_area}
-                        onChangeText={(val) => setNewSite({ ...newSite, total_area: formatCurrency(val) })}
-                        placeholder="50,000"
-                        keyboardType="numeric"
-                        placeholderTextColor={colors.textSecondary}
-                    />
-                </View>
-                <View style={styles(colors, spacing).halfWidth}>
-                    <Text style={styles(colors, fontSize).formLabel}>Area/Floor (sq ft)</Text>
-                    <TextInput
-                        style={styles(colors, spacing, borderRadius).input}
-                        value={newSite.area_per_floor}
-                        onChangeText={(val) => setNewSite({ ...newSite, area_per_floor: formatCurrency(val) })}
-                        placeholder="5,000"
-                        keyboardType="numeric"
-                        placeholderTextColor={colors.textSecondary}
-                    />
-                </View>
-            </View>
+            {siteType === 'conventional' ? (
+                // Conventional office fields
+                <>
+                    <View style={styles(colors, spacing).row}>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Total Area (sq ft)</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.total_area}
+                                onChangeText={(val) => setNewSite({ ...newSite, total_area: formatCurrency(val) })}
+                                placeholder="50,000"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Area/Floor (sq ft)</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.area_per_floor}
+                                onChangeText={(val) => setNewSite({ ...newSite, area_per_floor: formatCurrency(val) })}
+                                placeholder="5,000"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                    </View>
 
-            <View style={styles(colors, spacing).formGroup}>
-                <Text style={styles(colors, fontSize).formLabel}>Available Floors</Text>
-                <TextInput
-                    style={styles(colors, spacing, borderRadius).input}
-                    value={newSite.availble_floors}
-                    onChangeText={(val) => setNewSite({ ...newSite, availble_floors: val })}
-                    placeholder="G+1 to G+5"
-                    placeholderTextColor={colors.textSecondary}
-                />
-            </View>
+                    <View style={styles(colors, spacing).formGroup}>
+                        <Text style={styles(colors, fontSize).formLabel}>Available Floors</Text>
+                        <TextInput
+                            style={styles(colors, spacing, borderRadius).input}
+                            value={newSite.availble_floors}
+                            onChangeText={(val) => setNewSite({ ...newSite, availble_floors: val })}
+                            placeholder="G+1 to G+5"
+                            placeholderTextColor={colors.textSecondary}
+                        />
+                    </View>
 
-            <View style={styles(colors, spacing).formGroup}>
-                <Text style={styles(colors, fontSize).formLabel}>Area Offered</Text>
-                <TextInput
-                    style={styles(colors, spacing, borderRadius).input}
-                    value={newSite.area_offered}
-                    onChangeText={(val) => setNewSite({ ...newSite, area_offered: val })}
-                    placeholder="11000"
-                    placeholderTextColor={colors.textSecondary}
-                />
-            </View>
+                    <View style={styles(colors, spacing).formGroup}>
+                        <Text style={styles(colors, fontSize).formLabel}>Area Offered</Text>
+                        <TextInput
+                            style={styles(colors, spacing, borderRadius).input}
+                            value={newSite.area_offered}
+                            onChangeText={(val) => setNewSite({ ...newSite, area_offered: val })}
+                            placeholder="11000"
+                            placeholderTextColor={colors.textSecondary}
+                        />
+                    </View>
+                </>
+            ) : (
+                // Managed office fields
+                <>
+                    <View style={styles(colors, spacing).row}>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Total Seats</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.total_seats}
+                                onChangeText={(val) => setNewSite({ ...newSite, total_seats: formatCurrency(val) })}
+                                placeholder="500"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Seats Available</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.seats_available}
+                                onChangeText={(val) => setNewSite({ ...newSite, seats_available: formatCurrency(val) })}
+                                placeholder="200"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                    </View>
+
+                    <View style={styles(colors, spacing).row}>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Number of Units</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.number_of_units}
+                                onChangeText={(val) => setNewSite({ ...newSite, number_of_units: formatCurrency(val) })}
+                                placeholder="50"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Seats Per Unit</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.number_of_seats_per_unit}
+                                onChangeText={(val) => setNewSite({ ...newSite, number_of_seats_per_unit: formatCurrency(val) })}
+                                placeholder="10"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                    </View>
+                </>
+            )}
 
             <View style={styles(colors, spacing).formGroup}>
                 <Text style={styles(colors, fontSize).formLabel}>Efficiency (%)</Text>
@@ -613,7 +826,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     const renderStep3 = () => (
         <View style={styles(colors, spacing, borderRadius).stepContent}>
             <Text style={styles(colors, fontSize).stepTitle}>💰 Financial Details</Text>
-            <Text style={styles(colors, fontSize).stepDescription}>Rent and payment terms</Text>
+            <Text style={styles(colors, fontSize).stepDescription}>
+                {siteType === 'conventional' ? 'Rent and payment terms' : 'Seat pricing and payment terms'}
+            </Text>
 
             <View style={styles(colors, spacing).formGroup}>
                 <Text style={styles(colors, fontSize).formLabel}>Building Status</Text>
@@ -628,31 +843,89 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 </TouchableOpacity>
             </View>
 
-            <View style={styles(colors, spacing).row}>
-                <View style={styles(colors, spacing).halfWidth}>
-                    <Text style={styles(colors, fontSize).formLabel}>Monthly Rent (₹)</Text>
-                    <TextInput
-                        style={styles(colors, spacing, borderRadius).input}
-                        value={newSite.rent}
-                        onChangeText={(val) => setNewSite({ ...newSite, rent: formatCurrency(val) })}
-                        placeholder="5,00,000"
-                        keyboardType="numeric"
-                        placeholderTextColor={colors.textSecondary}
-                    />
-                </View>
-                <View style={styles(colors, spacing).halfWidth}>
-                    <Text style={styles(colors, fontSize).formLabel}>CAM (₹)</Text>
-                    <TextInput
-                        style={styles(colors, spacing, borderRadius).input}
-                        value={newSite.cam}
-                        onChangeText={(val) => setNewSite({ ...newSite, cam: formatCurrency(val) })}
-                        placeholder="50,000"
-                        keyboardType="numeric"
-                        placeholderTextColor={colors.textSecondary}
-                    />
-                </View>
-            </View>
+            {siteType === 'conventional' ? (
+                // Conventional office financial fields
+                <>
+                    <View style={styles(colors, spacing).row}>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>Monthly Rent (₹)</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.rent}
+                                onChangeText={(val) => setNewSite({ ...newSite, rent: formatCurrency(val) })}
+                                placeholder="5,00,000"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>CAM (₹)</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.cam}
+                                onChangeText={(val) => setNewSite({ ...newSite, cam: formatCurrency(val) })}
+                                placeholder="50,000"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                    </View>
+                </>
+            ) : (
+                // Managed office financial fields
+                <>
+                    <View style={styles(colors, spacing).formGroup}>
+                        <Text style={styles(colors, fontSize).formLabel}>Rent Per Seat (₹)</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.rent_per_seat}
+                                onChangeText={(val) => setNewSite({ ...newSite, rent_per_seat: formatCurrency(val) })}
+                                placeholder="8,000"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                    </View>
 
+                    <View style={styles(colors, spacing).row}>
+                        <View style={styles(colors, spacing).halfWidth}>
+                            <Text style={styles(colors, fontSize).formLabel}>CAM (₹)</Text>
+                            <TextInput
+                                style={styles(colors, spacing, borderRadius).input}
+                                value={newSite.cam}
+                                onChangeText={(val) => setNewSite({ ...newSite, cam: formatCurrency(val) })}
+                                placeholder="50,000"
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        </View>
+                    </View>
+
+                    {/* Managed office specific fields */}
+                    <View style={styles(colors, spacing).formGroup}>
+                        <Text style={styles(colors, fontSize).formLabel}>Business Hours of Operation</Text>
+                        <TextInput
+                            style={styles(colors, spacing, borderRadius).input}
+                            value={newSite.business_hours_of_operation}
+                            onChangeText={(val) => setNewSite({ ...newSite, business_hours_of_operation: val })}
+                            placeholder="9:00 AM - 6:00 PM, Monday to Friday"
+                            placeholderTextColor={colors.textSecondary}
+                        />
+                    </View>
+
+                    <View style={styles(colors, spacing).formGroup}>
+                        <Text style={styles(colors, fontSize).formLabel}>Premises Access</Text>
+                        <TextInput
+                            style={styles(colors, spacing, borderRadius).input}
+                            value={newSite.premises_access}
+                            onChangeText={(val) => setNewSite({ ...newSite, premises_access: val })}
+                            placeholder="24/7 access with key card"
+                            placeholderTextColor={colors.textSecondary}
+                        />
+                    </View>
+                </>
+            )}
+
+            {/* Common financial fields */}
             <View style={styles(colors, spacing).row}>
                 <View style={styles(colors, spacing).halfWidth}>
                     <Text style={styles(colors, fontSize).formLabel}>CAM Deposit (₹)</Text>
@@ -725,17 +998,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 </View>
             </View>
 
-            <View style={styles(colors, spacing).row}>
-                <View style={styles(colors, spacing).halfWidth}>
-                    <Text style={styles(colors, fontSize).formLabel}>Maintenance rate</Text>
-                    <TextInput
-                        style={styles(colors, spacing, borderRadius).input}
-                        value={newSite.maintenance_rate}
-                        onChangeText={(val) => setNewSite({ ...newSite, maintenance_rate: val })}
-                        placeholder="12"
-                        placeholderTextColor={colors.textSecondary}
-                    />
-                </View>
+            <View style={styles(colors, spacing).formGroup}>
+                <Text style={styles(colors, fontSize).formLabel}>Maintenance rate</Text>
+                <TextInput
+                    style={styles(colors, spacing, borderRadius).input}
+                    value={newSite.maintenance_rate}
+                    onChangeText={(val) => setNewSite({ ...newSite, maintenance_rate: val })}
+                    placeholder="12"
+                    placeholderTextColor={colors.textSecondary}
+                />
             </View>
 
             <View style={styles(colors, spacing).checkboxContainer}>
@@ -763,6 +1034,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             </View>
         </View>
     );
+
+    // Steps 4, 5, 6 remain largely the same as they contain common fields
+    // Only minor adjustments needed for conditional rendering
 
     const renderStep4 = () => (
         <View style={styles(colors, spacing, borderRadius).stepContent}>
@@ -1211,6 +1485,68 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         </Modal>
     );
 
+    const MetroDropdownModal = () => (
+        <Modal visible={showMetroDropdown} transparent animationType="fade" onRequestClose={() => setShowMetroDropdown(false)}>
+            <TouchableOpacity
+                style={styles(colors).dropdownOverlay}
+                activeOpacity={1}
+                onPress={() => setShowMetroDropdown(false)}
+            >
+                <View style={styles(colors, spacing, borderRadius, shadows).dropdownContainer}>
+                    <Text style={styles(colors, fontSize).dropdownTitle}>Select Metro Station</Text>
+                    
+                    <View style={styles(colors, spacing).searchContainer}>
+                        <TextInput
+                            style={styles(colors, spacing, borderRadius).searchInput}
+                            value={metroSearchQuery}
+                            onChangeText={setMetroSearchQuery}
+                            placeholder="Search metro stations..."
+                            placeholderTextColor={colors.textSecondary}
+                        />
+                    </View>
+
+                    <ScrollView style={styles(colors).dropdownScroll}>
+                        {loadingMetroStations ? (
+                            <View style={styles(colors, spacing).loadingContainer}>
+                                <ActivityIndicator size="small" color={colors.primary} />
+                                <Text style={styles(colors, fontSize).loadingText}>Searching...</Text>
+                            </View>
+                        ) : metroStations.length === 0 ? (
+                            <Text style={styles(colors, fontSize).noResultsText}>
+                                {metroSearchQuery ? 'No stations found' : 'Start typing to search metro stations'}
+                            </Text>
+                        ) : (
+                            metroStations.map((station) => (
+                                <TouchableOpacity
+                                    key={station.id}
+                                    style={styles(colors, spacing, borderRadius).dropdownOption}
+                                    onPress={() => {
+                                        setSelectedMetroStation(station);
+                                        setShowMetroDropdown(false);
+                                        setMetroSearchQuery('');
+                                    }}
+                                >
+                                    <Text style={styles(colors, fontSize).dropdownOptionText}>{station.name}</Text>
+                                    <Text style={styles(colors, fontSize).dropdownOptionSubtext}>{station.city}</Text>
+                                </TouchableOpacity>
+                            ))
+                        )}
+                    </ScrollView>
+
+                    <TouchableOpacity
+                        style={styles(colors, spacing, borderRadius).cancelButton}
+                        onPress={() => {
+                            setShowMetroDropdown(false);
+                            setMetroSearchQuery('');
+                        }}
+                    >
+                        <Text style={styles(colors, fontSize).cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
+        </Modal>
+    );
+
     const ImageSourceModal = () => (
         <Modal visible={showImageSourceModal} transparent animationType="fade" onRequestClose={() => setShowImageSourceModal(false)}>
             <TouchableOpacity
@@ -1265,6 +1601,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
                 <ScrollView style={styles(colors).scrollView} showsVerticalScrollIndicator={false}>
                     <View style={styles(colors, spacing).formContainer}>
+                        {currentStep === 0 && renderStep0()}
                         {currentStep === 1 && renderStep1()}
                         {currentStep === 2 && renderStep2()}
                         {currentStep === 3 && renderStep3()}
@@ -1275,7 +1612,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 </ScrollView>
 
                 <View style={styles(colors, spacing, borderRadius).navigationButtons}>
-                    {currentStep > 1 && (
+                    {currentStep > 0 && (
                         <TouchableOpacity
                             style={styles(colors, spacing, borderRadius).navButton}
                             onPress={handlePrevStep}
@@ -1285,7 +1622,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                     )}
                     {currentStep < 6 ? (
                         <TouchableOpacity
-                            style={[styles(colors, spacing, borderRadius).navButton, styles(colors, spacing, borderRadius).navButtonPrimary, currentStep === 1 && styles(colors, spacing, borderRadius).navButtonFull]}
+                            style={[styles(colors, spacing, borderRadius).navButton, styles(colors, spacing, borderRadius).navButtonPrimary, currentStep === 0 && styles(colors, spacing, borderRadius).navButtonFull]}
                             onPress={handleNextStep}
                         >
                             <Text style={styles(colors, fontSize).navButtonTextPrimary}>Next →</Text>
@@ -1326,6 +1663,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 onClose={() => setShowFloorConditionDropdown(false)}
                 title="Select Floor Condition"
             />
+
+            <MetroDropdownModal />
 
             <ImageSourceModal />
         </SafeAreaView>
@@ -1531,6 +1870,41 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
             fontSize: 14,
             color: colors.text,
         },
+        dropdownOptionSubtext: {
+            fontSize: 12,
+            color: colors.textSecondary,
+            marginTop: 2,
+        },
+        searchContainer: {
+            marginBottom: spacing?.md || 12,
+        },
+        searchInput: {
+            paddingHorizontal: spacing?.md || 12,
+            paddingVertical: spacing?.sm || 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: borderRadius?.md || 8,
+            backgroundColor: colors.white,
+            fontSize: 14,
+            color: colors.text,
+        },
+        loadingContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: spacing?.lg || 16,
+        },
+        loadingText: {
+            marginLeft: spacing?.sm || 8,
+            fontSize: 14,
+            color: colors.textSecondary,
+        },
+        noResultsText: {
+            textAlign: 'center',
+            padding: spacing?.lg || 16,
+            fontSize: 14,
+            color: colors.textSecondary,
+        },
         imageSourceContainer: {
             width: '100%',
             maxWidth: 400,
@@ -1612,6 +1986,53 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
             fontSize: 18,
             fontWeight: '700',
             color: colors.text,
+        },
+        // Site Type Styles
+        siteTypeContainer: {
+            gap: spacing?.md || 12,
+        },
+        siteTypeCard: {
+            backgroundColor: colors.white,
+            padding: spacing?.lg || 16,
+            borderRadius: borderRadius?.lg || 12,
+            borderWidth: 2,
+            borderColor: colors.border,
+            ...shadows?.sm,
+        },
+        siteTypeCardSelected: {
+            borderColor: colors.primary,
+            backgroundColor: colors.primary + '10',
+        },
+        siteTypeIcon: {
+            fontSize: 32,
+            marginBottom: spacing?.sm || 8,
+        },
+        siteTypeTitle: {
+            fontSize: 16,
+            fontWeight: '700',
+            color: colors.text,
+            marginBottom: spacing?.xs || 4,
+        },
+        siteTypeDescription: {
+            fontSize: 12,
+            color: colors.textSecondary,
+            lineHeight: 16,
+        },
+        siteTypeCheckmark: {
+            position: 'absolute',
+            top: spacing?.md || 12,
+            right: spacing?.md || 12,
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: colors.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        siteTypeCheckmarkText: {
+            color: colors.white,
+            fontSize: 12,
+            fontWeight: '700',
         },
         // Other Amenities Styles
         otherAmenityContainer: {
