@@ -29,7 +29,9 @@ import {
   Holiday,
   AttendanceRecord,
   LeaveForm,
-  TabType
+  TabType,
+  CHECKIN_REASONS,
+  CHECKOUT_REASONS
 } from './types';
 import AttendanceTab from './AttendanceTab';
 import LeaveTab from './LeaveTab';
@@ -37,6 +39,7 @@ import CalendarTab from './CalendarTab';
 import ReportsTab from './ReportsTab';
 import LeaveModal from './LeaveModal';
 import { MonthDropdown, YearDropdown } from './DropdownComponents';
+import ReasonModal from './ReasonModal';
 
 const TOKEN_2_KEY = 'token_2';
 
@@ -50,8 +53,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
-  const [showCheckOutReasonModal, setShowCheckOutReasonModal] = useState(false);
-  const [checkoutReason, setCheckoutReason] = useState('');
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     casual_leaves: 0,
     sick_leaves: 0,
@@ -75,9 +76,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [showLeaveInfo, setShowLeaveInfo] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveApplication | null>(null);
-  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
-  const [attendanceDescription, setAttendanceDescription] = useState('');
-  const [showCheckOutTimeModal, setShowCheckOutTimeModal] = useState(false);
+
+  // Reason Modal States
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [reasonModalType, setReasonModalType] = useState<'checkin' | 'checkout'>('checkin');
+  const [selectedReason, setSelectedReason] = useState('');
+  const [customReason, setCustomReason] = useState('');
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -190,6 +194,36 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
+  // Helper function to reset reason modal state
+  const resetReasonModal = () => {
+    setShowReasonModal(false);
+    setSelectedReason('');
+    setCustomReason('');
+  };
+
+  // Handler for reason modal submission
+  const handleReasonSubmit = () => {
+    let finalReason = '';
+
+    if (selectedReason === 'other') {
+      if (!customReason.trim()) {
+        Alert.alert('Error', 'Please specify your reason.');
+        return;
+      }
+      finalReason = customReason.trim();
+    } else {
+      finalReason = reasonModalType === 'checkin' 
+        ? CHECKIN_REASONS.find(r => r.value === selectedReason)?.label || selectedReason
+        : CHECKOUT_REASONS.find(r => r.value === selectedReason)?.label || selectedReason;
+    }
+
+    if (reasonModalType === 'checkin') {
+      markAttendance(finalReason);
+    } else {
+      markCheckout(finalReason);
+    }
+  };
+
   const markAttendance = async (description?: string) => {
     if (!token) {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
@@ -237,8 +271,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       if (response.status === 200) {
         Alert.alert('Success', 'Attendance marked successfully!');
-        setShowDescriptionModal(false);
-        setAttendanceDescription('');
+        resetReasonModal();
 
         // Real-time update
         const today = new Date().toISOString().split('T')[0];
@@ -269,7 +302,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         if (data.message === 'Mark attendance failed, You are not in office' ||
           data.message === 'description is required if you are not at office') {
           if (!description || typeof description !== 'string') {
-            setShowDescriptionModal(true);
+            // Show reason modal for check-in
+            setReasonModalType('checkin');
+            setShowReasonModal(true);
             setLoading(false);
             return;
           } else {
@@ -336,8 +371,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       if (response.status === 200) {
         Alert.alert('Success', 'Checkout time marked successfully!');
-        setShowCheckOutReasonModal(false);
-        setCheckoutReason('');
+        resetReasonModal();
 
         // Update today's attendance with checkout time
         const today = new Date().toISOString().split('T')[0];
@@ -369,7 +403,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       } else if (response.status === 400) {
         if (data.message === 'Mark checkout failed, You are not in office add a reason too') {
           if (!reason || typeof reason !== 'string') {
-            setShowCheckOutReasonModal(true);
+            // Show reason modal for checkout
+            setReasonModalType('checkout');
+            setShowReasonModal(true);
             setLoading(false);
             return;
           } else {
@@ -786,20 +822,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     setHolidays(updatedHolidays);
   };
 
-  const handleRemoteAttendanceSubmit = () => {
-    if (!attendanceDescription.trim()) {
-      Alert.alert('Error', 'Please enter a description for remote attendance.');
-      return;
-    }
-    markAttendance(attendanceDescription.trim());
-  };
-
-  const handleCloseDescriptionModal = () => {
-    setShowDescriptionModal(false);
-    setAttendanceDescription('');
-    setLoading(false);
-  };
-
   const handleCheckout = () => {
     Alert.alert(
       'Confirm Checkout',
@@ -809,19 +831,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         { text: 'Checkout', onPress: () => markCheckout() }
       ]
     );
-  };
-  const handleCheckoutReasonSubmit = () => {
-    if (!checkoutReason.trim()) {
-      Alert.alert('Error', 'Please enter a reason for early checkout.');
-      return;
-    }
-    markCheckout(checkoutReason.trim());
-  };
-
-  const handleCloseCheckoutReasonModal = () => {
-    setShowCheckOutReasonModal(false);
-    setCheckoutReason('');
-    setLoading(false);
   };
 
   if (showLeaveInfo && selectedLeave) {
@@ -953,95 +962,25 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         onSelect={handleYearChange}
       />
 
-      {/* Remote Attendance Description Modal */}
-      <Modal
-        visible={showDescriptionModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleCloseDescriptionModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.descriptionModal}>
-            <Text style={styles.modalTitle}>Remote Attendance</Text>
-            <Text style={styles.modalSubtitle}>
-              You're not at the office location. Please provide a description for remote attendance:
-            </Text>
-            <TextInput
-              style={styles.descriptionInput}
-              placeholder="Enter description (e.g., Working from home, Client meeting, etc.)"
-              value={attendanceDescription}
-              onChangeText={setAttendanceDescription}
-              multiline
-              numberOfLines={3}
-              maxLength={200}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={handleCloseDescriptionModal}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleRemoteAttendanceSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Submit</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Checkout Reason Modal */}
-      <Modal
-        visible={showCheckOutReasonModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleCloseCheckoutReasonModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.descriptionModal}>
-            <Text style={styles.modalTitle}>Early Checkout</Text>
-            <Text style={styles.modalSubtitle}>
-              You're not at the office location. Please provide a reason for early checkout:
-            </Text>
-            <TextInput
-              style={styles.descriptionInput}
-              placeholder="Enter reason (e.g., Early leave, Personal work, etc.)"
-              value={checkoutReason}
-              onChangeText={setCheckoutReason}
-              multiline
-              numberOfLines={3}
-              maxLength={200}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={handleCloseCheckoutReasonModal}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleCheckoutReasonSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Submit</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Unified Reason Modal for both Check-in and Checkout */}
+      <ReasonModal
+        visible={showReasonModal}
+        type={reasonModalType}
+        title={reasonModalType === 'checkin' ? 'Remote Attendance' : 'Early Checkout'}
+        subtitle={
+          reasonModalType === 'checkin' 
+            ? "You're not at the office location. Please select a reason for remote attendance:" 
+            : "You're not at the office location. Please select a reason for early checkout:"
+        }
+        selectedReason={selectedReason}
+        onReasonSelect={setSelectedReason}
+        customReason={customReason}
+        onCustomReasonChange={setCustomReason}
+        onSubmit={handleReasonSubmit}
+        onClose={resetReasonModal}
+        loading={loading}
+        reasons={reasonModalType === 'checkin' ? CHECKIN_REASONS : CHECKOUT_REASONS}
+      />
     </SafeAreaView>
   );
 };
@@ -1104,86 +1043,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  descriptionModal: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    width: '100%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  descriptionInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    textAlignVertical: 'top',
-    marginBottom: spacing.lg,
-    minHeight: 80,
-    backgroundColor: colors.white,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-  },
-  cancelButton: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-  },
-  cancelButtonText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  submitButtonText: {
-    fontSize: fontSize.md,
-    color: colors.white,
-    fontWeight: '600',
   },
 });
 
