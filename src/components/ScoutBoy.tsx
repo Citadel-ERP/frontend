@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Modal, TextInput, Dimensions, ActivityIndicator,
-  Image, RefreshControl, Alert
+  Image, RefreshControl, Alert, PanResponder
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
@@ -88,15 +88,6 @@ const BackIcon = () => (
   </View>
 );
 
-const NavigationArrow = ({ direction }: { direction: 'left' | 'right' }) => (
-  <View style={styles.navArrowIcon}>
-    <View style={[
-      styles.navArrow,
-      direction === 'right' && styles.navArrowRight
-    ]} />
-  </View>
-);
-
 interface ScoutBoyProps {
   onBack: () => void;
 }
@@ -133,6 +124,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [commentsCurrentPage, setCommentsCurrentPage] = useState(1);
   const [commentsHasNextPage, setCommentsHasNextPage] = useState(false);
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
+
+  // Swipe gesture state
+  const [swipeStartX, setSwipeStartX] = useState(0);
 
   const TOKEN_KEY = 'token_2';
 
@@ -175,6 +169,27 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       case 'admin_completed': return '✓✓';
       case 'cancelled': return '✗';
       default: return '•';
+    }
+  };
+
+  // Swipe navigation handlers
+  const handleSwipeStart = (event: any) => {
+    setSwipeStartX(event.nativeEvent.pageX);
+  };
+
+  const handleSwipeEnd = (event: any) => {
+    const swipeEndX = event.nativeEvent.pageX;
+    const swipeDistance = swipeEndX - swipeStartX;
+    const swipeThreshold = 50; // Minimum swipe distance to trigger navigation
+
+    if (Math.abs(swipeDistance) > swipeThreshold) {
+      if (swipeDistance > 0) {
+        // Swipe right - previous visit
+        navigateToPreviousVisit();
+      } else {
+        // Swipe left - next visit
+        navigateToNextVisit();
+      }
     }
   };
 
@@ -778,7 +793,11 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     const hasNext = currentVisitIndex < visits.length - 1;
 
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View 
+        style={[styles.container, { paddingTop: insets.top }]}
+        onTouchStart={handleSwipeStart}
+        onTouchEnd={handleSwipeEnd}
+      >
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
         {/* Header */}
@@ -795,264 +814,256 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           <View style={styles.headerSpacer} />
         </View>
 
-        {/* Navigation arrows */}
-        <View style={styles.galleryNavigationContainer}>
-          <TouchableOpacity
-            style={[
-              styles.galleryNavButton,
-              styles.galleryNavButtonLeft,
-              !hasPrevious && styles.galleryNavButtonDisabled
-            ]}
-            onPress={navigateToPreviousVisit}
-            disabled={!hasPrevious}
-          >
-            <NavigationArrow direction="left" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.galleryNavButton,
-              styles.galleryNavButtonRight,
-              !hasNext && styles.galleryNavButtonDisabled
-            ]}
-            onPress={navigateToNextVisit}
-            disabled={!hasNext}
-          >
-            <NavigationArrow direction="right" />
-          </TouchableOpacity>
+        {/* Swipe Instructions */}
+        <View style={styles.swipeInstructions}>
+          <Text style={styles.swipeInstructionsText}>
+            {hasPrevious && hasNext ? 'Swipe left or right to navigate' : 
+             hasPrevious ? 'Swipe right for previous' : 
+             hasNext ? 'Swipe left for next' : ''}
+          </Text>
         </View>
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.detailContainer}>
+            {/* Building Name Card */}
             <View style={styles.card}>
-              {/* Photos */}
-              {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
-                <View style={styles.card}>
-                  <Text style={styles.sectionTitle}>Photos ({selectedVisit.building_photos.length})</Text>
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.photoScroll}
-                  >
-                    {selectedVisit.building_photos.map((photo: any, index: number) => (
-                      <TouchableOpacity
-                        key={photo.id}
-                        style={styles.photoThumbnail}
-                        onPress={() => {
-                          setSelectedPhotoIndex(index);
-                          setSelectedPhotoUrl(photo.file_url);
-                          setShowPhotoModal(true);
-                        }}
-                      >
-                        <Image
-                          source={{ uri: photo.file_url }}
-                          style={styles.photoImage}
-                        />
-                        <View style={styles.photoNumberBadge}>
-                          <Text style={styles.photoNumber}>{index + 1}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+              <Text style={styles.buildingNameTitle}>Building Name</Text>
+              <Text style={styles.buildingName}>{site.building_name || 'Unnamed Building'}</Text>
+              {site.location && (
+                <View style={styles.locationRow}>
+                  <Text style={styles.locationIcon}>📍</Text>
+                  <Text style={styles.locationText}>{site.location}</Text>
                 </View>
-              ) : (
-                <View style={styles.card}>
-                  <Text style={styles.sectionTitle}>Photos</Text>
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateIcon}>📷</Text>
-                    <Text style={styles.emptyStateText}>No photos available</Text>
-                  </View>
+              )}
+            </View>
+
+            {/* Photos */}
+            {selectedVisit.building_photos && selectedVisit.building_photos.length > 0 ? (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Photos ({selectedVisit.building_photos.length})</Text>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photoScroll}
+                >
+                  {selectedVisit.building_photos.map((photo: any, index: number) => (
+                    <TouchableOpacity
+                      key={photo.id}
+                      style={styles.photoThumbnail}
+                      onPress={() => {
+                        setSelectedPhotoIndex(index);
+                        setSelectedPhotoUrl(photo.file_url);
+                        setShowPhotoModal(true);
+                      }}
+                    >
+                      <Image
+                        source={{ uri: photo.file_url }}
+                        style={styles.photoImage}
+                      />
+                      <View style={styles.photoNumberBadge}>
+                        <Text style={styles.photoNumber}>{index + 1}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Photos</Text>
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>📷</Text>
+                  <Text style={styles.emptyStateText}>No photos available</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Property Details */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>
+                Property Details
+                {site.managed_property && (
+                  <Text style={styles.managedBadge}> • Managed Office</Text>
+                )}
+                {site.conventional_property && (
+                  <Text style={styles.conventionalBadge}> • Conventional Office</Text>
+                )}
+              </Text>
+
+              {/* Metro Station - Show for both types if available */}
+              {site.nearest_metro_station && (
+                <View style={styles.metroStationContainer}>
+                  <Text style={styles.metroStationIcon}>🚇</Text>
+                  <Text style={styles.metroStationText}>
+                    Nearest Metro: {site.nearest_metro_station.name}
+                  </Text>
                 </View>
               )}
 
-              {/* Property Details */}
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>
-                  Property Details
-                  {site.managed_property && (
-                    <Text style={styles.managedBadge}> • Managed Office</Text>
-                  )}
-                  {site.conventional_property && (
-                    <Text style={styles.conventionalBadge}> • Conventional Office</Text>
-                  )}
-                </Text>
+              <DetailSection title="📋 Basic Information" site={site} />
+              <DetailSection title="💰 Commercial Details" site={site} />
+              <DetailSection title="🚗 Vehicle Information" site={site} />
+              <DetailSection title="👤 Contact Information" site={site} />
 
-                {/* Metro Station - Show for both types if available */}
-                {site.nearest_metro_station && (
-                  <View style={styles.metroStationContainer}>
-                    <Text style={styles.metroStationIcon}>🚇</Text>
-                    <Text style={styles.metroStationText}>
-                      Nearest Metro: {site.nearest_metro_station.name}
-                    </Text>
+              {site.remarks && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
+                  <Text style={styles.remarksText}>{site.remarks}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Comments Section */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
+
+              <View style={styles.commentsContainer}>
+                {loadingComments ? (
+                  <View style={styles.commentsLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.commentsLoadingText}>Loading comments...</Text>
                   </View>
-                )}
+                ) : comments.length > 0 ? (
+                  <ScrollView
+                    style={styles.commentsList}
+                    showsVerticalScrollIndicator={false}
+                    onScroll={({ nativeEvent }) => {
+                      const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                      const isCloseToBottom =
+                        layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+                      if (isCloseToBottom && !loadingMoreComments) {
+                        loadMoreComments();
+                      }
+                    }}
+                    scrollEventThrottle={400}
+                  >
+                    {comments.map((comment, index) => (
+                      <View key={`${comment.commentId}`} style={styles.commentItem}>
+                        <View style={styles.commentHeader}>
+                          <Text style={styles.commentAuthor}>
+                            {comment.user?.full_name || 'Unknown User'}
+                          </Text>
+                          <Text style={styles.commentTime}>
+                            {formatCommentDate(comment.created_at)}
+                          </Text>
+                        </View>
 
-                <DetailSection title="📋 Basic Information" site={site} />
-                <DetailSection title="💰 Commercial Details" site={site} />
-                <DetailSection title="🚗 Vehicle Information" site={site} />
-                <DetailSection title="👤 Contact Information" site={site} />
+                        {comment.content ? (
+                          <Text style={styles.commentContent}>{comment.content}</Text>
+                        ) : null}
 
-                {site.remarks && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>📝 Remarks</Text>
-                    <Text style={styles.remarksText}>{site.remarks}</Text>
+                        {comment.documents && comment.documents.length > 0 && (
+                          <View style={styles.commentDocuments}>
+                            {comment.documents.map((doc: any, docIndex: number) => (
+                              <TouchableOpacity key={docIndex} style={styles.commentDocument}>
+                                <Text style={styles.commentDocumentText}>
+                                  📎 {doc.name || 'Document'}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+
+                        {index < comments.length - 1 && (
+                          <View style={styles.commentSeparator} />
+                        )}
+                      </View>
+                    ))}
+
+                    {loadingMoreComments && (
+                      <View style={styles.loadingMoreComments}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={styles.loadingMoreCommentsText}>Loading older comments...</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.emptyComments}>
+                    <Text style={styles.emptyCommentsIcon}>💬</Text>
+                    <Text style={styles.emptyCommentsText}>No comments yet</Text>
+                    <Text style={styles.emptyCommentsSubtext}>Be the first to add a comment</Text>
                   </View>
                 )}
               </View>
 
-              {/* Comments Section */}
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Comments ({comments.length})</Text>
-
-                <View style={styles.commentsContainer}>
-                  {loadingComments ? (
-                    <View style={styles.commentsLoading}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                      <Text style={styles.commentsLoadingText}>Loading comments...</Text>
-                    </View>
-                  ) : comments.length > 0 ? (
-                    <ScrollView
-                      style={styles.commentsList}
-                      showsVerticalScrollIndicator={false}
-                      onScroll={({ nativeEvent }) => {
-                        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-                        const isCloseToBottom =
-                          layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
-                        if (isCloseToBottom && !loadingMoreComments) {
-                          loadMoreComments();
-                        }
-                      }}
-                      scrollEventThrottle={400}
-                    >
-                      {comments.map((comment, index) => (
-                        <View key={`${comment.commentId}`} style={styles.commentItem}>
-                          <View style={styles.commentHeader}>
-                            <Text style={styles.commentAuthor}>
-                              {comment.user?.full_name || 'Unknown User'}
-                            </Text>
-                            <Text style={styles.commentTime}>
-                              {formatCommentDate(comment.created_at)}
-                            </Text>
-                          </View>
-
-                          {comment.content ? (
-                            <Text style={styles.commentContent}>{comment.content}</Text>
-                          ) : null}
-
-                          {comment.documents && comment.documents.length > 0 && (
-                            <View style={styles.commentDocuments}>
-                              {comment.documents.map((doc: any, docIndex: number) => (
-                                <TouchableOpacity key={docIndex} style={styles.commentDocument}>
-                                  <Text style={styles.commentDocumentText}>
-                                    📎 {doc.name || 'Document'}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          )}
-
-                          {index < comments.length - 1 && (
-                            <View style={styles.commentSeparator} />
-                          )}
-                        </View>
-                      ))}
-
-                      {loadingMoreComments && (
-                        <View style={styles.loadingMoreComments}>
-                          <ActivityIndicator size="small" color={colors.primary} />
-                          <Text style={styles.loadingMoreCommentsText}>Loading older comments...</Text>
-                        </View>
-                      )}
-                    </ScrollView>
-                  ) : (
-                    <View style={styles.emptyComments}>
-                      <Text style={styles.emptyCommentsIcon}>💬</Text>
-                      <Text style={styles.emptyCommentsText}>No comments yet</Text>
-                      <Text style={styles.emptyCommentsSubtext}>Be the first to add a comment</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Add Comment */}
-                <View style={styles.addCommentContainer}>
-                  {commentDocuments.length > 0 && (
-                    <View style={styles.attachedFilesContainer}>
-                      <Text style={styles.attachedFilesTitle}>Attached files:</Text>
-                      {commentDocuments.map((doc, index) => (
-                        <View key={index} style={styles.attachedFile}>
-                          <Text style={styles.attachedFileName} numberOfLines={1}>
-                            {doc.type === 'image' ? '📷' : '📄'} {doc.name}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => handleRemoveDocument(index)}
-                            style={styles.removeFileButton}
-                          >
-                            <Text style={styles.removeFileText}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  <View style={styles.commentInputContainer}>
-                    <TextInput
-                      style={styles.commentInput}
-                      placeholder="Add a comment..."
-                      value={commentText}
-                      onChangeText={setCommentText}
-                      multiline
-                      maxLength={500}
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                    <TouchableOpacity
-                      style={styles.attachButton}
-                      onPress={handleAttachFile}
-                    >
-                      <Text style={styles.attachButtonText}>📎</Text>
-                    </TouchableOpacity>
+              {/* Add Comment */}
+              <View style={styles.addCommentContainer}>
+                {commentDocuments.length > 0 && (
+                  <View style={styles.attachedFilesContainer}>
+                    <Text style={styles.attachedFilesTitle}>Attached files:</Text>
+                    {commentDocuments.map((doc, index) => (
+                      <View key={index} style={styles.attachedFile}>
+                        <Text style={styles.attachedFileName} numberOfLines={1}>
+                          {doc.type === 'image' ? '📷' : '📄'} {doc.name}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveDocument(index)}
+                          style={styles.removeFileButton}
+                        >
+                          <Text style={styles.removeFileText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
                   </View>
+                )}
 
+                <View style={styles.commentInputContainer}>
+                  <TextInput
+                    style={styles.commentInput}
+                    placeholder="Add a comment..."
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    multiline
+                    maxLength={500}
+                    placeholderTextColor={colors.textSecondary}
+                  />
                   <TouchableOpacity
-                    style={[
-                      styles.addCommentButton,
-                      (!commentText.trim() && commentDocuments.length === 0) && styles.addCommentButtonDisabled,
-                      addingComment && styles.addCommentButtonDisabled
-                    ]}
-                    onPress={handleAddComment}
-                    disabled={(!commentText.trim() && commentDocuments.length === 0) || addingComment}
+                    style={styles.attachButton}
+                    onPress={handleAttachFile}
                   >
-                    {addingComment ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <Text style={styles.addCommentButtonText}>Add Comment</Text>
-                    )}
+                    <Text style={styles.attachButtonText}>📎</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
 
-              {/* Mark Complete CTA */}
-              {selectedVisit.status === 'pending' && (
                 <TouchableOpacity
                   style={[
-                    styles.markCompleteButton,
-                    markingComplete && styles.markCompleteButtonDisabled
+                    styles.addCommentButton,
+                    (!commentText.trim() && commentDocuments.length === 0) && styles.addCommentButtonDisabled,
+                    addingComment && styles.addCommentButtonDisabled
                   ]}
-                  onPress={handleMarkComplete}
-                  disabled={markingComplete}
+                  onPress={handleAddComment}
+                  disabled={(!commentText.trim() && commentDocuments.length === 0) || addingComment}
                 >
-                  {markingComplete ? (
+                  {addingComment ? (
                     <ActivityIndicator size="small" color={colors.white} />
                   ) : (
-                    <Text style={styles.markCompleteButtonText}>
-                      ✓ Mark Visit as Completed
-                    </Text>
+                    <Text style={styles.addCommentButtonText}>Add Comment</Text>
                   )}
                 </TouchableOpacity>
-              )}
-
-              <View style={{ height: 24 }} />
+              </View>
             </View>
+
+            {/* Mark Complete CTA */}
+            {selectedVisit.status === 'pending' && (
+              <TouchableOpacity
+                style={[
+                  styles.markCompleteButton,
+                  markingComplete && styles.markCompleteButtonDisabled
+                ]}
+                onPress={handleMarkComplete}
+                disabled={markingComplete}
+              >
+                {markingComplete ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.markCompleteButtonText}>
+                    ✓ Mark Visit as Completed
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+
+            <View style={{ height: 24 }} />
           </View>
         </ScrollView>
 
@@ -1362,52 +1373,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  galleryNavigationContainer: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    zIndex: 10,
-    pointerEvents: 'box-none',
+  swipeInstructions: {
+    backgroundColor: colors.primaryLight,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
-  galleryNavButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.lg,
-  },
-  galleryNavButtonLeft: {
-    marginLeft: 0,
-  },
-  galleryNavButtonRight: {
-    marginRight: 0,
-  },
-  galleryNavButtonDisabled: {
-    backgroundColor: colors.backgroundSecondary,
-    opacity: 0.5,
-  },
-  navArrowIcon: {
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navArrow: {
-    width: 10,
-    height: 10,
-    borderLeftWidth: 2.5,
-    borderTopWidth: 2.5,
-    borderColor: colors.primary,
-    transform: [{ rotate: '-45deg' }],
-  },
-  navArrowRight: {
-    transform: [{ rotate: '135deg' }],
+  swipeInstructionsText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    fontWeight: '600',
   },
   contentContainer: {
     flex: 1,
@@ -1621,6 +1596,31 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     ...shadows.md,
+  },
+  buildingNameTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  buildingName: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: spacing.sm,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationIcon: {
+    fontSize: fontSize.sm,
+    marginRight: spacing.xs,
+  },
+  locationText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: fontSize.lg,
