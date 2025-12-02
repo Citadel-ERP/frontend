@@ -24,6 +24,8 @@ import Reminder from './Reminder';
 import BUP from './BUP/BUP';
 import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
+import Settings from './Settings';
+import AttendanceWrapper from './AttendanceWrapper';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -120,6 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showCreateSite, setShowCreateSite] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [showBUP, setShowBUP] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -759,14 +762,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
-  const menuItems = [
-    { title: 'Profile', icon: <Icon type="user" color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Profile' },
-    { title: 'Settings', icon: <Icon type="settings" color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Settings' },
-    { title: 'Notifications', icon: <Icon type="notification" color={activeMenuItem === 'Notifications' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Notifications' },
-    { title: 'Help & Support', icon: <Icon type="help" color={activeMenuItem === 'Help & Support' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Help & Support' },
-    { title: 'Privacy Policy', icon: <Icon type="lock" color={activeMenuItem === 'Privacy Policy' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Privacy Policy' },
-    { title: 'About', icon: <Icon type="info" color={activeMenuItem === 'About' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'About' },
-  ];
+ const menuItems = [
+  { title: 'Profile', icon: <Icon type="user" color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Profile' },
+  { title: 'Settings', icon: <Icon type="settings" color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Settings' },
+  { title: 'Notifications', icon: <Icon type="notification" color={activeMenuItem === 'Notifications' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Notifications' },
+  { title: 'Help & Support', icon: <Icon type="help" color={activeMenuItem === 'Help & Support' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Help & Support' },
+  { title: 'Privacy Policy', icon: <Icon type="lock" color={activeMenuItem === 'Privacy Policy' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Privacy Policy' },
+  { title: 'About', icon: <Icon type="info" color={activeMenuItem === 'About' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'About' },
+];
 
   const openMenu = () => {
     setIsMenuVisible(true);
@@ -785,14 +788,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const handleMenuItemPress = (item: string) => {
-    setActiveMenuItem(item);
-    closeMenu();
-    if (item === 'Profile') {
-      setShowProfile(true);
-    } else {
-      Alert.alert('Coming Soon', `${item} feature will be available soon!`);
-    }
-  };
+  setActiveMenuItem(item);
+  closeMenu();
+  if (item === 'Profile') {
+    setShowProfile(true);
+  } else if (item === 'Settings') {
+    setShowSettings(true);
+  } else {
+    Alert.alert('Coming Soon', `${item} feature will be available soon!`);
+  }
+};
+
+const handleBackFromSettings = () => {
+  setShowSettings(false);
+  setActiveMenuItem('Dashboard');
+};
 
   const handleBackFromCreateSite = () => {
     setShowCreateSite(false);
@@ -1021,46 +1031,48 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      {showChatRoom && selectedChatRoom ? (
-        <ChatRoomScreen
-          chatRoom={selectedChatRoom}
-          onBack={handleBackFromChatRoom}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-        />
-      ) : showChat ? (
-        <ChatScreen
-          onBack={handleBackFromChat}
-          onOpenChatRoom={handleOpenChatRoom}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-        />
-      ) : showAttendance ? (
-        <Attendance key={attendanceKey} onBack={handleBackFromAttendance} />
-      ) : showProfile ? (
-        <Profile onBack={handleBackFromProfile} userData={userData} />
-      ) : showHR ? (
-        <HR onBack={handleBackFromHR} />
-      ) : showCab ? (
-        <Cab onBack={handleBackFromCab} />
-      ) : showDriver ? (
-        <Driver onBack={handleBackFromDriver} />
-      ) : showBDT ? (
-        <BDT onBack={handleBackFromBDT} />
-      ) : showMedical ? (
-        <Medical onBack={handleBackFromMedical} />
-      ) : showScoutBoy ? (
-        <ScoutBoy onBack={handleBackFromScoutBoy} />
-      ) : showCreateSite ? (
-        <CreateSite
-          onBack={handleBackFromCreateSite}
-          colors={colors}
-          spacing={spacing}
-          fontSize={fontSize}
-          borderRadius={borderRadius}
-          shadows={shadows}
-        />
-      ) : showReminder ? (
-        <Reminder onBack={handleBackFromReminder} />
-      ) : showBUP ? (
+    {showChatRoom && selectedChatRoom ? (
+      <ChatRoomScreen
+        chatRoom={selectedChatRoom}
+        onBack={handleBackFromChatRoom}
+        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+      />
+    ) : showChat ? (
+      <ChatScreen
+        onBack={handleBackFromChat}
+        onOpenChatRoom={handleOpenChatRoom}
+        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+      />
+    ) : showAttendance ? (
+      <AttendanceWrapper key={attendanceKey} onBack={handleBackFromAttendance} attendanceKey={attendanceKey} />
+    ) : showSettings ? (
+      <Settings onBack={handleBackFromSettings} />
+    ) : showProfile ? (
+      <Profile onBack={handleBackFromProfile} userData={userData} />
+    ) : showHR ? (
+      <HR onBack={handleBackFromHR} />
+    ) : showCab ? (
+      <Cab onBack={handleBackFromCab} />
+    ) : showDriver ? (
+      <Driver onBack={handleBackFromDriver} />
+    ) : showBDT ? (
+      <BDT onBack={handleBackFromBDT} />
+    ) : showMedical ? (
+      <Medical onBack={handleBackFromMedical} />
+    ) : showScoutBoy ? (
+      <ScoutBoy onBack={handleBackFromScoutBoy} />
+    ) : showCreateSite ? (
+      <CreateSite
+        onBack={handleBackFromCreateSite}
+        colors={colors}
+        spacing={spacing}
+        fontSize={fontSize}
+        borderRadius={borderRadius}
+        shadows={shadows}
+      />
+    ) : showReminder ? (
+      <Reminder onBack={handleBackFromReminder} />
+    ) : showBUP ? (
         <BUP onBack={handleBackFromBUP} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
