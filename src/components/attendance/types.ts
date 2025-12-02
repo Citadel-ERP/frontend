@@ -64,4 +64,29 @@ export interface LeaveForm {
   reason: string;
 }
 
+// types.ts - Add these interfaces
+
+export interface ReasonOption {
+  value: string;
+  label: string;
+}
+
+export const CHECKIN_REASONS: ReasonOption[] = [
+  { value: 'working_from_home', label: 'Working from home' },
+  { value: 'client_visit', label: 'Client visit/meeting' },
+  { value: 'field_work', label: 'Field work' },
+  { value: 'sick', label: 'Sick/Medical appointment' },
+  { value: 'personal_work', label: 'Personal work' },
+  { value: 'other', label: 'Other (please specify)' }
+];
+
+export const CHECKOUT_REASONS: ReasonOption[] = [
+  { value: 'early_leave', label: 'Early leave' },
+  { value: 'client_meeting', label: 'Client meeting outside' },
+  { value: 'personal_work', label: 'Personal work' },
+  { value: 'sick', label: 'Feeling unwell' },
+  { value: 'emergency', label: 'Emergency' },
+  { value: 'other', label: 'Other (please specify)' }
+];
+
 export type TabType = 'attendance' | 'leave' | 'calendar' | 'reports';

@@ -52,6 +52,22 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     const [metroSearchQuery, setMetroSearchQuery] = useState('');
     const [selectedMetroStation, setSelectedMetroStation] = useState<MetroStation | null>(null);
     const [loadingMetroStations, setLoadingMetroStations] = useState(false);
+    const [showCustomMetroInput, setShowCustomMetroInput] = useState(false);
+    const [customMetroStation, setCustomMetroStation] = useState('');
+
+    // Default metro stations
+    const defaultMetroStations: MetroStation[] = [
+        { id: 1, name: 'Rajiv Chowk', city: 'Delhi' },
+        { id: 2, name: 'Kashmere Gate', city: 'Delhi' },
+        { id: 3, name: 'Central Secretariat', city: 'Delhi' },
+        { id: 4, name: 'Hauz Khas', city: 'Delhi' },
+        { id: 5, name: 'Karol Bagh', city: 'Delhi' },
+        { id: 6, name: 'Janakpuri West', city: 'Delhi' },
+        { id: 7, name: 'Botanical Garden', city: 'Noida' },
+        { id: 8, name: 'Noida Sector 18', city: 'Noida' },
+        { id: 9, name: 'Vaishali', city: 'Ghaziabad' },
+        { id: 10, name: 'Mohan Estate', city: 'Delhi' },
+    ];
 
     const [newSite, setNewSite] = useState({
         building_name: '',
@@ -121,7 +137,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     // Fetch metro stations
     const fetchMetroStations = async (query: string) => {
         if (!query || query.length < 2) {
-            setMetroStations([]);
+            // Show default stations when query is empty or short
+            setMetroStations(defaultMetroStations);
             return;
         }
 
@@ -133,11 +150,21 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             if (data.message === "Success" && data.data) {
                 setMetroStations(data.data);
             } else {
-                setMetroStations([]);
+                // If no results from backend, show default stations that match the query
+                const filteredDefaultStations = defaultMetroStations.filter(station =>
+                    station.name.toLowerCase().includes(query.toLowerCase()) ||
+                    station.city.toLowerCase().includes(query.toLowerCase())
+                );
+                setMetroStations(filteredDefaultStations);
             }
         } catch (error) {
             console.error('Error fetching metro stations:', error);
-            setMetroStations([]);
+            // On error, show filtered default stations
+            const filteredDefaultStations = defaultMetroStations.filter(station =>
+                station.name.toLowerCase().includes(query.toLowerCase()) ||
+                station.city.toLowerCase().includes(query.toLowerCase())
+            );
+            setMetroStations(filteredDefaultStations);
         } finally {
             setLoadingMetroStations(false);
         }
@@ -145,13 +172,21 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
-            if (metroSearchQuery) {
-                fetchMetroStations(metroSearchQuery);
-            }
+            fetchMetroStations(metroSearchQuery);
         }, 500);
 
         return () => clearTimeout(delayDebounceFn);
     }, [metroSearchQuery]);
+
+    // Load default stations when modal opens
+    useEffect(() => {
+        if (showMetroDropdown) {
+            setMetroStations(defaultMetroStations);
+            setMetroSearchQuery('');
+            setShowCustomMetroInput(false);
+            setCustomMetroStation('');
+        }
+    }, [showMetroDropdown]);
 
     const BUILDING_STATUS_OPTIONS = [
         { label: 'Available', value: 'available' },
@@ -387,6 +422,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             // Add metro station if selected
             if (selectedMetroStation) {
                 siteData.nearest_metro_station = selectedMetroStation.id;
+            } else if (customMetroStation) {
+                // For custom metro station, we'll create a custom object
+                siteData.nearest_metro_station = customMetroStation;
             }
 
             // Common fields for both types
@@ -598,22 +636,54 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                 </TouchableOpacity>
             </View>
 
-            {/* Metro Station Field - Available for both types */}
-            <View style={styles(colors, spacing).formGroup}>
+            {/* Metro Station Field - Available for both types with proper spacing */}
+            <View style={[styles(colors, spacing).formGroup, { marginTop: spacing.xl || 24 }]}>
                 <Text style={styles(colors, fontSize).formLabel}>Nearest Metro Station</Text>
                 <TouchableOpacity
                     style={styles(colors, spacing, borderRadius).dropdownButton}
-                    onPress={() => setShowMetroDropdown(true)}
+                    onPress={() => {
+                        setShowMetroDropdown(true);
+                        setMetroSearchQuery('');
+                        setMetroStations(defaultMetroStations);
+                    }}
                 >
                     <Text style={[
                         styles(colors, fontSize).dropdownButtonText,
-                        !selectedMetroStation && { color: colors.textSecondary }
+                        !selectedMetroStation && !customMetroStation && { color: colors.textSecondary }
                     ]}>
-                        {selectedMetroStation ? selectedMetroStation.name : 'Search for metro station...'}
+                        {selectedMetroStation ? selectedMetroStation.name : 
+                         customMetroStation ? customMetroStation : 
+                         'Search for metro station...'}
                     </Text>
                     <Text style={styles(colors, fontSize).dropdownButtonIcon}>▼</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Custom Metro Station Input */}
+            {showCustomMetroInput && (
+                <View style={styles(colors, spacing).formGroup}>
+                    <Text style={styles(colors, fontSize).formLabel}>Enter Metro Station Name</Text>
+                    <TextInput
+                        style={styles(colors, spacing, borderRadius).input}
+                        value={customMetroStation}
+                        onChangeText={setCustomMetroStation}
+                        placeholder="Enter metro station name"
+                        placeholderTextColor={colors.textSecondary}
+                    />
+                    <TouchableOpacity
+                        style={[styles(colors, spacing, borderRadius).navButton, { marginTop: spacing.sm }]}
+                        onPress={() => {
+                            if (customMetroStation.trim()) {
+                                setSelectedMetroStation(null);
+                                setShowCustomMetroInput(false);
+                                setShowMetroDropdown(false);
+                            }
+                        }}
+                    >
+                        <Text style={styles(colors, fontSize).navButtonText}>Save Custom Station</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 
@@ -1034,9 +1104,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             </View>
         </View>
     );
-
-    // Steps 4, 5, 6 remain largely the same as they contain common fields
-    // Only minor adjustments needed for conditional rendering
 
     const renderStep4 = () => (
         <View style={styles(colors, spacing, borderRadius).stepContent}>
@@ -1486,12 +1553,18 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     );
 
     const MetroDropdownModal = () => (
-        <Modal visible={showMetroDropdown} transparent animationType="fade" onRequestClose={() => setShowMetroDropdown(false)}>
-            <TouchableOpacity
-                style={styles(colors).dropdownOverlay}
-                activeOpacity={1}
-                onPress={() => setShowMetroDropdown(false)}
-            >
+        <Modal 
+            visible={showMetroDropdown} 
+            transparent 
+            animationType="slide"
+            onRequestClose={() => setShowMetroDropdown(false)}
+        >
+            <View style={styles(colors).modalContainer}>
+                <TouchableOpacity
+                    style={styles(colors).modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowMetroDropdown(false)}
+                />
                 <View style={styles(colors, spacing, borderRadius, shadows).dropdownContainer}>
                     <Text style={styles(colors, fontSize).dropdownTitle}>Select Metro Station</Text>
                     
@@ -1502,6 +1575,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                             onChangeText={setMetroSearchQuery}
                             placeholder="Search metro stations..."
                             placeholderTextColor={colors.textSecondary}
+                            autoFocus={true}
                         />
                     </View>
 
@@ -1513,7 +1587,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                             </View>
                         ) : metroStations.length === 0 ? (
                             <Text style={styles(colors, fontSize).noResultsText}>
-                                {metroSearchQuery ? 'No stations found' : 'Start typing to search metro stations'}
+                                No stations found. Try a different search or add a custom station.
                             </Text>
                         ) : (
                             metroStations.map((station) => (
@@ -1522,8 +1596,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                                     style={styles(colors, spacing, borderRadius).dropdownOption}
                                     onPress={() => {
                                         setSelectedMetroStation(station);
+                                        setCustomMetroStation('');
+                                        setShowCustomMetroInput(false);
                                         setShowMetroDropdown(false);
-                                        setMetroSearchQuery('');
                                     }}
                                 >
                                     <Text style={styles(colors, fontSize).dropdownOptionText}>{station.name}</Text>
@@ -1531,6 +1606,20 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                                 </TouchableOpacity>
                             ))
                         )}
+
+                        {/* Add Custom Station Option */}
+                        <TouchableOpacity
+                            style={[styles(colors, spacing, borderRadius).dropdownOption, { borderTopWidth: 1, borderTopColor: colors.border }]}
+                            onPress={() => {
+                                setShowCustomMetroInput(true);
+                                setShowMetroDropdown(false);
+                                setSelectedMetroStation(null);
+                            }}
+                        >
+                            <Text style={[styles(colors, fontSize).dropdownOptionText, { color: colors.primary }]}>
+                                + Add Custom Metro Station
+                            </Text>
+                        </TouchableOpacity>
                     </ScrollView>
 
                     <TouchableOpacity
@@ -1543,7 +1632,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                         <Text style={styles(colors, fontSize).cancelButtonText}>Cancel</Text>
                     </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
+            </View>
         </Modal>
     );
 
@@ -1589,7 +1678,11 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
             
             <View style={styles(colors, spacing).header}>
-                <TouchableOpacity style={styles(colors, spacing).backButton} onPress={onBack}>
+                <TouchableOpacity 
+                    style={styles(colors, spacing).backButton} 
+                    onPress={onBack}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                     <BackIcon />
                 </TouchableOpacity>
                 <Text style={styles(colors, fontSize).headerTitle}>Create New Site</Text>
@@ -1616,6 +1709,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                         <TouchableOpacity
                             style={styles(colors, spacing, borderRadius).navButton}
                             onPress={handlePrevStep}
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         >
                             <Text style={styles(colors, fontSize).navButtonText}>← Previous</Text>
                         </TouchableOpacity>
@@ -1624,6 +1718,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                         <TouchableOpacity
                             style={[styles(colors, spacing, borderRadius).navButton, styles(colors, spacing, borderRadius).navButtonPrimary, currentStep === 0 && styles(colors, spacing, borderRadius).navButtonFull]}
                             onPress={handleNextStep}
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         >
                             <Text style={styles(colors, fontSize).navButtonTextPrimary}>Next →</Text>
                         </TouchableOpacity>
@@ -1632,6 +1727,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
                             style={[styles(colors, spacing, borderRadius).navButton, styles(colors, spacing, borderRadius).navButtonPrimary, styles(colors, spacing, borderRadius).navButtonFull, creatingSite && styles(colors, spacing, borderRadius).buttonDisabled]}
                             onPress={handleCreateSite}
                             disabled={creatingSite}
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         >
                             {creatingSite ? (
                                 <View style={styles(colors, spacing).buttonLoading}>
@@ -1842,13 +1938,23 @@ const styles = (colors: any, spacing?: any, borderRadius?: any, shadows?: any) =
             alignItems: 'center',
             padding: spacing?.lg || 16,
         },
+        modalContainer: {
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        },
+        modalOverlay: {
+            flex: 1,
+        },
         dropdownContainer: {
-            width: '100%',
-            maxWidth: 400,
-            maxHeight: 400,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
             backgroundColor: colors.white,
-            borderRadius: borderRadius?.xl || 16,
+            borderTopLeftRadius: borderRadius?.xl || 16,
+            borderTopRightRadius: borderRadius?.xl || 16,
             padding: spacing?.lg || 16,
+            maxHeight: '80%',
             ...shadows?.lg,
         },
         dropdownTitle: {
