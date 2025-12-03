@@ -143,6 +143,36 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}Z`;
   };
 
+  const isBeforeTimeIST = (hours: number, minutes: number): boolean => {
+    const now = new Date();
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const istTime = new Date(utcTime + 19800000);
+
+    const currentHours = istTime.getHours();
+    const currentMinutes = istTime.getMinutes();
+
+    if (currentHours < hours) return true;
+    if (currentHours === hours && currentMinutes < minutes) return true;
+    return false;
+  };
+  const checkSpecialAttendance = async (): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/checkSpecialAttendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.special_attendance === true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking special attendance:', error);
+      return false;
+    }
+  };
   const initializeLocationPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -212,7 +242,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       }
       finalReason = customReason.trim();
     } else {
-      finalReason = reasonModalType === 'checkin' 
+      finalReason = reasonModalType === 'checkin'
         ? CHECKIN_REASONS.find(r => r.value === selectedReason)?.label || selectedReason
         : CHECKOUT_REASONS.find(r => r.value === selectedReason)?.label || selectedReason;
     }
@@ -230,6 +260,22 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return;
     }
 
+    // Check if it's after 10:15 AM IST
+    if (!isBeforeTimeIST(10, 15)) {
+      setLoading(true);
+      const hasSpecialPermission = await checkSpecialAttendance();
+      setLoading(false);
+
+      if (!hasSpecialPermission) {
+        Alert.alert(
+          'Late Attendance',
+          'You cannot mark attendance after 10:15 AM. Kindly raise a request to your HR to allow you to mark late attendance.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const location = await getCurrentLocation(10000);
@@ -239,21 +285,16 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         return;
       }
 
-      // Create request body
       const requestBody: any = {
         token,
         latitude: location.latitude.toString(),
         longitude: location.longitude.toString(),
       };
 
-      // For drivers, automatically capture current time in IST
-      if (isDriver) {
-        const checkInTimeIST = getCurrentTimeInIST();
-        requestBody.check_in_time = checkInTimeIST;
-        console.log('Driver check-in time (IST):', checkInTimeIST);
-      }
+      const checkInTimeIST = getCurrentTimeInIST();
+      requestBody.check_in_time = checkInTimeIST;
+      console.log('Driver check-in time (IST):', checkInTimeIST);
 
-      // Add description if provided
       if (description && typeof description === 'string' && description.trim()) {
         requestBody.description = description.trim();
       }
@@ -273,7 +314,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         Alert.alert('Success', 'Attendance marked successfully!');
         resetReasonModal();
 
-        // Real-time update
         const today = new Date().toISOString().split('T')[0];
         const currentTime = isDriver ? requestBody.check_in_time : new Date().toLocaleTimeString('en-US', {
           hour12: false,
@@ -302,7 +342,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         if (data.message === 'Mark attendance failed, You are not in office' ||
           data.message === 'description is required if you are not at office') {
           if (!description || typeof description !== 'string') {
-            // Show reason modal for check-in
             setReasonModalType('checkin');
             setShowReasonModal(true);
             setLoading(false);
@@ -326,104 +365,115 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
+
   const markCheckout = async (reason?: string) => {
-    if (!token) {
-      Alert.alert('Error', 'Authentication token not found. Please login again.');
+  if (!token) {
+    Alert.alert('Error', 'Authentication token not found. Please login again.');
+    return;
+  }
+
+  // Check if it's before 5:30 PM IST
+  if (isBeforeTimeIST(17, 30)) {
+    setLoading(true);
+    const hasSpecialPermission = await checkSpecialAttendance();
+    setLoading(false);
+
+    if (!hasSpecialPermission) {
+      Alert.alert(
+        'Early Checkout',
+        'You cannot mark checkout before 5:30 PM. Kindly raise a request to your HR to allow early checkout.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+  }
+
+  setLoading(true);
+  try {
+    const location = await getCurrentLocation(10000);
+    if (!location) {
+      Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    try {
-      const location = await getCurrentLocation(10000);
-      if (!location) {
-        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
-        setLoading(false);
-        return;
-      }
+    const checkOutTimeIST = getCurrentTimeInIST();
+    console.log('Checkout time (IST):', checkOutTimeIST);
 
-      // Auto-capture checkout time in IST
-      const checkOutTimeIST = getCurrentTimeInIST();
-      console.log('Checkout time (IST):', checkOutTimeIST);
+    const requestBody: any = {
+      token,
+      checkout_time: checkOutTimeIST,
+      latitude: location.latitude.toString(),
+      longitude: location.longitude.toString(),
+    };
 
-      // Create request body
-      const requestBody: any = {
-        token,
-        checkout_time: checkOutTimeIST,
-        latitude: location.latitude.toString(),
-        longitude: location.longitude.toString(),
-      };
+    if (reason && typeof reason === 'string' && reason.trim()) {
+      requestBody.reason_not_in_office = reason.trim();
+    }
 
-      // Add reason if provided
-      if (reason && typeof reason === 'string' && reason.trim()) {
-        requestBody.reason_not_in_office = reason.trim();
-      }
+    console.log('Marking checkout with payload:', requestBody);
 
-      console.log('Marking checkout with payload:', requestBody);
+    const response = await fetch(`${BACKEND_URL}/core/markCheckoutTime`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
 
-      const response = await fetch(`${BACKEND_URL}/core/markCheckoutTime`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+    const responseText = await response.text();
+    const data = responseText ? JSON.parse(responseText) : {};
+
+    if (response.status === 200) {
+      Alert.alert('Success', 'Checkout time marked successfully!');
+      resetReasonModal();
+
+      const today = new Date().toISOString().split('T')[0];
+      setTodayAttendance(prev => {
+        if (prev && prev.date === today) {
+          return {
+            ...prev,
+            check_out_time: checkOutTimeIST
+          };
+        }
+        return prev;
       });
 
-      const responseText = await response.text();
-      const data = responseText ? JSON.parse(responseText) : {};
-
-      if (response.status === 200) {
-        Alert.alert('Success', 'Checkout time marked successfully!');
-        resetReasonModal();
-
-        // Update today's attendance with checkout time
-        const today = new Date().toISOString().split('T')[0];
-        setTodayAttendance(prev => {
-          if (prev && prev.date === today) {
+      setAttendanceRecords(prevRecords => {
+        return prevRecords.map(record => {
+          if (record.date === today) {
             return {
-              ...prev,
+              ...record,
               check_out_time: checkOutTimeIST
             };
           }
-          return prev;
+          return record;
         });
+      });
 
-        // Update attendance records
-        setAttendanceRecords(prevRecords => {
-          return prevRecords.map(record => {
-            if (record.date === today) {
-              return {
-                ...record,
-                check_out_time: checkOutTimeIST
-              };
-            }
-            return record;
-          });
-        });
-
-        await fetchAttendanceRecords();
-        setLoading(false);
-      } else if (response.status === 400) {
-        if (data.message === 'Mark checkout failed, You are not in office add a reason too') {
-          if (!reason || typeof reason !== 'string') {
-            // Show reason modal for checkout
-            setReasonModalType('checkout');
-            setShowReasonModal(true);
-            setLoading(false);
-            return;
-          } else {
-            Alert.alert('Error', 'Failed to mark checkout. Please try again.');
-          }
+      await fetchAttendanceRecords();
+      setLoading(false);
+    } else if (response.status === 400) {
+      if (data.message === 'Mark checkout failed, You are not in office add a reason too') {
+        if (!reason || typeof reason !== 'string') {
+          setReasonModalType('checkout');
+          setShowReasonModal(true);
+          setLoading(false);
+          return;
         } else {
-          Alert.alert('Error', data.message || 'Failed to mark checkout time.');
+          Alert.alert('Error', 'Failed to mark checkout. Please try again.');
         }
       } else {
-        Alert.alert('Error', data.message || `Server error (${response.status}).`);
+        Alert.alert('Error', data.message || 'Failed to mark checkout time.');
       }
-    } catch (error) {
-      console.error('Error marking checkout:', error);
-      Alert.alert('Error', 'Network error occurred. Please try again.');
-    } finally {
-      setLoading(false);
+    } else {
+      Alert.alert('Error', data.message || `Server error (${response.status}).`);
     }
-  };
+  } catch (error) {
+    console.error('Error marking checkout:', error);
+    Alert.alert('Error', 'Network error occurred. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchLeaveBalance = async (token?: string) => {
     try {
@@ -968,8 +1018,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         type={reasonModalType}
         title={reasonModalType === 'checkin' ? 'Remote Attendance' : 'Early Checkout'}
         subtitle={
-          reasonModalType === 'checkin' 
-            ? "You're not at the office location. Please select a reason for remote attendance:" 
+          reasonModalType === 'checkin'
+            ? "You're not at the office location. Please select a reason for remote attendance:"
             : "You're not at the office location. Please select a reason for early checkout:"
         }
         selectedReason={selectedReason}

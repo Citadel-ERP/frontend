@@ -102,11 +102,11 @@ const AttendanceTab: React.FC<AttendanceTabProps> = ({
                   <Text style={styles.recordDate}>{record.date}</Text>
                   <View style={[
                     styles.recordStatus,
-                    { backgroundColor: record.status === 'Present' ? colors.successLight : colors.errorLight }
+                    { backgroundColor: record.status === 'present' ? colors.successLight : colors.errorLight }
                   ]}>
                     <Text style={[
                       styles.recordStatusText,
-                      { color: record.status === 'Present' ? colors.success : colors.error }
+                      { color: record.status === 'present' ? colors.success : colors.error }
                     ]}>
                       {record.status}
                     </Text>

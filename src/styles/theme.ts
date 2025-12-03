@@ -3,6 +3,12 @@ export const colors = {
   primaryLight: '#c1c7f4ff',
   primaryDark: '#1A1D2E',
 
+  successLight: '#D1E7DD',
+  successDark: '#0F5132',
+
+  errorLight: '#F8D7DA',
+  errorDark: '#842029',
+
   background: '#FFFFFF',
   backgroundSecondary: '#F8F9FA',
 
