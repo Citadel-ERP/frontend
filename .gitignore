@@ -114,3 +114,5 @@ yarn-error.*
 *.tsbuildinfo
 
 # @end expo-cli.expo/
+
+src/config/config.ts
