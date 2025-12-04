@@ -4,6 +4,7 @@
     "slug": "citadel",
     "owner": "ananyavishnoi",
     "version": "1.0.0",
+    "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
@@ -12,6 +13,10 @@
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
+    },
+    "web": {
+      "bundler": "webpack",
+      "favicon": "./assets/images/logo.png"
     },
     "assetBundlePatterns": [
       "**/*"
