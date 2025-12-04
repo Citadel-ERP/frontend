@@ -115,5 +115,4 @@ yarn-error.*
 
 # @end expo-cli.expo/
 
-src/config/config.ts
 web-build/
