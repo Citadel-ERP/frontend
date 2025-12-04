@@ -47,7 +47,7 @@ const AttendanceTab: React.FC<AttendanceTabProps> = ({
             {todayAttendance.check_out_time && (
               <View style={styles.timeInfo}>
                 <Text style={styles.timeLabel}>Check-out:</Text>
-                <Text style={styles.t\imeValue}>{todayAttendance.check_out_time}</Text>
+                <Text style={styles.timeValue}>{todayAttendance.check_out_time}</Text>
               </View>
             )}
 
