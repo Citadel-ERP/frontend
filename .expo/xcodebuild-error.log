@@ -1,6 +1,0 @@
-2025-09-17 15:11:41.687 xcodebuild[72899:1341310] Writing error result bundle to /var/folders/lc/fp9tvqc91wq123fpmbg3tpww0000gn/T/ResultBundle_2025-17-09_15-11-0041.xcresult
-xcodebuild: error: Unable to find a destination matching the provided destination specifier:
-		{ id:C4564A62-0371-4D9C-971A-6CD1DE7A5225 }
-
-	Ineligible destinations for the "Citadel" scheme:
-		{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device, error:iOS 26.0 is not installed. Please download and install the platform from Xcode > Settings > Components. }

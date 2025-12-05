@@ -1,3 +1,0 @@
-Command line invocation:
-    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -workspace /Users/ananyavishnoi/Downloads/Projectss/Citadel-frontend/citadel/ios/Citadel.xcworkspace -configuration Debug -scheme Citadel -destination id=C4564A62-0371-4D9C-971A-6CD1DE7A5225
-

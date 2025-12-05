@@ -18,20 +18,14 @@
       "bundler": "webpack",
       "favicon": "./assets/images/logo.png"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
         "NSCameraUsageDescription": "This app uses the camera for Face ID authentication.",
-        "UIBackgroundModes": [
-          "fetch",
-          "location",
-          "remote-notification"
-        ],
+        "UIBackgroundModes": ["fetch", "location", "remote-notification"],
         "NSLocationWhenInUseUsageDescription": "This app needs location access to mark attendance when you're at the office.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to automatically mark your attendance.",
         "NSLocationAlwaysUsageDescription": "This app needs location access to automatically mark your attendance even when the app is not in use."
@@ -58,7 +52,8 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION"
-      ]
+      ],
+      "useNextNotificationsApi": true
     },
     "plugins": [
       "expo-secure-store",
@@ -81,10 +76,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/logo.png",
-          "color": "#2D3748",
-          "sounds": [
-            "./assets/notification-sound.wav"
-          ]
+          "color": "#2D3748"
         }
       ],
       "expo-task-manager",
