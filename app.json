@@ -76,7 +76,8 @@
         "expo-notifications",
         {
           "icon": "./assets/images/logo.png",
-          "color": "#2D3748"
+          "color": "#2D3748",
+          "useNextNotificationsApi": true
         }
       ],
       "expo-task-manager",
