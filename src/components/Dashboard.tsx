@@ -209,147 +209,72 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   // Function to register for push notifications
+  // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
-    let token;
+  let token;
 
-    try {
-      console.log('[Line 1] Starting notification registration...');
-      console.log('[Line 2] Platform:', Platform.OS);
-      console.log('[Line 3] Is Device:', Device.isDevice);
-
-      if (Platform.OS === 'android') {
-        try {
-          console.log('[Line 4] Setting up Android notification channel...');
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#2D3748',
-          });
-          console.log('[Line 5] Android notification channel created successfully');
-        } catch (channelError) {
-          console.error('[Line 6] Error creating notification channel:', channelError);
-          throw channelError;
-        }
-      }
-
-      if (Device.isDevice) {
-        try {
-          console.log('[Line 7] Checking existing permissions...');
-          const { status: existingStatus } = await Notifications.getPermissionsAsync();
-          console.log('[Line 8] Existing permission status:', existingStatus);
-          let finalStatus = existingStatus;
-
-          if (existingStatus !== 'granted') {
-            console.log('[Line 9] Requesting permissions...');
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-            console.log('[Line 10] Permission request result:', finalStatus);
-          }
-
-          if (finalStatus !== 'granted') {
-            console.log('[Line 11] Permission denied by user');
-            Alert.alert(
-              'Permission Required',
-              'Push notifications are disabled. Please enable them in your device settings to receive important updates.',
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-
-          console.log('[Line 12] Permissions granted, proceeding to get token...');
-
-          try {
-            console.log('[Line 13] Getting project ID...');
-            const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-            console.log('[Line 14] Project ID:', projectId);
-
-            if (!projectId) {
-              const errorMsg = 'Project ID not found in Constants';
-              console.error('[Line 15]', errorMsg);
-              console.log('[Line 16] Constants.expoConfig:', JSON.stringify(Constants.expoConfig, null, 2));
-              console.log('[Line 17] Constants.easConfig:', JSON.stringify(Constants.easConfig, null, 2));
-              Alert.alert(
-                'Configuration Error',
-                `${errorMsg} at Line 15\n\nPlease check your app.json configuration.`
-              );
-              return;
-            }
-
-            console.log('[Line 18] Calling getExpoPushTokenAsync...');
-            const tokenData = await Notifications.getExpoPushTokenAsync({
-              projectId
-            });
-            console.log('[Line 19] Token data received:', tokenData);
-
-            token = tokenData.data;
-            console.log('[Line 20] Expo Push Token extracted:', token);
-
-          } catch (tokenError) {
-            console.error('[Line 21] Error getting Expo push token:', tokenError);
-            console.error('[Line 22] Error name:', (tokenError as Error).name);
-            console.error('[Line 23] Error message:', (tokenError as Error).message);
-            console.error('[Line 24] Error stack:', (tokenError as Error).stack);
-
-            const errorMessage = (tokenError as Error).message;
-            const errorStack = (tokenError as Error).stack || '';
-
-            let userFriendlyMessage = errorMessage;
-            let debugInfo = '';
-
-            if (errorMessage.includes('Firebase') || errorMessage.includes('firebase')) {
-              userFriendlyMessage = 'Firebase conflict detected. This app should not have Firebase installed.';
-              debugInfo += '\n\n🔧 Solution:\n1. Remove google-services.json\n2. Run: expo prebuild --clean\n3. Rebuild with: eas build --platform android --profile preview --clear-cache';
-            } else if (errorMessage.includes('No FCM token')) {
-              userFriendlyMessage = 'FCM token error - Firebase may still be configured';
-              debugInfo += '\n\n🔧 Check:\n1. Ensure google-services.json is removed\n2. Check if @react-native-firebase packages are installed';
-            }
-
-            Alert.alert(
-              'Token Error (Line 21-24)',
-              `${userFriendlyMessage}\n\nError at Line 21:\n${errorMessage}${debugInfo}\n\nFull Stack:\n${errorStack.substring(0, 200)}...`,
-              [
-                { text: 'Copy Error', onPress: () => console.log('Full error:', tokenError) },
-                { text: 'OK' }
-              ]
-            );
-            throw tokenError;
-          }
-
-        } catch (permissionError) {
-          console.error('[Line 25] Error in permission flow:', permissionError);
-          Alert.alert(
-            'Permission Error',
-            `Failed at Line 25 (Permission Flow):\n${(permissionError as Error).message}\n\nStack: ${(permissionError as Error).stack}`
-          );
-          throw permissionError;
-        }
-      } else {
-        console.log('[Line 26] Not a physical device');
-        Alert.alert('Notice', 'Push notifications require a physical device');
-      }
-
-      console.log('[Line 27] Registration completed. Token:', token);
-      return token;
-
-    } catch (mainError) {
-      console.error('[Line 28] Main function error:', mainError);
-      console.error('[Line 29] Error details:', {
-        name: (mainError as Error).name,
-        message: (mainError as Error).message,
-        stack: (mainError as Error).stack
-      });
-
-      Alert.alert(
-        'Notification Setup Failed',
-        `Fatal error at Line 28:\n${(mainError as Error).message}\n\nType: ${(mainError as Error).name}\n\nPlease check console logs for full details.`,
-        [{ text: 'OK' }]
-      );
-
+  try {
+    console.log('[Push Token] Starting registration...');
+    
+    if (!Device.isDevice) {
+      console.log('[Push Token] Not a physical device');
       return undefined;
     }
-  }
 
+    // Android notification channel
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2D3748',
+      });
+    }
+
+    // Request permissions
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') {
+      console.log('[Push Token] Permission denied');
+      return undefined;
+    }
+
+    // Get Expo Push Token
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    
+    if (!projectId) {
+      console.error('[Push Token] No project ID');
+      return undefined;
+    }
+
+    console.log('[Push Token] Getting token for project:', projectId);
+    
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId
+    });
+
+    token = tokenData.data;
+    console.log('[Push Token] Success:', token);
+    
+    return token;
+
+  } catch (error: any) {
+    console.error('[Push Token Error]', error.message);
+    
+    // Still getting Firebase errors? Your build still has FCM
+    if (error.message?.includes('Firebase') || error.message?.includes('FCM')) {
+      console.error('❌ BUILD STILL CONTAINS FIREBASE - Rebuild required');
+    }
+    
+    return undefined;
+  }
+}
   // Function to send token to backend
   const sendTokenToBackend = async (expoToken: string, userToken: string) => {
     if (!expoToken || !userToken) {
@@ -762,14 +687,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     </View>
   );
 
- const menuItems = [
-  { title: 'Profile', icon: <Icon type="user" color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Profile' },
-  { title: 'Settings', icon: <Icon type="settings" color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Settings' },
-  { title: 'Notifications', icon: <Icon type="notification" color={activeMenuItem === 'Notifications' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Notifications' },
-  { title: 'Help & Support', icon: <Icon type="help" color={activeMenuItem === 'Help & Support' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Help & Support' },
-  { title: 'Privacy Policy', icon: <Icon type="lock" color={activeMenuItem === 'Privacy Policy' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Privacy Policy' },
-  { title: 'About', icon: <Icon type="info" color={activeMenuItem === 'About' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'About' },
-];
+  const menuItems = [
+    { title: 'Profile', icon: <Icon type="user" color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Profile' },
+    { title: 'Settings', icon: <Icon type="settings" color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Settings' },
+    { title: 'Notifications', icon: <Icon type="notification" color={activeMenuItem === 'Notifications' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Notifications' },
+    { title: 'Help & Support', icon: <Icon type="help" color={activeMenuItem === 'Help & Support' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Help & Support' },
+    { title: 'Privacy Policy', icon: <Icon type="lock" color={activeMenuItem === 'Privacy Policy' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Privacy Policy' },
+    { title: 'About', icon: <Icon type="info" color={activeMenuItem === 'About' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'About' },
+  ];
 
   const openMenu = () => {
     setIsMenuVisible(true);
@@ -788,21 +713,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const handleMenuItemPress = (item: string) => {
-  setActiveMenuItem(item);
-  closeMenu();
-  if (item === 'Profile') {
-    setShowProfile(true);
-  } else if (item === 'Settings') {
-    setShowSettings(true);
-  } else {
-    Alert.alert('Coming Soon', `${item} feature will be available soon!`);
-  }
-};
+    setActiveMenuItem(item);
+    closeMenu();
+    if (item === 'Profile') {
+      setShowProfile(true);
+    } else if (item === 'Settings') {
+      setShowSettings(true);
+    } else {
+      Alert.alert('Coming Soon', `${item} feature will be available soon!`);
+    }
+  };
 
-const handleBackFromSettings = () => {
-  setShowSettings(false);
-  setActiveMenuItem('Dashboard');
-};
+  const handleBackFromSettings = () => {
+    setShowSettings(false);
+    setActiveMenuItem('Dashboard');
+  };
 
   const handleBackFromCreateSite = () => {
     setShowCreateSite(false);
@@ -1031,48 +956,48 @@ const handleBackFromSettings = () => {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    {showChatRoom && selectedChatRoom ? (
-      <ChatRoomScreen
-        chatRoom={selectedChatRoom}
-        onBack={handleBackFromChatRoom}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
-    ) : showChat ? (
-      <ChatScreen
-        onBack={handleBackFromChat}
-        onOpenChatRoom={handleOpenChatRoom}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
-    ) : showAttendance ? (
-      <AttendanceWrapper key={attendanceKey} onBack={handleBackFromAttendance} attendanceKey={attendanceKey} />
-    ) : showSettings ? (
-      <Settings onBack={handleBackFromSettings} />
-    ) : showProfile ? (
-      <Profile onBack={handleBackFromProfile} userData={userData} />
-    ) : showHR ? (
-      <HR onBack={handleBackFromHR} />
-    ) : showCab ? (
-      <Cab onBack={handleBackFromCab} />
-    ) : showDriver ? (
-      <Driver onBack={handleBackFromDriver} />
-    ) : showBDT ? (
-      <BDT onBack={handleBackFromBDT} />
-    ) : showMedical ? (
-      <Medical onBack={handleBackFromMedical} />
-    ) : showScoutBoy ? (
-      <ScoutBoy onBack={handleBackFromScoutBoy} />
-    ) : showCreateSite ? (
-      <CreateSite
-        onBack={handleBackFromCreateSite}
-        colors={colors}
-        spacing={spacing}
-        fontSize={fontSize}
-        borderRadius={borderRadius}
-        shadows={shadows}
-      />
-    ) : showReminder ? (
-      <Reminder onBack={handleBackFromReminder} />
-    ) : showBUP ? (
+      {showChatRoom && selectedChatRoom ? (
+        <ChatRoomScreen
+          chatRoom={selectedChatRoom}
+          onBack={handleBackFromChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      ) : showChat ? (
+        <ChatScreen
+          onBack={handleBackFromChat}
+          onOpenChatRoom={handleOpenChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      ) : showAttendance ? (
+        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromAttendance} attendanceKey={attendanceKey} />
+      ) : showSettings ? (
+        <Settings onBack={handleBackFromSettings} />
+      ) : showProfile ? (
+        <Profile onBack={handleBackFromProfile} userData={userData} />
+      ) : showHR ? (
+        <HR onBack={handleBackFromHR} />
+      ) : showCab ? (
+        <Cab onBack={handleBackFromCab} />
+      ) : showDriver ? (
+        <Driver onBack={handleBackFromDriver} />
+      ) : showBDT ? (
+        <BDT onBack={handleBackFromBDT} />
+      ) : showMedical ? (
+        <Medical onBack={handleBackFromMedical} />
+      ) : showScoutBoy ? (
+        <ScoutBoy onBack={handleBackFromScoutBoy} />
+      ) : showCreateSite ? (
+        <CreateSite
+          onBack={handleBackFromCreateSite}
+          colors={colors}
+          spacing={spacing}
+          fontSize={fontSize}
+          borderRadius={borderRadius}
+          shadows={shadows}
+        />
+      ) : showReminder ? (
+        <Reminder onBack={handleBackFromReminder} />
+      ) : showBUP ? (
         <BUP onBack={handleBackFromBUP} />
       ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
