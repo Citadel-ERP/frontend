@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,42 @@ import {
   Image,
   Dimensions,
   Platform,
-  KeyboardAvoidingView,
-  ScrollView,
+  StatusBar,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { colors, commonStyles } from '../styles/theme';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const isTablet = screenWidth >= 768;
-const isSmallDevice = screenHeight < 700;
+const getDeviceType = () => {
+  if (Platform.OS === 'web') {
+    if (SCREEN_WIDTH >= 1024) return 'desktop';
+    if (SCREEN_WIDTH >= 768) return 'tablet';
+    return 'mobile';
+  }
+  return SCREEN_WIDTH >= 768 ? 'tablet' : 'mobile';
+};
+
+const getResponsiveValues = () => {
+  const deviceType = getDeviceType();
+  
+  return {
+    isDesktop: deviceType === 'desktop',
+    isTablet: deviceType === 'tablet',
+    isMobile: deviceType === 'mobile',
+    isWeb: Platform.OS === 'web',
+    containerMaxWidth: deviceType === 'desktop' ? 480 : deviceType === 'tablet' ? 420 : '100%',
+    horizontalPadding: deviceType === 'desktop' ? 60 : deviceType === 'tablet' ? 40 : 24,
+    logoSize: deviceType === 'desktop' ? 140 : deviceType === 'tablet' ? 120 : 90,
+    titleSize: deviceType === 'desktop' ? 36 : deviceType === 'tablet' ? 32 : 28,
+    subtitleSize: deviceType === 'desktop' ? 18 : deviceType === 'tablet' ? 17 : 16,
+    inputHeight: deviceType === 'desktop' ? 58 : deviceType === 'tablet' ? 56 : 50,
+    buttonHeight: deviceType === 'desktop' ? 58 : deviceType === 'tablet' ? 56 : 52,
+    fontSize: deviceType === 'desktop' ? 16 : deviceType === 'tablet' ? 16 : 15,
+    spacing: deviceType === 'desktop' ? 32 : deviceType === 'tablet' ? 28 : 24,
+  };
+};
 
 interface LoginProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -25,7 +52,6 @@ interface LoginProps {
   isLoading?: boolean;
 }
 
-// Eye icon components for password visibility toggle
 const EyeIcon = ({ visible }: { visible: boolean }) => (
   <View style={styles.eyeIcon}>
     <Text style={styles.eyeIconText}>{visible ? '👁️' : '👁️‍🗨️'}</Text>
@@ -44,9 +70,23 @@ const Login: React.FC<LoginProps> = ({
     email: '',
     password: '',
   });
+  const [responsive, setResponsive] = useState(getResponsiveValues());
 
-  const scrollViewRef = useRef<ScrollView>(null);
   const passwordInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setResponsive(getResponsiveValues());
+    };
+
+    if (Platform.OS === 'web') {
+      const globalWindow = (global as any).window;
+      if (globalWindow && globalWindow.addEventListener) {
+        globalWindow.addEventListener('resize', handleResize);
+        return () => globalWindow.removeEventListener('resize', handleResize);
+      }
+    }
+  }, []);
 
   const validateForm = () => {
     const newErrors = { email: '', password: '' };
@@ -71,6 +111,7 @@ const Login: React.FC<LoginProps> = ({
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
+    Keyboard.dismiss();
 
     try {
       await onLogin(email.toLowerCase().trim(), password);
@@ -79,198 +120,302 @@ const Login: React.FC<LoginProps> = ({
     }
   };
 
-  // Improved keyboard handling - scroll to the focused input with appropriate offset
-  const handleInputFocus = (inputType: 'email' | 'password') => {
-    setTimeout(() => {
-      if (scrollViewRef.current) {
-        const baseOffset = isSmallDevice ? 100 : 120;
-        const inputOffset = inputType === 'password' ? 80 : 0;
-        const totalOffset = baseOffset + inputOffset;
-        
-        scrollViewRef.current.scrollTo({
-          y: totalOffset,
-          animated: true,
-        });
-      }
-    }, 150);
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
   };
 
+  const handleForgotPasswordPress = () => {
+    Keyboard.dismiss();
+    setTimeout(() => {
+      onForgotPassword();
+    }, 100);
+  };
+
+  const dynamicStyles = getDynamicStyles(responsive);
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        scrollEnabled={true}
-      >
-        {/* Header with Logo */}
-        <View style={styles.headerContainer}>
-          <Image
-            source={require('../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Main Content - Login Form */}
-        <View style={styles.mainContent}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to your account</Text>
-          </View>
-
-          <View style={styles.formContainer}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  errors.email ? styles.inputError : null
-                ]}
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  if (errors.email) {
-                    setErrors(prev => ({ ...prev, email: '' }));
-                  }
-                }}
-                onFocus={() => handleInputFocus('email')}
-                placeholder="Enter your email"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-                returnKeyType="next"
-                onSubmitEditing={() => passwordInputRef.current?.focus()}
-                blurOnSubmit={false}
+    <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
+      <View style={styles.wrapper}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={colors.background}
+          translucent={false}
+        />
+        
+        {/* Fixed Container - No Scroll */}
+        <View style={styles.fixedContainer}>
+          <View style={[styles.innerContainer, { maxHeight: SCREEN_HEIGHT }]}>
+            <View style={[styles.headerContainer, dynamicStyles.headerContainer]}>
+              <Image
+                source={require('../assets/logo.png')}
+                style={[styles.logo, dynamicStyles.logo]}
+                resizeMode="contain"
               />
-              {errors.email ? (
-                <Text style={styles.errorText}>{errors.email}</Text>
-              ) : null}
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  ref={passwordInputRef}
-                  style={[
-                    styles.passwordInput,
-                    errors.password ? styles.inputError : null
-                  ]}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (errors.password) {
-                      setErrors(prev => ({ ...prev, password: '' }));
-                    }
-                  }}
-                  onFocus={() => handleInputFocus('password')}
-                  placeholder="Enter your password"
-                  placeholderTextColor={colors.textSecondary}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
-                />
-                <TouchableOpacity
-                  style={styles.eyeButton}
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
-                  activeOpacity={0.7}
-                >
-                  <EyeIcon visible={showPassword} />
-                </TouchableOpacity>
+            <View style={[styles.mainContent, dynamicStyles.mainContent]}>
+              <View style={[styles.contentMaxWidth, dynamicStyles.contentMaxWidth]}>
+                <View style={[styles.titleContainer, dynamicStyles.titleContainer]}>
+                  <Text style={[styles.title, dynamicStyles.title]}>
+                    Welcome Back
+                  </Text>
+                  <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+                    Sign in to your account
+                  </Text>
+                </View>
+
+                <View style={[styles.formContainer, dynamicStyles.formContainer]}>
+                  <View style={[styles.inputContainer, dynamicStyles.inputMargin]}>
+                    <Text style={[styles.label, dynamicStyles.label]}>Email</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        dynamicStyles.input,
+                        errors.email && styles.inputError,
+                      ]}
+                      value={email}
+                      onChangeText={(text) => {
+                        setEmail(text);
+                        if (errors.email) {
+                          setErrors(prev => ({ ...prev, email: '' }));
+                        }
+                      }}
+                      placeholder="Enter your email"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={!isLoading}
+                      returnKeyType="next"
+                      onSubmitEditing={() => passwordInputRef.current?.focus()}
+                      blurOnSubmit={false}
+                    />
+                    {errors.email && (
+                      <Text style={[styles.errorText, dynamicStyles.errorText]}>
+                        {errors.email}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={[styles.inputContainer, dynamicStyles.passwordMargin]}>
+                    <Text style={[styles.label, dynamicStyles.label]}>Password</Text>
+                    <View style={styles.passwordContainer}>
+                      <TextInput
+                        ref={passwordInputRef}
+                        style={[
+                          styles.passwordInput,
+                          dynamicStyles.passwordInput,
+                          errors.password && styles.inputError,
+                        ]}
+                        value={password}
+                        onChangeText={(text) => {
+                          setPassword(text);
+                          if (errors.password) {
+                            setErrors(prev => ({ ...prev, password: '' }));
+                          }
+                        }}
+                        placeholder="Enter your password"
+                        placeholderTextColor={colors.textSecondary}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isLoading}
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit}
+                      />
+                      <TouchableOpacity
+                        style={[styles.eyeButton, dynamicStyles.eyeButton]}
+                        onPress={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
+                        activeOpacity={0.7}
+                      >
+                        <EyeIcon visible={showPassword} />
+                      </TouchableOpacity>
+                    </View>
+                    {errors.password && (
+                      <Text style={[styles.errorText, dynamicStyles.errorText]}>
+                        {errors.password}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Fixed: Only the text itself is clickable */}
+                  <View style={[styles.forgotPasswordWrapper, dynamicStyles.forgotPasswordMargin]}>
+                    <TouchableOpacity
+                      onPress={handleForgotPasswordPress}
+                      disabled={isLoading}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 15, bottom: 15, left: 10, right: 10 }}
+                      style={styles.forgotPasswordButton}
+                    >
+                      <Text style={[styles.forgotPasswordText, dynamicStyles.forgotPasswordText]}>
+                        Forgot Password?
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.loginButton,
+                      dynamicStyles.loginButton,
+                      isLoading && styles.loginButtonDisabled,
+                    ]}
+                    onPress={handleSubmit}
+                    disabled={isLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color={colors.white} size="small" />
+                    ) : (
+                      <Text style={[styles.loginButtonText, dynamicStyles.loginButtonText]}>
+                        Sign In
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-              {errors.password ? (
-                <Text style={styles.errorText}>{errors.password}</Text>
-              ) : null}
             </View>
 
-            <TouchableOpacity
-              style={styles.forgotPasswordContainer}
-              onPress={onForgotPassword}
-              disabled={isLoading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.loginButton,
-                isLoading ? styles.loginButtonDisabled : null,
-              ]}
-              onPress={handleSubmit}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
+            <View style={[styles.footerContainer, dynamicStyles.footerContainer]}>
+              <View style={[styles.contentMaxWidth, dynamicStyles.footerMaxWidth]}>
+                <View style={[styles.footerContent, dynamicStyles.footerContent]}>
+                  <Text style={[styles.footerText, dynamicStyles.footerText]}>
+                    First time user? Your password will be provided by your administrator.
+                  </Text>
+                </View>
+              </View>
+            </View>
           </View>
         </View>
-
-        {/* Footer */}
-        <View style={styles.footerContainer}>
-          <View style={styles.footerContent}>
-            <Text style={styles.footerText}>
-              First time user? Your password will be provided by your administrator.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 };
 
+const getDynamicStyles = (responsive: ReturnType<typeof getResponsiveValues>) => {
+  return StyleSheet.create({
+    contentMaxWidth: {
+      maxWidth: responsive.isDesktop ? 480 : responsive.isTablet ? 420 : '100%',
+      width: '100%',
+    },
+    footerMaxWidth: {
+      maxWidth: responsive.isDesktop ? 480 : responsive.isTablet ? 420 : '100%',
+      width: '100%',
+    },
+    headerContainer: {
+      paddingTop: responsive.isWeb ? (responsive.isDesktop ? 40 : responsive.isTablet ? 30 : 20) : Platform.OS === 'ios' ? 60 : 40,
+      paddingBottom: responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12,
+    },
+    logo: {
+      width: responsive.logoSize,
+      height: responsive.logoSize,
+    },
+    mainContent: {
+      paddingVertical: responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12,
+      paddingHorizontal: responsive.horizontalPadding,
+    },
+    titleContainer: {
+      marginBottom: responsive.spacing,
+    },
+    title: {
+      fontSize: responsive.titleSize,
+    },
+    subtitle: {
+      fontSize: responsive.subtitleSize,
+    },
+    formContainer: {
+      width: '100%',
+    },
+    label: {
+      fontSize: responsive.fontSize,
+    },
+    input: {
+      height: responsive.inputHeight,
+      fontSize: responsive.fontSize,
+    },
+    passwordInput: {
+      height: responsive.inputHeight,
+      fontSize: responsive.fontSize,
+    },
+    eyeButton: {
+      height: responsive.inputHeight,
+    },
+    inputMargin: {
+      marginBottom: responsive.spacing * 0.7,
+    },
+    passwordMargin: {
+      marginBottom: responsive.spacing * 0.6,
+    },
+    forgotPasswordMargin: {
+      marginBottom: responsive.spacing * 0.75,
+    },
+    forgotPasswordText: {
+      fontSize: responsive.fontSize - 1,
+    },
+    loginButton: {
+      height: responsive.buttonHeight,
+    },
+    loginButtonText: {
+      fontSize: responsive.fontSize + 1,
+    },
+    errorText: {
+      fontSize: responsive.fontSize - 2,
+    },
+    footerContainer: {
+      paddingHorizontal: responsive.horizontalPadding,
+      paddingTop: responsive.isWeb ? (responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12) : responsive.spacing * 0.8,
+      paddingBottom: responsive.isWeb ? (responsive.isDesktop ? 30 : responsive.isTablet ? 20 : 16) : Platform.OS === 'ios' ? 40 : 24,
+    },
+    footerContent: {
+      padding: responsive.isDesktop ? 22 : responsive.isTablet ? 18 : 14,
+    },
+    footerText: {
+      fontSize: responsive.fontSize - 1,
+    },
+  });
+};
+
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContainer: {
-    flexGrow: 1,
-    minHeight: screenHeight,
+  fixedContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
-  
-  // Header with logo
-  headerContainer: {
+  innerContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    width: '100%',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 20,
-    backgroundColor: colors.background,
-  },
-  logo: {
-    width: isTablet ? 120 : 100,
-    height: isTablet ? 120 : 100,
   },
 
-  // Main content area
-  mainContent: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: isTablet ? 48 : 24,
-    paddingVertical: 20,
+  headerContainer: {
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    width: '100%',
   },
-  titleContainer: {
-    marginBottom: isSmallDevice ? 32 : 40,
+  logo: {
+    width: 100,
+    height: 100,
+  },
+
+  mainContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    flex: 1,
+  },
+  contentMaxWidth: {
     alignItems: 'center',
   },
+  titleContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
   title: {
-    fontSize: isTablet ? 32 : isSmallDevice ? 28 : 30,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
@@ -278,37 +423,32 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: isTablet ? 18 : isSmallDevice ? 16 : 17,
     color: colors.textSecondary,
     textAlign: 'center',
     fontWeight: '400',
   },
 
-  // Form styles
   formContainer: {
     width: '100%',
-    maxWidth: isTablet ? 400 : '100%',
     alignSelf: 'center',
   },
   inputContainer: {
-    marginBottom: 20,
+    width: '100%',
   },
   label: {
-    fontSize: isTablet ? 16 : 15,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 8,
     letterSpacing: 0.2,
   },
   input: {
-    ...commonStyles.input,
-    fontSize: isTablet ? 16 : 15,
-    height: isTablet ? 56 : 52,
+    width: '100%',
     paddingHorizontal: 16,
     borderRadius: 12,
     backgroundColor: colors.white,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
+    color: colors.text,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -321,24 +461,22 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  
-  // Password field styles
+
   passwordContainer: {
     position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
   },
   passwordInput: {
-    ...commonStyles.input,
-    fontSize: isTablet ? 16 : 15,
-    height: isTablet ? 56 : 52,
+    width: '100%',
     paddingHorizontal: 16,
     paddingRight: 50,
     borderRadius: 12,
     backgroundColor: colors.white,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    flex: 1,
+    color: colors.text,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -354,7 +492,6 @@ const styles = StyleSheet.create({
   eyeButton: {
     position: 'absolute',
     right: 12,
-    height: isTablet ? 56 : 52,
     width: 40,
     justifyContent: 'center',
     alignItems: 'center',
@@ -376,30 +513,33 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.error,
-    fontSize: isTablet ? 14 : 13,
     marginTop: 6,
     fontWeight: '500',
     paddingLeft: 4,
   },
-  
-  forgotPasswordContainer: {
+
+  // Fixed: Changed from forgotPasswordContainer to forgotPasswordWrapper
+  forgotPasswordWrapper: {
     alignItems: 'flex-end',
-    marginBottom: 24,
     paddingVertical: 4,
+    width: '100%',
+  },
+  forgotPasswordButton: {
+    // Button only wraps the text
+    alignSelf: 'flex-end',
   },
   forgotPasswordText: {
     color: colors.primary,
-    fontSize: isTablet ? 15 : 14,
     fontWeight: '500',
     textDecorationLine: 'underline',
   },
-  
+
   loginButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
-    height: isTablet ? 56 : 52,
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
@@ -417,23 +557,21 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: colors.white,
-    fontSize: isTablet ? 17 : 16,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
 
-  // Footer styles
   footerContainer: {
-    paddingHorizontal: isTablet ? 48 : 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    paddingTop: 20,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: colors.background,
   },
   footerContent: {
     backgroundColor: '#F7FAFC',
     borderRadius: 12,
-    padding: isTablet ? 20 : 16,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
+    width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -447,9 +585,8 @@ const styles = StyleSheet.create({
     }),
   },
   footerText: {
-    fontSize: isTablet ? 15 : 14,
     color: '#4A5568',
-    lineHeight: isTablet ? 22 : 20,
+    lineHeight: 20,
     textAlign: 'center',
     fontWeight: '400',
   },
