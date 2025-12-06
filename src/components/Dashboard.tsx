@@ -294,17 +294,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       token = tokenData.data;
       await debugLog('[Push Token] Success', token);
 
-      // Show success alert in APK
-      Alert.alert('Push Token Generated', `Token: ${token.substring(0, 20)}...`);
+      // // Show success alert in APK
+      // Alert.alert('Push Token Generated', `Token: ${token.substring(0, 20)}...`);
 
       return token;
 
     } catch (error: any) {
       await debugLog('[Push Token Error]', error.message);
-      Alert.alert(
-        'Notification Error',
-        `Failed: ${error.message}`
-      );
+      // Alert.alert(
+      //   'Notification Error',
+      //   `Failed: ${error.message}`
+      // );
       return undefined;
     }
   }
@@ -315,7 +315,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     if (!expoToken || !userToken) {
       await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
-      Alert.alert('Error', 'Cannot register push token - missing credentials');
+      // Alert.alert('Error', 'Cannot register push token - missing credentials');
       return;
     }
 
@@ -345,47 +345,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       if (response.ok) {
         await debugLog('✅ Push token registered successfully');
         await AsyncStorage.setItem('expo_push_token', expoToken);
-        Alert.alert('Success', 'Notifications enabled successfully!');
+        // Alert.alert('Success', 'Notifications enabled successfully!');
       } else {
         await debugLog('❌ Failed to register push token', data.message);
-        Alert.alert('Registration Failed', `Error: ${data.message || 'Unknown error'}`);
+        // Alert.alert('Registration Failed', `Error: ${data.message || 'Unknown error'}`);
       }
     } catch (error: any) {
       await debugLog('❌ Network error', error.message);
-      Alert.alert('Network Error', `Could not reach server: ${error.message}`);
-    }
-  };
-
-  // Add a function to view debug logs
-  const viewDebugLogs = async () => {
-    try {
-      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
-      const logArray = JSON.parse(logs);
-      const logText = logArray.map((log: any) =>
-        `${log.timestamp}\n${log.message}\n${log.data || ''}\n---`
-      ).join('\n');
-
-      Alert.alert(
-        'Debug Logs',
-        logText || 'No logs available',
-        [
-          {
-            text: 'Copy', onPress: () => {
-              // You could implement clipboard copy here
-              console.log(logText);
-            }
-          },
-          {
-            text: 'Clear', onPress: async () => {
-              await AsyncStorage.removeItem('debug_logs');
-              Alert.alert('Logs cleared');
-            }
-          },
-          { text: 'Close' }
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Could not load logs');
+      // Alert.alert('Network Error', `Could not reach server: ${error.message}`);
     }
   };
 
@@ -629,7 +596,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       } catch (error) {
         console.error('Error fetching user data:', error);
         setError(error instanceof Error ? error.message : 'Failed to fetch user data');
-        Alert.alert('Error', 'Failed to load user data. Please try again.');
+        // Alert.alert('Error', 'Failed to load user data. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -1192,41 +1159,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <HamburgerMenu />
         </View>
       )}
-      // Add this in your Dashboard component's return statement, maybe in the header
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          top: insets.top + 10,
-          right: 10,
-          backgroundColor: 'rgba(255,255,255,0.3)',
-          padding: 8,
-          borderRadius: 8
-        }}
-        onPress={viewDebugLogs}
-      >
-        <Text style={{ color: 'white', fontSize: 10 }}>Logs</Text>
-      </TouchableOpacity>
-
-      {/* Add another button to manually trigger registration */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          top: insets.top + 50,
-          right: 10,
-          backgroundColor: 'rgba(255,255,255,0.3)',
-          padding: 8,
-          borderRadius: 8
-        }}
-        onPress={async () => {
-          await debugLog('Manual registration triggered');
-          const pushToken = await registerForPushNotificationsAsync();
-          if (pushToken && token) {
-            await sendTokenToBackend(pushToken, token);
-          }
-        }}
-      >
-        <Text style={{ color: 'white', fontSize: 10 }}>Test Push</Text>
-      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
