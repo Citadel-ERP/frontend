@@ -207,103 +207,185 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       console.error('Background attendance task error:', error);
     }
   };
-
+  const debugLog = async (message: string, data?: any) => {
+    console.log(message, data);
+    // Store logs in AsyncStorage for later viewing
+    try {
+      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
+      const logArray = JSON.parse(logs);
+      logArray.push({
+        timestamp: new Date().toISOString(),
+        message,
+        data: data ? JSON.stringify(data) : null
+      });
+      // Keep only last 50 logs
+      const recentLogs = logArray.slice(-50);
+      await AsyncStorage.setItem('debug_logs', JSON.stringify(recentLogs));
+    } catch (error) {
+      console.error('Error storing debug log:', error);
+    }
+  };
   // Function to register for push notifications
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
-  let token;
+    let token;
 
-  try {
-    console.log('[Push Token] Starting registration...');
-    
-    if (!Device.isDevice) {
-      console.log('[Push Token] Not a physical device');
-      return undefined;
-    }
+    try {
+      await debugLog('[Push Token] Starting registration...');
 
-    // Android notification channel
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2D3748',
+      if (!Device.isDevice) {
+        await debugLog('[Push Token] Not a physical device');
+        Alert.alert('Debug', 'Not a physical device');
+        return undefined;
+      }
+
+      await debugLog('[Push Token] Device check passed');
+
+      // Android notification channel
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#2D3748',
+        });
+        await debugLog('[Push Token] Notification channel created');
+      }
+
+      // Request permissions
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      await debugLog('[Push Token] Existing permission status', existingStatus);
+
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+        await debugLog('[Push Token] New permission status', status);
+      }
+
+      if (finalStatus !== 'granted') {
+        await debugLog('[Push Token] Permission denied');
+        Alert.alert('Permission Denied', 'Please enable notifications in settings');
+        return undefined;
+      }
+
+      // Get Expo Push Token
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId
+        || Constants.easConfig?.projectId;
+
+      await debugLog('[Push Token] Project ID', projectId);
+
+      if (!projectId) {
+        await debugLog('[Push Token] ERROR: No project ID found');
+        Alert.alert(
+          'Configuration Error',
+          'Project ID missing. Please contact support.'
+        );
+        return undefined;
+      }
+
+      await debugLog('[Push Token] Getting token for project', projectId);
+
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId
       });
-    }
 
-    // Request permissions
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+      token = tokenData.data;
+      await debugLog('[Push Token] Success', token);
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
+      // Show success alert in APK
+      Alert.alert('Push Token Generated', `Token: ${token.substring(0, 20)}...`);
 
-    if (finalStatus !== 'granted') {
-      console.log('[Push Token] Permission denied');
+      return token;
+
+    } catch (error: any) {
+      await debugLog('[Push Token Error]', error.message);
+      Alert.alert(
+        'Notification Error',
+        `Failed: ${error.message}`
+      );
       return undefined;
     }
-
-    // Get Expo Push Token
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    
-    if (!projectId) {
-      console.error('[Push Token] No project ID');
-      return undefined;
-    }
-
-    console.log('[Push Token] Getting token for project:', projectId);
-    
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId
-    });
-
-    token = tokenData.data;
-    console.log('[Push Token] Success:', token);
-    
-    return token;
-
-  } catch (error: any) {
-    console.error('[Push Token Error]', error.message);
-    
-    // Still getting Firebase errors? Your build still has FCM
-    if (error.message?.includes('Firebase') || error.message?.includes('FCM')) {
-      console.error('❌ BUILD STILL CONTAINS FIREBASE - Rebuild required');
-    }
-    
-    return undefined;
   }
-}
-  // Function to send token to backend
   const sendTokenToBackend = async (expoToken: string, userToken: string) => {
+    await debugLog('=== SENDING TOKEN TO BACKEND ===');
+    await debugLog('Expo Token', expoToken);
+    await debugLog('User Token exists', !!userToken);
+
     if (!expoToken || !userToken) {
-      console.error('Missing tokens:', { expoToken, userToken });
+      await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
+      Alert.alert('Error', 'Cannot register push token - missing credentials');
       return;
     }
 
     try {
+      await debugLog('Making request to', `${BACKEND_URL}/core/modifyToken`);
+
+      const requestBody = {
+        token: userToken,
+        expo_token: expoToken,
+      };
+
+      await debugLog('Request body', requestBody);
+
       const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          token: userToken,
-          expo_token: expoToken,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      await debugLog('Response status', response.status);
+
       const data = await response.json();
+      await debugLog('Backend response', data);
 
       if (response.ok) {
-        console.log('Push token registered successfully:', data.message);
+        await debugLog('✅ Push token registered successfully');
         await AsyncStorage.setItem('expo_push_token', expoToken);
+        Alert.alert('Success', 'Notifications enabled successfully!');
       } else {
-        console.error('Failed to register push token:', data.message);
+        await debugLog('❌ Failed to register push token', data.message);
+        Alert.alert('Registration Failed', `Error: ${data.message || 'Unknown error'}`);
       }
+    } catch (error: any) {
+      await debugLog('❌ Network error', error.message);
+      Alert.alert('Network Error', `Could not reach server: ${error.message}`);
+    }
+  };
+
+  // Add a function to view debug logs
+  const viewDebugLogs = async () => {
+    try {
+      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
+      const logArray = JSON.parse(logs);
+      const logText = logArray.map((log: any) =>
+        `${log.timestamp}\n${log.message}\n${log.data || ''}\n---`
+      ).join('\n');
+
+      Alert.alert(
+        'Debug Logs',
+        logText || 'No logs available',
+        [
+          {
+            text: 'Copy', onPress: () => {
+              // You could implement clipboard copy here
+              console.log(logText);
+            }
+          },
+          {
+            text: 'Clear', onPress: async () => {
+              await AsyncStorage.removeItem('debug_logs');
+              Alert.alert('Logs cleared');
+            }
+          },
+          { text: 'Close' }
+        ]
+      );
     } catch (error) {
-      console.error('Error sending push token to backend:', error);
+      Alert.alert('Error', 'Could not load logs');
     }
   };
 
@@ -361,62 +443,53 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     let isMounted = true;
 
     const setupNotifications = async () => {
-      if (!token) return;
+      if (!token) {
+        await debugLog('Setup aborted: No user token');
+        return;
+      }
 
       try {
+        await debugLog('Starting notification setup', { token: !!token });
+
         const savedToken = await AsyncStorage.getItem('expo_push_token');
-        console.log('Saved token:', savedToken);
+        await debugLog('Saved token from storage', savedToken);
 
         const pushToken = await registerForPushNotificationsAsync();
-        console.log('Push token:', pushToken);
-        console.log('isMounted:', isMounted);
+        await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
 
         if (pushToken && isMounted) {
           setExpoPushToken(pushToken);
-          console.log("sending token to backend");
+          await debugLog('Calling sendTokenToBackend');
           await sendTokenToBackend(pushToken, token);
+        } else {
+          await debugLog('Skipping backend call', { pushToken: !!pushToken, isMounted });
         }
 
         // Listener for notifications received while app is foregrounded
         notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-          console.log('📱 Notification received in foreground:', notification);
+          debugLog('📱 Notification received in foreground', notification);
           setNotification(notification);
 
-          // Handle auto-mark attendance immediately when notification is received
           const data = notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
-            console.log('🎯 AUTO-MARK: Detected autoMarkAttendance in foreground notification');
+            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance');
             autoMarkAttendance();
-          } else if (data?.page) {
-            console.log('Foreground notification with page:', data.page);
           }
         });
 
         // Listener for when user taps on notification
         responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-          console.log('👆 Notification tapped:', response);
-
+          debugLog('👆 Notification tapped', response);
           const data = response.notification.request.content.data;
-          console.log('Notification data:', data);
-
-          // Handle navigation based on page parameter
           if (data?.page) {
-            console.log('Navigating to page:', data.page);
             handleNotificationNavigation(data.page as string);
-          } else {
-            if (data?.screen) {
-              console.log('Using legacy screen parameter:', data.screen);
-              handleNotificationNavigation(data.screen as string);
-            } else {
-              console.log('No page or screen parameter found in notification data');
-            }
           }
         });
 
-        // Check if app was opened from a notification (when app was closed)
+        // Check if app was opened from a notification
         const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
         if (lastNotificationResponse) {
-          console.log('📬 App opened from notification:', lastNotificationResponse);
+          debugLog('📬 App opened from notification', lastNotificationResponse);
           const data = lastNotificationResponse.notification.request.content.data;
           if (data?.page) {
             setTimeout(() => {
@@ -425,8 +498,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           }
         }
 
-      } catch (error) {
-        console.error('Error setting up notifications:', error);
+      } catch (error: any) {
+        await debugLog('Error in setupNotifications', error.message);
       }
     };
 
@@ -1119,6 +1192,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <HamburgerMenu />
         </View>
       )}
+      // Add this in your Dashboard component's return statement, maybe in the header
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          top: insets.top + 10,
+          right: 10,
+          backgroundColor: 'rgba(255,255,255,0.3)',
+          padding: 8,
+          borderRadius: 8
+        }}
+        onPress={viewDebugLogs}
+      >
+        <Text style={{ color: 'white', fontSize: 10 }}>Logs</Text>
+      </TouchableOpacity>
+
+      {/* Add another button to manually trigger registration */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          top: insets.top + 50,
+          right: 10,
+          backgroundColor: 'rgba(255,255,255,0.3)',
+          padding: 8,
+          borderRadius: 8
+        }}
+        onPress={async () => {
+          await debugLog('Manual registration triggered');
+          const pushToken = await registerForPushNotificationsAsync();
+          if (pushToken && token) {
+            await sendTokenToBackend(pushToken, token);
+          }
+        }}
+      >
+        <Text style={{ color: 'white', fontSize: 10 }}>Test Push</Text>
+      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
