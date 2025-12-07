@@ -7,6 +7,10 @@ export interface LoginResponse {
   message: string;
   first_login?: boolean;
   token?: string;
+  user?: {
+    email: string;
+    name?: string;
+  }
 }
 
 export interface CreateMPINResponse {
@@ -29,7 +33,7 @@ class AuthService {
   private static instance: AuthService;
   private token: string | null = null;
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -47,9 +51,9 @@ class AuthService {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
       const email = await AsyncStorage.getItem(STORAGE_KEYS.EMAIL);
       const firstLogin = await AsyncStorage.getItem(STORAGE_KEYS.FIRST_LOGIN);
-      
+
       this.token = token;
-      
+
       return {
         token,
         email,
@@ -65,24 +69,39 @@ class AuthService {
     }
   }
 
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(identifier: string, password: string, identifierType: 'email' | 'phone'): Promise<LoginResponse> {
     try {
+      // Create the request body with the appropriate key
+      const requestBody: any = {
+        password,
+      };
+
+      // Add either email or phone based on identifierType - THIS IS THE FIX
+      if (identifierType === 'email') {
+        requestBody.email = identifier;
+      } else {
+        // Previously, this was still sending as 'email' key
+        requestBody.phone = identifier; // Changed from requestBody.email = identifier;
+      }
+
+      console.log("Request Body:", requestBody); // Debug log
+
       const response = await fetch(`http://${API_BASE_URL}/core/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(requestBody),
       });
 
       const data: LoginResponse = await response.json();
 
       if (response.ok) {
-        // Store user data
-        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL, email);
+        // Store user data - use identifier for storage
+        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL, identifier);
         await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LOGIN, (data.first_login || false).toString());
         await AsyncStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
-        
+
         return data;
       } else {
         throw new Error(data.message || 'Login failed');
@@ -269,6 +288,7 @@ class AuthService {
 
       const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
       const timeSinceLastActivity = Date.now() - parseInt(lastActivity);
+
       return timeSinceLastActivity > INACTIVITY_TIMEOUT;
     } catch (error) {
       console.error('Error checking inactivity:', error);

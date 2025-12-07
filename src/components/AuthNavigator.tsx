@@ -57,29 +57,27 @@ const AuthNavigator: React.FC<AuthNavigatorProps> = ({onAuthSuccess}) => {
     }
   };
 
-  const handleLogin = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const response: LoginResponse = await authService.login(email, password);
-      setUserEmail(response.user.email);
+  const handleLogin = async (identifier: string, password: string, identifierType: 'email' | 'phone') => {
+  setIsLoading(true);
+  try {
+    const response: LoginResponse = await authService.login(identifier, password, identifierType);
+    setUserEmail(response.user.email);
 
-      if (response.requiresPasswordChange) {
-        setCurrentStep('change_password');
-      } else if (response.requiresMPINSetup) {
-        setCurrentStep('create_mpin');
-      } else if (response.token2) {
-        // Full authentication complete
-        onAuthSuccess(response.user);
-      } else {
-        // Need to show change password or create MPIN
-        setCurrentStep('change_password');
-      }
-    } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Please check your credentials');
-    } finally {
-      setIsLoading(false);
+    if (response.requiresPasswordChange) {
+      setCurrentStep('change_password');
+    } else if (response.requiresMPINSetup) {
+      setCurrentStep('create_mpin');
+    } else if (response.token2) {
+      onAuthSuccess(response.user);
+    } else {
+      setCurrentStep('change_password');
     }
-  };
+  } catch (error: any) {
+    Alert.alert('Login Failed', error.message || 'Please check your credentials');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleMPINLogin = async (mpin: string) => {
     setIsLoading(true);
