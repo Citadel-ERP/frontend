@@ -12,19 +12,43 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import { BACKEND_URL } from '../config/config'; 
 import { colors, commonStyles } from '../styles/theme';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Responsive dimensions
-const isTablet = screenWidth >= 768;
-const isSmallDevice = screenHeight < 700;
-const containerPadding = isTablet ? 48 : 24;
-const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
+const getDeviceType = () => {
+  if (Platform.OS === 'web') {
+    if (SCREEN_WIDTH >= 1024) return 'desktop';
+    if (SCREEN_WIDTH >= 768) return 'tablet';
+    return 'mobile';
+  }
+  return SCREEN_WIDTH >= 768 ? 'tablet' : 'mobile';
+};
 
-// Environment configuration
+const getResponsiveValues = () => {
+  const deviceType = getDeviceType();
+  
+  return {
+    isDesktop: deviceType === 'desktop',
+    isTablet: deviceType === 'tablet',
+    isMobile: deviceType === 'mobile',
+    isWeb: Platform.OS === 'web',
+    containerMaxWidth: deviceType === 'desktop' ? 480 : deviceType === 'tablet' ? 420 : '100%',
+    horizontalPadding: deviceType === 'desktop' ? 60 : deviceType === 'tablet' ? 40 : 24,
+    logoSize: deviceType === 'desktop' ? 100 : deviceType === 'tablet' ? 90 : 90,
+    titleSize: deviceType === 'desktop' ? 32 : deviceType === 'tablet' ? 28 : 28,
+    subtitleSize: deviceType === 'desktop' ? 16 : deviceType === 'tablet' ? 15 : 16,
+    inputHeight: deviceType === 'desktop' ? 52 : deviceType === 'tablet' ? 50 : 50,
+    buttonHeight: deviceType === 'desktop' ? 52 : deviceType === 'tablet' ? 50 : 52,
+    fontSize: deviceType === 'desktop' ? 15 : deviceType === 'tablet' ? 15 : 15,
+    spacing: deviceType === 'desktop' ? 20 : deviceType === 'tablet' ? 18 : 24,
+    inputSpacing: deviceType === 'desktop' ? 16 : deviceType === 'tablet' ? 16 : 20,
+  };
+};
+
 interface CreateMPINProps {
   onCreateMPIN: (email: string, mpin: string, newPassword: string, token?: string) => Promise<void>;
   onBack: () => void;
@@ -55,6 +79,21 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
 
   const scrollViewRef = useRef<ScrollView>(null);
   const confirmMPinInputRef = useRef<TextInput>(null);
+  const [responsive, setResponsive] = useState(getResponsiveValues());
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setResponsive(getResponsiveValues());
+    };
+
+    if (Platform.OS === 'web') {
+      const globalWindow = (global as any).window;
+      if (globalWindow && globalWindow.addEventListener) {
+        globalWindow.addEventListener('resize', handleResize);
+        return () => globalWindow.removeEventListener('resize', handleResize);
+      }
+    }
+  }, []);
 
   // Backend API call for creating MPIN
   const createMPINAPI = async (email: string, mpin: string, password: string): Promise<CreateMPINResponse> => {
@@ -164,226 +203,444 @@ const CreateMPIN: React.FC<CreateMPINProps> = ({
     }
   };
 
-  // Handle focus to scroll to input when keyboard appears
-  const handleInputFocus = (inputType: 'mpin' | 'confirmMPin') => {
-    setTimeout(() => {
-      const scrollY = inputType === 'mpin' ? 
-        (isSmallDevice ? 200 : 250) : 
-        (isSmallDevice ? 300 : 350);
-      
-      scrollViewRef.current?.scrollTo({
-        y: scrollY,
-        animated: true,
-      });
-    }, 100);
-  };
-
   const isFormLoading = isLoading || loading;
 
+  const dynamicStyles = getDynamicStyles(responsive);
+
   const renderContent = () => (
-    <View style={styles.contentContainer}>
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/logo.png')}
-          style={[styles.logo, { width: logoSize, height: logoSize }]}
-          resizeMode="contain"
+    <View style={styles.wrapper}>
+      {Platform.OS !== 'web' && (
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={colors.background}
+          translucent={false}
         />
-      </View>
-
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>Create MPIN</Text>
-        <Text style={styles.subtitle}>
-          Create a 6-digit MPIN for quick login access
-        </Text>
-      </View>
-
-      <View style={styles.formContainer}>
-        {/* Email display (read-only) */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <View style={[styles.input, styles.readOnlyInput]}>
-            <Text style={styles.readOnlyText}>{initialEmail}</Text>
+      )}
+      
+      <View style={styles.fixedContainer}>
+        <View style={[styles.innerContainer, { maxHeight: SCREEN_HEIGHT }]}>
+          <View style={[styles.headerContainer, dynamicStyles.headerContainer]}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={[styles.logo, dynamicStyles.logo]}
+              resizeMode="contain"
+            />
           </View>
-        </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Create 6-Digit MPIN</Text>
-          <TextInput
-            style={[styles.input, errors.mpin ? styles.inputError : null]}
-            value={mpin}
-            onChangeText={(text) => {
-              setMPin(text);
-              if (errors.mpin) {
-                setErrors(prev => ({ ...prev, mpin: '' }));
-              }
-            }}
-            onFocus={() => handleInputFocus('mpin')}
-            placeholder="Enter 6-digit MPIN"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="numeric"
-            maxLength={6}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isFormLoading}
-            returnKeyType="next"
-            onSubmitEditing={() => confirmMPinInputRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-          {errors.mpin ? <Text style={styles.errorText}>{errors.mpin}</Text> : null}
-          <Text style={styles.hintText}>
-            Choose a unique 6-digit number that you'll remember easily
-          </Text>
-        </View>
+{responsive.isWeb ? (
+            // Web: No scroll, fixed layout
+            <View style={[styles.mainContent, dynamicStyles.mainContent]}>
+              <View style={[styles.contentMaxWidth, dynamicStyles.contentMaxWidth]}>
+                <View style={[styles.titleContainer, dynamicStyles.titleContainer]}>
+                  <Text style={[styles.title, dynamicStyles.title]}>Create MPIN</Text>
+                  <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+                    Create a 6-digit MPIN for quick login access
+                  </Text>
+                </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Confirm MPIN</Text>
-          <TextInput
-            ref={confirmMPinInputRef}
-            style={[styles.input, errors.confirmMPin ? styles.inputError : null]}
-            value={confirmMPin}
-            onChangeText={(text) => {
-              setConfirmMPin(text);
-              if (errors.confirmMPin) {
-                setErrors(prev => ({ ...prev, confirmMPin: '' }));
-              }
-            }}
-            onFocus={() => handleInputFocus('confirmMPin')}
-            placeholder="Re-enter 6-digit MPIN"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="numeric"
-            maxLength={6}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isFormLoading}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-          />
-          {errors.confirmMPin ? (
-            <Text style={styles.errorText}>{errors.confirmMPin}</Text>
-          ) : null}
-        </View>
+                <View style={styles.formContainer}>
+                  {/* Email display (read-only) */}
+                  <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+                    <Text style={[styles.label, dynamicStyles.label]}>Email</Text>
+                    <View style={[styles.input, styles.readOnlyInput, dynamicStyles.input]}>
+                      <Text style={[styles.readOnlyText, dynamicStyles.readOnlyText]}>{initialEmail}</Text>
+                    </View>
+                  </View>
 
-        <View style={styles.infoContainer}>
-          <Text style={styles.infoText}>
-            Your MPIN will be used for quick login access after your initial setup is complete.
-          </Text>
-        </View>
+                  <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+                    <Text style={[styles.label, dynamicStyles.label]}>Create 6-Digit MPIN</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        dynamicStyles.input,
+                        errors.mpin ? styles.inputError : null
+                      ]}
+                      value={mpin}
+                      onChangeText={(text) => {
+                        setMPin(text);
+                        if (errors.mpin) {
+                          setErrors(prev => ({ ...prev, mpin: '' }));
+                        }
+                      }}
+                      placeholder="Enter 6-digit MPIN"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={!isFormLoading}
+                      returnKeyType="next"
+                      onSubmitEditing={() => confirmMPinInputRef.current?.focus()}
+                      blurOnSubmit={false}
+                    />
+                    {errors.mpin ? <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.mpin}</Text> : null}
+                    <Text style={[styles.hintText, dynamicStyles.hintText]}>
+                      Choose a unique 6-digit number that you'll remember easily
+                    </Text>
+                  </View>
 
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={onBack}
-            disabled={isFormLoading}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.secondaryButtonText}>Back</Text>
-          </TouchableOpacity>
+                  <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+                    <Text style={[styles.label, dynamicStyles.label]}>Confirm MPIN</Text>
+                    <TextInput
+                      ref={confirmMPinInputRef}
+                      style={[
+                        styles.input,
+                        dynamicStyles.input,
+                        errors.confirmMPin ? styles.inputError : null
+                      ]}
+                      value={confirmMPin}
+                      onChangeText={(text) => {
+                        setConfirmMPin(text);
+                        if (errors.confirmMPin) {
+                          setErrors(prev => ({ ...prev, confirmMPin: '' }));
+                        }
+                      }}
+                      placeholder="Re-enter 6-digit MPIN"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={!isFormLoading}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSubmit}
+                    />
+                    {errors.confirmMPin ? (
+                      <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.confirmMPin}</Text>
+                    ) : null}
+                  </View>
 
-          <TouchableOpacity
-            style={[
-              styles.button,
-              styles.primaryButton,
-              isFormLoading ? styles.primaryButtonDisabled : null,
-            ]}
-            onPress={handleSubmit}
-            disabled={isFormLoading}
-            activeOpacity={0.8}
-          >
-            {isFormLoading ? (
-              <ActivityIndicator color={colors.white} size="small" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Create MPIN</Text>
-            )}
-          </TouchableOpacity>
+                  <View style={[styles.infoContainer, dynamicStyles.infoContainer]}>
+                    <Text style={[styles.infoText, dynamicStyles.infoText]}>
+                      Your MPIN will be used for quick login access after your initial setup is complete.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          ) : (
+            // Mobile: Scrollable layout
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.scrollView}
+              contentContainerStyle={[styles.scrollContent, dynamicStyles.scrollContent]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+            >
+              <View style={[styles.mainContent, dynamicStyles.mainContent]}>
+                <View style={[styles.contentMaxWidth, dynamicStyles.contentMaxWidth]}>
+                  <View style={[styles.titleContainer, dynamicStyles.titleContainer]}>
+                    <Text style={[styles.title, dynamicStyles.title]}>Create MPIN</Text>
+                    <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+                      Create a 6-digit MPIN for quick login access
+                    </Text>
+                  </View>
+
+                  <View style={styles.formContainer}>
+                    {/* Email display (read-only) */}
+                    <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+                      <Text style={[styles.label, dynamicStyles.label]}>Email</Text>
+                      <View style={[styles.input, styles.readOnlyInput, dynamicStyles.input]}>
+                        <Text style={[styles.readOnlyText, dynamicStyles.readOnlyText]}>{initialEmail}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+                      <Text style={[styles.label, dynamicStyles.label]}>Create 6-Digit MPIN</Text>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          dynamicStyles.input,
+                          errors.mpin ? styles.inputError : null
+                        ]}
+                        value={mpin}
+                        onChangeText={(text) => {
+                          setMPin(text);
+                          if (errors.mpin) {
+                            setErrors(prev => ({ ...prev, mpin: '' }));
+                          }
+                        }}
+                        placeholder="Enter 6-digit MPIN"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                        maxLength={6}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isFormLoading}
+                        returnKeyType="next"
+                        onSubmitEditing={() => confirmMPinInputRef.current?.focus()}
+                        blurOnSubmit={false}
+                      />
+                      {errors.mpin ? <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.mpin}</Text> : null}
+                      <Text style={[styles.hintText, dynamicStyles.hintText]}>
+                        Choose a unique 6-digit number that you'll remember easily
+                      </Text>
+                    </View>
+
+                    <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+                      <Text style={[styles.label, dynamicStyles.label]}>Confirm MPIN</Text>
+                      <TextInput
+                        ref={confirmMPinInputRef}
+                        style={[
+                          styles.input,
+                          dynamicStyles.input,
+                          errors.confirmMPin ? styles.inputError : null
+                        ]}
+                        value={confirmMPin}
+                        onChangeText={(text) => {
+                          setConfirmMPin(text);
+                          if (errors.confirmMPin) {
+                            setErrors(prev => ({ ...prev, confirmMPin: '' }));
+                          }
+                        }}
+                        placeholder="Re-enter 6-digit MPIN"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                        maxLength={6}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isFormLoading}
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit}
+                      />
+                      {errors.confirmMPin ? (
+                        <Text style={[styles.errorText, dynamicStyles.errorText]}>{errors.confirmMPin}</Text>
+                      ) : null}
+                    </View>
+
+                    <View style={[styles.infoContainer, dynamicStyles.infoContainer]}>
+                      <Text style={[styles.infoText, dynamicStyles.infoText]}>
+                        Your MPIN will be used for quick login access after your initial setup is complete.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+
+          <View style={[styles.footerContainer, dynamicStyles.footerContainer]}>
+            <View style={[styles.contentMaxWidth, dynamicStyles.footerMaxWidth]}>
+              <View style={[styles.buttonContainer, dynamicStyles.buttonContainer]}>
+                <TouchableOpacity
+                  style={[styles.button, styles.secondaryButton, dynamicStyles.button]}
+                  onPress={onBack}
+                  disabled={isFormLoading}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.secondaryButtonText, dynamicStyles.buttonText]}>Back</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.primaryButton,
+                    dynamicStyles.button,
+                    isFormLoading ? styles.primaryButtonDisabled : null,
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={isFormLoading}
+                  activeOpacity={0.8}
+                >
+                  {isFormLoading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={[styles.primaryButtonText, dynamicStyles.buttonText]}>Create MPIN</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </View>
       </View>
     </View>
   );
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-        scrollEnabled={true}
-        nestedScrollEnabled={true}
-      >
-        {renderContent()}
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
+  return renderContent();
+};
+
+const getDynamicStyles = (responsive: ReturnType<typeof getResponsiveValues>) => {
+  return StyleSheet.create({
+    contentMaxWidth: {
+      maxWidth: responsive.isDesktop ? 480 : responsive.isTablet ? 420 : '100%',
+      width: '100%',
+    },
+    footerMaxWidth: {
+      maxWidth: responsive.isDesktop ? 480 : responsive.isTablet ? 420 : '100%',
+      width: '100%',
+    },
+    headerContainer: {
+      paddingTop: responsive.isWeb ? (responsive.isDesktop ? 24 : responsive.isTablet ? 20 : 20) : Platform.OS === 'ios' ? 60 : 40,
+      paddingBottom: responsive.isDesktop ? 12 : responsive.isTablet ? 10 : 12,
+    },
+    logo: {
+      width: responsive.logoSize,
+      height: responsive.logoSize,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: responsive.horizontalPadding,
+    },
+    mainContent: {
+      paddingVertical: responsive.isWeb ? (responsive.isDesktop ? 10 : responsive.isTablet ? 8 : 12) : (responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12),
+      paddingHorizontal: responsive.isWeb ? responsive.horizontalPadding : 0,
+      justifyContent: responsive.isWeb ? 'flex-start' : 'center',
+      width: '100%',
+    },
+    titleContainer: {
+      marginBottom: responsive.isWeb ? (responsive.isDesktop ? 16 : responsive.isTablet ? 14 : responsive.spacing) : responsive.spacing,
+    },
+    title: {
+      fontSize: responsive.titleSize,
+    },
+    subtitle: {
+      fontSize: responsive.subtitleSize,
+    },
+    inputContainer: {
+      marginBottom: responsive.isWeb ? (responsive.isDesktop ? responsive.inputSpacing : responsive.isTablet ? responsive.inputSpacing : 20) : (responsive.isDesktop ? 24 : responsive.isTablet ? 22 : 20),
+    },
+    label: {
+      fontSize: responsive.fontSize,
+      marginBottom: responsive.isDesktop ? 10 : responsive.isTablet ? 8 : 6,
+    },
+    input: {
+      height: responsive.inputHeight,
+      fontSize: responsive.fontSize,
+      paddingHorizontal: responsive.isDesktop ? 20 : responsive.isTablet ? 18 : 16,
+      borderRadius: responsive.isDesktop ? 14 : responsive.isTablet ? 12 : 10,
+    },
+    readOnlyText: {
+      fontSize: responsive.fontSize,
+    },
+    errorText: {
+      fontSize: responsive.fontSize - 2,
+      marginTop: responsive.isDesktop ? 8 : 6,
+    },
+    hintText: {
+      fontSize: responsive.fontSize - 2,
+      marginTop: responsive.isDesktop ? 8 : 6,
+      lineHeight: responsive.isDesktop ? 20 : responsive.isTablet ? 18 : 16,
+    },
+    infoContainer: {
+      borderRadius: responsive.isDesktop ? 12 : responsive.isTablet ? 10 : 8,
+      padding: responsive.isDesktop ? 16 : responsive.isTablet ? 14 : 16,
+      marginBottom: responsive.isWeb ? (responsive.isDesktop ? 12 : responsive.isTablet ? 10 : responsive.spacing) : responsive.spacing,
+    },
+    infoText: {
+      fontSize: responsive.isWeb ? (responsive.isDesktop ? 13 : responsive.isTablet ? 13 : responsive.fontSize - 1) : (responsive.fontSize - 1),
+      lineHeight: responsive.isDesktop ? 20 : responsive.isTablet ? 18 : 20,
+    },
+    footerContainer: {
+      paddingHorizontal: responsive.horizontalPadding,
+      paddingTop: responsive.isWeb ? (responsive.isDesktop ? 12 : responsive.isTablet ? 10 : 12) : responsive.spacing * 0.8,
+      paddingBottom: responsive.isWeb ? (responsive.isDesktop ? 24 : responsive.isTablet ? 20 : 16) : Platform.OS === 'ios' ? 40 : 24,
+    },
+    buttonContainer: {
+      flexDirection: responsive.isDesktop || responsive.isTablet ? 'row' : 'column',
+      gap: responsive.isDesktop ? 16 : responsive.isTablet ? 14 : 12,
+    },
+    button: {
+      height: responsive.buttonHeight,
+      borderRadius: responsive.isDesktop ? 14 : responsive.isTablet ? 12 : 10,
+      flex: responsive.isDesktop || responsive.isTablet ? 1 : 0,
+    },
+    buttonText: {
+      fontSize: responsive.fontSize + 1,
+    },
+  });
 };
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
     backgroundColor: colors.background,
+    overflow: 'hidden',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingBottom: Platform.OS === 'ios' ? 50 : 20,
+  fixedContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
   },
-  contentContainer: {
-    paddingHorizontal: containerPadding,
-    paddingVertical: isSmallDevice ? 20 : 40,
-    minHeight: screenHeight - (Platform.OS === 'ios' ? 100 : 50),
-  },
-  logoContainer: {
+  innerContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    width: '100%',
     alignItems: 'center',
-    marginBottom: isSmallDevice ? 20 : 30,
+    overflow: 'hidden',
+  },
+  headerContainer: {
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    width: '100%',
+    flexShrink: 0,
   },
   logo: {
-    marginBottom: isTablet ? 30 : isSmallDevice ? 16 : 24,
+    width: 100,
+    height: 100,
+  },
+  scrollView: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  mainContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    overflow: 'hidden',
+  },
+  contentMaxWidth: {
+    alignItems: 'center',
+    width: '100%',
   },
   titleContainer: {
-    marginBottom: isSmallDevice ? 24 : 40,
+    alignItems: 'center',
+    width: '100%',
   },
   title: {
-    fontSize: isTablet ? 32 : isSmallDevice ? 24 : 28,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: isSmallDevice ? 6 : 8,
-    letterSpacing: 0.5,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: isTablet ? 18 : isSmallDevice ? 14 : 16,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: isTablet ? 28 : isSmallDevice ? 20 : 24,
-    paddingHorizontal: isTablet ? 20 : 12,
+    fontWeight: '400',
+    lineHeight: 24,
   },
   formContainer: {
     width: '100%',
-    maxWidth: isTablet ? 400 : '100%',
-    alignSelf: 'center',
+    maxWidth: '100%',
   },
   inputContainer: {
-    marginBottom: isSmallDevice ? 20 : 24,
+    marginBottom: 20,
   },
   label: {
-    fontSize: isTablet ? 18 : 16,
+    fontSize: 16,
     fontWeight: '500',
     color: colors.text,
-    marginBottom: isSmallDevice ? 6 : 8,
+    marginBottom: 8,
     letterSpacing: 0.3,
   },
   input: {
-    ...commonStyles.input,
-    fontSize: isTablet ? 18 : 16,
-    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
-    paddingHorizontal: isTablet ? 20 : 16,
-    borderRadius: isTablet ? 16 : 12,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
     backgroundColor: colors.white,
+    fontSize: 16,
+    color: colors.text,
+    paddingHorizontal: 16,
+    height: 50,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -402,7 +659,7 @@ const styles = StyleSheet.create({
   },
   readOnlyText: {
     color: colors.text,
-    fontSize: isTablet ? 18 : 16,
+    fontSize: 16,
     fontWeight: '400',
   },
   inputError: {
@@ -411,23 +668,23 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.error,
-    fontSize: isTablet ? 16 : 14,
+    fontSize: 14,
     marginTop: 6,
     fontWeight: '500',
     paddingLeft: 4,
   },
   hintText: {
     color: colors.textSecondary,
-    fontSize: isTablet ? 14 : 12,
+    fontSize: 12,
     marginTop: 6,
-    lineHeight: isTablet ? 20 : 16,
+    lineHeight: 16,
     paddingLeft: 4,
   },
   infoContainer: {
     backgroundColor: '#F0F8FF',
-    borderRadius: isTablet ? 12 : 8,
-    padding: isTablet ? 20 : 16,
-    marginBottom: isSmallDevice ? 24 : 32,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 24,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
     ...Platform.select({
@@ -443,22 +700,25 @@ const styles = StyleSheet.create({
     }),
   },
   infoText: {
-    fontSize: isTablet ? 16 : 14,
+    fontSize: 14,
     color: '#4A5568',
-    lineHeight: isTablet ? 24 : 20,
+    lineHeight: 20,
     textAlign: 'center',
     fontWeight: '400',
   },
+  footerContainer: {
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    flexShrink: 0,
+  },
   buttonContainer: {
-    flexDirection: isTablet ? 'row' : 'column',
-    gap: isTablet ? 16 : 12,
     alignItems: 'stretch',
-    marginBottom: isSmallDevice ? 20 : 40,
+    width: '100%',
+    maxWidth: '100%',
   },
   button: {
-    flex: isTablet ? 1 : 0,
-    height: isTablet ? 64 : isSmallDevice ? 48 : 56,
-    borderRadius: isTablet ? 16 : 12,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
@@ -481,7 +741,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.white,
-    fontSize: isTablet ? 18 : 16,
+    fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
@@ -492,7 +752,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: colors.text,
-    fontSize: isTablet ? 18 : 16,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

@@ -9,23 +9,49 @@ import {
   Image,
   Dimensions,
   Platform,
-  KeyboardAvoidingView,
-  ScrollView,
+  StatusBar,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { BACKEND_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../styles/theme';
-import {
-  requestBiometricPermissions,
-  getBiometricType,
-  getBiometricPromptMessage
-} from '../utils/permissions';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const isTablet = screenWidth >= 768;
-const isSmallDevice = screenHeight < 700;
+const getDeviceType = () => {
+  if (Platform.OS === 'web') {
+    if (SCREEN_WIDTH >= 1024) return 'desktop';
+    if (SCREEN_WIDTH >= 768) return 'tablet';
+    return 'mobile';
+  }
+  return SCREEN_WIDTH >= 768 ? 'tablet' : 'mobile';
+};
+
+const getResponsiveValues = () => {
+  const deviceType = getDeviceType();
+  
+  return {
+    isDesktop: deviceType === 'desktop',
+    isTablet: deviceType === 'tablet',
+    isMobile: deviceType === 'mobile',
+    isWeb: Platform.OS === 'web',
+    containerMaxWidth: deviceType === 'desktop' ? 480 : deviceType === 'tablet' ? 420 : '100%',
+    horizontalPadding: deviceType === 'desktop' ? 60 : deviceType === 'tablet' ? 40 : 24,
+    logoSize: deviceType === 'desktop' ? 140 : deviceType === 'tablet' ? 120 : 90,
+    titleSize: deviceType === 'desktop' ? 36 : deviceType === 'tablet' ? 32 : 28,
+    subtitleSize: deviceType === 'desktop' ? 18 : deviceType === 'tablet' ? 17 : 16,
+    inputHeight: deviceType === 'desktop' ? 58 : deviceType === 'tablet' ? 56 : 50,
+    buttonHeight: deviceType === 'desktop' ? 58 : deviceType === 'tablet' ? 56 : 52,
+    fontSize: deviceType === 'desktop' ? 16 : deviceType === 'tablet' ? 16 : 15,
+    spacing: deviceType === 'desktop' ? 32 : deviceType === 'tablet' ? 28 : 24,
+    mpinInputSize: deviceType === 'desktop' ? 60 : deviceType === 'tablet' ? 55 : 48,
+    mpinInputFontSize: deviceType === 'desktop' ? 28 : deviceType === 'tablet' ? 26 : 22,
+    biometricIconSize: deviceType === 'desktop' ? 100 : deviceType === 'tablet' ? 90 : 80,
+    biometricIconFontSize: deviceType === 'desktop' ? 45 : deviceType === 'tablet' ? 40 : 32,
+  };
+};
 
 interface MPINLoginProps {
   onMPINLogin: (mpin: string) => Promise<void>;
@@ -56,6 +82,8 @@ interface BiometricCapabilities {
 
 // Biometric Icons Component
 const BiometricIcon = ({ type }: { type: 'face' | 'fingerprint' | 'default' }) => {
+  const responsive = getResponsiveValues();
+  
   const getIconText = () => {
     switch (type) {
       case 'face': return '🔐';
@@ -65,8 +93,17 @@ const BiometricIcon = ({ type }: { type: 'face' | 'fingerprint' | 'default' }) =
   };
 
   return (
-    <View style={styles.biometricIconContainer}>
-      <Text style={styles.biometricIconText}>{getIconText()}</Text>
+    <View style={[
+      styles.biometricIconContainer,
+      {
+        width: responsive.biometricIconSize,
+        height: responsive.biometricIconSize,
+        borderRadius: responsive.biometricIconSize / 2,
+      }
+    ]}>
+      <Text style={[styles.biometricIconText, { fontSize: responsive.biometricIconFontSize }]}>
+        {getIconText()}
+      </Text>
     </View>
   );
 };
@@ -95,7 +132,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
   const [biometricAttempted, setBiometricAttempted] = useState<boolean>(false);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [responsive, setResponsive] = useState(getResponsiveValues());
 
   // Constants
   const TOKEN_2_KEY = 'token_2';
@@ -123,43 +160,35 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     }
   }, [biometricCapabilities, biometricAttempted, showMPINSection]);
 
-  const debugBiometrics = useCallback(async () => {
-    const permissionResult = await requestBiometricPermissions();
-
-    if (permissionResult.granted) {
-      const types = getBiometricType(permissionResult.supportedTypes);
-      const messages = getBiometricPromptMessage(permissionResult.supportedTypes);
-    }
-  }, []);
-
   useEffect(() => {
-    debugBiometrics();
+    const handleResize = () => {
+      setResponsive(getResponsiveValues());
+    };
+
+    if (Platform.OS === 'web') {
+      const globalWindow = (global as any).window;
+      if (globalWindow && globalWindow.addEventListener) {
+        globalWindow.addEventListener('resize', handleResize);
+        return () => globalWindow.removeEventListener('resize', handleResize);
+      }
+    }
   }, []);
 
   const checkBiometricCapabilities = useCallback(async () => {
     try {
-      const permissionResult = await requestBiometricPermissions();
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      const supportedTypes = await LocalAuthentication.supportedAuthenticationTypesAsync();
 
-      if (!permissionResult.granted) {
-        setBiometricCapabilities({
-          hasHardware: permissionResult.hasHardware,
-          isEnrolled: permissionResult.isEnrolled,
-          supportedTypes: permissionResult.supportedTypes,
-          hasFaceID: false,
-          hasFingerprintOrTouchID: false,
-        });
-        setShowMPINSection(true);
-        return;
-      }
-
-      const biometricTypes = getBiometricType(permissionResult.supportedTypes);
+      const hasFaceID = supportedTypes.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+      const hasFingerprintOrTouchID = supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
 
       const capabilities: BiometricCapabilities = {
-        hasHardware: permissionResult.hasHardware,
-        isEnrolled: permissionResult.isEnrolled,
-        supportedTypes: permissionResult.supportedTypes,
-        hasFaceID: biometricTypes.hasFaceID,
-        hasFingerprintOrTouchID: biometricTypes.hasFingerprint,
+        hasHardware,
+        isEnrolled,
+        supportedTypes,
+        hasFaceID,
+        hasFingerprintOrTouchID,
       };
 
       setBiometricCapabilities(capabilities);
@@ -219,6 +248,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         return;
       }
     } catch (error) {
+      // If we can't read preference, continue with biometric
     }
 
     setBiometricAttempted(true);
@@ -478,21 +508,12 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     return `${maskedUsername}@${domain}`;
   }, [userEmail]);
 
-  const handleInputFocus = useCallback((index: number) => {
-    setCurrentIndex(index);
-    setTimeout(() => {
-      if (scrollViewRef.current) {
-        const baseScrollY = isSmallDevice ? 80 : 100;
-        const keyboardOffset = Platform.OS === 'ios' ? 0 : 50;
-        const scrollY = baseScrollY + keyboardOffset;
-
-        scrollViewRef.current.scrollTo({
-          y: scrollY,
-          animated: true,
-        });
-      }
-    }, 100);
-  }, []);
+  const dismissKeyboard = () => {
+    // Only dismiss keyboard on mobile platforms
+    if (Platform.OS !== 'web') {
+      Keyboard.dismiss();
+    }
+  };
 
   const getBiometricText = useCallback(() => {
     if (!biometricCapabilities) return 'Biometric Authentication';
@@ -513,229 +534,436 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
     return 'default';
   }, [biometricCapabilities]);
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        scrollEnabled={true}
-      >
-        {/* Header with Logo */}
-        <View style={styles.headerContainer}>
-          <Image
-            source={require('../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
+  const dynamicStyles = getDynamicStyles(responsive);
 
-        {/* Main Content */}
-        <View style={styles.mainContent}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Login to {getDisplayEmail()}</Text>
+  // Create content without TouchableWithoutFeedback wrapper
+  const content = (
+    <View style={styles.wrapper}>
+      {Platform.OS !== 'web' && (
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={colors.background}
+          translucent={false}
+        />
+      )}
+      
+      {/* Fixed Container - No Scroll */}
+      <View style={styles.fixedContainer}>
+        <View style={[styles.innerContainer, { maxHeight: SCREEN_HEIGHT }]}>
+          <View style={[styles.headerContainer, dynamicStyles.headerContainer]}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={[styles.logo, dynamicStyles.logo]}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Biometric Section */}
-          {!showMPINSection && biometricCapabilities?.isEnrolled ? (
-            <View style={styles.biometricSection}>
-              <BiometricIcon type={getBiometricIconType()} />
+          <View style={[styles.mainContent, dynamicStyles.mainContent]}>
+            <View style={[styles.contentMaxWidth, dynamicStyles.contentMaxWidth]}>
+              <View style={[styles.titleContainer, dynamicStyles.titleContainer]}>
+                <Text style={[styles.title, dynamicStyles.title]}>
+                  Welcome Back
+                </Text>
+                <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
+                  Login to {getDisplayEmail()}
+                </Text>
+              </View>
 
-              {isBiometricAuthenticating ? (
-                <View style={styles.authenticatingContainer}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={styles.authenticatingText}>
-                    Authenticating with {getBiometricText()}...
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.biometricReadyContainer}>
-                  <Text style={styles.biometricReadyText}>
-                    Use {getBiometricText()} to login
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.biometricButton}
-                    onPress={handleRetryBiometric}
-                    disabled={isBiometricAuthenticating}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.biometricButtonText}>
-                      Try {getBiometricText()}
-                    </Text>
-                  </TouchableOpacity>
+              {/* Biometric Section */}
+              {!showMPINSection && biometricCapabilities?.isEnrolled ? (
+                <View style={[styles.biometricSection, dynamicStyles.biometricSection]}>
+                  <BiometricIcon type={getBiometricIconType()} />
 
-                  {biometricError ? (
-                    <Text style={styles.errorText}>{biometricError}</Text>
-                  ) : null}
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.switchToMPINButton}
-                onPress={() => setShowMPINSection(true)}
-                disabled={isBiometricAuthenticating}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.switchToMPINText}>Use MPIN Instead</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            /* MPIN Section */
-            <View style={styles.mpinSection}>
-              {biometricCapabilities?.isEnrolled && (
-                <TouchableOpacity
-                  style={styles.switchToBiometricButton}
-                  onPress={() => {
-                    setShowMPINSection(false);
-                    setBiometricAttempted(false);
-                    setBiometricError('');
-                  }}
-                  disabled={isLoading || isSubmitting}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.switchToBiometricText}>
-                    Use {getBiometricText()} Instead
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <Text style={styles.mpinTitle}>Enter Your MPIN</Text>
-
-              <View style={styles.mpinInputContainer}>
-                <View style={styles.mpinContainer}>
-                  {mpin.map((digit, index) => (
-                    <TextInput
-                      key={index}
-                      ref={(ref) => {
-                        inputRefs.current[index] = ref;
-                      }}
-                      style={[
-                        styles.mpinInput,
-                        currentIndex === index ? styles.mpinInputFocused : null,
-                        error ? styles.mpinInputError : null,
-                        isBlocked ? styles.mpinInputDisabled : null,
-                      ]}
-                      value={digit}
-                      onChangeText={(value) => handleMPINChange(value, index)}
-                      onKeyPress={(e) => handleKeyPress(e, index)}
-                      onFocus={() => handleInputFocus(index)}
-                      keyboardType="numeric"
-                      maxLength={1}
-                      secureTextEntry
-                      selectTextOnFocus
-                      editable={!isLoading && !isSubmitting && !isBlocked}
-                    />
-                  ))}
-                </View>
-
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                <View style={styles.buttonContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.submitButton,
-                      !isMPINComplete ? styles.submitButtonInactive : null,
-                      (isLoading || isSubmitting || isBlocked) ? styles.submitButtonDisabled : null,
-                    ]}
-                    onPress={() => handleSubmit()}
-                    disabled={isLoading || isSubmitting || isBlocked || !isMPINComplete}
-                    activeOpacity={0.8}
-                  >
-                    {(isLoading || isSubmitting) ? (
-                      <ActivityIndicator color={colors.white} size="small" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>
-                        {isBlocked ? 'Account Locked' : 'Login with MPIN'}
+                  {isBiometricAuthenticating ? (
+                    <View style={[styles.authenticatingContainer, dynamicStyles.authenticatingContainer]}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={[styles.authenticatingText, dynamicStyles.authenticatingText]}>
+                        Authenticating with {getBiometricText()}...
                       </Text>
-                    )}
-                  </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={[styles.biometricReadyContainer, dynamicStyles.biometricReadyContainer]}>
+                      <Text style={[styles.biometricReadyText, dynamicStyles.biometricReadyText]}>
+                        Use {getBiometricText()} to login
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.biometricButton, dynamicStyles.biometricButton]}
+                        onPress={handleRetryBiometric}
+                        disabled={isBiometricAuthenticating}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.biometricButtonText, dynamicStyles.biometricButtonText]}>
+                          Try {getBiometricText()}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {biometricError ? (
+                        <Text style={[styles.errorText, dynamicStyles.errorText]}>{biometricError}</Text>
+                      ) : null}
+                    </View>
+                  )}
 
                   <TouchableOpacity
-                    style={styles.forgotMPINLink}
-                    onPress={handleForgotMPIN}
-                    disabled={isLoading || isSubmitting}
+                    style={[styles.switchToMPINButton, dynamicStyles.switchToMPINButton]}
+                    onPress={() => setShowMPINSection(true)}
+                    disabled={isBiometricAuthenticating}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.forgotMPINText}>Forgot MPIN?</Text>
+                    <Text style={[styles.switchToMPINText, dynamicStyles.switchToMPINText]}>
+                      Use MPIN Instead
+                    </Text>
                   </TouchableOpacity>
-
-                  {hasEnteredDigits && (
+                </View>
+              ) : (
+                /* MPIN Section */
+                <View style={[styles.mpinSection, dynamicStyles.mpinSection]}>
+                  {biometricCapabilities?.isEnrolled && (
                     <TouchableOpacity
-                      style={styles.clearLink}
-                      onPress={clearMPIN}
-                      disabled={isLoading || isSubmitting || isBlocked}
+                      style={[styles.switchToBiometricButton, dynamicStyles.switchToBiometricButton]}
+                      onPress={() => {
+                        setShowMPINSection(false);
+                        setBiometricAttempted(false);
+                        setBiometricError('');
+                      }}
+                      disabled={isLoading || isSubmitting}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.clearLinkText}>Clear</Text>
+                      <Text style={[styles.switchToBiometricText, dynamicStyles.switchToBiometricText]}>
+                        Use {getBiometricText()} Instead
+                      </Text>
                     </TouchableOpacity>
                   )}
+
+                  <Text style={[styles.mpinTitle, dynamicStyles.mpinTitle]}>Enter Your MPIN</Text>
+
+                  {/* FIX: Added a fixed container for MPIN inputs to prevent position shifting */}
+                  <View style={[styles.mpinFixedContainer, dynamicStyles.mpinFixedContainer]}>
+                    <View style={[styles.mpinContainer, dynamicStyles.mpinContainer]}>
+                      {mpin.map((digit, index) => (
+                        <TextInput
+                          key={index}
+                          ref={(ref) => {
+                            inputRefs.current[index] = ref;
+                          }}
+                          style={[
+                            styles.mpinInput,
+                            dynamicStyles.mpinInput,
+                            currentIndex === index ? styles.mpinInputFocused : null,
+                            error ? styles.mpinInputError : null,
+                            isBlocked ? styles.mpinInputDisabled : null,
+                          ]}
+                          value={digit}
+                          onChangeText={(value) => handleMPINChange(value, index)}
+                          onKeyPress={(e) => handleKeyPress(e, index)}
+                          keyboardType="numeric"
+                          maxLength={1}
+                          secureTextEntry
+                          selectTextOnFocus
+                          editable={!isLoading && !isSubmitting && !isBlocked}
+                          // FIX: Added fixed height and width to prevent layout shifts
+                          onLayout={(event) => {
+                            // Keep the layout stable
+                          }}
+                        />
+                      ))}
+                    </View>
+                  </View>
+
+                  {error ? (
+                    <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text>
+                  ) : null}
+
+                  <View style={[styles.buttonContainer, dynamicStyles.buttonContainer]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.submitButton,
+                        dynamicStyles.submitButton,
+                        !isMPINComplete ? styles.submitButtonInactive : null,
+                        (isLoading || isSubmitting || isBlocked) ? styles.submitButtonDisabled : null,
+                      ]}
+                      onPress={() => handleSubmit()}
+                      disabled={isLoading || isSubmitting || isBlocked || !isMPINComplete}
+                      activeOpacity={0.8}
+                    >
+                      {(isLoading || isSubmitting) ? (
+                        <ActivityIndicator color={colors.white} size="small" />
+                      ) : (
+                        <Text style={[styles.submitButtonText, dynamicStyles.submitButtonText]}>
+                          {isBlocked ? 'Account Locked' : 'Login with MPIN'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.forgotMPINLink, dynamicStyles.forgotMPINLink]}
+                      onPress={handleForgotMPIN}
+                      disabled={isLoading || isSubmitting}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 15, bottom: 15, left: 10, right: 10 }}
+                    >
+                      <Text style={[styles.forgotMPINText, dynamicStyles.forgotMPINText]}>
+                        Forgot MPIN?
+                      </Text>
+                    </TouchableOpacity>
+
+                    {hasEnteredDigits && (
+                      <TouchableOpacity
+                        style={[styles.clearLink, dynamicStyles.clearLink]}
+                        onPress={clearMPIN}
+                        disabled={isLoading || isSubmitting || isBlocked}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 15, bottom: 15, left: 10, right: 10 }}
+                      >
+                        <Text style={[styles.clearLinkText, dynamicStyles.clearLinkText]}>
+                          Clear
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.footerContainer, dynamicStyles.footerContainer]}>
+            <View style={[styles.contentMaxWidth, dynamicStyles.footerMaxWidth]}>
+              <View style={[styles.footerContent, dynamicStyles.footerContent]}>
+                <Text style={[styles.footerTitle, dynamicStyles.footerTitle]}>
+                  Having trouble?
+                </Text>
+                <TouchableOpacity
+                  style={[styles.usePasswordButton, dynamicStyles.usePasswordButton]}
+                  onPress={handleRedirectToLogin}
+                  disabled={isLoading || isSubmitting || isBiometricAuthenticating}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 15, bottom: 15, left: 10, right: 10 }}
+                >
+                  <Text style={[styles.usePasswordText, dynamicStyles.usePasswordText]}>
+                    Use Email & Password Instead
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-          )}
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footerContainer}>
-          <View style={styles.footerContent}>
-            <Text style={styles.footerTitle}>Having trouble?</Text>
-            <TouchableOpacity
-              style={styles.usePasswordButton}
-              onPress={handleRedirectToLogin}
-              disabled={isLoading || isSubmitting || isBiometricAuthenticating}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.usePasswordText}>Use Email & Password Instead</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </View>
+  );
+
+  // Only wrap with TouchableWithoutFeedback on mobile platforms
+  if (Platform.OS === 'web') {
+    return content;
+  }
+
+  return (
+    <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
+      {content}
+    </TouchableWithoutFeedback>
   );
 };
 
+const getDynamicStyles = (responsive: ReturnType<typeof getResponsiveValues>) => {
+  return StyleSheet.create({
+    contentMaxWidth: {
+      maxWidth: responsive.isDesktop ? 480 : responsive.isTablet ? 420 : '100%',
+      width: '100%',
+    },
+    footerMaxWidth: {
+      maxWidth: responsive.isDesktop ? 480 : responsive.isTablet ? 420 : '100%',
+      width: '100%',
+    },
+    headerContainer: {
+      paddingTop: responsive.isWeb ? (responsive.isDesktop ? 40 : responsive.isTablet ? 30 : 20) : Platform.OS === 'ios' ? 60 : 40,
+      paddingBottom: responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12,
+    },
+    logo: {
+      width: responsive.logoSize,
+      height: responsive.logoSize,
+    },
+    mainContent: {
+      paddingVertical: responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12,
+      paddingHorizontal: responsive.horizontalPadding,
+    },
+    titleContainer: {
+      marginBottom: responsive.spacing,
+    },
+    title: {
+      fontSize: responsive.titleSize,
+    },
+    subtitle: {
+      fontSize: responsive.subtitleSize,
+    },
+    
+    // Biometric section
+    biometricSection: {
+      alignItems: 'center',
+      width: '100%',
+    },
+    authenticatingContainer: {
+      alignItems: 'center',
+      paddingVertical: responsive.spacing,
+    },
+    authenticatingText: {
+      fontSize: responsive.fontSize,
+      marginTop: responsive.spacing * 0.5,
+    },
+    biometricReadyContainer: {
+      alignItems: 'center',
+      width: '100%',
+    },
+    biometricReadyText: {
+      fontSize: responsive.fontSize + 1,
+      marginBottom: responsive.spacing,
+    },
+    biometricButton: {
+      paddingVertical: responsive.isDesktop ? 16 : responsive.isTablet ? 14 : 12,
+      paddingHorizontal: responsive.isDesktop ? 40 : responsive.isTablet ? 32 : 24,
+      minWidth: responsive.isDesktop ? 250 : responsive.isTablet ? 220 : 200,
+      marginBottom: responsive.spacing * 0.5,
+    },
+    biometricButtonText: {
+      fontSize: responsive.fontSize,
+    },
+    switchToMPINButton: {
+      paddingVertical: responsive.spacing * 0.3,
+      paddingHorizontal: 16,
+    },
+    switchToMPINText: {
+      fontSize: responsive.fontSize - 1,
+    },
+
+    // MPIN section
+    mpinSection: {
+      alignItems: 'center',
+      width: '100%',
+    },
+    switchToBiometricButton: {
+      marginBottom: responsive.spacing,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    switchToBiometricText: {
+      fontSize: responsive.fontSize - 1,
+    },
+    mpinTitle: {
+      fontSize: responsive.titleSize - 2,
+      marginBottom: responsive.spacing,
+    },
+    // FIX: Added fixed container for MPIN inputs
+    mpinFixedContainer: {
+      minHeight: responsive.isDesktop ? 75 : responsive.isTablet ? 70 : 65,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: '100%',
+      marginBottom: responsive.spacing,
+    },
+    mpinContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      // FIX: Added minWidth to prevent container shrinking
+      minWidth: responsive.isDesktop ? 450 : responsive.isTablet ? 380 : 320,
+    },
+    // FIX: Made MPIN inputs fully responsive
+    mpinInput: {
+      width: responsive.mpinInputSize,
+      height: responsive.isDesktop ? 65 : responsive.isTablet ? 60 : 55,
+      fontSize: responsive.mpinInputFontSize,
+      // Ensure consistent spacing
+      marginHorizontal: responsive.isDesktop ? 6 : responsive.isTablet ? 5 : 4,
+      // Fixed minWidth to prevent size changes
+      minWidth: responsive.mpinInputSize,
+    },
+    buttonContainer: {
+      width: '100%',
+    },
+    submitButton: {
+      height: responsive.buttonHeight,
+      marginBottom: responsive.spacing * 0.3,
+    },
+    submitButtonText: {
+      fontSize: responsive.fontSize + 1,
+    },
+    forgotMPINLink: {
+      marginBottom: responsive.spacing * 0.4,
+    },
+    forgotMPINText: {
+      fontSize: responsive.fontSize - 1,
+    },
+    clearLink: {
+      paddingVertical: 8,
+    },
+    clearLinkText: {
+      fontSize: responsive.fontSize - 1,
+    },
+    errorText: {
+      fontSize: responsive.fontSize - 2,
+      marginBottom: responsive.spacing,
+    },
+
+    // Footer
+    footerContainer: {
+      paddingHorizontal: responsive.horizontalPadding,
+      paddingTop: responsive.isWeb ? (responsive.isDesktop ? 20 : responsive.isTablet ? 16 : 12) : responsive.spacing * 0.8,
+      paddingBottom: responsive.isWeb ? (responsive.isDesktop ? 30 : responsive.isTablet ? 20 : 16) : Platform.OS === 'ios' ? 40 : 24,
+    },
+    footerContent: {
+      padding: responsive.isDesktop ? 22 : responsive.isTablet ? 18 : 14,
+    },
+    footerTitle: {
+      fontSize: responsive.fontSize - 1,
+      marginBottom: responsive.spacing * 0.2,
+    },
+    usePasswordButton: {
+      paddingVertical: responsive.spacing * 0.2,
+    },
+    usePasswordText: {
+      fontSize: responsive.fontSize - 1,
+    },
+  });
+};
+
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContainer: {
-    flexGrow: 1,
-    minHeight: screenHeight,
+  fixedContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  innerContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    width: '100%',
+    alignItems: 'center',
   },
 
-  // Header with logo
   headerContainer: {
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 20,
     backgroundColor: colors.background,
+    width: '100%',
   },
   logo: {
-    width: isTablet ? 120 : 100,
-    height: isTablet ? 120 : 100,
+    width: 100,
+    height: 100,
   },
 
-  // Main content area
   mainContent: {
-    flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: isTablet ? 48 : 24,
-    paddingVertical: 20,
+    alignItems: 'center',
+    width: '100%',
+    flex: 1,
   },
-  titleContainer: {
-    marginBottom: isSmallDevice ? 40 : 50,
+  contentMaxWidth: {
     alignItems: 'center',
   },
+  titleContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
   title: {
-    fontSize: isTablet ? 32 : isSmallDevice ? 28 : 30,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
@@ -743,7 +971,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: isTablet ? 18 : isSmallDevice ? 16 : 17,
     color: colors.textSecondary,
     textAlign: 'center',
     fontWeight: '400',
@@ -752,12 +979,8 @@ const styles = StyleSheet.create({
   // Biometric section
   biometricSection: {
     alignItems: 'center',
-    marginBottom: isSmallDevice ? 30 : 40,
   },
   biometricIconContainer: {
-    width: isTablet ? 100 : 80,
-    height: isTablet ? 100 : 80,
-    borderRadius: isTablet ? 50 : 40,
     backgroundColor: '#F0F8FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -766,16 +989,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primary + '20',
   },
   biometricIconText: {
-    fontSize: isTablet ? 40 : 32,
+    fontSize: 32,
   },
   authenticatingContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
   },
   authenticatingText: {
-    fontSize: isTablet ? 18 : 16,
     color: colors.text,
-    marginTop: 16,
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -784,19 +1004,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   biometricReadyText: {
-    fontSize: isTablet ? 20 : 18,
     color: colors.text,
-    marginBottom: 24,
     textAlign: 'center',
     fontWeight: '500',
   },
   biometricButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
-    paddingVertical: isTablet ? 16 : 14,
-    paddingHorizontal: isTablet ? 40 : 32,
-    marginBottom: 16,
-    minWidth: isTablet ? 250 : 200,
     alignItems: 'center',
     ...Platform.select({
       ios: {
@@ -812,17 +1026,14 @@ const styles = StyleSheet.create({
   },
   biometricButtonText: {
     color: colors.white,
-    fontSize: isTablet ? 17 : 16,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   switchToMPINButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    alignSelf: 'center',
   },
   switchToMPINText: {
     color: colors.textSecondary,
-    fontSize: isTablet ? 16 : 14,
     fontWeight: '500',
     textAlign: 'center',
     textDecorationLine: 'underline',
@@ -833,51 +1044,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  // FIX: Added fixed container for MPIN inputs
+  mpinFixedContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
   switchToBiometricButton: {
-    marginBottom: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    alignSelf: 'center',
   },
   switchToBiometricText: {
     color: colors.primary,
-    fontSize: isTablet ? 16 : 14,
     fontWeight: '500',
     textAlign: 'center',
     textDecorationLine: 'underline',
   },
   mpinTitle: {
-    fontSize: isTablet ? 24 : isSmallDevice ? 20 : 22,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: isSmallDevice ? 24 : 32,
     letterSpacing: -0.3,
-  },
-  mpinInputContainer: {
-    width: '100%',
-    alignItems: 'center',
-    paddingHorizontal: isTablet ? 20 : 16,
   },
   mpinContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    width: '100%',
-    maxWidth: isTablet ? 380 : 300,
-    gap: isTablet ? 14 : isSmallDevice ? 8 : 10,
+    // FIX: Added minWidth to prevent container shrinking
+    minWidth: 320,
   },
   mpinInput: {
-    width: isTablet ? 55 : isSmallDevice ? 42 : 48,
-    height: isTablet ? 65 : isSmallDevice ? 52 : 58,
     borderWidth: 2,
     borderColor: '#E2E8F0',
     borderRadius: 12,
     backgroundColor: colors.white,
     textAlign: 'center',
-    fontSize: isTablet ? 26 : isSmallDevice ? 20 : 22,
     fontWeight: '700',
     color: colors.text,
+    // FIX: Added consistent margin to prevent position shifts
+    marginHorizontal: 4,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -887,6 +1091,13 @@ const styles = StyleSheet.create({
       },
       android: {
         elevation: 1,
+      },
+      web: {
+        outlineStyle: 'none',
+        // FIX: Prevent layout shifts on web
+        boxSizing: 'border-box',
+        minWidth: 48,
+        transition: 'all 0.2s ease',
       },
     }),
   },
@@ -908,26 +1119,15 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     color: '#9CA3AF',
   },
-  errorText: {
-    color: colors.error,
-    fontSize: isTablet ? 16 : 14,
-    textAlign: 'center',
-    marginBottom: 20,
-    fontWeight: '500',
-    lineHeight: 20,
-  },
   buttonContainer: {
-    width: '100%',
     alignItems: 'center',
   },
   submitButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
-    height: isTablet ? 56 : 52,
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
@@ -949,50 +1149,43 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: colors.white,
-    fontSize: isTablet ? 17 : 16,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-
-  // Forgot MPIN link
   forgotMPINLink: {
-    alignSelf: 'flex-end',
-    paddingVertical: 1,
-    paddingHorizontal: 4,
-    marginBottom: 16,
+    alignSelf: 'center',
   },
   forgotMPINText: {
     color: colors.primary,
-    fontSize: isTablet ? 15 : 14,
     fontWeight: '500',
     textDecorationLine: 'underline',
   },
-
-  // Clear link
   clearLink: {
     alignSelf: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
   },
   clearLinkText: {
     color: colors.textSecondary,
-    fontSize: isTablet ? 15 : 14,
     fontWeight: '500',
     textDecorationLine: 'underline',
+  },
+  errorText: {
+    color: colors.error,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 
   // Footer styles
   footerContainer: {
-    paddingHorizontal: isTablet ? 48 : 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    paddingTop: 20,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: colors.background,
   },
   footerContent: {
     backgroundColor: '#F7FAFC',
     borderRadius: 12,
-    padding: isTablet ? 24 : 20,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
+    width: '100%',
     alignItems: 'center',
     ...Platform.select({
       ios: {
@@ -1007,19 +1200,15 @@ const styles = StyleSheet.create({
     }),
   },
   footerTitle: {
-    fontSize: isTablet ? 16 : 15,
     color: '#4A5568',
     fontWeight: '600',
-    marginBottom: 8,
     textAlign: 'center',
   },
   usePasswordButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    alignSelf: 'center',
   },
   usePasswordText: {
     color: colors.primary,
-    fontSize: isTablet ? 15 : 14,
     fontWeight: '500',
     textAlign: 'center',
     textDecorationLine: 'underline',
