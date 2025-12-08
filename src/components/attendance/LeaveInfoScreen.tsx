@@ -6,24 +6,87 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
-  Dimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../../styles/theme';
-import { LeaveApplication } from './types';
-import { formatDate, getStatusBadgeColor, formatDateTime } from './utils';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Theme colors matching your app
+const colors = {
+  primary: '#f59e0b',
+  secondary: '#1e1b4b',
+  white: '#FFFFFF',
+  text: '#111827',
+  textSecondary: '#6b7280',
+  background: '#f3f4f6',
+  backgroundSecondary: '#F5F5F5',
+  border: '#e5e7eb',
+  success: '#10b981',
+  error: '#ef4444',
+  blue: '#3b82f6',
+  purple: '#a855f7',
+};
+
+const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const fontSize = { xs: 11, sm: 13, md: 15, lg: 17, xl: 20 };
+const borderRadius = { sm: 8, md: 12, lg: 16, xl: 20 };
+
+interface LeaveApplication {
+  id: number;
+  start_date: string;
+  end_date: string;
+  leave_type: string;
+  reason: string;
+  status: string;
+  approved_by?: any;
+  approved_at?: string;
+  rejected_at?: string;
+  total_number_of_days?: number;
+  is_sandwich?: boolean;
+  comment?: string;
+  user?: {
+    full_name: string;
+    employee_id: string;
+    email: string;
+    designation?: string;
+  };
+}
 
 interface LeaveInfoScreenProps {
   leave: LeaveApplication;
   onBack: () => void;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
-
 const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
-  const insets = useSafeAreaInsets();
+  
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutes.toString().padStart(2, '0');
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} at ${displayHours}:${displayMinutes} ${ampm}`;
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return colors.success;
+      case 'rejected':
+        return colors.error;
+      case 'pending':
+        return colors.primary;
+      default:
+        return colors.textSecondary;
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -50,129 +113,152 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
     return diffDays;
   };
 
+  const getLeaveTypeIcon = (type: string) => {
+    const lowerType = type.toLowerCase();
+    if (lowerType.includes('sick')) return '🤒';
+    if (lowerType.includes('casual')) return '☀️';
+    if (lowerType.includes('earned')) return '⭐';
+    return '📋';
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
+      
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Leave Details</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      </SafeAreaView>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Leave Details</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollContainer} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Status Card */}
         <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <Text style={styles.statusIcon}>{getStatusIcon(leave.status)}</Text>
+          <View style={styles.statusBadgeContainer}>
             <View style={[
               styles.statusBadge,
               { backgroundColor: getStatusBadgeColor(leave.status) }
             ]}>
-              <Text style={styles.statusBadgeText}>{leave.status}</Text>
+              <Text style={styles.statusIcon}>{getStatusIcon(leave.status)}</Text>
+              <Text style={styles.statusText}>
+                {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
+              </Text>
             </View>
           </View>
-          <Text style={styles.leaveTypeTitle}>{formatLeaveType(leave.leave_type)} Leave</Text>
-          <Text style={styles.dateRange}>
-            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
-          </Text>
+          
+          <View style={styles.leaveTypeHeader}>
+            <Text style={styles.leaveTypeIcon}>{getLeaveTypeIcon(leave.leave_type)}</Text>
+            <Text style={styles.leaveTypeTitle}>{formatLeaveType(leave.leave_type)} Leave</Text>
+          </View>
+          
+          <View style={styles.dateRangeContainer}>
+            <View style={styles.dateItem}>
+              <Text style={styles.dateLabel}>From</Text>
+              <Text style={styles.dateValue}>{formatDate(leave.start_date)}</Text>
+            </View>
+            <View style={styles.dateDivider}>
+              <Text style={styles.dateDividerText}>→</Text>
+            </View>
+            <View style={styles.dateItem}>
+              <Text style={styles.dateLabel}>To</Text>
+              <Text style={styles.dateValue}>{formatDate(leave.end_date)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.durationBadge}>
+            <Text style={styles.durationText}>
+              📅 {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} {' '}
+              {(leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)) === 1 ? 'day' : 'days'}
+            </Text>
+          </View>
         </View>
 
-        {/* Leave Information */}
-        <View style={styles.infoSection}>
+        {/* Reason Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Reason for Leave</Text>
+          <View style={styles.card}>
+            <Text style={styles.reasonText}>{leave.reason}</Text>
+          </View>
+        </View>
+
+        {/* Leave Information Grid */}
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Leave Information</Text>
-          
           <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Leave Type</Text>
+              <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
+            </View>
+            
+            <View style={styles.infoCard}>
               <Text style={styles.infoLabel}>Duration</Text>
               <Text style={styles.infoValue}>
                 {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} days
               </Text>
             </View>
             
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Leave Type</Text>
-              <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
-            </View>
-            
             {leave.is_sandwich !== undefined && (
-              <View style={styles.infoItem}>
+              <View style={styles.infoCard}>
                 <Text style={styles.infoLabel}>Sandwich Leave</Text>
-                <Text style={styles.infoValue}>{leave.is_sandwich ? 'Yes' : 'No'}</Text>
+                <Text style={[styles.infoValue, { color: leave.is_sandwich ? colors.error : colors.success }]}>
+                  {leave.is_sandwich ? 'Yes' : 'No'}
+                </Text>
               </View>
             )}
           </View>
         </View>
 
-        {/* Reason */}
-        <View style={styles.reasonSection}>
-          <Text style={styles.sectionTitle}>Reason</Text>
-          <View style={styles.reasonCard}>
-            <Text style={styles.reasonText}>{leave.reason}</Text>
-          </View>
-        </View>
-
-        {/* Approval Information */}
+        {/* Approval/Rejection Details */}
         {(leave.status === 'approved' || leave.status === 'rejected') && (
-          <View style={styles.approvalSection}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>
               {leave.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
             </Text>
             
-            <View style={styles.approvalCard}>
+            <View style={styles.card}>
               {leave.approved_by && (
-                <View style={styles.approvalItem}>
-                  <Text style={styles.approvalLabel}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>
                     {leave.status === 'approved' ? 'Approved by' : 'Rejected by'}
                   </Text>
-                  <Text style={styles.approvalValue}>
-                    {leave.approved_by?.first_name  || `User ID: ${leave.approved_by}`}
+                  <Text style={styles.detailValue}>
+                    {leave.approved_by?.first_name || `User ID: ${leave.approved_by}`}
                   </Text>
                 </View>
               )}
               
-              {leave.approved_at && (
-                <View style={styles.approvalItem}>
-                  <Text style={styles.approvalLabel}>
+              {(leave.approved_at || leave.rejected_at) && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>
                     {leave.status === 'approved' ? 'Approved on' : 'Rejected on'}
                   </Text>
-                  <Text style={styles.approvalValue}>
-                    {formatDateTime(leave.approved_at)}
-                  </Text>
-                </View>
-              )}
-
-              {leave.rejected_at && (
-                <View style={styles.approvalItem}>
-                  <Text style={styles.approvalLabel}>Rejected on</Text>
-                  <Text style={styles.approvalValue}>
-                    {formatDateTime(leave.rejected_at)}
+                  <Text style={styles.detailValue}>
+                    {formatDateTime(leave.approved_at || leave.rejected_at || '')}
                   </Text>
                 </View>
               )}
               
               {leave.comment && (
-                <View style={styles.commentSection}>
+                <View style={styles.commentContainer}>
                   <Text style={styles.commentLabel}>
-                    {leave.status === 'approved' ? 'Approval Comment' : 'Rejection Reason'}
+                    {leave.status === 'approved' ? 'Comment' : 'Rejection Reason'}
                   </Text>
                   <View style={[
-                    styles.commentCard,
+                    styles.commentBox,
                     { 
                       borderLeftColor: leave.status === 'approved' ? colors.success : colors.error,
-                      backgroundColor: leave.status === 'approved' ? 
-                        `${colors.success}10` : `${colors.error}10`
+                      backgroundColor: leave.status === 'approved' ? colors.success + '10' : colors.error + '10'
                     }
                   ]}>
-                    <Text style={[
-                      styles.commentText,
-                      { color: leave.status === 'approved' ? colors.success : colors.error }
-                    ]}>
-                      {leave.comment}
-                    </Text>
+                    <Text style={styles.commentText}>{leave.comment}</Text>
                   </View>
                 </View>
               )}
@@ -182,22 +268,41 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
 
         {/* Employee Information */}
         {leave.user && (
-          <View style={styles.employeeSection}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Employee Details</Text>
-            <View style={styles.employeeCard}>
-              <View style={styles.employeeInfo}>
-                <Text style={styles.employeeName}>{leave.user.full_name}</Text>
-                <Text style={styles.employeeDetails}>{leave.user.employee_id}</Text>
-                <Text style={styles.employeeDetails}>{leave.user.email}</Text>
-                {leave.user.designation && (
-                  <Text style={styles.employeeDesignation}>{leave.user.designation}</Text>
-                )}
+            <View style={styles.card}>
+              <View style={styles.employeeHeader}>
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarText}>
+                    {leave.user.full_name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.employeeInfo}>
+                  <Text style={styles.employeeName}>{leave.user.full_name}</Text>
+                  {leave.user.designation && (
+                    <Text style={styles.employeeDesignation}>{leave.user.designation}</Text>
+                  )}
+                </View>
+              </View>
+              
+              <View style={styles.employeeDetails}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Employee ID</Text>
+                  <Text style={styles.detailValue}>{leave.user.employee_id}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Email</Text>
+                  <Text style={styles.detailValue}>{leave.user.email}</Text>
+                </View>
               </View>
             </View>
           </View>
         )}
+
+        {/* Bottom Padding */}
+        <View style={{ height: 32 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -206,220 +311,265 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  safeArea: {
+    backgroundColor: colors.secondary,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    ...shadows.sm,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: colors.secondary,
   },
   backButton: {
-    padding: spacing.sm,
+    padding: 8,
   },
   backButtonText: {
-    fontSize: fontSize.xl,
-    color: colors.text,
-    fontWeight: '600',
+    fontSize: 28,
+    color: colors.white,
+    fontWeight: '300',
   },
   headerTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.white,
   },
   headerSpacer: {
-    width: 40,
+    width: 44,
   },
-  content: {
+  scrollContainer: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+  },
+  scrollContent: {
+    padding: 16,
   },
   statusCard: {
     backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    alignItems: 'center',
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  statusHeader: {
-    flexDirection: 'row',
+  statusBadgeContainer: {
     alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  statusIcon: {
-    fontSize: 24,
-    textAlign: 'center',
+    marginBottom: 16,
   },
   statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    minWidth: 80,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
   },
-  statusBadgeText: {
+  statusIcon: {
+    fontSize: 16,
     color: colors.white,
-    fontSize: fontSize.sm,
+  },
+  statusText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: colors.white,
     textTransform: 'uppercase',
   },
+  leaveTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  leaveTypeIcon: {
+    fontSize: 24,
+  },
   leaveTypeTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
   },
-  dateRange: {
-    fontSize: fontSize.md,
+  dateRangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  dateItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dateLabel: {
+    fontSize: 11,
     color: colors.textSecondary,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 4,
   },
-  infoSection: {
-    marginBottom: spacing.lg,
+  dateValue: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  dateDivider: {
+    paddingHorizontal: 8,
+  },
+  dateDividerText: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  durationBadge: {
+    backgroundColor: colors.success + '15',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'center',
+  },
+  durationText: {
+    fontSize: 13,
+    color: colors.success,
+    fontWeight: '600',
+  },
+  section: {
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
-  infoGrid: {
+  card: {
     backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.backgroundSecondary,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
-    flex: 1,
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '600',
-    textAlign: 'right',
-    flex: 1,
-  },
-  reasonSection: {
-    marginBottom: spacing.lg,
-  },
-  reasonCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   reasonText: {
-    fontSize: fontSize.md,
+    fontSize: 15,
     color: colors.text,
     lineHeight: 22,
   },
-  approvalSection: {
-    marginBottom: spacing.lg,
+  infoGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
   },
-  approvalCard: {
+  infoCard: {
+    flex: 1,
+    minWidth: '45%',
     backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  approvalItem: {
+  infoLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  infoValue: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
+    alignItems: 'flex-start',
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: colors.backgroundSecondary,
+    borderBottomColor: colors.background,
   },
-  approvalLabel: {
-    fontSize: fontSize.sm,
+  detailLabel: {
+    fontSize: 13,
     color: colors.textSecondary,
     fontWeight: '500',
     flex: 1,
   },
-  approvalValue: {
-    fontSize: fontSize.sm,
+  detailValue: {
+    fontSize: 13,
     color: colors.text,
     fontWeight: '600',
     textAlign: 'right',
     flex: 1,
   },
-  commentSection: {
-    marginTop: spacing.md,
+  commentContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
   },
   commentLabel: {
-    fontSize: fontSize.sm,
+    fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '600',
-    marginBottom: spacing.sm,
+    marginBottom: 8,
     textTransform: 'uppercase',
   },
-  commentCard: {
-    padding: spacing.md,
-    borderRadius: borderRadius.sm,
+  commentBox: {
+    padding: 12,
+    borderRadius: 8,
     borderLeftWidth: 4,
   },
   commentText: {
-    fontSize: fontSize.sm,
+    fontSize: 13,
+    color: colors.text,
     lineHeight: 20,
-    fontWeight: '500',
   },
-  employeeSection: {
-    marginBottom: spacing.xl,
+  employeeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.background,
   },
-  employeeCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.white,
   },
   employeeInfo: {
-    alignItems: 'flex-start',
+    flex: 1,
   },
   employeeName: {
-    fontSize: fontSize.lg,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  employeeDetails: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs / 2,
+    marginBottom: 2,
   },
   employeeDesignation: {
-    fontSize: fontSize.sm,
+    fontSize: 13,
     color: colors.primary,
     fontWeight: '600',
-    marginTop: spacing.xs,
+  },
+  employeeDetails: {
+    gap: 0,
   },
 });
 

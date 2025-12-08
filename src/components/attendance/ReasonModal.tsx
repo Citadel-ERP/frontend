@@ -133,7 +133,7 @@ const ReasonModal: React.FC<ReasonModalProps> = ({
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
                 <Text style={styles.submitButtonText}>
-                  {type === 'checkin' ? 'Mark Attendance' : 'Mark Checkout'}
+                  {type === 'checkin' ? 'Attendance' : 'Checkout'}
                 </Text>
               )}
             </TouchableOpacity>

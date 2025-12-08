@@ -61,7 +61,7 @@ const AttendanceTab: React.FC<AttendanceTabProps> = ({
                 {loading ? (
                   <ActivityIndicator color={colors.white} />
                 ) : (
-                  <Text style={styles.checkoutButtonText}>Mark Checkout</Text>
+                  <Text style={styles.checkoutButtonText}>Checkout</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -83,7 +83,7 @@ const AttendanceTab: React.FC<AttendanceTabProps> = ({
               {loading ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={styles.markButtonText}>Mark Attendance</Text>
+                <Text style={styles.markButtonText}>Attendance</Text>
               )}
             </TouchableOpacity>
           </View>

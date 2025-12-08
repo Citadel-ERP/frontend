@@ -14,26 +14,26 @@ import {
 } from 'react-native';
 import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
 
-// Mock theme for demo
+// Theme colors matching your app
 const colors = {
-  primary: '#007AFF',
+  primary: '#f59e0b',
+  primaryDark: '#d97706',
+  secondary: '#1e1b4b',
   white: '#FFFFFF',
-  text: '#000000',
-  textSecondary: '#666666',
+  text: '#111827',
+  textSecondary: '#6b7280',
+  background: '#f3f4f6',
   backgroundSecondary: '#F5F5F5',
-  border: '#E0E0E0',
-  success: '#34C759',
-  error: '#FF3B30',
+  border: '#e5e7eb',
+  success: '#10b981',
+  error: '#ef4444',
+  blue: '#3b82f6',
+  purple: '#a855f7',
 };
 
 const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
 const fontSize = { xs: 11, sm: 13, md: 15, lg: 17, xl: 20 };
-const borderRadius = { sm: 6, lg: 12, xl: 16, full: 9999 };
-const shadows = {
-  lg: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 },
-  md: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  none: {},
-};
+const borderRadius = { sm: 8, md: 12, lg: 16, xl: 20 };
 
 interface LeaveForm {
   startDate: string;
@@ -109,11 +109,9 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
 
   const formatDate = (date: Date | undefined) => {
     if (!date) return '';
-    return new Date(date).toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const d = new Date(date);
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   };
 
   const formatDateToString = (date: Date): string => {
@@ -127,16 +125,12 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     const newStartDate = params.startDate ? new Date(params.startDate) : undefined;
     const newEndDate = params.endDate ? new Date(params.endDate) : undefined;
 
-    // Smart date selection logic
     if (editMode === 'start' && newStartDate) {
-      // Editing start date
       const startStr = formatDateToString(newStartDate);
       
-      // If we have an end date, check if new start is after it
       if (dateRange.endDate) {
         const existingEnd = new Date(dateRange.endDate);
         if (newStartDate > existingEnd) {
-          // New start is after end, so make both the same
           setDateRange({ startDate: newStartDate, endDate: newStartDate });
           onFormChange({
             ...leaveForm,
@@ -144,7 +138,6 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
             endDate: startStr,
           });
         } else {
-          // Valid range
           setDateRange({ startDate: newStartDate, endDate: dateRange.endDate });
           onFormChange({
             ...leaveForm,
@@ -160,13 +153,11 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       }
       setEditMode('none');
     } else if (editMode === 'end' && newEndDate) {
-      // Editing end date
       const endStr = formatDateToString(newEndDate);
       
       if (dateRange.startDate) {
         const existingStart = new Date(dateRange.startDate);
         if (newEndDate < existingStart) {
-          // New end is before start, so make both the same
           setDateRange({ startDate: newEndDate, endDate: newEndDate });
           onFormChange({
             ...leaveForm,
@@ -174,7 +165,6 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
             endDate: endStr,
           });
         } else {
-          // Valid range
           setDateRange({ startDate: dateRange.startDate, endDate: newEndDate });
           onFormChange({
             ...leaveForm,
@@ -191,7 +181,6 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       }
       setEditMode('none');
     } else {
-      // Normal range selection (default behavior)
       setDateRange(params);
       
       const startDateString = newStartDate ? formatDateToString(newStartDate) : '';
@@ -246,18 +235,18 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
 
   const getHelperText = () => {
     if (editMode === 'start') {
-      return '📍 Select a new start date';
+      return '📍 Tap a date below to update start date';
     }
     if (editMode === 'end') {
-      return '📍 Select a new end date';
+      return '📍 Tap a date below to update end date';
     }
     if (!dateRange.startDate) {
-      return '💡 Tip: Tap a date to set start, then tap another date for end';
+      return '💡 Tip: Select start date, then end date from calendar';
     }
     if (dateRange.startDate && !dateRange.endDate) {
-      return '✓ Start date set. Now select your end date';
+      return '✓ Start set. Now select end date';
     }
-    return '✓ Date range selected. Tap dates above to edit individually';
+    return '✓ Dates selected. Tap date boxes to edit';
   };
 
   const renderContent = () => (
@@ -268,7 +257,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     >
       {/* Header */}
       <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle}>Apply for Leave</Text>
+        <Text style={styles.modalTitle}>Apply Leave</Text>
         <TouchableOpacity
           style={styles.closeButton}
           onPress={onClose}
@@ -279,90 +268,73 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       </View>
 
       {/* Date Selection Section */}
-      <View style={styles.dateSection}>
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Select Leave Dates</Text>
+      <View style={styles.section}>
+        {/* Selected Dates Display */}
+        <View style={styles.dateDisplayContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.dateBox,
+              editMode === 'start' && styles.dateBoxActive
+            ]}
+            onPress={handleEditStartDate}
+            disabled={!dateRange.startDate}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.dateLabel}>Start</Text>
+            <Text style={[
+              styles.dateValue,
+              !dateRange.startDate && styles.dateValuePlaceholder
+            ]}>
+              {dateRange.startDate ? formatDate(new Date(dateRange.startDate)) : 'Select'}
+            </Text>
+          </TouchableOpacity>
+          
+          <View style={styles.dateArrow}>
+            <Text style={styles.dateArrowText}>→</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[
+              styles.dateBox,
+              editMode === 'end' && styles.dateBoxActive
+            ]}
+            onPress={handleEditEndDate}
+            disabled={!dateRange.endDate}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.dateLabel}>End</Text>
+            <Text style={[
+              styles.dateValue,
+              !dateRange.endDate && styles.dateValuePlaceholder
+            ]}>
+              {dateRange.endDate ? formatDate(new Date(dateRange.endDate)) : 'Select'}
+            </Text>
+          </TouchableOpacity>
+
           {(dateRange.startDate || dateRange.endDate) && (
             <TouchableOpacity
-              style={styles.clearButton}
+              style={styles.clearIconButton}
               onPress={handleClearDates}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.clearButtonText}>Clear Selection</Text>
+              <Text style={styles.clearIcon}>✕</Text>
             </TouchableOpacity>
           )}
         </View>
         
-        {/* Selected Dates Display - Now Clickable */}
-        <View style={styles.selectedDatesContainer}>
-          <View style={styles.dateDisplayRow}>
-            <TouchableOpacity 
-              style={[
-                styles.dateDisplayItem,
-                editMode === 'start' && styles.dateDisplayItemActive
-              ]}
-              onPress={handleEditStartDate}
-              disabled={!dateRange.startDate}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.dateLabel}>Start Date {dateRange.startDate && '✏️'}</Text>
-              <Text style={[
-                styles.dateValue,
-                !dateRange.startDate && styles.placeholderText,
-                editMode === 'start' && styles.dateValueActive
-              ]}>
-                {dateRange.startDate ? formatDate(new Date(dateRange.startDate)) : 'Tap calendar below'}
-              </Text>
-            </TouchableOpacity>
-            
-            <View style={styles.dateSeparator}>
-              <Text style={styles.dateSeparatorText}>→</Text>
-            </View>
-            
-            <TouchableOpacity 
-              style={[
-                styles.dateDisplayItem,
-                editMode === 'end' && styles.dateDisplayItemActive
-              ]}
-              onPress={handleEditEndDate}
-              disabled={!dateRange.endDate}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.dateLabel}>End Date {dateRange.endDate && '✏️'}</Text>
-              <Text style={[
-                styles.dateValue,
-                !dateRange.endDate && styles.placeholderText,
-                editMode === 'end' && styles.dateValueActive
-              ]}>
-                {dateRange.endDate ? formatDate(new Date(dateRange.endDate)) : 'Select end date'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Duration Display */}
-          {leaveForm.startDate && leaveForm.endDate && (
-            <View style={styles.durationBadge}>
-              <Text style={styles.durationText}>
-                📅 {getDaysCount()} {getDaysCount() === 1 ? 'day' : 'days'} selected
-              </Text>
-            </View>
-          )}
-
-          {/* Dynamic Helper Text */}
-          <View style={styles.helperTextContainer}>
-            <Text style={[
-              styles.helperText,
-              editMode !== 'none' && styles.helperTextActive
-            ]}>
-              {getHelperText()}
+        {/* Duration Badge */}
+        {leaveForm.startDate && leaveForm.endDate && (
+          <View style={styles.durationBadge}>
+            <Text style={styles.durationText}>
+              {getDaysCount()} {getDaysCount() === 1 ? 'day' : 'days'}
             </Text>
           </View>
-        </View>
+        )}
 
-        {/* Date Picker with Enhanced Visual Feedback */}
+        {/* Calendar */}
         <View style={[
-          styles.datePickerContainer,
-          editMode !== 'none' && styles.datePickerContainerActive
+          styles.calendarContainer,
+          editMode !== 'none' && styles.calendarContainerActive
         ]}>
           <DateTimePicker
             mode="range"
@@ -370,68 +342,48 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
             endDate={dateRange.endDate}
             onChange={handleDateChange}
             timePicker={false}
-            
-            // Enhanced styling for better visibility
             selectedItemColor={colors.primary}
-            selectedRangeBackgroundColor={colors.primary + '35'}
+            selectedRangeBackgroundColor={colors.primary + '20'}
             headerButtonColor={colors.primary}
-            
-            // Text styling with better contrast
-            weekDaysTextStyle={[styles.weekDaysText, { color: colors.textSecondary }]}
-            calendarTextStyle={[styles.calendarText, { color: colors.text }]}
-            headerTextStyle={[styles.headerText, { color: colors.text }]}
-            selectedTextStyle={{ 
-              color: colors.white, 
-              fontWeight: 'bold',
-              fontSize: fontSize.md 
-            }}
-            todayContainerStyle={[styles.todayContainer, { 
+            weekDaysTextStyle={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}
+            calendarTextStyle={{ color: colors.text, fontSize: 13 }}
+            headerTextStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}
+            selectedTextStyle={{ color: colors.white, fontWeight: '600' }}
+            todayContainerStyle={{
               borderColor: colors.success,
               borderWidth: 2,
-              backgroundColor: colors.success + '15'
-            }]}
-            
-            // Navigation buttons
-            buttonPrevIcon={<Text style={styles.navButton}>‹</Text>}
-            buttonNextIcon={<Text style={styles.navButton}>›</Text>}
-            
-            // Additional props
+            }}
+            buttonPrevIcon={<Text style={styles.navIcon}>‹</Text>}
+            buttonNextIcon={<Text style={styles.navIcon}>›</Text>}
             firstDayOfWeek={0}
             displayFullDays={true}
-            containerStyle={styles.datePickerInner}
           />
-          
-          {/* Retroactive Leave Notice */}
-          <View style={styles.retroNotice}>
-            <Text style={styles.retroNoticeText}>
-              ℹ️ You can select past dates for retroactive leave applications
-            </Text>
-          </View>
         </View>
       </View>
 
       {/* Leave Type */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Leave Type</Text>
-        <View style={styles.leaveTypeRow}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Leave Type</Text>
+        <View style={styles.leaveTypeGrid}>
           {[
-            { key: 'casual', label: 'Casual', icon: '🌴' },
-            { key: 'sick', label: 'Sick', icon: '🏥' },
-            { key: 'earned', label: 'Earned', icon: '💼' }
+            { key: 'casual', label: 'Casual', icon: '☀️', color: colors.error },
+            { key: 'sick', label: 'Sick', icon: '🤒', color: colors.success },
+            { key: 'earned', label: 'Earned', icon: '⭐', color: colors.blue }
           ].map((type) => (
             <TouchableOpacity
               key={type.key}
               style={[
-                styles.leaveTypeButton,
-                leaveForm.leaveType === type.key && styles.leaveTypeButtonActive
+                styles.leaveTypeCard,
+                leaveForm.leaveType === type.key && styles.leaveTypeCardActive,
+                leaveForm.leaveType === type.key && { borderColor: type.color }
               ]}
               onPress={() => onFormChange({ ...leaveForm, leaveType: type.key })}
               activeOpacity={0.7}
             >
               <Text style={styles.leaveTypeIcon}>{type.icon}</Text>
               <Text style={[
-                styles.leaveTypeButtonText,
-                leaveForm.leaveType === type.key && styles.leaveTypeButtonTextActive
+                styles.leaveTypeText,
+                leaveForm.leaveType === type.key && styles.leaveTypeTextActive
               ]}>
                 {type.label}
               </Text>
@@ -441,57 +393,26 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       </View>
 
       {/* Reason */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Reason for Leave</Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Reason</Text>
         <TextInput
           style={styles.reasonInput}
           value={leaveForm.reason}
           onChangeText={(text) => onFormChange({ ...leaveForm, reason: text })}
-          placeholder="Please provide a brief reason for your leave request..."
+          placeholder="Brief reason for leave..."
           placeholderTextColor={colors.textSecondary}
           multiline
-          numberOfLines={4}
+          numberOfLines={3}
           textAlignVertical="top"
           maxLength={200}
         />
         <Text style={styles.characterCount}>
-          {leaveForm.reason.length}/200 characters
+          {leaveForm.reason.length}/200
         </Text>
       </View>
 
-      {/* Footer Buttons */}
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={onClose}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            (!isFormValid() || loading) && styles.submitButtonDisabled
-          ]}
-          onPress={onSubmit}
-          disabled={!isFormValid() || loading}
-          activeOpacity={0.7}
-        >
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={colors.white} size="small" />
-              <Text style={[styles.submitButtonText, { marginLeft: spacing.sm }]}>
-                Submitting...
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.submitButtonText}>
-              Submit Application
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      {/* Bottom Spacing */}
+      <View style={{ height: 70 }} />
     </ScrollView>
   );
 
@@ -507,7 +428,36 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardContainer}
         >
-          {renderContent()}
+          <View style={styles.modalWrapper}>
+            {renderContent()}
+            
+            {/* Fixed Bottom Buttons */}
+            <View style={styles.bottomButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  (!isFormValid() || loading) && styles.submitButtonDisabled
+                ]}
+                onPress={onSubmit}
+                disabled={!isFormValid() || loading}
+                activeOpacity={0.7}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -518,59 +468,75 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   keyboardContainer: {
     width: '100%',
-    alignItems: 'center',
+  },
+  modalWrapper: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderBottomLeftRadius: borderRadius.xl,
+    borderBottomRightRadius: borderRadius.xl,
+    maxHeight: '80%',
+    marginLeft: 15,
+    marginRight: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   modalContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    width: '95%',
-    maxWidth: 500,
-    maxHeight: '95%',
-    ...shadows.lg,
+    maxHeight: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     position: 'relative',
   },
   modalTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
     color: colors.text,
   },
   closeButton: {
     position: 'absolute',
-    right: 0,
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.backgroundSecondary,
+    right: spacing.lg,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeButtonText: {
-    fontSize: fontSize.lg,
+    fontSize: 16,
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  dateSection: {
-    marginBottom: spacing.xl,
+  section: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
-  sectionTitleRow: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 15,
     fontWeight: '600',
     color: colors.text,
+    marginBottom: spacing.sm,
   },
   clearButton: {
     paddingVertical: spacing.xs,
@@ -583,245 +549,211 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '600',
   },
-  selectedDatesContainer: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dateDisplayRow: {
+  dateDisplayContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  dateDisplayItem: {
+  dateBox: {
     flex: 1,
-    alignItems: 'center',
-    padding: spacing.sm,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.sm,
-    backgroundColor: 'transparent',
-  },
-  dateDisplayItemActive: {
-    backgroundColor: colors.primary + '15',
+    padding: spacing.sm,
     borderWidth: 2,
+    borderColor: colors.border,
+    minHeight: 60,
+    justifyContent: 'center',
+  },
+  dateBoxActive: {
     borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
     borderStyle: 'dashed',
   },
   dateLabel: {
-    fontSize: fontSize.sm,
+    fontSize: 11,
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 2,
   },
   dateValue: {
-    fontSize: fontSize.md,
+    fontSize: 13,
     color: colors.text,
     fontWeight: '600',
-    textAlign: 'center',
   },
-  dateValueActive: {
-    color: colors.primary,
-  },
-  placeholderText: {
+  dateValuePlaceholder: {
     color: colors.textSecondary,
-    fontStyle: 'italic',
     fontWeight: '400',
-    fontSize: fontSize.sm,
+    fontSize: 12,
   },
-  dateSeparator: {
-    paddingHorizontal: spacing.md,
+  dateArrow: {
+    paddingHorizontal: 4,
   },
-  dateSeparatorText: {
-    fontSize: fontSize.lg,
+  dateArrowText: {
+    fontSize: 16,
     color: colors.primary,
+    fontWeight: '600',
+  },
+  clearIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearIcon: {
+    fontSize: 14,
+    color: colors.error,
     fontWeight: '600',
   },
   durationBadge: {
-    backgroundColor: colors.success + '20',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.full,
-    alignSelf: 'center',
-    marginTop: spacing.md,
+    backgroundColor: colors.success + '15',
+    paddingVertical: 4,
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
   },
   durationText: {
-    fontSize: fontSize.sm,
+    fontSize: 12,
     color: colors.success,
     fontWeight: '600',
   },
-  helperTextContainer: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  helperContainer: {
+    marginBottom: spacing.sm,
   },
   helperText: {
-    fontSize: fontSize.xs,
+    fontSize: 11,
     color: colors.textSecondary,
     textAlign: 'center',
-    fontStyle: 'italic',
+    lineHeight: 14,
   },
   helperTextActive: {
     color: colors.primary,
     fontWeight: '600',
-    fontStyle: 'normal',
   },
-  datePickerContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: colors.primary + '30',
+  calendarContainer: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     overflow: 'hidden',
-    padding: spacing.sm,
+    padding: 4,
   },
-  datePickerContainerActive: {
+  calendarContainerActive: {
     borderColor: colors.primary,
-    borderWidth: 3,
     backgroundColor: colors.primary + '05',
   },
-  datePickerInner: {
-    backgroundColor: 'transparent',
-  },
-  retroNotice: {
-    backgroundColor: colors.primary + '10',
-    padding: spacing.md,
-    borderRadius: borderRadius.sm,
-    marginTop: spacing.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
-  retroNoticeText: {
-    fontSize: fontSize.xs,
+  navIcon: {
+    fontSize: 20,
+    fontWeight: '600',
     color: colors.primary,
-    fontWeight: '500',
-    textAlign: 'center',
   },
-  todayContainer: {
-    backgroundColor: 'transparent',
-    borderColor: colors.success,
-    borderWidth: 2,
-    borderRadius: borderRadius.sm,
-  },
-  headerText: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  weekDaysText: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  calendarText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  navButton: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.primary,
-    paddingHorizontal: spacing.md,
-  },
-  inputGroup: {
-    marginBottom: spacing.xl,
-  },
-  label: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  leaveTypeRow: {
+  leaveTypeGrid: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  leaveTypeButton: {
+  leaveTypeCard: {
     flex: 1,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
+    minHeight: 75,
+    justifyContent: 'center',
   },
-  leaveTypeButtonActive: {
-    backgroundColor: colors.primary + '20',
-    borderColor: colors.primary,
+  leaveTypeCardActive: {
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   leaveTypeIcon: {
-    fontSize: fontSize.xl,
+    fontSize: 24,
     marginBottom: spacing.xs,
   },
-  leaveTypeButtonText: {
-    fontSize: fontSize.sm,
+  leaveTypeText: {
+    fontSize: 12,
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  leaveTypeButtonTextActive: {
-    color: colors.primary,
+  leaveTypeTextActive: {
+    color: colors.text,
     fontWeight: '700',
   },
   reasonInput: {
     borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    fontSize: fontSize.md,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    fontSize: 14,
     color: colors.text,
-    backgroundColor: colors.backgroundSecondary,
-    minHeight: 100,
+    backgroundColor: colors.background,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   characterCount: {
-    fontSize: fontSize.xs,
+    fontSize: 11,
     color: colors.textSecondary,
     textAlign: 'right',
     marginTop: spacing.xs,
   },
-  buttonRow: {
+  bottomButtons: {
     flexDirection: 'row',
-    gap: spacing.lg,
-    marginTop: spacing.xl,
-    marginBottom: 70,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.white,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.sm,
     alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    minHeight: 44,
   },
   cancelButtonText: {
-    fontSize: fontSize.md,
+    fontSize: 14,
     color: colors.textSecondary,
     fontWeight: '600',
   },
   submitButton: {
     flex: 2,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.sm,
     alignItems: 'center',
-    ...shadows.md,
+    justifyContent: 'center',
+    minHeight: 44,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   submitButtonDisabled: {
     opacity: 0.5,
-    ...shadows.none,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   submitButtonText: {
-    fontSize: fontSize.md,
+    fontSize: 14,
     color: colors.white,
-    fontWeight: '700',
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontWeight: '600',
   },
 });
 
