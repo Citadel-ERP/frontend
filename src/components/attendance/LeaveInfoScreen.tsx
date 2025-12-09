@@ -120,6 +120,11 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
     if (lowerType.includes('earned')) return '⭐';
     return '📋';
   };
+   const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -128,7 +133,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Text style={styles.backButtonText}><BackIcon /></Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Leave Details</Text>
           <View style={styles.headerSpacer} />
@@ -570,6 +575,10 @@ const styles = StyleSheet.create({
   },
   employeeDetails: {
     gap: 0,
+  },backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  backArrow: {
+    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
+    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
   },
 });
 

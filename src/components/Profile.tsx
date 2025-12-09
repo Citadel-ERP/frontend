@@ -602,6 +602,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       </View>
     );
   }
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -609,7 +614,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backIcon}>←</Text>
+          <Text style={styles.backButtonText}><BackIcon/></Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         
@@ -707,7 +712,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   backButton: { padding: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
-  backIcon: { color: colors.white, fontSize: 18, fontWeight: 'bold' },
   headerTitle: { flex: 1, textAlign: 'center', color: colors.white, fontSize: fontSize.xl, fontWeight: '600' },
   editButton: { padding: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
   editIcon: { color: colors.white, fontSize: 16 },
@@ -814,7 +818,16 @@ const styles = StyleSheet.create({
   modalBody: { padding: spacing.lg },
   modalText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
 
-  bottomSpacing: { height: spacing.xl },
+  bottomSpacing: { height: spacing.xl },backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  backArrow: {
+    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
+    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: '300',
+  },
 });
 
 export default Profile;

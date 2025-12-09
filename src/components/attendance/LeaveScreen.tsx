@@ -116,6 +116,12 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
     fetchLeaveBalance();
   }, [token]);
 
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
+
   const submitLeaveApplication = async () => {
     if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason.trim()) {
       Alert.alert('Error', 'Please fill all required fields');
@@ -227,7 +233,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Text style={styles.backButtonText}><BackIcon/></Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Leave</Text>
           <View style={styles.headerSpacer} />
@@ -552,6 +558,10 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
+  },backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  backArrow: {
+    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
+    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
   },
 });
 

@@ -257,12 +257,12 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 38,
   },
   cancelButton: {
     backgroundColor: colors.background,
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   submitButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.success,
   },
   submitButtonDisabled: {
     backgroundColor: colors.textSecondary + '80',

@@ -121,6 +121,8 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     return `${year}-${month}-${day}`;
   };
 
+ 
+
   const handleDateChange = (params: { startDate: DateType; endDate: DateType }) => {
     const newStartDate = params.startDate ? new Date(params.startDate) : undefined;
     const newEndDate = params.endDate ? new Date(params.endDate) : undefined;
@@ -755,6 +757,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
   },
+   
 });
 
 export default LeaveModal;

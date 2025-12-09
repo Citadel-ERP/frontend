@@ -85,10 +85,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       try {
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
         const driverStatus = await AsyncStorage.getItem('is_driver');
-
         if (storedToken) {
           setToken(storedToken);
-
           if (driverStatus) {
             try {
               const isDriverBool = JSON.parse(driverStatus);
@@ -97,7 +95,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               setIsDriver(false);
             }
           }
-
           await fetchInitialData(storedToken);
           await initializeLocationPermission();
         }
@@ -107,6 +104,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     };
     initializeApp();
   }, []);
+
+  // Fetch attendance records when month/year changes
+  useEffect(() => {
+    if (token) {
+      fetchAttendanceRecords(token, selectedMonth, selectedYear);
+    }
+  }, [selectedMonth, selectedYear]);
 
   const getCurrentTimeInIST = (): string => {
     const now = new Date();
@@ -185,19 +189,22 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return null;
     }
   };
+
   const BackIcon = () => (
-      <View style={styles.backIcon}>
-        <View style={styles.backArrow} />
-      </View>
-    );
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
 
   const fetchInitialData = async (token?: string) => {
     setLoading(true);
     try {
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
       await Promise.all([
         fetchLeaveBalance(token),
         fetchHolidays(token),
-        fetchAttendanceRecords(token)
+        fetchAttendanceRecords(token, currentMonth, currentYear)
       ]);
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -237,6 +244,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
     }
+
     if (!isBeforeTimeIST(10, 15)) {
       setLoading(true);
       const hasSpecialPermission = await checkSpecialAttendance();
@@ -250,6 +258,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         return;
       }
     }
+
     setLoading(true);
     try {
       const location = await getCurrentLocation(10000);
@@ -258,23 +267,29 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         setLoading(false);
         return;
       }
+
       const requestBody: any = {
         token,
         latitude: location.latitude.toString(),
         longitude: location.longitude.toString(),
       };
+
       const checkInTimeIST = getCurrentTimeInIST();
       requestBody.check_in_time = checkInTimeIST;
+
       if (description && typeof description === 'string' && description.trim()) {
         requestBody.description = description.trim();
       }
+
       const response = await fetch(`${BACKEND_URL}/core/markAttendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
+
       const responseText = await response.text();
       const data = responseText ? JSON.parse(responseText) : {};
+
       if (response.status === 200) {
         Alert.alert('Success', 'Attendance marked successfully!');
         resetReasonModal();
@@ -296,7 +311,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           const updatedRecords = prevRecords.filter(record => record.date !== today);
           return [newTodayAttendance, ...updatedRecords];
         });
-        await fetchAttendanceRecords();
+        await fetchAttendanceRecords(token, selectedMonth, selectedYear);
         setLoading(false);
       } else if (response.status === 400) {
         if (data.message === 'Mark attendance failed, You are not in office' ||
@@ -330,6 +345,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
     }
+
     if (isBeforeTimeIST(17, 30)) {
       setLoading(true);
       const hasSpecialPermission = await checkSpecialAttendance();
@@ -343,6 +359,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         return;
       }
     }
+
     setLoading(true);
     try {
       const location = await getCurrentLocation(10000);
@@ -351,6 +368,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         setLoading(false);
         return;
       }
+
       const checkOutTimeIST = getCurrentTimeInIST();
       const requestBody: any = {
         token,
@@ -358,16 +376,20 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         latitude: location.latitude.toString(),
         longitude: location.longitude.toString(),
       };
+
       if (reason && typeof reason === 'string' && reason.trim()) {
         requestBody.reason_not_in_office = reason.trim();
       }
+
       const response = await fetch(`${BACKEND_URL}/core/markCheckoutTime`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
+
       const responseText = await response.text();
       const data = responseText ? JSON.parse(responseText) : {};
+
       if (response.status === 200) {
         Alert.alert('Success', 'Checkout time marked successfully!');
         resetReasonModal();
@@ -392,7 +414,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             return record;
           });
         });
-        await fetchAttendanceRecords();
+        await fetchAttendanceRecords(token, selectedMonth, selectedYear);
         setLoading(false);
       } else if (response.status === 400) {
         if (data.message === 'Mark checkout failed, You are not in office add a reason too') {
@@ -461,6 +483,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
+
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/applyLeave`, {
@@ -510,13 +533,22 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const fetchAttendanceRecords = async (token?: string) => {
+  const fetchAttendanceRecords = async (token?: string, month?: number, year?: number) => {
     try {
+      // Format month as YYYY-MM
+      const actualMonth = month !== undefined ? month : selectedMonth;
+      const actualYear = year !== undefined ? year : selectedYear;
+      const monthStr = `${actualYear}-${String(actualMonth + 1).padStart(2, '0')}`;
+
       const response = await fetch(`${BACKEND_URL}/core/getRecentRecords`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({
+          token,
+          month: monthStr
+        }),
       });
+
       if (response.ok) {
         const data = await response.json();
         if (data.attendances && Array.isArray(data.attendances)) {
@@ -528,24 +560,37 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           }));
           console.log('Fetched attendance records:', formattedRecords);
           setAttendanceRecords(formattedRecords);
-          const today = new Date().toISOString().split('T')[0];
-          const todaysRecord = data.attendances.find((attendance: any) => attendance.date === today);
-          if (todaysRecord) {
-            setTodayAttendance({
-              date: todaysRecord.date,
-              status: todaysRecord.day,
-              check_in_time: todaysRecord.check_in_time,
-              check_out_time: todaysRecord.check_out_time
-            });
-          } else {
-            setTodayAttendance(null);
+
+          // FIXED: Only update todayAttendance when fetching current month's data
+          const today = new Date();
+          const currentMonth = today.getMonth();
+          const currentYear = today.getFullYear();
+
+          // Only check for today's attendance if we're fetching the current month
+          if (actualMonth === currentMonth && actualYear === currentYear) {
+            const todayStr = today.toISOString().split('T')[0];
+            const todaysRecord = data.attendances.find((attendance: any) => attendance.date === todayStr);
+
+            // Only set todayAttendance if attendance is actually marked (has check_in_time)
+            if (todaysRecord && todaysRecord.check_in_time) {
+              setTodayAttendance({
+                date: todaysRecord.date,
+                status: todaysRecord.day,
+                check_in_time: todaysRecord.check_in_time,
+                check_out_time: todaysRecord.check_out_time
+              });
+            } else {
+              // No attendance marked yet today
+              setTodayAttendance(null);
+            }
           }
+          // Don't modify todayAttendance when viewing other months
         }
       }
     } catch (error) {
       console.error('Error fetching attendance records:', error);
       setAttendanceRecords([]);
-      setTodayAttendance(null);
+      // Only clear todayAttendance on error, not when browsing months
     }
   };
 
@@ -561,16 +606,20 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           year: selectedYear.toString(),
         }),
       });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to generate report');
       }
+
       const data = await response.json();
       if (!data.file_url) {
         throw new Error('Invalid response from server');
       }
+
       const fileUrl = data.file_url;
       const filename = data.filename || `attendance_report_${selectedMonth + 1}_${selectedYear}.pdf`;
+
       Alert.alert(
         'Download Report',
         'Choose how you want to access your attendance report:',
@@ -722,27 +771,42 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const getDateStatus = (day: number) => {
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const record = attendanceRecords.find(r => r.date === dateStr);
+
+    // Check for holiday first
     const holiday = holidays.find(h => h.date === dateStr);
-    const leave = leaveApplications.find(l => 
-      dateStr >= l.start_date && 
-      dateStr <= l.end_date && 
+    if (holiday) return 'holiday';
+
+    // Check for leave
+    const leave = leaveApplications.find(l =>
+      dateStr >= l.start_date &&
+      dateStr <= l.end_date &&
       l.status === 'approved'
     );
-    
-    if (holiday) return 'holiday';
-    if (leave) return leave.leave_type === 'Work From Home' ? 'wfh' : 'leave';
-    if (record?.status.toLowerCase() === 'present') return 'present';
-    
+    if (leave) {
+      return leave.leave_type === 'Work From Home' ? 'wfh' : 'leave';
+    }
+
+    // Check attendance record
+    const record = attendanceRecords.find(r => r.date === dateStr);
+    if (record) {
+      const status = record.status.toLowerCase();
+      if (status === 'present') return 'present';
+      if (status === 'absent') return 'absent';
+      if (status === 'holiday') return 'holiday';
+      if (status === 'leave') return 'leave';
+      if (status === 'work from home' || status === 'wfh') return 'wfh';
+      if (status === 'pending') return 'pending';
+    }
+
+    // Check if date is in the future
     const currentDate = new Date();
     const checkDate = new Date(selectedYear, selectedMonth, day);
     if (checkDate > currentDate) return null;
-    
+
     return null;
   };
 
   const getDateColor = (status: string | null) => {
-    console.log('Getting color for status:', status);
     switch (status) {
       case 'present': return '#10b981';
       case 'leave': return '#f59e0b';
@@ -769,7 +833,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     for (let day = 1; day <= daysInMonth; day++) {
       const status = getDateStatus(day);
       const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
-      
+
       days.push(
         <View key={day} style={styles.calendarDay}>
           <View style={[
@@ -802,6 +866,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   if (showLeaveScreen) {
     return <LeaveScreen onBack={() => setShowLeaveScreen(false)} />;
   }
+
   if (showLeaveInfo && selectedLeave) {
     return (
       <LeaveInfoScreen
@@ -814,7 +879,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-      
+
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -867,7 +932,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.markButtonText}>Attendance</Text>
+                  <Text style={styles.markButtonText}>Mark Attendance</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -913,25 +978,29 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 <View style={[styles.legendDot, { backgroundColor: '#3b82f6' }]} />
                 <Text style={styles.legendText}>Holiday</Text>
               </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                <Text style={styles.legendText}>Absent</Text>
+              </View>
             </View>
           </View>
         </View>
       </ScrollView>
 
       <View style={styles.bottomActions}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.actionButton, styles.applyLeaveButton]}
           onPress={handleApplyLeave}
         >
           <Text style={styles.actionButtonText}>Apply Leave</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.actionButton, styles.holidaysButton]}
           onPress={handleOpenHolidays}
         >
           <Text style={styles.actionButtonText}>Holidays</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.actionButton, styles.reportButton]}
           onPress={downloadAttendanceReport}
           disabled={loading}
@@ -998,7 +1067,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#1e1b4b',
-
   },
   backButton: {
     padding: 8,
@@ -1085,8 +1153,15 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   checkoutButton: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FFC107',
     marginTop: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    width: '100%',
   },
   markButtonText: {
     fontSize: 16,

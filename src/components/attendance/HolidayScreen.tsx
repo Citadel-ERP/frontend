@@ -1,4 +1,4 @@
-// HolidayScreen.tsx - Modern Holiday Calendar Component
+// HolidayScreen.tsx - Enhanced Modern Holiday Calendar Component
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -49,7 +49,6 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-
       if (response.ok) {
         const data = await response.json();
         if (data.cities && Array.isArray(data.cities)) {
@@ -75,6 +74,12 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
     }
   };
 
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+    </View>
+  );
+
   const fetchHolidaysByCity = async (cityName: string) => {
     if (!cityName) return;
     
@@ -84,7 +89,6 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-
       if (response.ok) {
         const data = await response.json();
         if (data.holidays && Array.isArray(data.holidays)) {
@@ -128,26 +132,46 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 
   const getHolidayGradient = (index: number) => {
     const gradients = [
-      ['#FF6B9D', '#FFC371'],
-      ['#4776E6', '#8E54E9'],
-      ['#43E97B', '#38F9D7'],
-      ['#F093FB', '#F5576C'],
-      ['#FA709A', '#FEE140'],
-      ['#30CFD0', '#330867'],
+      ['#667eea', '#764ba2'], // Purple Dream
+      ['#f093fb', '#f5576c'], // Pink Sunset
+      ['#4facfe', '#00f2fe'], // Blue Sky
+      ['#43e97b', '#38f9d7'], // Mint Fresh
+      ['#fa709a', '#fee140'], // Peach Glow
+      ['#30cfd0', '#330867'], // Deep Ocean
+      ['#a8edea', '#fed6e3'], // Soft Coral
+      ['#ff9a9e', '#fecfef'], // Rose Garden
+      ['#ffecd2', '#fcb69f'], // Warm Sunset
+      ['#ff6e7f', '#bfe9ff'], // Cotton Candy
     ];
     return gradients[index % gradients.length];
   };
 
   const getHolidayIcon = (name: string) => {
     const nameLower = name.toLowerCase();
-    if (nameLower.includes('christmas')) return '🎅';
-    if (nameLower.includes('new year')) return '🎉';
+    if (nameLower.includes('christmas')) return '🎄';
+    if (nameLower.includes('new year')) return '🎊';
     if (nameLower.includes('diwali')) return '🪔';
     if (nameLower.includes('holi')) return '🎨';
     if (nameLower.includes('eid')) return '🌙';
     if (nameLower.includes('independence') || nameLower.includes('republic')) return '🇮🇳';
     if (nameLower.includes('gandhi')) return '🕊️';
-    return '🎊';
+    if (nameLower.includes('valentine')) return '❤️';
+    if (nameLower.includes('durga')) return '🙏';
+    if (nameLower.includes('navratri')) return '💃';
+    return '✨';
+  };
+
+  const getCityIcon = (cityName: string) => {
+    const cityLower = cityName.toLowerCase();
+    if (cityLower.includes('mumbai')) return '🏙️';
+    if (cityLower.includes('delhi')) return '🏛️';
+    if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return '🌳';
+    if (cityLower.includes('chennai')) return '🏖️';
+    if (cityLower.includes('kolkata')) return '🎭';
+    if (cityLower.includes('hyderabad')) return '💎';
+    if (cityLower.includes('pune')) return '🎓';
+    if (cityLower.includes('ahmedabad')) return '🕌';
+    return '📍';
   };
 
   const renderCityModal = () => (
@@ -158,38 +182,60 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
       onRequestClose={() => setShowCityModal(false)}
     >
       <View style={styles.modalOverlay}>
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setShowCityModal(false)}
+        />
         <View style={styles.cityModal}>
+          <View style={styles.modalDragIndicator} />
+          
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select City</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowCityModal(false)}
-            >
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
+            <View>
+              <Text style={styles.modalTitle}>Select Your City</Text>
+              <Text style={styles.modalSubtitle}>Choose a city to view holidays</Text>
+            </View>
           </View>
           
-          <ScrollView style={styles.cityList} showsVerticalScrollIndicator={false}>
-            {cities.map((city, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.cityItem,
-                  selectedCity === city.name && styles.selectedCityItem
-                ]}
-                onPress={() => handleCitySelect(city.name)}
-              >
-                <Text style={[
-                  styles.cityItemText,
-                  selectedCity === city.name && styles.selectedCityItemText
-                ]}>
-                  {city.name}
-                </Text>
-                {selectedCity === city.name && (
-                  <Text style={styles.checkMark}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))}
+          <ScrollView 
+            style={styles.cityList} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.cityListContent}
+          >
+            {cities.map((city, index) => {
+              const isSelected = selectedCity === city.name;
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.cityItem,
+                    isSelected && styles.selectedCityItem
+                  ]}
+                  onPress={() => handleCitySelect(city.name)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.cityItemLeft}>
+                    <View style={[
+                      styles.cityIconContainer,
+                      isSelected && styles.selectedCityIconContainer
+                    ]}>
+                      <Text style={styles.cityIconText}>{getCityIcon(city.name)}</Text>
+                    </View>
+                    <Text style={[
+                      styles.cityItemText,
+                      isSelected && styles.selectedCityItemText
+                    ]}>
+                      {city.name}
+                    </Text>
+                  </View>
+                  {isSelected && (
+                    <View style={styles.checkMarkContainer}>
+                      <Text style={styles.checkMark}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       </View>
@@ -198,14 +244,14 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#5b21b6" translucent={false} />
       
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Text style={styles.backButtonText}><BackIcon /></Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Holidays</Text>
+          <Text style={styles.headerTitle}>Holiday Calendar</Text>
           <View style={styles.headerSpacer} />
         </View>
       </SafeAreaView>
@@ -215,18 +261,24 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
           style={styles.cityFilterButton}
           onPress={() => setShowCityModal(true)}
           disabled={citiesLoading}
+          activeOpacity={0.8}
         >
           {citiesLoading ? (
-            <ActivityIndicator color="#1e1b4b" size="small" />
+            <ActivityIndicator color="#5b21b6" size="small" />
           ) : (
             <>
-              <Text style={styles.filterLabel}>Filter by city</Text>
-              <View style={styles.filterValueContainer}>
-                <Text style={styles.filterValue}>
-                  {selectedCity || 'Select City'}
-                </Text>
-                <Text style={styles.dropdownArrow}>▼</Text>
+              <View style={styles.filterLeftSection}>
+                <View style={styles.filterIconContainer}>
+                  <Text style={styles.filterIcon}>📍</Text>
+                </View>
+                <View style={styles.filterTextContainer}>
+                  <Text style={styles.filterLabel}>Location</Text>
+                  <Text style={styles.filterValue}>
+                    {selectedCity || 'Select City'}
+                  </Text>
+                </View>
               </View>
+              <Text style={styles.dropdownArrow}>›</Text>
             </>
           )}
         </TouchableOpacity>
@@ -239,7 +291,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color="#1e1b4b" size="large" />
+            <ActivityIndicator color="#5b21b6" size="large" />
             <Text style={styles.loadingText}>Loading holidays...</Text>
           </View>
         ) : (
@@ -252,18 +304,27 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
                 
                 return (
                   <View key={holiday.id} style={styles.holidayCard}>
-                    <View style={[styles.holidayCardGradient, { backgroundColor: gradientColors[0] }]}>
+                    <View style={[
+                      styles.holidayCardGradient, 
+                      { 
+                        backgroundColor: gradientColors[0],
+                        backgroundImage: `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[1]} 100%)`
+                      }
+                    ]}>
+                      <View style={styles.holidayCardOverlay} />
                       <View style={styles.holidayContent}>
                         <View style={styles.holidayLeft}>
-                          <Text style={styles.holidayIcon}>{icon}</Text>
+                          <View style={styles.holidayIconContainer}>
+                            <Text style={styles.holidayIcon}>{icon}</Text>
+                          </View>
                           <View style={styles.holidayTextContainer}>
                             <Text style={styles.holidayName}>{holiday.name}</Text>
                             <Text style={styles.holidayDate}>{formatDate(holiday.date)}</Text>
                           </View>
                         </View>
                         <View style={styles.dateBadge}>
-                          <Text style={styles.dateBadgeDay}>{dateInfo.day}</Text>
                           <Text style={styles.dateBadgeMonth}>{dateInfo.month}</Text>
+                          <Text style={styles.dateBadgeDay}>{dateInfo.day}</Text>
                         </View>
                       </View>
                     </View>
@@ -272,7 +333,9 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
               })
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateIcon}>📅</Text>
+                <View style={styles.emptyStateIconContainer}>
+                  <Text style={styles.emptyStateIcon}>📅</Text>
+                </View>
                 <Text style={styles.emptyStateTitle}>No Holidays Found</Text>
                 <Text style={styles.emptyStateText}>
                   {selectedCity 
@@ -294,10 +357,10 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#fafafa',
   },
   safeArea: {
-    backgroundColor: '#1e1b4b',
+    backgroundColor: colors.primary,
   },
   header: {
     flexDirection: 'row',
@@ -305,7 +368,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#1e1b4b',
+    backgroundColor: colors.primary,
   },
   backButton: {
     padding: 8,
@@ -317,8 +380,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#fff',
+    letterSpacing: 0.3,
   },
   headerSpacer: {
     width: 44,
@@ -326,44 +390,68 @@ const styles = StyleSheet.create({
   filterContainer: {
     backgroundColor: '#fff',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#f0f0f0',
   },
   cityFilterButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderWidth: 2,
+    borderColor: '#e8e8e8',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  filterLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  filterValueContainer: {
+  filterLeftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
+  },
+  filterIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f3f0ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  filterIcon: {
+    fontSize: 20,
+  },
+  filterTextContainer: {
+    flex: 1,
+  },
+  filterLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   filterValue: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#111827',
     fontWeight: '600',
   },
   dropdownArrow: {
-    fontSize: 10,
-    color: '#6b7280',
+    fontSize: 28,
+    color: '#9ca3af',
+    fontWeight: '300',
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 32,
   },
   loadingContainer: {
@@ -374,159 +462,262 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#9ca3af',
     marginTop: 12,
+    fontWeight: '500',
   },
   holidayCard: {
     marginBottom: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 5,
+    elevation: 6,
   },
   holidayCardGradient: {
-    padding: 20,
+    padding: 0,
+    position: 'relative',
+  },
+  holidayCardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
   },
   holidayContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 20,
   },
   holidayLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  holidayIcon: {
-    fontSize: 40,
+  holidayIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  holidayIcon: {
+    fontSize: 32,
   },
   holidayTextContainer: {
     flex: 1,
   },
   holidayName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#fff',
     marginBottom: 4,
+    letterSpacing: 0.2,
   },
   holidayDate: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#fff',
-    opacity: 0.9,
+    opacity: 0.95,
+    fontWeight: '500',
   },
   dateBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 14,
     padding: 12,
-    minWidth: 60,
+    minWidth: 64,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  dateBadgeDay: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-    lineHeight: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   dateBadgeMonth: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b7280',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  dateBadgeDay: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111827',
+    lineHeight: 30,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
     paddingHorizontal: 32,
   },
+  emptyStateIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f3f0ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
   emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+    fontSize: 48,
   },
   emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#111827',
     marginBottom: 8,
   },
   emptyStateText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#6b7280',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   
-  // Modal styles
+  // Enhanced Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   cityModal: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '70%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '75%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  modalDragIndicator: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#f3f4f6',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#111827',
+    marginBottom: 4,
   },
-  closeButton: {
-    padding: 4,
-  },
-  closeButtonText: {
-    fontSize: 24,
+  modalSubtitle: {
+    fontSize: 14,
     color: '#6b7280',
-    fontWeight: '300',
+    fontWeight: '500',
   },
   cityList: {
-    maxHeight: 400,
+    maxHeight: 500,
+  },
+  cityListContent: {
+    padding: 16,
+    paddingBottom: 32,
   },
   cityItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 10,
+    backgroundColor: '#fafafa',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   selectedCityItem: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#f3f0ff',
+    borderColor: colors.primary,
+  },
+  cityItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cityIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  selectedCityIconContainer: {
+    backgroundColor: '#fff',
+  },
+  cityIconText: {
+    fontSize: 22,
   },
   cityItemText: {
     fontSize: 16,
-    color: '#111827',
+    color: '#374151',
+    fontWeight: '600',
     flex: 1,
   },
   selectedCityItemText: {
-    color: '#1e40af',
-    fontWeight: '600',
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  checkMarkContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkMark: {
-    fontSize: 18,
-    color: '#1e40af',
+    fontSize: 16,
+    color: '#fff',
     fontWeight: 'bold',
+  },
+  backIcon: { 
+    width: 24, 
+    height: 24, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  backArrow: {
+    width: 12, 
+    height: 12, 
+    borderLeftWidth: 2, 
+    borderTopWidth: 2,
+    borderColor: '#fff', 
+    transform: [{ rotate: '-45deg' }],
   },
 });
 

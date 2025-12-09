@@ -95,6 +95,7 @@ interface ApiResponse {
   upcoming_birthdays: any[];
   is_driver: boolean;
   upcoming_anniversary: any[];
+  autoReconfigure: boolean
 }
 
 interface UpcomingEvent {
@@ -499,7 +500,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const calculateYearsOnAnniversary = (dateString: string): number => {
     const joiningDate = new Date(dateString);
     const today = new Date();
-
+    
     let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
 
     if (anniversaryThisYear < today) {
@@ -554,6 +555,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return events;
   };
 
+  const setAutoReconfigure = async () => {
+    const response = await fetch(`${BACKEND_URL}/core/updateDeviceId`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+      let SecureStore: any = null;
+      if (Platform.OS !== 'web') {
+        SecureStore = require('expo-secure-store');
+      }
+      if (response.ok) {
+        console.log('Device ID updated successfully');
+        const data = await response.json();
+        if (SecureStore) {
+                  await SecureStore.setItemAsync('device_id', data.device_id);
+        }
+      } else {
+        console.error('Failed to update device ID');
+      }
+  }
+
   useEffect(() => {
     if (!token) return;
     const fetchUserData = async () => {
@@ -575,7 +599,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           setUserData(transformedUserData);
           setModules(data.modules);
           setUpcomingBirthdays(data.upcoming_birthdays || []);
-
+          if (data.autoReconfigure){
+            setAutoReconfigure();
+          }
           // Save driver field to AsyncStorage
           try {
             await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
