@@ -13,8 +13,8 @@ const configs: Record<string, AppConfig> = {
     // BACKEND_URL_WEBSOCKET: 'https://962xzp32-8000.inc1.devtunnels.ms',
   },
   production: {
-    BACKEND_URL: 'https://backend-staging.citadelnetinc.com',
-    BACKEND_URL_WEBSOCKET: 'https://backend-staging.citadelnetinc.com',
+    BACKEND_URL: 'https://backend.citadelnetinc.com',
+    BACKEND_URL_WEBSOCKET: 'https://backend.citadelnetinc.com',
 
     // BACKEND_URL: 'https://962xzp32-8000.inc1.devtunnels.ms',
     // BACKEND_URL_WEBSOCKET: 'https://962xzp32-8000.inc1.devtunnels.ms',
@@ -24,7 +24,7 @@ const configs: Record<string, AppConfig> = {
 };
 
 // Determine environment - you can change this logic as needed
-const environment = 'development';
+const environment = 'production'; // development
 
 export const config = configs[environment];
 // Export individual values for convenience
