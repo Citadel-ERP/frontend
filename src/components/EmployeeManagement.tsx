@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
   StatusBar, Alert, ActivityIndicator, TextInput, Image, Dimensions,
-  RefreshControl, Modal
+  RefreshControl, Modal, Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,7 +44,7 @@ const BackIcon = () => (
   </View>
 );
 
-const SearchIcon = ({ size = 20, color = colors.textSecondary }) => (
+const SearchIcon = ({ size = 20, color = '#6b7280' }) => (
   <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
     <View style={{
       width: size * 0.6,
@@ -76,7 +76,6 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  
 
   useEffect(() => {
     const getToken = async () => {
@@ -199,160 +198,160 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Employee Management</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <View style={styles.searchIconContainer}>
-              <SearchIcon size={18} color={colors.textSecondary} />
-            </View>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search employees by name, ID, or designation..."
-              placeholderTextColor={colors.textSecondary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              clearButtonMode="while-editing"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => setSearchQuery('')}
-              >
-                <Text style={styles.clearButtonText}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.searchHint}>
-            {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} found
-          </Text>
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <BackIcon />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Employee Management</Text>
+          <View style={styles.headerSpacer} />
         </View>
+      </SafeAreaView>
 
-        {loading && employees.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading employees...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={fetchEmployees}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : filteredEmployees.length > 0 ? (
-          <ScrollView
-            style={styles.employeesList}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.contentPadding}>
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <View style={styles.searchIconContainer}>
+                <SearchIcon size={18} color="#6b7280" />
+              </View>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search employees by name, ID, or designation..."
+                placeholderTextColor="#9ca3af"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                clearButtonMode="while-editing"
               />
-            }
-          >
-            {filteredEmployees.map((employee) => (
-              <TouchableOpacity
-                key={employee.employee_id}
-                style={styles.employeeCard}
-                onPress={() => handleEmployeePress(employee)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.employeeCardHeader}>
-                  <View style={styles.employeeAvatar}>
-                    {employee.profile_picture ? (
-                      <Image
-                        source={{ uri: employee.profile_picture }}
-                        style={styles.avatarImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Text style={styles.avatarInitials}>
-                        {getInitials(employee.full_name)}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.employeeInfo}>
-                    <Text style={styles.employeeName} numberOfLines={1}>
-                      {employee.full_name}
-                    </Text>
-                    <Text style={styles.employeeDesignation} numberOfLines={1}>
-                      {employee.designation || employee.role}
-                    </Text>
-                    <View style={styles.employeeDetails}>
-                      <Text style={styles.employeeId}>
-                        ID: {employee.employee_id}
-                      </Text>
-                      <Text style={styles.employeeExperience}>
-                        ⏳ {calculateExperience(employee.joining_date)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => setSearchQuery('')}
+                >
+                  <Text style={styles.clearButtonText}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.searchHint}>
+              {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} found
+            </Text>
+          </View>
 
-                <View style={styles.employeeCardFooter}>
-                  <View style={styles.leavesContainer}>
-                    <View style={styles.leaveItem}>
-                      <Text style={styles.leaveLabel}>Earned</Text>
-                      <Text style={styles.leaveValue}>{employee.earned_leaves}</Text>
-                    </View>
-                    <View style={styles.leaveDivider} />
-                    <View style={styles.leaveItem}>
-                      <Text style={styles.leaveLabel}>Sick</Text>
-                      <Text style={styles.leaveValue}>{employee.sick_leaves}</Text>
-                    </View>
-                    <View style={styles.leaveDivider} />
-                    <View style={styles.leaveItem}>
-                      <Text style={styles.leaveLabel}>Casual</Text>
-                      <Text style={styles.leaveValue}>{employee.casual_leaves}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.viewDetailsButton}>
-                    <Text style={styles.viewDetailsText}>View Details →</Text>
-                  </View>
-                </View>
+          {loading && employees.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1e1b4b" />
+              <Text style={styles.loadingText}>Loading employees...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={fetchEmployees}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
-            ))}
-            <View style={styles.listFooter}>
-              <Text style={styles.listFooterText}>
-                Showing {filteredEmployees.length} of {employees.length} employees
+            </View>
+          ) : filteredEmployees.length > 0 ? (
+            <View style={styles.employeesList}>
+              {filteredEmployees.map((employee) => (
+                <TouchableOpacity
+                  key={employee.employee_id}
+                  style={styles.employeeCard}
+                  onPress={() => handleEmployeePress(employee)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.employeeCardHeader}>
+                    <View style={styles.employeeAvatar}>
+                      {employee.profile_picture ? (
+                        <Image
+                          source={{ uri: employee.profile_picture }}
+                          style={styles.avatarImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={styles.avatarInitials}>
+                          {getInitials(employee.full_name)}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.employeeInfo}>
+                      <Text style={styles.employeeName} numberOfLines={1}>
+                        {employee.full_name}
+                      </Text>
+                      <Text style={styles.employeeDesignation} numberOfLines={1}>
+                        {employee.designation || employee.role}
+                      </Text>
+                      <View style={styles.employeeDetails}>
+                        <Text style={styles.employeeId}>
+                          ID: {employee.employee_id}
+                        </Text>
+                        <Text style={styles.employeeExperience}>
+                          ⏳ {calculateExperience(employee.joining_date)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.employeeCardFooter}>
+                    <View style={styles.leavesContainer}>
+                      <View style={styles.leaveItem}>
+                        <Text style={styles.leaveLabel}>Earned</Text>
+                        <Text style={styles.leaveValue}>{employee.earned_leaves}</Text>
+                      </View>
+                      <View style={styles.leaveDivider} />
+                      <View style={styles.leaveItem}>
+                        <Text style={styles.leaveLabel}>Sick</Text>
+                        <Text style={styles.leaveValue}>{employee.sick_leaves}</Text>
+                      </View>
+                      <View style={styles.leaveDivider} />
+                      <View style={styles.leaveItem}>
+                        <Text style={styles.leaveLabel}>Casual</Text>
+                        <Text style={styles.leaveValue}>{employee.casual_leaves}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.viewDetailsButton}>
+                      <Text style={styles.viewDetailsText}>View Details →</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.listFooter}>
+                <Text style={styles.listFooterText}>
+                  Showing {filteredEmployees.length} of {employees.length} employees
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Image
+                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4076/4076432.png' }}
+                style={styles.emptyStateImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.emptyStateTitle}>
+                {searchQuery ? 'No employees found' : 'No employees'}
+              </Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {searchQuery
+                  ? 'Try adjusting your search terms'
+                  : 'No employees are currently assigned under your management'}
               </Text>
             </View>
-          </ScrollView>
-        ) : (
-          <View style={styles.emptyState}>
-            <Image
-              source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4076/4076432.png' }}
-              style={styles.emptyStateImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.emptyStateTitle}>
-              {searchQuery ? 'No employees found' : 'No employees'}
-            </Text>
-            <Text style={styles.emptyStateSubtitle}>
-              {searchQuery
-                ? 'Try adjusting your search terms'
-                : 'No employees are currently assigned under your management'}
-            </Text>
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
+          )}
+        </View>
+      </ScrollView>
+
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        colors={['#1e1b4b']}
+        tintColor="#1e1b4b"
+      />
+    </View>
   );
 };
 
@@ -572,6 +571,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     setRejectionReason('');
     setRejectionModalVisible(true);
   };
+  
   const submitRejection = async () => {
     if (!selectedLeaveId || !rejectionReason.trim()) {
       Alert.alert('Error', 'Please enter a reason for rejection');
@@ -585,7 +585,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
         body: JSON.stringify({
           token,
           leave_id: selectedLeaveId,
-          reason: rejectionReason.trim()
+          reject_reason: rejectionReason.trim()
         }),
       });
 
@@ -645,7 +645,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     const record = attendanceReport.find(r => r.date === dateStr);
 
     if (record) {
-      return record.attendance_status; // Use the status from API response
+      return record.attendance_status;
     }
 
     return null;
@@ -680,7 +680,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     for (let day = 1; day <= daysInMonth; day++) {
       const status = getDateStatus(day);
       const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
-      const shouldShowText = !['pending'].includes(status || ''); // Don't show text for pending
+      const shouldShowText = !['pending'].includes(status || '');
 
       days.push(
         <View key={day} style={styles.calendarDay}>
@@ -706,7 +706,6 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     return days;
   };
 
-  // Add summary statistics calculation:
   const calculateSummary = () => {
     if (!attendanceReport || attendanceReport.length === 0) {
       return {
@@ -729,29 +728,6 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
       pending: attendanceReport.filter(r => r.attendance_status === 'pending').length,
       weekends: attendanceReport.filter(r => r.attendance_status === 'weekend').length
     };
-  };
-
-  const calculatePresentDays = () => {
-    if (!attendanceReport) return 0;
-    return attendanceReport.filter(record =>
-      record.check_in_time && record.check_out_time
-    ).length;
-  };
-
-  const calculateTotalHours = () => {
-    if (!attendanceReport) return 0;
-    let totalHours = 0;
-
-    attendanceReport.forEach(record => {
-      if (record.check_in_time && record.check_out_time) {
-        const start = new Date(record.check_in_time);
-        const end = new Date(record.check_out_time);
-        const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-        totalHours += hours;
-      }
-    });
-
-    return totalHours.toFixed(1);
   };
 
   const renderOverviewTab = () => (
@@ -852,7 +828,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color="#1e1b4b" />
         </View>
       )}
     </ScrollView>
@@ -863,38 +839,6 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
 
     return (
       <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false}>
-        {/* Add Summary Statistics Section */}
-        {/* <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>Attendance Summary</Text>
-          <View style={styles.summaryGrid}>
-            <View style={styles.summaryCard}>
-              <Text style={[styles.summaryValue, { color: '#10b981' }]}>{summary.present}</Text>
-              <Text style={styles.summaryLabel}>Present</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>{summary.leave}</Text>
-              <Text style={styles.summaryLabel}>Leave</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={[styles.summaryValue, { color: '#a855f7' }]}>{summary.wfh}</Text>
-              <Text style={styles.summaryLabel}>WFH</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={[styles.summaryValue, { color: '#3b82f6' }]}>{summary.holidays}</Text>
-              <Text style={styles.summaryLabel}>Holidays</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={[styles.summaryValue, { color: '#ef4444' }]}>{summary.absent}</Text>
-              <Text style={styles.summaryLabel}>Absent</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={[styles.summaryValue, { color: '#ef4444' }]}>{summary.pending}</Text>
-              <Text style={styles.summaryLabel}>Absent</Text>
-            </View>
-          </View>
-        </View> */}
-
-        {/* Calendar Section */}
         <View style={styles.calendarCard}>
           <View style={styles.calendarHeader}>
             <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
@@ -975,9 +919,9 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
                   styles.leaveStatusBadge,
                   {
                     backgroundColor:
-                      leave.status === 'approved_by_manager' ? colors.success :
-                        leave.status === 'rejected' ? colors.error :
-                          colors.warning
+                      leave.status === 'approved_by_manager' ? '#10b981' :
+                        leave.status === 'rejected' ? '#ef4444' :
+                          '#f59e0b'
                   }
                 ]}>
                   <Text style={styles.leaveStatusText}>
@@ -992,19 +936,19 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
               </Text>
 
               <Text style={styles.leaveReason}>
-                {leave.reason}
+                {leave.reject_reason}
               </Text>
 
               {leave.status === 'pending' && (
                 <View style={styles.leaveActions}>
                   <TouchableOpacity
-                    style={[styles.leaveActionButton, { backgroundColor: colors.success }]}
+                    style={[styles.leaveActionButton, { backgroundColor: '#10b981' }]}
                     onPress={() => handleApproveLeave(leave.id)}
                   >
                     <Text style={styles.leaveActionText}>Approve</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.leaveActionButton, { backgroundColor: colors.error }]}
+                    style={[styles.leaveActionButton, { backgroundColor: '#ef4444' }]}
                     onPress={() => handleRejectLeave(leave.id)}
                   >
                     <Text style={styles.leaveActionText}>Reject</Text>
@@ -1052,18 +996,20 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
   };
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {employee.full_name}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <BackIcon />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {employee.full_name}
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      </SafeAreaView>
 
       <View style={styles.tabNavigation}>
         {[
@@ -1086,11 +1032,13 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
         ))}
       </View>
 
-      <View style={styles.content}>
-        {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'attendance' && renderAttendanceTab()}
-        {activeTab === 'leaves' && renderLeavesTab()}
-      </View>
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.contentPadding}>
+          {activeTab === 'overview' && renderOverviewTab()}
+          {activeTab === 'attendance' && renderAttendanceTab()}
+          {activeTab === 'leaves' && renderLeavesTab()}
+        </View>
+      </ScrollView>
 
       {/* Rejection Reason Modal */}
       <Modal
@@ -1107,7 +1055,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
             <TextInput
               style={styles.reasonInput}
               placeholder="Enter rejection reason..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="#9ca3af"
               value={rejectionReason}
               onChangeText={setRejectionReason}
               multiline={true}
@@ -1141,25 +1089,38 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color="#1e1b4b" />
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.primary },
+  container: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  safeArea: {
+    backgroundColor: '#1e1b4b',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  contentPadding: {
+    padding: 16,
+    paddingBottom: 100,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#1e1b4b',
   },
   backButton: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
+    padding: 8,
   },
   backIcon: {
     width: 24,
@@ -1172,135 +1133,130 @@ const styles = StyleSheet.create({
     height: 12,
     borderLeftWidth: 2,
     borderTopWidth: 2,
-    borderColor: colors.white,
+    borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
   headerTitle: {
-    fontSize: fontSize.xl,
+    fontSize: 20,
     fontWeight: '600',
-    color: colors.white,
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: spacing.sm,
+    color: '#fff',
   },
-  headerSpacer: { width: 40 },
-
-  content: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+  headerSpacer: {
+    width: 44,
   },
 
   searchContainer: {
-    padding: spacing.lg,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    marginBottom: 16,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    ...shadows.sm,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchIconContainer: {
-    marginRight: spacing.sm,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    paddingVertical: spacing.md,
+    fontSize: 14,
+    color: '#111827',
+    paddingVertical: 14,
     minHeight: 48,
   },
   clearButton: {
-    padding: spacing.xs,
+    padding: 4,
   },
   clearButtonText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#6b7280',
   },
   searchHint: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 8,
   },
 
   employeesList: {
-    paddingHorizontal: spacing.lg,
+    marginTop: 8,
   },
   employeeCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   employeeCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   employeeAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1e1b4b',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: 16,
   },
   avatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   avatarInitials: {
-    color: colors.white,
-    fontSize: fontSize.md,
+    color: '#fff',
+    fontSize: 18,
     fontWeight: 'bold',
   },
   employeeInfo: {
     flex: 1,
   },
   employeeName: {
-    fontSize: fontSize.md,
+    fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: '#111827',
+    marginBottom: 4,
   },
   employeeDesignation: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 6,
   },
   employeeDetails: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   employeeId: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginRight: spacing.md,
+    fontSize: 12,
+    color: '#6b7280',
+    marginRight: 12,
   },
   employeeExperience: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: '#6b7280',
   },
   employeeCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing.sm,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#e5e7eb',
   },
   leavesContainer: {
     flexDirection: 'row',
@@ -1308,32 +1264,32 @@ const styles = StyleSheet.create({
   },
   leaveItem: {
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 12,
   },
   leaveLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 11,
+    color: '#6b7280',
+    marginBottom: 4,
   },
   leaveValue: {
-    fontSize: fontSize.md,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: colors.text,
+    color: '#111827',
   },
   leaveDivider: {
     width: 1,
     height: 20,
-    backgroundColor: colors.border,
+    backgroundColor: '#e5e7eb',
   },
   viewDetailsButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#1e1b4b',
+    borderRadius: 8,
   },
   viewDetailsText: {
-    fontSize: fontSize.xs,
-    color: colors.white,
+    fontSize: 12,
+    color: '#fff',
     fontWeight: '600',
   },
 
@@ -1341,35 +1297,36 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: spacing.xl * 2,
+    paddingTop: 80,
   },
   loadingText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 16,
   },
 
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 24,
+    paddingTop: 80,
   },
   errorText: {
-    fontSize: fontSize.md,
-    color: colors.text,
+    fontSize: 16,
+    color: '#111827',
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    backgroundColor: '#1e1b4b',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   retryButtonText: {
-    fontSize: fontSize.md,
-    color: colors.white,
+    fontSize: 16,
+    color: '#fff',
     fontWeight: '600',
   },
 
@@ -1377,157 +1334,174 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl * 2,
+    paddingHorizontal: 24,
+    paddingTop: 80,
   },
   emptyStateImage: {
     width: 120,
     height: 120,
     opacity: 0.5,
-    marginBottom: spacing.lg,
+    marginBottom: 24,
   },
   emptyStateTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: '#111827',
+    marginBottom: 8,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
   },
 
   listFooter: {
-    paddingVertical: spacing.lg,
+    paddingVertical: 24,
     alignItems: 'center',
   },
   listFooterText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: '#6b7280',
   },
 
   tabNavigation: {
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.xs,
-    borderTopRightRadius: borderRadius.xl,
-    borderTopLeftRadius: borderRadius.xl,
+    backgroundColor: '#fff',
+    paddingHorizontal: 4,
+    borderTopRightRadius: 16,
+    borderTopLeftRadius: 16,
+    marginTop: -16,
+    zIndex: 1,
   },
   tab: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   activeTab: {
     borderBottomWidth: 3,
-    borderBottomColor: colors.primary,
+    borderBottomColor: '#1e1b4b',
   },
   tabText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
     fontWeight: '500',
   },
   activeTabText: {
-    color: colors.primary,
+    color: '#1e1b4b',
     fontWeight: '600',
   },
 
   detailsContent: {
     flex: 1,
-    padding: spacing.lg,
   },
 
   employeeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   employeeAvatarLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#1e1b4b',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: 16,
   },
   avatarImageLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   avatarInitialsLarge: {
-    color: colors.white,
-    fontSize: fontSize.xl,
+    color: '#fff',
+    fontSize: 24,
     fontWeight: 'bold',
   },
   employeeHeaderInfo: {
     flex: 1,
   },
   employeeNameLarge: {
-    fontSize: fontSize.xl,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: '#111827',
+    marginBottom: 4,
   },
   employeeDesignationLarge: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 4,
   },
   employeeIdLarge: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
   },
 
   infoSection: {
-    marginBottom: spacing.xl,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
+    color: '#111827',
+    marginBottom: 16,
   },
   infoGrid: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.sm,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   infoItem: {
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   infoLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
     fontWeight: '600',
   },
   infoValue: {
-    fontSize: fontSize.md,
-    color: colors.text,
+    fontSize: 16,
+    color: '#111827',
   },
 
   leaveBalanceContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: 12,
   },
   leaveBalanceCard: {
     flex: 1,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
-    ...shadows.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   leaveBalanceTitle: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: spacing.sm,
+    marginBottom: 8,
     color: '#111827',
     textAlign: 'center',
   },
@@ -1537,27 +1511,27 @@ const styles = StyleSheet.create({
   },
 
   assetCard: {
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#e5e7eb',
   },
   assetName: {
-    fontSize: fontSize.md,
+    fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: '#111827',
+    marginBottom: 4,
   },
   assetDetails: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 4,
   },
   assetAssignedDate: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: '#6b7280',
   },
 
   calendarCard: {
@@ -1661,119 +1635,93 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 
-  attendanceSummaryNew: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  summaryCardNew: {
-    flex: 1,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    ...shadows.sm,
-  },
-  summaryValueNew: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e1b4b',
-    marginBottom: spacing.xs,
-  },
-  summaryLabelNew: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-
   downloadSection: {
-    marginTop: spacing.md,
+    marginTop: 8,
   },
   downloadButtonNew: {
     backgroundColor: '#1e1b4b',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
   },
   downloadButtonIcon: {
-    fontSize: fontSize.lg,
-    marginRight: spacing.sm,
+    fontSize: 18,
+    marginRight: 8,
   },
   downloadButtonTextNew: {
-    fontSize: fontSize.md,
-    color: colors.white,
+    fontSize: 16,
+    color: '#fff',
     fontWeight: '600',
   },
 
   leaveCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#e5e7eb',
   },
   leaveHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 8,
   },
   leaveType: {
-    fontSize: fontSize.md,
+    fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#111827',
   },
   leaveStatusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   leaveStatusText: {
-    fontSize: fontSize.xs,
-    color: colors.white,
+    fontSize: 12,
+    color: '#fff',
     fontWeight: '600',
     textTransform: 'capitalize',
   },
   leaveDates: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
   },
   leaveReason: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginBottom: spacing.md,
+    fontSize: 14,
+    color: '#111827',
+    marginBottom: 12,
     lineHeight: 20,
   },
   leaveActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
+    marginTop: 12,
   },
   leaveActionButton: {
     flex: 1,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginHorizontal: spacing.xs,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
     alignItems: 'center',
   },
   leaveActionText: {
-    fontSize: fontSize.sm,
-    color: colors.white,
+    fontSize: 14,
+    color: '#fff',
     fontWeight: '600',
   },
   managerComment: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
+    fontSize: 14,
+    color: '#111827',
+    marginTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#e5e7eb',
     fontStyle: 'italic',
   },
   commentLabel: {
@@ -1781,12 +1729,12 @@ const styles = StyleSheet.create({
   },
 
   emptyLeaves: {
-    padding: spacing.xl,
+    padding: 40,
     alignItems: 'center',
   },
   emptyLeavesText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
   },
 
   loadingOverlay: {
@@ -1799,117 +1747,88 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  summaryContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-  },
-  summaryTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  summaryCard: {
-    width: '30%',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    padding: spacing.sm,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: spacing.xs,
-  },
-  summaryLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: 24,
   },
   
   modalContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
     width: '100%',
     maxWidth: 500,
-    ...shadows.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
   
   modalTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: '#111827',
+    marginBottom: 8,
     textAlign: 'center',
   },
   
   modalSubtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 24,
     textAlign: 'center',
   },
   
   reasonInput: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 16,
+    color: '#111827',
     minHeight: 100,
-    marginBottom: spacing.lg,
-    backgroundColor: colors.backgroundSecondary,
+    marginBottom: 24,
+    backgroundColor: '#f9fafb',
   },
   
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: 16,
   },
   
   modalButton: {
     flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   
   cancelButton: {
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: '#f3f4f6',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#e5e7eb',
   },
   
   cancelButtonText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#6b7280',
     fontWeight: '600',
   },
   
   submitButton: {
-    backgroundColor: colors.error,
+    backgroundColor: '#ef4444',
   },
   
   submitButtonText: {
-    fontSize: fontSize.md,
-    color: colors.white,
+    fontSize: 16,
+    color: '#fff',
     fontWeight: '600',
   },
 });
