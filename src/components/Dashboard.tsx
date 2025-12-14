@@ -26,6 +26,7 @@ import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
+import EmployeeManagement from './EmployeeManagement';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -124,6 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showReminder, setShowReminder] = useState(false);
   const [showBUP, setShowBUP] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -356,7 +358,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       // Alert.alert('Network Error', `Could not reach server: ${error.message}`);
     }
   };
-
+  const handleBackFromEmployeeManagement = () => {
+      setShowEmployeeManagement(false);
+      setActiveMenuItem('Dashboard');
+    };
   const handleNotificationNavigation = (page: string) => {
     console.log('Handling notification navigation for page:', page);
 
@@ -399,6 +404,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         break;
       case 'bup':
         setShowBUP(true);
+        break;
+      case 'employee_management':
+        setShowEmployeeManagement(true);
         break;
       default:
         console.log('Unknown page:', page);
@@ -809,6 +817,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setShowHR(true);
     } else if (moduleUniqueName === 'cab' || module.toLowerCase().includes('cab')) {
       setShowCab(true);
+    } else if (moduleUniqueName === 'employee_management') {
+      setShowEmployeeManagement(true);
     } else if (moduleUniqueName === 'driver' || module.toLowerCase().includes('driver')) {
       setShowDriver(true);
     } else if (moduleUniqueName === 'bdt' || module.toLowerCase().includes('bdt')) {
@@ -1065,7 +1075,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <Reminder onBack={handleBackFromReminder} />
       ) : showBUP ? (
         <BUP onBack={handleBackFromBUP} />
-      ) : (
+      ) :showEmployeeManagement ? (
+  <EmployeeManagement onBack={handleBackFromEmployeeManagement} />
+) :(
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
           <View style={styles.header}>
