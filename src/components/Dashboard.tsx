@@ -79,6 +79,11 @@ interface UserData {
   designation?: string;
   user_tags: Array<any>;
   reporting_tags: Array<any>;
+  days_present: number;
+  leaves_applied: number;
+  holidays: number;
+  late_arrivals: number;
+
 }
 
 interface ApiResponse {
@@ -359,9 +364,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }
   };
   const handleBackFromEmployeeManagement = () => {
-      setShowEmployeeManagement(false);
-      setActiveMenuItem('Dashboard');
-    };
+    setShowEmployeeManagement(false);
+    setActiveMenuItem('Dashboard');
+  };
   const handleNotificationNavigation = (page: string) => {
     console.log('Handling notification navigation for page:', page);
 
@@ -508,7 +513,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const calculateYearsOnAnniversary = (dateString: string): number => {
     const joiningDate = new Date(dateString);
     const today = new Date();
-    
+
     let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
 
     if (anniversaryThisYear < today) {
@@ -565,25 +570,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const setAutoReconfigure = async () => {
     const response = await fetch(`${BACKEND_URL}/core/updateDeviceId`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
-      let SecureStore: any = null;
-      if (Platform.OS !== 'web') {
-        SecureStore = require('expo-secure-store');
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+    let SecureStore: any = null;
+    if (Platform.OS !== 'web') {
+      SecureStore = require('expo-secure-store');
+    }
+    if (response.ok) {
+      console.log('Device ID updated successfully');
+      const data = await response.json();
+      if (SecureStore) {
+        await SecureStore.setItemAsync('device_id', data.device_id);
       }
-      if (response.ok) {
-        console.log('Device ID updated successfully');
-        const data = await response.json();
-        if (SecureStore) {
-                  await SecureStore.setItemAsync('device_id', data.device_id);
-        }
-      } else {
-        console.error('Failed to update device ID');
-      }
+    } else {
+      console.error('Failed to update device ID');
+    }
   }
 
   useEffect(() => {
@@ -600,6 +605,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data: ApiResponse = await response.json();
         if (data.message === "Get modules successful") {
+          console.log('User data:', data.user);
           const transformedUserData: UserData = {
             ...data.user,
             profile_picture: data.user.profile_picture || undefined
@@ -607,7 +613,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           setUserData(transformedUserData);
           setModules(data.modules);
           setUpcomingBirthdays(data.upcoming_birthdays || []);
-          if (data.autoReconfigure){
+          if (data.autoReconfigure) {
             setAutoReconfigure();
           }
           // Save driver field to AsyncStorage
@@ -648,6 +654,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const getDisplayModules = () => {
+    console.log('modules', modules);
     return modules.map(module => ({
       title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
       iconUrl: module.module_icon,
@@ -810,26 +817,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const handleModulePress = (module: string, moduleUniqueName?: string) => {
-    if (module.toLowerCase().includes('attendance') || moduleUniqueName === 'attendance') {
+    const key = moduleUniqueName?.toLowerCase() ?? '';
+
+    if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
-    } else if (moduleUniqueName === 'hr' || module.toLowerCase().includes('hr')) {
+    } else if (key.includes('hr')) {
       setShowHR(true);
-    } else if (moduleUniqueName === 'cab' || module.toLowerCase().includes('cab')) {
+    } else if (key.includes('cab')) {
       setShowCab(true);
-    } else if (moduleUniqueName === 'employee_management') {
+    } else if (key === 'employee_management') {
       setShowEmployeeManagement(true);
-    } else if (moduleUniqueName === 'driver' || module.toLowerCase().includes('driver')) {
+    } else if (key.includes('driver')) {
       setShowDriver(true);
-    } else if (moduleUniqueName === 'bdt' || module.toLowerCase().includes('bdt')) {
+    } else if (key.includes('bdt')) {
       setShowBDT(true);
-    } else if (moduleUniqueName === 'mediclaim' || module.toLowerCase().includes('mediclaim')) {
+    } else if (key.includes('mediclaim')) {
       setShowMedical(true);
-    } else if (moduleUniqueName === 'scout_boy' || module.toLowerCase().includes('scout')) {
+    } else if (key.includes('scout')) {
       setShowScoutBoy(true);
-    } else if (moduleUniqueName === 'reminder' || module.toLowerCase().includes('reminder')) {
+    } else if (key.includes('reminder')) {
       setShowReminder(true);
-    } else if (moduleUniqueName === 'bup' || module.toLowerCase().includes('bup') || module.toLowerCase().includes('business update')) {
+    } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
     } else {
       Alert.alert('Coming Soon', `${module} module will be available soon!`);
@@ -1075,9 +1084,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <Reminder onBack={handleBackFromReminder} />
       ) : showBUP ? (
         <BUP onBack={handleBackFromBUP} />
-      ) :showEmployeeManagement ? (
-  <EmployeeManagement onBack={handleBackFromEmployeeManagement} />
-) :(
+      ) : showEmployeeManagement ? (
+        <EmployeeManagement onBack={handleBackFromEmployeeManagement} />
+      ) : (
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
           <View style={styles.header}>
@@ -1108,14 +1117,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Attendance</Text>
                 <View style={styles.attendanceGrid}>
-                  <AttendanceCard value="261" label="Days Present" color="#A7F3D0" />
+                  <AttendanceCard value={String(userData.days_present)} label="Days Present" color="#A7F3D0" />
                   <AttendanceCard
-                    value={String(userData.earned_leaves + userData.sick_leaves + userData.casual_leaves)}
+                    value={String(userData.leaves_applied)}
                     label="Leaves Applied"
                     color="#FED7AA"
                   />
-                  <AttendanceCard value="7" label="Holidays" color="#DDD6FE" />
-                  <AttendanceCard value="0" label="Late Arrivals" color="#FBCFE8" />
+                  <AttendanceCard value={String(userData.holidays)} label="Holidays" color="#DDD6FE" />
+                  <AttendanceCard value={String(userData.late_arrivals)} label="Late Arrivals" color="#FBCFE8" />
                 </View>
               </View>
               <View style={styles.sectionModules}>

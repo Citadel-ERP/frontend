@@ -1250,7 +1250,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cab Booking</Text>
+        <Text style={styles.headerTitle}>Car Booking</Text>
         <View style={styles.headerSpacer} />
       </View>
 
