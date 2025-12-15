@@ -9,7 +9,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
-
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
 
@@ -94,6 +93,20 @@ interface City {
   value: string;
 }
 
+interface UserSearchResult {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  profile_picture: string | null;
+  is_approved_by_hr: boolean;
+  is_approved_by_admin: boolean;
+  is_archived: boolean;
+  designation: string | null;
+}
+
 interface BookingModalProps {
   visible: boolean;
   onClose: () => void;
@@ -106,6 +119,10 @@ interface BookingModalProps {
   formatDateForDisplay: (date: Date) => string;
   formatTimeForDisplay: (date: Date) => string;
   colors: any;
+  userSearchResults: UserSearchResult[];
+  onSearchUsers: (query: string) => void;
+  onSelectUser: (user: UserSearchResult | null) => void;
+  selectedUser: UserSearchResult | null;
 }
 
 interface CancelModalProps {
@@ -299,8 +316,43 @@ const BookingModal: React.FC<BookingModalProps> = ({
   onBookVehicle,
   formatDateForDisplay,
   formatTimeForDisplay,
-  colors
+  colors,
+  userSearchResults,
+  onSearchUsers,
+  onSelectUser,
+  selectedUser
 }) => {
+  const [isUserDropdownVisible, setIsUserDropdownVisible] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  
+  const handleUserSearch = (text: string) => {
+    setUserSearchQuery(text);
+    if (text.length >= 2 && onSearchUsers) {
+      setSearchLoading(true);
+      // Debounce the search
+      const timer = setTimeout(() => {
+        onSearchUsers(text);
+        setSearchLoading(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  };
+  
+  const handleSelectUser = (user: UserSearchResult) => {
+    if (onSelectUser) {
+      onSelectUser(user);
+      setIsUserDropdownVisible(false);
+      setUserSearchQuery('');
+    }
+  };
+  
+  const handleClearUser = () => {
+    if (onSelectUser) {
+      onSelectUser(null);
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -323,7 +375,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
@@ -339,7 +390,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   </Text>
                 </View>
               )}
-
+              
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Purpose of Trip *</Text>
                 <TextInput
@@ -352,7 +403,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   numberOfLines={3}
                 />
               </View>
-
+              
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Start Location *</Text>
                 <TextInput
@@ -363,7 +414,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
-
+              
               <View style={styles.formGroup}>
                 <Text style={styles.label}>End Location *</Text>
                 <TextInput
@@ -374,7 +425,97 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
-
+              
+              {/* Grace Period Field */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Grace Period (Optional)</Text>
+                <View style={styles.gracePeriodContainer}>
+                  <TextInput
+                    style={[styles.textInput, styles.gracePeriodInput]}
+                    value={bookingForm.grace_period}
+                    onChangeText={(text) => setBookingForm((prev: any) => ({ 
+                      ...prev, 
+                      grace_period: text.replace(/[^0-9]/g, '') 
+                    }))}
+                    placeholder="Enter grace period in hours"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.gracePeriodSuffix}>hours</Text>
+                </View>
+                <Text style={styles.helperText}>
+                  Additional time after booking ends for vehicle return
+                </Text>
+              </View>
+              
+              {/* Book for Someone Else Field */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Book for Someone Else (Optional)</Text>
+                {selectedUser ? (
+                  <View style={styles.selectedUserContainer}>
+                    <View style={styles.selectedUserInfo}>
+                      <Text style={styles.selectedUserName}>{selectedUser.full_name}</Text>
+                      <Text style={styles.selectedUserDetails}>
+                        {selectedUser.employee_id} • {selectedUser.email}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.clearUserButton}
+                      onPress={handleClearUser}
+                    >
+                      <Text style={styles.clearUserText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      style={styles.textInput}
+                      value={userSearchQuery}
+                      onChangeText={handleUserSearch}
+                      placeholder="Search by name, employee ID, or email"
+                      placeholderTextColor={colors.textSecondary}
+                      onFocus={() => setIsUserDropdownVisible(true)}
+                    />
+                    {searchLoading && (
+                      <ActivityIndicator size="small" color={colors.primary} style={styles.searchLoading} />
+                    )}
+                  </>
+                )}
+                
+                {isUserDropdownVisible && userSearchResults.length > 0 && (
+                  <View style={styles.userDropdown}>
+                    <ScrollView style={styles.userDropdownList} nestedScrollEnabled={true}>
+                      {userSearchResults.map((user) => (
+                        <TouchableOpacity
+                          key={user.employee_id}
+                          style={styles.userOption}
+                          onPress={() => handleSelectUser(user)}
+                        >
+                          <View style={styles.userOptionContent}>
+                            <Text style={styles.userOptionName}>{user.full_name}</Text>
+                            <Text style={styles.userOptionDetails}>
+                              {user.employee_id} • {user.email}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                    <TouchableOpacity
+                      style={styles.closeDropdownButton}
+                      onPress={() => setIsUserDropdownVisible(false)}
+                    >
+                      <Text style={styles.closeDropdownText}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
+                {isUserDropdownVisible && userSearchQuery.length >= 2 && userSearchResults.length === 0 && !searchLoading && (
+                  <View style={styles.noResultsContainer}>
+                    <Text style={styles.noResultsText}>No users found</Text>
+                  </View>
+                )}
+              </View>
+              
               <View style={styles.dateInfo}>
                 <Text style={styles.dateInfoTitle}>Booking Period</Text>
                 <Text style={styles.dateInfoText}>
@@ -384,7 +525,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   To: {formatDateForDisplay(searchForm.endDate)} at {formatTimeForDisplay(searchForm.endTime)}
                 </Text>
               </View>
-
+              
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
@@ -448,7 +589,6 @@ const CancelModal: React.FC<CancelModalProps> = ({
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
@@ -467,7 +607,7 @@ const CancelModal: React.FC<CancelModalProps> = ({
                   </Text>
                 </View>
               )}
-
+              
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Reason for Cancellation *</Text>
                 <TextInput
@@ -480,7 +620,7 @@ const CancelModal: React.FC<CancelModalProps> = ({
                   numberOfLines={3}
                 />
               </View>
-
+              
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
@@ -523,14 +663,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [cities, setCities] = useState<City[]>(DEFAULT_CITIES);
   const [citiesLoading, setCitiesLoading] = useState(false);
-
   const [isVehicleDetailModalVisible, setIsVehicleDetailModalVisible] = useState(false);
   const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
   const [isCityDropdownVisible, setIsCityDropdownVisible] = useState(false);
-
   const [activePickerType, setActivePickerType] = useState<PickerType | null>(null);
-
+  
+  // New states for user search
+  const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  
   const [searchForm, setSearchForm] = useState({
     city: 'hyderabad',
     startDate: new Date(),
@@ -538,13 +681,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     startTime: new Date(new Date().setHours(8, 0, 0, 0)),
     endTime: new Date(new Date().setHours(18, 0, 0, 0))
   });
-
+  
   const [bookingForm, setBookingForm] = useState({
     purpose: '',
     start_location: '',
-    end_location: ''
+    end_location: '',
+    grace_period: '',
   });
-
+  
   const [cancelReason, setCancelReason] = useState('');
   const [hasSearchedVehicles, setHasSearchedVehicles] = useState(false);
 
@@ -556,7 +700,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-
+      
       if (response.ok) {
         const data = await response.json();
         if (data.cities && Array.isArray(data.cities)) {
@@ -565,7 +709,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
             value: city.toLowerCase()
           }));
           setCities(formattedCities);
-
           // Update default city if current one is not in the new list
           const currentCityExists = formattedCities.some(city => city.value === searchForm.city);
           if (!currentCityExists && formattedCities.length > 0) {
@@ -574,13 +717,42 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         }
       } else {
         console.error('Failed to fetch cities, using default cities');
-        // Keep using default cities on error
       }
     } catch (error) {
       console.error('Error fetching cities:', error);
-      // Keep using default cities on error
     } finally {
       setCitiesLoading(false);
+    }
+  };
+
+  // Search users function
+  const searchUsers = async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+    
+    setUserSearchLoading(true);
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/core/getUsers?query=${encodeURIComponent(query)}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUserSearchResults(data.data || []);
+      } else {
+        setUserSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setUserSearchResults([]);
+    } finally {
+      setUserSearchLoading(false);
     }
   };
 
@@ -594,8 +766,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       }
     };
     getToken();
-
-    // Fetch cities when component mounts
     fetchCities();
   }, []);
 
@@ -611,14 +781,13 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       Alert.alert('Error', 'Please select a city');
       return;
     }
-
+    
     setLoading(true);
     setHasSearchedVehicles(true);
-
     try {
       const startDateTime = `${searchForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.startTime)}:00`;
       const endDateTime = `${searchForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.endTime)}:00`;
-
+      
       const response = await fetch(
         `${BACKEND_URL}/core/getAvailableVehicles?city=${encodeURIComponent(searchForm.city)}&start_date=${encodeURIComponent(startDateTime)}&end_date=${encodeURIComponent(endDateTime)}`,
         {
@@ -626,7 +795,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           headers: { 'Content-Type': 'application/json' },
         }
       );
-
+      
       if (response.ok) {
         const data = await response.json();
         setVehicles(data.vehicles || []);
@@ -647,7 +816,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const fetchMyBookings = async () => {
     if (!token) return;
-
+    
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getMyBookings`, {
@@ -655,7 +824,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-
+      
       if (response.ok) {
         const data = await response.json();
         setMyBookings(data.vehicle_bookings || []);
@@ -671,41 +840,50 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const bookVehicle = async () => {
     if (!selectedVehicle || !bookingForm.purpose || !bookingForm.start_location || !bookingForm.end_location) {
-      Alert.alert('Error', 'Please fill all booking fields');
+      Alert.alert('Error', 'Please fill all required booking fields');
       return;
     }
-
+    
     setLoading(true);
     try {
       const startDateTime = `${searchForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.startTime)}:00`;
       const endDateTime = `${searchForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(searchForm.endTime)}:00`;
-
+      
+      const requestData: any = {
+        token,
+        vehicle_id: selectedVehicle.id,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        purpose: bookingForm.purpose,
+        start_location: bookingForm.start_location,
+        end_location: bookingForm.end_location
+      };
+      
+      // Add grace_period if provided
+      if (bookingForm.grace_period && bookingForm.grace_period.trim() !== '') {
+        requestData.grace_period = bookingForm.grace_period;
+      }
+      
+      // Add booking_for_someone_else if selected
+      if (selectedUser) {
+        requestData.booking_for_someone_else = selectedUser.employee_id;
+      }
+      
       const response = await fetch(`${BACKEND_URL}/core/bookVehicle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          vehicle_id: selectedVehicle.id,
-          start_time: startDateTime,
-          end_time: endDateTime,
-          purpose: bookingForm.purpose,
-          start_location: bookingForm.start_location,
-          end_location: bookingForm.end_location
-        }),
+        body: JSON.stringify(requestData),
       });
-
+      
       if (response.ok) {
         Alert.alert('Success', 'Vehicle booked successfully!');
         closeBookingModal();
-
         if (activeTab !== 'my-bookings') {
           setActiveTab('my-bookings');
         }
-
         if (activeTab === 'my-bookings' || myBookings.length > 0) {
           fetchMyBookings();
         }
-
         setActiveTab('my-bookings');
       } else {
         const error = await response.json();
@@ -724,7 +902,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
       Alert.alert('Error', 'Please provide a reason for cancellation');
       return;
     }
-
+    
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/cancelbooking`, {
@@ -736,7 +914,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           reason_of_cancellation: cancelReason
         }),
       });
-
+      
       if (response.ok) {
         Alert.alert('Success', 'Booking cancelled successfully!');
         closeCancelModal();
@@ -760,7 +938,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-
+      
       if (response.ok) {
         const data = await response.json();
         setSelectedVehicle(data.vehicle);
@@ -779,7 +957,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
   const closeBookingModal = () => {
     setIsBookingModalVisible(false);
-    setBookingForm({ purpose: '', start_location: '', end_location: '' });
+    setBookingForm({ 
+      purpose: '', 
+      start_location: '', 
+      end_location: '',
+      grace_period: '' 
+    });
+    setSelectedUser(null);
+    setUserSearchResults([]);
   };
 
   const closeCancelModal = () => {
@@ -893,7 +1078,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-
             {selectedVehicle && (
               <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -914,7 +1098,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                       <Text style={styles.statusBadgeText}>{selectedVehicle.status}</Text>
                     </View>
                   </View>
-
                   <View style={styles.vehicleInfoGrid}>
                     <View style={styles.infoItem}>
                       <Text style={styles.infoLabel}>Type</Text>
@@ -937,7 +1120,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                       <Text style={styles.infoValue}>{selectedVehicle.seating_capacity} seats</Text>
                     </View>
                   </View>
-
                   <View style={styles.locationSection}>
                     <Text style={styles.sectionTitle}>Driver Information</Text>
                     <Text style={styles.driverInfo}>
@@ -947,14 +1129,12 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                       Employee ID: {selectedVehicle.assigned_to.employee_id}
                     </Text>
                   </View>
-
                   <View style={styles.locationSection}>
                     <Text style={styles.sectionTitle}>Current Location</Text>
                     <Text style={styles.locationText}>
                       {selectedVehicle.current_location.address}, {selectedVehicle.current_location.city}, {selectedVehicle.current_location.state} - {selectedVehicle.current_location.zip_code}
                     </Text>
                   </View>
-
                   <TouchableOpacity
                     style={styles.bookButton}
                     onPress={() => {
@@ -977,7 +1157,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Search Vehicles</Text>
-
         <View style={styles.searchForm}>
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1 }]}>
@@ -998,7 +1177,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               </TouchableOpacity>
             </View>
           </View>
-
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
               <Text style={styles.label}>Start Date</Text>
@@ -1025,7 +1203,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               </TouchableOpacity>
             </View>
           </View>
-
           <View style={styles.formRow}>
             <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
               <Text style={styles.label}>Start Time</Text>
@@ -1052,7 +1229,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
               </TouchableOpacity>
             </View>
           </View>
-
           <TouchableOpacity
             style={styles.searchButton}
             onPress={searchVehicles}
@@ -1066,7 +1242,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           </TouchableOpacity>
         </View>
       </View>
-
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Available Vehicles</Text>
         {vehicles.length > 0 ? (
@@ -1093,20 +1268,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                   <Text style={styles.vehicleStatusText}>{vehicle.status}</Text>
                 </View>
               </View>
-
               <View style={styles.vehicleDetails}>
                 <Text style={styles.vehicleLocation}>
                   📍 {vehicle.current_location.city}, {vehicle.current_location.state}
                 </Text>
                 <Text style={styles.vehicleCapacity}>👥 {vehicle.seating_capacity} seats</Text>
               </View>
-
               <View style={styles.driverSection}>
                 <Text style={styles.driverText}>
                   Driver: {vehicle.assigned_to.full_name}
                 </Text>
               </View>
-
               <View style={styles.vehicleFooter}>
                 <Text style={styles.tapToView}>Tap to view details and book</Text>
               </View>
@@ -1128,7 +1300,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           </View>
         )}
       </View>
-
       <CityDropdown
         visible={isCityDropdownVisible}
         onClose={() => setIsCityDropdownVisible(false)}
@@ -1136,7 +1307,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         onSelectCity={(city) => setSearchForm(prev => ({ ...prev, city }))}
         cities={cities}
       />
-
       {activePickerType && (
         <CustomDateTimePicker
           visible={true}
@@ -1186,7 +1356,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                   <Text style={styles.bookingStatusText}>{booking.status}</Text>
                 </View>
               </View>
-
               <View style={styles.bookingDetails}>
                 <Text style={styles.bookingDetail}>
                   <Text style={styles.bookingLabel}>Purpose:</Text> {booking.purpose}
@@ -1206,7 +1375,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                   </Text>
                 )}
               </View>
-
               {booking.status === 'booked' && (
                 <View style={styles.bookingActions}>
                   <TouchableOpacity
@@ -1245,7 +1413,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
@@ -1253,7 +1420,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         <Text style={styles.headerTitle}>Car Booking</Text>
         <View style={styles.headerSpacer} />
       </View>
-
       <View style={styles.tabNavigation}>
         {[
           { key: 'search' as const, label: 'Search Vehicles' },
@@ -1273,11 +1439,9 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
           </TouchableOpacity>
         ))}
       </View>
-
       <View style={styles.contentContainer}>
         {renderContent()}
       </View>
-
       <VehicleDetailModal />
       <BookingModal
         visible={isBookingModalVisible}
@@ -1291,6 +1455,10 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         formatDateForDisplay={formatDateForDisplay}
         formatTimeForDisplay={formatTimeForDisplay}
         colors={colors}
+        userSearchResults={userSearchResults}
+        onSearchUsers={searchUsers}
+        onSelectUser={setSelectedUser}
+        selectedUser={selectedUser}
       />
       <CancelModal
         visible={isCancelModalVisible}
@@ -1322,9 +1490,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center'
-  }, arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.textSecondary },
-  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs,borderTopRightRadius:28,borderTopLeftRadius:28 },
-  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2,borderTopRightRadius:28,borderTopLeftRadius:28  },
+  },
+  arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.textSecondary },
+  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs, borderTopRightRadius: 28, borderTopLeftRadius: 28 },
+  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2, borderTopRightRadius: 28, borderTopLeftRadius: 28 },
   activeTab: { borderBottomWidth: 3, borderBottomColor: colors.primary, backgroundColor: colors.backgroundSecondary },
   tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
   activeTabText: { color: colors.primary, fontWeight: '600' },
@@ -1429,6 +1598,127 @@ const styles = StyleSheet.create({
   modalSubmitButton: { flex: 1, backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginLeft: spacing.sm, minHeight: 48, justifyContent: 'center' },
   modalSubmitButtonDisabled: { backgroundColor: colors.textSecondary, opacity: 0.6 },
   modalSubmitText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
+  
+  // New styles for grace period
+  gracePeriodContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gracePeriodInput: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  gracePeriodSuffix: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    minWidth: 60,
+  },
+  helperText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
+  },
+  
+  // New styles for user search
+  selectedUserContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.backgroundSecondary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  selectedUserInfo: {
+    flex: 1,
+  },
+  selectedUserName: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  selectedUserDetails: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  clearUserButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.errorLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  clearUserText: {
+    fontSize: fontSize.sm,
+    color: colors.error,
+    fontWeight: '600',
+  },
+  searchLoading: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  userDropdown: {
+    position: 'absolute',
+    top: 70,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 200,
+    zIndex: 1000,
+    ...shadows.md,
+  },
+  userDropdownList: {
+    maxHeight: 150,
+  },
+  userOption: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  userOptionContent: {
+    flex: 1,
+  },
+  userOptionName: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  userOptionDetails: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  closeDropdownButton: {
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  closeDropdownText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  noResultsContainer: {
+    padding: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.xs,
+  },
+  noResultsText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
 });
 
 export default Cab;
