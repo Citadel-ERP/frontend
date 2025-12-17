@@ -28,7 +28,44 @@ import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './EmployeeManagement';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const isTablet = screenWidth >= 768;
+const isSmallScreen = screenHeight < 600;
+const isWeb = Platform.OS === 'web';
+
+// Get device type for responsive design
+const getDeviceType = () => {
+  if (isWeb) {
+    if (screenWidth >= 1024) return 'desktop';
+    if (screenWidth >= 768) return 'tablet';
+    return 'mobile';
+  }
+  return isTablet ? 'tablet' : 'mobile';
+};
+
+const deviceType = getDeviceType();
+const isDesktop = deviceType === 'desktop';
+const isMobile = deviceType === 'mobile';
+
+// Get responsive values based on device type
+const getResponsiveValues = () => {
+  const baseSpacing = isDesktop ? 32 : isTablet ? 24 : 20;
+  const baseFontSize = isDesktop ? 16 : isTablet ? 15 : 14;
+  
+  return {
+    horizontalPadding: isDesktop ? 30 : isTablet ? 24 : 16,
+    verticalPadding: isDesktop ? 24 : isTablet ? 20 : 16,
+    sectionSpacing: isDesktop ? 28 : isTablet ? 24 : 20,
+    cardSpacing: isDesktop ? 16 : isTablet ? 14 : 12,
+    logoSize: isDesktop ? 120 : isTablet ? 100 : 80,
+    avatarSize: isDesktop ? 80 : isTablet ? 70 : 60,
+    iconSize: isDesktop ? 28 : isTablet ? 24 : 22,
+    bottomBarHeight: isDesktop ? 90 : isTablet ? 80 : 70,
+    waveHeight: isDesktop ? 60 : isTablet ? 50 : 40,
+  };
+};
+
+const responsive = getResponsiveValues();
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -83,7 +120,6 @@ interface UserData {
   leaves_applied: number;
   holidays: number;
   late_arrivals: number;
-
 }
 
 interface ApiResponse {
@@ -110,6 +146,155 @@ interface UpcomingEvent {
   type: 'birthday' | 'anniversary';
   years?: number;
 }
+
+// Custom Wave Bottom Bar Component
+interface WaveBottomBarProps {
+  data: Array<{
+    routeName: string;
+    tabLabel: string;
+    tabIcon: (isFocused: boolean) => React.ReactNode;
+  }>;
+  selectedTab: string;
+  onTabPress: (routeName: string) => void;
+  waveColor: string;
+  backgroundColor: string;
+  barColor: string;
+  containerStyle?: any;
+  tabButtonStyle?: any;
+  tabTextStyle?: any;
+  animatedWaveStyle?: any;
+}
+
+const CustomWaveBottomBar: React.FC<WaveBottomBarProps> = ({
+  data,
+  selectedTab,
+  onTabPress,
+  waveColor,
+  backgroundColor,
+  barColor,
+  containerStyle,
+  tabButtonStyle,
+  tabTextStyle,
+  animatedWaveStyle
+}) => {
+  const waveAnim = React.useRef(new Animated.Value(0)).current;
+  const waveHeight = responsive.waveHeight;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(waveAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(waveAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  const waveTranslateY = waveAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -15]
+  });
+
+  const waveScaleX = waveAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.05, 1]
+  });
+
+  const opacity = waveAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.7, 0.9, 0.7]
+  });
+
+  return (
+    <View style={[styles.customBarContainer, containerStyle, { backgroundColor: barColor }]}>
+      {/* Wave effect with multiple layers for better animation */}
+      <Animated.View 
+        style={[
+          styles.waveEffect,
+          animatedWaveStyle,
+          {
+            backgroundColor: waveColor,
+            height: waveHeight,
+            opacity: opacity,
+            transform: [
+              { translateY: waveTranslateY },
+              { scaleX: waveScaleX }
+            ]
+          }
+        ]}
+      >
+        {/* Wave pattern overlay */}
+        <View style={styles.wavePattern}>
+          {[...Array(10)].map((_, i) => (
+            <View key={i} style={[styles.waveCircle, { 
+              left: `${i * 10}%`,
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              width: waveHeight * 0.6,
+              height: waveHeight * 0.6,
+              borderRadius: waveHeight * 0.3,
+            }]} />
+          ))}
+        </View>
+      </Animated.View>
+      
+      {/* Tabs container */}
+      <View style={[styles.tabsContainer, { 
+        backgroundColor,
+        paddingBottom: Platform.OS === 'ios' ? Math.max(responsive.bottomBarHeight * 0.4, 30) : responsive.bottomBarHeight * 0.3,
+        paddingTop: 12,
+      }]}>
+        {data.map((item, index) => {
+          const isFocused = selectedTab === item.routeName;
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.tabButton,
+                tabButtonStyle,
+                { 
+                  paddingVertical: isDesktop ? 12 : isTablet ? 10 : 8,
+                }
+              ]}
+              onPress={() => onTabPress(item.routeName)}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.tabIconContainer,
+                isFocused && styles.tabIconContainerActive,
+                { 
+                  backgroundColor: isFocused ? `${waveColor}15` : 'transparent',
+                  padding: isDesktop ? 10 : isTablet ? 8 : 6,
+                  borderRadius: isDesktop ? 16 : isTablet ? 14 : 12,
+                }
+              ]}>
+                {item.tabIcon(isFocused)}
+              </View>
+              <Text style={[
+                styles.tabLabel,
+                tabTextStyle,
+                {
+                  color: isFocused ? waveColor : '#666',
+                  fontSize: isDesktop ? 12 : isTablet ? 11 : 10,
+                  marginTop: isDesktop ? 6 : isTablet ? 5 : 4,
+                  fontWeight: isFocused ? '600' : '500',
+                }
+              ]}>
+                {item.tabLabel}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [token, setToken] = useState<string | null>(null);
@@ -146,13 +331,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-
-  // Add these state variables in your Dashboard component (around line 170-180)
+  // Add these state variables
   const [showChat, setShowChat] = useState(false);
   const [showChatRoom, setShowChatRoom] = useState(false);
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
 
   const TOKEN_2_KEY = 'token_2';
+
   // Function to auto-mark attendance
   const autoMarkAttendance = async () => {
     console.log('🎯 AUTO-MARK ATTENDANCE: Starting automatic attendance marking...');
@@ -215,6 +400,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       console.error('Background attendance task error:', error);
     }
   };
+
   const debugLog = async (message: string, data?: any) => {
     console.log(message, data);
     // Store logs in AsyncStorage for later viewing
@@ -233,7 +419,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       console.error('Error storing debug log:', error);
     }
   };
-  // Function to register for push notifications
+
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
     let token;
@@ -302,20 +488,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       token = tokenData.data;
       await debugLog('[Push Token] Success', token);
 
-      // // Show success alert in APK
-      // Alert.alert('Push Token Generated', `Token: ${token.substring(0, 20)}...`);
-
       return token;
 
     } catch (error: any) {
       await debugLog('[Push Token Error]', error.message);
-      // Alert.alert(
-      //   'Notification Error',
-      //   `Failed: ${error.message}`
-      // );
       return undefined;
     }
-  }
+  };
+
   const sendTokenToBackend = async (expoToken: string, userToken: string) => {
     await debugLog('=== SENDING TOKEN TO BACKEND ===');
     await debugLog('Expo Token', expoToken);
@@ -323,7 +503,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     if (!expoToken || !userToken) {
       await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
-      // Alert.alert('Error', 'Cannot register push token - missing credentials');
       return;
     }
 
@@ -353,20 +532,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       if (response.ok) {
         await debugLog('✅ Push token registered successfully');
         await AsyncStorage.setItem('expo_push_token', expoToken);
-        // Alert.alert('Success', 'Notifications enabled successfully!');
       } else {
         await debugLog('❌ Failed to register push token', data.message);
-        // Alert.alert('Registration Failed', `Error: ${data.message || 'Unknown error'}`);
       }
     } catch (error: any) {
       await debugLog('❌ Network error', error.message);
-      // Alert.alert('Network Error', `Could not reach server: ${error.message}`);
     }
   };
+
   const handleBackFromEmployeeManagement = () => {
     setShowEmployeeManagement(false);
     setActiveMenuItem('Dashboard');
   };
+
   const handleNotificationNavigation = (page: string) => {
     console.log('Handling notification navigation for page:', page);
 
@@ -417,7 +595,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         console.log('Unknown page:', page);
     }
   };
-
 
   // Setup push notifications
   useEffect(() => {
@@ -589,7 +766,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     } else {
       console.error('Failed to update device ID');
     }
-  }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -636,7 +813,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       } catch (error) {
         console.error('Error fetching user data:', error);
         setError(error instanceof Error ? error.message : 'Failed to fetch user data');
-        // Alert.alert('Error', 'Failed to load user data. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -911,7 +1087,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setShowChat(true);
   };
 
-  // Update the handleNavItemPress function (around line 700)
+  // Update the handleNavItemPress function
   const handleNavItemPress = (navItem: string) => {
     setActiveNavItem(navItem);
     if (navItem === 'message') {
@@ -923,23 +1099,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
+      <SafeAreaView style={[styles.container, styles.centerContent]}>
         <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error || !userData) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
+      <SafeAreaView style={[styles.container, styles.centerContent]}>
         <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
         <Text style={styles.errorText}>Failed to load data</Text>
         <TouchableOpacity style={styles.retryButton}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -950,11 +1126,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   }
 
   const AttendanceCard: React.FC<AttendanceCardProps> = ({ value, label, color }) => (
-    <View style={[styles.card, { backgroundColor: color }]}>
+    <View style={[
+      styles.card,
+      { 
+        backgroundColor: color,
+        width: isDesktop ? '23%' : isTablet ? '48%' : (screenWidth - responsive.horizontalPadding * 2 - responsive.cardSpacing) / 2,
+        minHeight: isSmallScreen ? 90 : isDesktop ? 140 : isTablet ? 120 : 110,
+      }
+    ]}>
       <View style={styles.cardCircle} />
       <View style={styles.cardCircleSmall} />
-      <Text style={styles.cardValue}>{value}</Text>
-      <Text style={styles.cardLabel}>{label}</Text>
+      <Text style={[
+        styles.cardValue,
+        { fontSize: isDesktop ? 52 : isTablet ? 44 : 40 }
+      ]}>{value}</Text>
+      <Text style={[
+        styles.cardLabel,
+        { fontSize: isDesktop ? 15 : isTablet ? 14 : 13 }
+      ]}>{label}</Text>
     </View>
   );
 
@@ -967,22 +1156,54 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   }
 
   const EventAvatar: React.FC<EventAvatarProps> = ({ name, date, initials, type, years }) => (
-    <View style={styles.eventContainer}>
+    <View style={[
+      styles.eventContainer,
+      { width: isDesktop ? 120 : isTablet ? 100 : 90 }
+    ]}>
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, type === 'anniversary' && styles.avatarAnniversary]}>
-          <Text style={styles.avatarInitials}>{initials}</Text>
+        <View style={[
+          styles.avatar,
+          type === 'anniversary' && styles.avatarAnniversary,
+          {
+            width: isDesktop ? 80 : isTablet ? 70 : 60,
+            height: isDesktop ? 80 : isTablet ? 70 : 60,
+          }
+        ]}>
+          <Text style={[
+            styles.avatarInitials,
+            { fontSize: isDesktop ? 22 : isTablet ? 20 : 18 }
+          ]}>{initials}</Text>
         </View>
-        <View style={[styles.dateBadge, type === 'anniversary' && styles.dateBadgeAnniversary]}>
-          <Text style={styles.dateText}>{date}</Text>
+        <View style={[
+          styles.dateBadge,
+          type === 'anniversary' && styles.dateBadgeAnniversary,
+          {
+            paddingHorizontal: isDesktop ? 14 : isTablet ? 12 : 10,
+            paddingVertical: isDesktop ? 8 : isTablet ? 6 : 5,
+          }
+        ]}>
+          <Text style={[
+            styles.dateText,
+            { fontSize: isDesktop ? 13 : isTablet ? 12 : 11 }
+          ]}>{date}</Text>
         </View>
         {type === 'anniversary' && years !== undefined && (
           <View style={styles.anniversaryBadge}>
-            <Text style={styles.anniversaryText}>🎉 {years}yr{years !== 1 ? 's' : ''}</Text>
+            <Text style={[
+              styles.anniversaryText,
+              { fontSize: isDesktop ? 12 : isTablet ? 11 : 10 }
+            ]}>🎉 {years}yr{years !== 1 ? 's' : ''}</Text>
           </View>
         )}
       </View>
-      <Text style={styles.eventName} numberOfLines={2}>{name}</Text>
-      <Text style={styles.eventType}>{type === 'birthday' ? '🎂 Birthday' : '💼 Anniversary'}</Text>
+      <Text style={[
+        styles.eventName,
+        { fontSize: isDesktop ? 14 : isTablet ? 13 : 12 }
+      ]} numberOfLines={2}>{name}</Text>
+      <Text style={[
+        styles.eventType,
+        { fontSize: isDesktop ? 12 : isTablet ? 11 : 10 }
+      ]}>{type === 'birthday' ? '🎂 Birthday' : '💼 Anniversary'}</Text>
     </View>
   );
 
@@ -993,54 +1214,169 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   }
 
   const ModuleItem: React.FC<ModuleItemProps> = ({ title, iconUrl, onPress }) => (
-    <TouchableOpacity style={styles.moduleItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.moduleIconContainer}>
-        <Image source={{ uri: iconUrl }} style={styles.moduleIconImage} resizeMode="contain" />
+    <TouchableOpacity style={[
+      styles.moduleItem,
+      {
+        width: isDesktop ? 150 : isTablet ? 130 : 110,
+        padding: isDesktop ? 18 : isTablet ? 16 : 12,
+        minHeight: isDesktop ? 150 : isTablet ? 130 : 110,
+      }
+    ]} onPress={onPress} activeOpacity={0.7}>
+      <View style={[
+        styles.moduleIconContainer,
+        {
+          width: isDesktop ? 60 : isTablet ? 56 : 48,
+          height: isDesktop ? 60 : isTablet ? 56 : 48,
+        }
+      ]}>
+        <Image source={{ uri: iconUrl }} style={[
+          styles.moduleIconImage,
+          {
+            width: isDesktop ? 40 : isTablet ? 36 : 32,
+            height: isDesktop ? 40 : isTablet ? 36 : 32,
+          }
+        ]} resizeMode="contain" />
       </View>
-      <Text style={styles.moduleTitle} numberOfLines={2}>{title}</Text>
+      <Text style={[
+        styles.moduleTitle,
+        { fontSize: isDesktop ? 14 : isTablet ? 13 : 12 }
+      ]} numberOfLines={2}>{title}</Text>
     </TouchableOpacity>
   );
 
   const HamburgerMenu = () => (
     <Modal transparent visible={isMenuVisible} animationType="none" onRequestClose={closeMenu}>
-      <View style={styles.overlay}>
+      <SafeAreaView style={styles.overlay}>
         <TouchableOpacity style={styles.overlayTouchable} activeOpacity={1} onPress={closeMenu} />
-        <Animated.View style={[styles.menuContainer, { transform: [{ translateX: slideAnim }] }]}>
+        <Animated.View style={[
+          styles.menuContainer,
+          {
+            width: isDesktop ? 400 : isTablet ? 350 : 300,
+            transform: [{ translateX: slideAnim }]
+          }
+        ]}>
           <View style={[styles.menuHeader, { paddingTop: insets.top }]}>
             <View style={styles.menuHeaderContent}>
-              <View style={styles.menuUserAvatarCircle}>
-                <Icon type="user" color={colors.white} size={24} />
+              <View style={[
+                styles.menuUserAvatarCircle,
+                {
+                  width: isDesktop ? 70 : isTablet ? 64 : 56,
+                  height: isDesktop ? 70 : isTablet ? 64 : 56,
+                }
+              ]}>
+                <Icon type="user" color={colors.white} size={isDesktop ? 28 : 24} />
               </View>
               <View style={styles.menuUserDetails}>
-                <Text style={styles.menuUserRole}>{userData.designation || userData.role || 'Employee'}</Text>
-                <Text style={styles.menuUserName}>{userData.full_name}</Text>
+                <Text style={[
+                  styles.menuUserRole,
+                  { fontSize: isDesktop ? 16 : isTablet ? 14 : 13 }
+                ]}>{userData.designation || userData.role || 'Employee'}</Text>
+                <Text style={[
+                  styles.menuUserName,
+                  { fontSize: isDesktop ? 22 : isTablet ? 20 : 18 }
+                ]}>{userData.full_name}</Text>
               </View>
             </View>
           </View>
           <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuItemsContent}>
             {menuItems.map((item, index) => (
-              <TouchableOpacity key={index} style={[styles.menuItem, item.isActive && styles.menuItemActive]} onPress={() => handleMenuItemPress(item.title)} activeOpacity={0.7}>
-                <View style={styles.menuItemIconContainer}>{item.icon}</View>
-                <Text style={[styles.menuItemText, item.isActive && styles.menuItemTextActive]}>{item.title}</Text>
+              <TouchableOpacity key={index} style={[
+                styles.menuItem,
+                item.isActive && styles.menuItemActive,
+                {
+                  paddingHorizontal: isDesktop ? 28 : isTablet ? 24 : 20,
+                  paddingVertical: isDesktop ? 18 : isTablet ? 16 : 14,
+                }
+              ]} onPress={() => handleMenuItemPress(item.title)} activeOpacity={0.7}>
+                <View style={[
+                  styles.menuItemIconContainer,
+                  {
+                    width: isDesktop ? 40 : isTablet ? 36 : 32,
+                    marginRight: isDesktop ? 24 : isTablet ? 20 : 16,
+                  }
+                ]}>{item.icon}</View>
+                <Text style={[
+                  styles.menuItemText,
+                  item.isActive && styles.menuItemTextActive,
+                  { fontSize: isDesktop ? 18 : isTablet ? 16 : 15 }
+                ]}>{item.title}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
           <View style={[styles.logoutSection, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.logoutDivider} />
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
-              <View style={styles.logoutIconContainer}><LogoutIcon /></View>
-              <Text style={styles.logoutButtonText}>Logout</Text>
+            <TouchableOpacity style={[
+              styles.logoutButton,
+              {
+                paddingHorizontal: isDesktop ? 28 : isTablet ? 24 : 20,
+                paddingVertical: isDesktop ? 18 : isTablet ? 16 : 14,
+              }
+            ]} onPress={handleLogout} activeOpacity={0.7}>
+              <View style={[
+                styles.logoutIconContainer,
+                {
+                  width: isDesktop ? 40 : isTablet ? 36 : 32,
+                  marginRight: isDesktop ? 24 : isTablet ? 20 : 16,
+                }
+              ]}><LogoutIcon /></View>
+              <Text style={[
+                styles.logoutButtonText,
+                { fontSize: isDesktop ? 18 : isTablet ? 16 : 15 }
+              ]}>Logout</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 
   const displayModules = getDisplayModules();
 
+  // WaveBottomBar configuration
+  const waveBottomBarTabs = [
+    {
+      routeName: 'home',
+      tabLabel: 'Home',
+      tabIcon: (isFocused: boolean) => (
+        <HomeIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
+      ),
+    },
+    {
+      routeName: 'message',
+      tabLabel: 'Messages',
+      tabIcon: (isFocused: boolean) => (
+        <MessageIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
+      ),
+    },
+    {
+      routeName: 'team',
+      tabLabel: 'Organisation',
+      tabIcon: (isFocused: boolean) => (
+        <TeamIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
+      ),
+    },
+    {
+      routeName: 'ai-bot',
+      tabLabel: 'AI Bot',
+      tabIcon: (isFocused: boolean) => (
+        <BotIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
+      ),
+    },
+    {
+      routeName: 'support',
+      tabLabel: 'Support',
+      tabIcon: (isFocused: boolean) => (
+        <SupportIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
+      ),
+    },
+  ];
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       {showChatRoom && selectedChatRoom ? (
         <ChatRoomScreen
           chatRoom={selectedChatRoom}
@@ -1087,23 +1423,56 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       ) : showEmployeeManagement ? (
         <EmployeeManagement onBack={handleBackFromEmployeeManagement} />
       ) : (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <SafeAreaView style={styles.container}>
           <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-          <View style={styles.header}>
+          <View style={[
+            styles.header,
+            {
+              paddingTop: Math.max(insets.top, isDesktop ? 20 : isTablet ? 16 : 12),
+              paddingBottom: isDesktop ? 28 : isTablet ? 24 : 20,
+              paddingHorizontal: responsive.horizontalPadding,
+            }
+          ]}>
             <View style={styles.headerTop}>
               <TouchableOpacity style={styles.menuIcon} onPress={openMenu}>
-                {[1, 2, 3].map(i => <View key={i} style={styles.menuLine} />)}
+                {[1, 2, 3].map(i => (
+                  <View key={i} style={[
+                    styles.menuLine,
+                    {
+                      width: isDesktop ? 24 : isTablet ? 22 : 20,
+                      height: 2,
+                    }
+                  ]} />
+                ))}
               </TouchableOpacity>
               <View style={styles.logoContainer}>
-                <Image source={require('../assets/logo_back.png')} style={styles.logo} resizeMode="contain" />
+                <Image source={require('../assets/logo_back.png')} style={[
+                  styles.logo,
+                  {
+                    width: responsive.logoSize,
+                    height: responsive.logoSize * 0.8,
+                  }
+                ]} resizeMode="contain" />
               </View>
-              <View style={styles.headerSpacer} />
+              <View style={[
+                styles.headerSpacer,
+                { width: isDesktop ? 44 : isTablet ? 40 : 36 }
+              ]} />
             </View>
             <View style={styles.userInfo}>
               <View style={styles.userDetails}>
-                <Text style={styles.greeting}>Hi</Text>
-                <Text style={styles.userName}>{userData.full_name.split(' ')[0]},</Text>
-                <Text style={styles.userRole}>{userData.designation || userData.role || 'Employee'}</Text>
+                <Text style={[
+                  styles.greeting,
+                  { fontSize: isDesktop ? 18 : isTablet ? 16 : 14 }
+                ]}>Hi</Text>
+                <Text style={[
+                  styles.userName,
+                  { fontSize: isDesktop ? 36 : isTablet ? 32 : 28 }
+                ]}>{userData.full_name.split(' ')[0]},</Text>
+                <Text style={[
+                  styles.userRole,
+                  { fontSize: isDesktop ? 19 : isTablet ? 17 : 15 }
+                ]}>{userData.designation || userData.role || 'Employee'}</Text>
               </View>
             </View>
           </View>
@@ -1111,12 +1480,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             <ScrollView
               style={styles.scrollContent}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContainer}
+              contentContainerStyle={[
+                styles.scrollContainer,
+                {
+                  paddingHorizontal: responsive.horizontalPadding,
+                  paddingTop: responsive.verticalPadding,
+                  paddingBottom: insets.bottom + responsive.bottomBarHeight + 20,
+                }
+              ]}
               keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Attendance</Text>
-                <View style={styles.attendanceGrid}>
+              <View style={[
+                styles.section,
+                { marginBottom: responsive.sectionSpacing }
+              ]}>
+                <Text style={[
+                  styles.sectionTitle,
+                  { fontSize: isDesktop ? 26 : isTablet ? 24 : 20 }
+                ]}>Attendance</Text>
+                <View style={[
+                  styles.attendanceGrid,
+                  {
+                    gap: responsive.cardSpacing,
+                    marginBottom: isDesktop ? 20 : isTablet ? 16 : 12,
+                  }
+                ]}>
                   <AttendanceCard value={String(userData.days_present)} label="Days Present" color="#A7F3D0" />
                   <AttendanceCard
                     value={String(userData.leaves_applied)}
@@ -1127,13 +1515,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   <AttendanceCard value={String(userData.late_arrivals)} label="Late Arrivals" color="#FBCFE8" />
                 </View>
               </View>
-              <View style={styles.sectionModules}>
-                <Text style={styles.sectionTitle}>Modules</Text>
+              <View style={[
+                styles.sectionModules,
+                {
+                  marginTop: Platform.OS === 'android' && isSmallScreen ? -40 : 0,
+                  marginBottom: responsive.sectionSpacing,
+                }
+              ]}>
+                <Text style={[
+                  styles.sectionTitle,
+                  { fontSize: isDesktop ? 26 : isTablet ? 24 : 20 }
+                ]}>Modules</Text>
                 {displayModules.length > 0 ? (
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.modulesScrollContent}
+                    contentContainerStyle={[
+                      styles.modulesScrollContent,
+                      { gap: responsive.cardSpacing }
+                    ]}
                   >
                     {displayModules.map((module, index) => (
                       <ModuleItem
@@ -1145,17 +1545,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     ))}
                   </ScrollView>
                 ) : (
-                  <Text style={styles.noModulesText}>No modules available</Text>
+                  <Text style={[
+                    styles.noModulesText,
+                    { fontSize: isDesktop ? 16 : isTablet ? 15 : 14 }
+                  ]}>No modules available</Text>
                 )}
               </View>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Upcoming Events</Text>
+              <View style={[
+                styles.section,
+                { marginBottom: responsive.sectionSpacing }
+              ]}>
+                <Text style={[
+                  styles.sectionTitle,
+                  { fontSize: isDesktop ? 26 : isTablet ? 24 : 20 }
+                ]}>Upcoming Events</Text>
                 {upcomingEvents.length > 0 ? (
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.eventsScroll}
-                    contentContainerStyle={styles.eventsScrollContent}
+                    contentContainerStyle={[
+                      styles.eventsScrollContent,
+                      { gap: isDesktop ? 24 : isTablet ? 20 : 16 }
+                    ]}
                   >
                     {upcomingEvents.map((event, index) => (
                       <EventAvatar
@@ -1172,39 +1584,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   <View style={styles.noEventsContainer}>
                     <Image
                       source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2965/2965140.png' }}
-                      style={styles.noEventsImage}
+                      style={[
+                        styles.noEventsImage,
+                        {
+                          width: isDesktop ? 120 : isTablet ? 100 : 80,
+                          height: isDesktop ? 120 : isTablet ? 100 : 80,
+                        }
+                      ]}
                       resizeMode="contain"
                     />
-                    <Text style={styles.noEventsText}>No upcoming events</Text>
+                    <Text style={[
+                      styles.noEventsText,
+                      { fontSize: isDesktop ? 18 : isTablet ? 16 : 14 }
+                    ]}>No upcoming events</Text>
                   </View>
                 )}
               </View>
             </ScrollView>
-            <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
-              <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('home')}>
-                <HomeIcon color={activeNavItem === 'home' ? colors.primary : colors.textSecondary} />
-                <Text style={[styles.navLabel, { color: activeNavItem === 'home' ? colors.primary : colors.textSecondary }]}>Home</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('message')}>
-                <MessageIcon color={activeNavItem === 'message' ? colors.primary : colors.textSecondary} />
-                <Text style={[styles.navLabel, { color: activeNavItem === 'message' ? colors.primary : colors.textSecondary }]}>Messages</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('team')}>
-                <TeamIcon color={activeNavItem === 'team' ? colors.primary : colors.textSecondary} />
-                <Text style={[styles.navLabel, { color: activeNavItem === 'team' ? colors.primary : colors.textSecondary }]}>Organisation</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('ai-bot')}>
-                <BotIcon color={activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary} />
-                <Text style={[styles.navLabel, { color: activeNavItem === 'ai-bot' ? colors.primary : colors.textSecondary }]}>AI Bot</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => handleNavItemPress('support')}>
-                <SupportIcon color={activeNavItem === 'support' ? colors.primary : colors.textSecondary} />
-                <Text style={[styles.navLabel, { color: activeNavItem === 'support' ? colors.primary : colors.textSecondary }]}>Support</Text>
-              </TouchableOpacity>
-            </View>
+            
+            {/* Custom Wave Bottom Bar */}
+            <CustomWaveBottomBar
+              data={waveBottomBarTabs}
+              selectedTab={activeNavItem}
+              onTabPress={(routeName: string) => handleNavItemPress(routeName)}
+              waveColor={colors.primary}
+              backgroundColor={colors.white}
+              barColor={colors.white}
+              containerStyle={[
+                styles.waveBarContainer,
+                { height: responsive.bottomBarHeight }
+              ]}
+              tabButtonStyle={styles.waveTabButton}
+              tabTextStyle={styles.waveTabText}
+              animatedWaveStyle={[
+                styles.waveAnimation,
+                { height: responsive.waveHeight }
+              ]}
+            />
           </View>
           <HamburgerMenu />
-        </View>
+        </SafeAreaView>
       )}
     </KeyboardAvoidingView>
   );
@@ -1223,12 +1642,12 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: colors.white,
-    fontSize: fontSize.md,
+    fontSize: isDesktop ? 18 : isTablet ? 16 : 14,
     marginTop: 16
   },
   errorText: {
     color: colors.white,
-    fontSize: fontSize.md,
+    fontSize: isDesktop ? 18 : isTablet ? 16 : 14,
     textAlign: 'center',
     marginBottom: 24
   },
@@ -1240,12 +1659,11 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: colors.primary,
-    fontSize: fontSize.md,
+    fontSize: isDesktop ? 16 : isTablet ? 15 : 14,
     fontWeight: '600'
   },
   noModulesText: {
     color: colors.textSecondary,
-    fontSize: fontSize.sm,
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 32,
@@ -1253,23 +1671,18 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 28
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 8
+    marginBottom: isDesktop ? 28 : isTablet ? 24 : 20,
   },
   menuIcon: {
     padding: 8,
     borderRadius: 4
   },
   menuLine: {
-    width: 20,
-    height: 2,
     backgroundColor: colors.white,
     marginVertical: 3,
     borderRadius: 1
@@ -1280,8 +1693,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   logo: {
-    width: 90,
-    height: 80,
     backgroundColor: 'transparent'
   },
   headerSpacer: {
@@ -1297,88 +1708,76 @@ const styles = StyleSheet.create({
   },
   greeting: {
     color: colors.textLight,
-    fontSize: 14,
     marginBottom: 4
   },
   userName: {
     color: colors.white,
-    fontSize: 28,
     fontWeight: '700',
     marginBottom: 4
   },
   userRole: {
     color: colors.textLight,
-    fontSize: 15,
     fontWeight: '400'
   },
   mainContent: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -16
+    borderTopLeftRadius: isDesktop ? 40 : isTablet ? 32 : 28,
+    borderTopRightRadius: isDesktop ? 40 : isTablet ? 32 : 28,
+    marginTop: -16,
+    position: 'relative',
   },
   scrollContent: {
     flex: 1
   },
   scrollContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20
+    flexGrow: 1,
   },
   section: {
-    marginBottom: 32
+    width: '100%',
   },
   sectionModules: {
-    marginTop: Platform.OS === 'android' ? -50 : 0,
-    marginBottom: 32
+    width: '100%',
   },
   sectionTitle: {
-    fontSize: 20,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: isDesktop ? 24 : isTablet ? 20 : 16,
     letterSpacing: -0.5
   },
   attendanceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 8
+    justifyContent: 'space-between',
+    width: '100%',
   },
   card: {
-    flex: 1,
-    minWidth: (screenWidth - 40 - 12) / 2,
-    maxWidth: (screenWidth - 40 - 12) / 2,
-    aspectRatio: Platform.OS === 'android' ? 1 : undefined,
     borderRadius: 20,
-    padding: 20,
+    padding: isDesktop ? 28 : isTablet ? 24 : 20,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: Platform.OS === 'ios' ? 110 : undefined,
     position: 'relative',
-    overflow: 'hidden'
+    overflow: 'hidden',
   },
   cardCircle: {
     position: 'absolute',
     top: -20,
     right: -20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: isDesktop ? 120 : isTablet ? 100 : 80,
+    height: isDesktop ? 120 : isTablet ? 100 : 80,
+    borderRadius: isDesktop ? 60 : isTablet ? 50 : 40,
     backgroundColor: 'rgba(255, 255, 255, 0.3)'
   },
   cardCircleSmall: {
     position: 'absolute',
     bottom: -10,
     left: -10,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: isDesktop ? 70 : isTablet ? 60 : 50,
+    height: isDesktop ? 70 : isTablet ? 60 : 50,
+    borderRadius: isDesktop ? 35 : isTablet ? 30 : 25,
     backgroundColor: 'rgba(255, 255, 255, 0.2)'
   },
   cardValue: {
-    fontSize: 40,
     fontWeight: '800',
     color: colors.text,
     marginBottom: 6,
@@ -1386,19 +1785,15 @@ const styles = StyleSheet.create({
     letterSpacing: -1
   },
   cardLabel: {
-    fontSize: 13,
     color: colors.textSecondary,
     textAlign: 'center',
     fontWeight: '600',
     zIndex: 1
   },
   modulesScrollContent: {
-    paddingRight: 16,
-    gap: 12
+    paddingRight: isDesktop ? 24 : isTablet ? 20 : 16,
   },
   moduleItem: {
-    width: 110,
-    padding: 12,
     borderRadius: 18,
     backgroundColor: colors.white,
     alignItems: 'center',
@@ -1413,40 +1808,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
-    minHeight: 110
   },
   moduleIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    borderRadius: isDesktop ? 16 : isTablet ? 14 : 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: isDesktop ? 14 : isTablet ? 12 : 10,
     overflow: 'hidden'
   },
   moduleIconImage: {
-    width: 32,
-    height: 32
+    width: '100%',
+    height: '100%',
   },
   moduleTitle: {
-    fontSize: 11,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
-    lineHeight: 14
+    lineHeight: isDesktop ? 20 : isTablet ? 18 : 16
   },
   eventsScroll: {
     marginTop: 8
   },
   eventsScrollContent: {
-    paddingRight: 16,
-    gap: 16,
+    paddingRight: isDesktop ? 24 : isTablet ? 20 : 16,
     paddingTop: 4,
     paddingBottom: 4
   },
   eventContainer: {
     alignItems: 'center',
-    width: 90,
     paddingTop: 12
   },
   avatarContainer: {
@@ -1456,10 +1845,8 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   avatar: {
-    width: 68,
-    height: 68,
     backgroundColor: colors.info,
-    borderRadius: 34,
+    borderRadius: isDesktop ? 40 : isTablet ? 35 : 30,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -1478,7 +1865,6 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     color: colors.white,
-    fontSize: 18,
     fontWeight: 'bold'
   },
   dateBadge: {
@@ -1486,9 +1872,7 @@ const styles = StyleSheet.create({
     bottom: -12,
     backgroundColor: colors.primary,
     borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 52,
+    minWidth: isDesktop ? 60 : isTablet ? 56 : 52,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
@@ -1504,7 +1888,6 @@ const styles = StyleSheet.create({
   },
   dateText: {
     color: colors.white,
-    fontSize: 11,
     fontWeight: '700'
   },
   anniversaryBadge: {
@@ -1526,19 +1909,16 @@ const styles = StyleSheet.create({
   },
   anniversaryText: {
     color: '#78350F',
-    fontSize: 10,
     fontWeight: '700'
   },
   eventName: {
-    fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: isDesktop ? 20 : isTablet ? 18 : 16,
     fontWeight: '500',
     marginBottom: 4
   },
   eventType: {
-    fontSize: 10,
     color: colors.textSecondary,
     textAlign: 'center',
     fontWeight: '600',
@@ -1560,42 +1940,85 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   noEventsImage: {
-    width: 80,
-    height: 80,
     marginBottom: 16,
     opacity: 0.5
   },
   noEventsText: {
     color: colors.textSecondary,
-    fontSize: 14,
     fontStyle: 'italic'
   },
-  bottomNav: {
+  // Custom Wave Bottom Bar Styles
+  customBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+  },
+  waveEffect: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+  },
+  wavePattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  waveCircle: {
+    position: 'absolute',
+    opacity: 0.3,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2
+      height: -3
     },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8
+    shadowRadius: 10,
+    elevation: 10,
   },
-  navItem: {
+  tabButton: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 6
+    justifyContent: 'center',
   },
-  navLabel: {
-    fontSize: 10,
+  tabIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconContainerActive: {},
+  tabLabel: {
+    textAlign: 'center',
+  },
+  // Wave Bar Container Styles
+  waveBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  waveTabButton: {
+    paddingVertical: 10,
+  },
+  waveTabText: {
     fontWeight: '600',
-    marginTop: 2
+  },
+  waveAnimation: {
+    height: 60,
   },
   overlay: {
     flex: 1,
@@ -1610,7 +2033,6 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: 300,
     backgroundColor: colors.white,
     shadowColor: '#000',
     shadowOffset: {
@@ -1634,8 +2056,6 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   menuUserAvatarCircle: {
-    width: 56,
-    height: 56,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 28,
     justifyContent: 'center',
@@ -1647,12 +2067,10 @@ const styles = StyleSheet.create({
   },
   menuUserRole: {
     color: colors.textLight,
-    fontSize: 13,
     marginBottom: 4
   },
   menuUserName: {
     color: colors.white,
-    fontSize: 18,
     fontWeight: '600'
   },
   menuItems: {
@@ -1666,8 +2084,6 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
     marginHorizontal: 12,
     borderRadius: 10,
     marginBottom: 4
@@ -1678,13 +2094,10 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.primary
   },
   menuItemIconContainer: {
-    width: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16
   },
   menuItemText: {
-    fontSize: 15,
     color: colors.textSecondary,
     fontWeight: '500',
     flex: 1
@@ -1706,8 +2119,6 @@ const styles = StyleSheet.create({
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
     backgroundColor: '#FEF2F2',
     marginHorizontal: 12,
     borderRadius: 10,
@@ -1715,13 +2126,10 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.error
   },
   logoutIconContainer: {
-    width: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16
   },
   logoutButtonText: {
-    fontSize: 15,
     color: colors.error,
     fontWeight: '600',
     flex: 1
