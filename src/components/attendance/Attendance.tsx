@@ -79,6 +79,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [customReason, setCustomReason] = useState('');
   const [showHolidayScreen, setShowHolidayScreen] = useState(false);
   const [showLeaveScreen, setShowLeaveScreen] = useState(false);
+  const [isCheckingPermission, setIsCheckingPermission] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -156,23 +157,76 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const initializeLocationPermission = async () => {
     try {
+      setIsCheckingPermission(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === 'granted');
-      if (status !== 'granted') {
+      const hasPermission = status === 'granted';
+      setLocationPermission(hasPermission);
+      if (!hasPermission) {
         Alert.alert(
           'Permission Denied',
-          'Location permission is required for automatic attendance marking.'
+          'Location permission is required for marking attendance and checkout. Please enable location access in your device settings.',
+          [{ text: 'OK' }]
         );
       }
+      return hasPermission;
     } catch (error) {
       console.error('Error requesting location permission:', error);
       setLocationPermission(false);
+      return false;
+    } finally {
+      setIsCheckingPermission(false);
+    }
+  };
+
+  const checkLocationPermission = async (): Promise<boolean> => {
+    try {
+      setIsCheckingPermission(true);
+      const { status } = await Location.getForegroundPermissionsAsync();
+      const hasPermission = status === 'granted';
+      setLocationPermission(hasPermission);
+      
+      if (!hasPermission) {
+        const userResponse = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Location Access Required',
+            'Location permission is required to mark attendance and checkout. Please enable location access to continue.',
+            [
+              { 
+                text: 'Cancel', 
+                style: 'cancel',
+                onPress: () => resolve(false)
+              },
+              { 
+                text: 'Enable Location', 
+                onPress: async () => {
+                  const permissionGranted = await initializeLocationPermission();
+                  resolve(permissionGranted);
+                }
+              }
+            ]
+          );
+        });
+        return userResponse;
+      }
+      
+      return hasPermission;
+    } catch (error) {
+      console.error('Error checking location permission:', error);
+      setLocationPermission(false);
+      return false;
+    } finally {
+      setIsCheckingPermission(false);
     }
   };
 
   const getCurrentLocation = async (timeoutMs: number = 10000) => {
     try {
-      if (!locationPermission) return null;
+      // Check location permission first
+      const hasPermission = await checkLocationPermission();
+      if (!hasPermission) {
+        return null;
+      }
+      
       const locationPromise = Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
@@ -186,6 +240,19 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       };
     } catch (error) {
       console.error('Error getting current location:', error);
+      Alert.alert(
+        'Location Error',
+        'Unable to get your location. Please check location permissions and try again.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Check Permissions', 
+            onPress: async () => {
+              await initializeLocationPermission();
+            }
+          }
+        ]
+      );
       return null;
     }
   };
@@ -240,6 +307,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const markAttendance = async (description?: string) => {
+    // Check location permission before proceeding
+    const hasPermission = await checkLocationPermission();
+    if (!hasPermission) {
+      return;
+    }
+
     if (!token) {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
@@ -263,7 +336,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     try {
       const location = await getCurrentLocation(10000);
       if (!location) {
-        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
         setLoading(false);
         return;
       }
@@ -341,6 +413,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const markCheckout = async (reason?: string) => {
+    // Check location permission before proceeding
+    const hasPermission = await checkLocationPermission();
+    if (!hasPermission) {
+      return;
+    }
+
     if (!token) {
       Alert.alert('Error', 'Authentication token not found. Please login again.');
       return;
@@ -364,7 +442,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     try {
       const location = await getCurrentLocation(10000);
       if (!location) {
-        Alert.alert('Error', 'Unable to get your location. Please check location permissions.');
         setLoading(false);
         return;
       }
@@ -876,6 +953,20 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     );
   }
 
+  const handleAttendanceButtonPress = async () => {
+    const hasPermission = await checkLocationPermission();
+    if (hasPermission) {
+      markAttendance();
+    }
+  };
+
+  const handleCheckoutButtonPress = async () => {
+    const hasPermission = await checkLocationPermission();
+    if (hasPermission) {
+      markCheckout();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
@@ -897,6 +988,26 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             <Text style={styles.todaySubtitle}>
               Mark your attendance between{'\n'}10:00 AM - 11:00 AM
             </Text>
+            
+            {!locationPermission && (
+              <View style={styles.permissionWarning}>
+                <Text style={styles.permissionWarningText}>
+                  ⚠️ Location permission required to mark attendance
+                </Text>
+                <TouchableOpacity 
+                  style={styles.enableLocationButton}
+                  onPress={initializeLocationPermission}
+                  disabled={isCheckingPermission}
+                >
+                  {isCheckingPermission ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.enableLocationButtonText}>Enable Location Access</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+            
             {todayAttendance ? (
               <View style={styles.markedContainer}>
                 <View style={styles.checkmarkCircle}>
@@ -911,28 +1022,39 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 )}
                 {todayAttendance.check_in_time && !todayAttendance.check_out_time && (
                   <TouchableOpacity
-                    style={[styles.markButton, styles.checkoutButton]}
-                    onPress={() => markCheckout()}
-                    disabled={loading}
+                    style={[
+                      styles.markButton, 
+                      styles.checkoutButton,
+                      !locationPermission && styles.disabledButton
+                    ]}
+                    onPress={handleCheckoutButtonPress}
+                    disabled={loading || !locationPermission}
                   >
                     {loading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.markButtonText}>Checkout</Text>
+                      <Text style={styles.markButtonText}>
+                        {!locationPermission ? 'Enable Location for Checkout' : 'Checkout'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 )}
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.markButton}
-                onPress={() => markAttendance()}
-                disabled={loading}
+                style={[
+                  styles.markButton,
+                  !locationPermission && styles.disabledButton
+                ]}
+                onPress={handleAttendanceButtonPress}
+                disabled={loading || !locationPermission}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.markButtonText}>Mark Attendance</Text>
+                  <Text style={styles.markButtonText}>
+                    {!locationPermission ? 'Enable Location to Mark Attendance' : 'Mark Attendance'}
+                  </Text>
                 )}
               </TouchableOpacity>
             )}
@@ -1114,6 +1236,35 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16,
   },
+  permissionWarning: {
+    backgroundColor: '#fef3c7',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    alignItems: 'center',
+  },
+  permissionWarningText: {
+    fontSize: 14,
+    color: '#92400e',
+    textAlign: 'center',
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  enableLocationButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 200,
+  },
+  enableLocationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+  },
   markedContainer: {
     alignItems: 'center',
     paddingVertical: 8,
@@ -1151,6 +1302,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
+  },
+  disabledButton: {
+    backgroundColor: '#9ca3af',
   },
   checkoutButton: {
     backgroundColor: '#FFC107',

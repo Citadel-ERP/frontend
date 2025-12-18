@@ -20,6 +20,7 @@ import OTPVerification from './src/components/OTPVerification';
 import ResetPassword from './src/components/ResetPassword';
 import WelcomeScreen from './src/components/WelcomeScreen';
 import Dashboard from './src/components/Dashboard';
+import { BackgroundLocationService } from './src/services/backgroundLocationTracking';
 import { colors } from './src/styles/theme';
 import { BackgroundAttendanceService } from './src/services/backgroundAttendance';
 
@@ -94,16 +95,60 @@ function App(): React.JSX.Element {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
   }, []);
+  useEffect(() => {
+    const initializeBackgroundServices = async () => {
+      if (userData.isAuthenticated) {
+        try {
+          console.log('🚀 User authenticated, initializing all background services...');
+
+          // Initialize background attendance service
+          const attendanceResults = await BackgroundAttendanceService.initializeAll();
+          console.log('📊 Background attendance services:', attendanceResults);
+
+          // Initialize random location tracking
+          const locationInitialized = await BackgroundLocationService.initialize();
+          console.log('📍 Random location tracking:', locationInitialized ? 'Active' : 'Failed');
+
+          if (locationInitialized) {
+            const locationInfo = await BackgroundLocationService.getLastTrackedInfo();
+            console.log('📊 Location tracking info:', locationInfo);
+          }
+
+        } catch (error) {
+          console.error('❌ Failed to initialize background services:', error);
+        }
+      }
+    };
+
+    initializeBackgroundServices();
+  }, [userData.isAuthenticated]);
 
   // Initialize background service when user becomes authenticated
   useEffect(() => {
     const initializeBackgroundService = async () => {
       if (userData.isAuthenticated) {
         try {
-          const registered = await BackgroundAttendanceService.registerBackgroundTask();
-          console.log('Background attendance service initialized for authenticated user:', registered ? 'success' : 'failed');
+          console.log('🚀 User authenticated, initializing background services...');
+
+          // Initialize all background methods (fetch + geofencing)
+          const results = await BackgroundAttendanceService.initializeAll();
+
+          console.log('📊 Background services initialized:', results);
+
+          if (results.backgroundFetch) {
+            console.log('✅ Background fetch: Ready');
+          } else {
+            console.log('⚠️ Background fetch: Failed');
+          }
+
+          if (results.geofencing) {
+            console.log('✅ Geofencing: Active');
+          } else {
+            console.log('ℹ️ Geofencing: Not configured (office location needed)');
+          }
+
         } catch (error) {
-          console.error('Failed to initialize background service:', error);
+          console.error('❌ Failed to initialize background services:', error);
         }
       }
     };
@@ -113,7 +158,7 @@ function App(): React.JSX.Element {
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     setAppState(nextAppState);
-    
+
     // Re-initialize background service when app becomes active and user is authenticated
     if (nextAppState === 'active' && userData.isAuthenticated) {
       try {
@@ -350,7 +395,7 @@ function App(): React.JSX.Element {
         [TOKEN_1_KEY, token1],
         [MPIN_KEY, mpin]
       ]);
-      
+
       // Update userData to authenticated state
       setUserData(prev => ({ ...prev, isAuthenticated: true }));
       setCurrentScreen('welcome');
@@ -373,7 +418,7 @@ function App(): React.JSX.Element {
       try {
         const response = await mpinLoginAPI(storedToken, mpin);
         console.log('MPIN login response:', response);
-        
+
         // Update user data if we get fresh data from the API
         if (response.user) {
           setUserData(prev => ({
@@ -494,19 +539,48 @@ function App(): React.JSX.Element {
 
   const handleLogout = async () => {
     try {
-      // Unregister background task before logout
-      await BackgroundAttendanceService.unregisterBackgroundTask();
-      
-      // Clear all stored data including first_name and last_name
-      await AsyncStorage.multiRemove([TOKEN_1_KEY, TOKEN_2_KEY, MPIN_KEY, 'user_email', 'user_first_name', 'user_last_name']);
+      console.log('🔄 Logging out and stopping all background services...');
+
+      // Stop all background services before logout
+      await BackgroundAttendanceService.stopAll();
+      await BackgroundLocationService.stop();
+      console.log('✅ All background services stopped');
+
+      // Clear all stored data
+      await AsyncStorage.multiRemove([
+        TOKEN_1_KEY,
+        TOKEN_2_KEY,
+        MPIN_KEY,
+        'user_email',
+        'user_first_name',
+        'user_last_name',
+        'last_attendance_marked',
+        'office_location',
+        'last_location_tracked'
+      ]);
+
       setUserData({});
       setUser(null);
       setTempData({});
       setCurrentScreen('login');
+
+      console.log('✅ Logout complete');
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('❌ Error during logout:', error);
+
       // Force clear even if there's an error
-      await AsyncStorage.multiRemove([TOKEN_1_KEY, TOKEN_2_KEY, MPIN_KEY, 'user_email', 'user_first_name', 'user_last_name']);
+      await AsyncStorage.multiRemove([
+        TOKEN_1_KEY,
+        TOKEN_2_KEY,
+        MPIN_KEY,
+        'user_email',
+        'user_first_name',
+        'user_last_name',
+        'last_attendance_marked',
+        'office_location',
+        'last_location_tracked'
+      ]);
+
       setUserData({});
       setUser(null);
       setTempData({});

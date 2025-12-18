@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import Attendance from './attendance/Attendance';
+import { BackgroundLocationService } from '../services/backgroundLocationTracking';
 import Profile from './Profile';
 import HR from './HR';
 import Cab from './Cab';
@@ -26,6 +26,7 @@ import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
+import { BackgroundAttendanceService } from '../services/backgroundAttendance';
 import EmployeeManagement from './EmployeeManagement';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -51,7 +52,7 @@ const isMobile = deviceType === 'mobile';
 const getResponsiveValues = () => {
   const baseSpacing = isDesktop ? 32 : isTablet ? 24 : 20;
   const baseFontSize = isDesktop ? 16 : isTablet ? 15 : 14;
-  
+
   return {
     horizontalPadding: isDesktop ? 30 : isTablet ? 24 : 16,
     verticalPadding: isDesktop ? 24 : isTablet ? 20 : 16,
@@ -245,7 +246,7 @@ const CustomWaveBottomBar: React.FC<WaveBottomBarProps> = ({
       </Animated.View>
       
       {/* Tabs container */}
-      <View style={[styles.tabsContainer, { 
+      <View style={[styles.tabsContainer, {
         backgroundColor,
         paddingBottom: Platform.OS === 'ios' ? Math.max(responsive.bottomBarHeight * 0.4, 30) : responsive.bottomBarHeight * 0.3,
         paddingTop: 12,
@@ -258,7 +259,7 @@ const CustomWaveBottomBar: React.FC<WaveBottomBarProps> = ({
               style={[
                 styles.tabButton,
                 tabButtonStyle,
-                { 
+                {
                   paddingVertical: isDesktop ? 12 : isTablet ? 10 : 8,
                 }
               ]}
@@ -268,7 +269,7 @@ const CustomWaveBottomBar: React.FC<WaveBottomBarProps> = ({
               <View style={[
                 styles.tabIconContainer,
                 isFocused && styles.tabIconContainerActive,
-                { 
+                {
                   backgroundColor: isFocused ? `${waveColor}15` : 'transparent',
                   padding: isDesktop ? 10 : isTablet ? 8 : 6,
                   borderRadius: isDesktop ? 16 : isTablet ? 14 : 12,
@@ -300,8 +301,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [token, setToken] = useState<string | null>(null);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
-  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined)
-  const responseListener = useRef<Notifications.Subscription | undefined>(undefined)
+  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
+  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
 
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -342,36 +343,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const autoMarkAttendance = async () => {
     console.log('🎯 AUTO-MARK ATTENDANCE: Starting automatic attendance marking...');
     try {
-      console.log('Background attendance task started');
-
-      // Check if it's the right time (10:00 AM - 11:00 AM, Mon-Fri)
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-
-      // Check if it's Monday to Friday (1-5) and between 10:00-11:00 AM
-      // Get stored token
       const token = await AsyncStorage.getItem(TOKEN_2_KEY);
       if (!token) {
-        console.log('No token found');
+        console.log('❌ No token found');
+        return;
       }
 
-      // Request location permission and get current location
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Location permission denied');
-        // Try to get background location permission
-        const bgStatus = await Location.requestBackgroundPermissionsAsync();
-        if (bgStatus.status !== 'granted') {
-          console.log('Background location permission denied');
+      // Check if already marked today
+      const lastMarked = await AsyncStorage.getItem('last_attendance_marked');
+      if (lastMarked) {
+        const lastDate = new Date(lastMarked);
+        const today = new Date();
+        if (
+          lastDate.getDate() === today.getDate() &&
+          lastDate.getMonth() === today.getMonth() &&
+          lastDate.getFullYear() === today.getFullYear()
+        ) {
+          console.log('✅ Attendance already marked today via notification');
+          return;
         }
       }
 
+      // Request location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('❌ Location permission denied');
+
+        // Try background permission as fallback
+        const bgStatus = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus.status !== 'granted') {
+          console.log('❌ Background location permission also denied');
+          return;
+        }
+      }
+
+      // Get current location
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
         timeInterval: 5000,
       });
+
+      console.log('📍 Location obtained:', location.coords);
 
       // Make API call to mark attendance
       const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
@@ -388,16 +400,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Attendance marked successfully:', result);
+        console.log('✅ Attendance marked successfully:', result);
 
-        // Store last attendance check time
-        await AsyncStorage.setItem('lastAttendanceCheck', now.toISOString());
+        // Store last attendance mark time
+        await AsyncStorage.setItem('last_attendance_marked', new Date().toISOString());
+
+        // Show success notification to user
+        Alert.alert(
+          'Attendance Marked',
+          'Your attendance has been marked automatically!',
+          [{ text: 'OK' }]
+        );
       } else {
-        console.log('Failed to mark attendance:', response.status);
+        console.log('❌ Failed to mark attendance:', response.status);
       }
 
     } catch (error) {
-      console.error('Background attendance task error:', error);
+      console.error('❌ Auto-mark attendance error:', error);
     }
   };
 
@@ -609,9 +628,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       try {
         await debugLog('Starting notification setup', { token: !!token });
 
-        const savedToken = await AsyncStorage.getItem('expo_push_token');
-        await debugLog('Saved token from storage', savedToken);
-
         const pushToken = await registerForPushNotificationsAsync();
         await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
 
@@ -619,8 +635,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           setExpoPushToken(pushToken);
           await debugLog('Calling sendTokenToBackend');
           await sendTokenToBackend(pushToken, token);
-        } else {
-          await debugLog('Skipping backend call', { pushToken: !!pushToken, isMounted });
         }
 
         // Listener for notifications received while app is foregrounded
@@ -630,7 +644,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
           const data = notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
-            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance');
+            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
+            // Automatically mark attendance when notification received
             autoMarkAttendance();
           }
         });
@@ -639,7 +654,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
           debugLog('👆 Notification tapped', response);
           const data = response.notification.request.content.data;
-          if (data?.page) {
+
+          if (data?.page === 'autoMarkAttendance') {
+            // User tapped attendance notification
+            autoMarkAttendance();
+          } else if (data?.page) {
             handleNotificationNavigation(data.page as string);
           }
         });
@@ -649,7 +668,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         if (lastNotificationResponse) {
           debugLog('📬 App opened from notification', lastNotificationResponse);
           const data = lastNotificationResponse.notification.request.content.data;
-          if (data?.page) {
+
+          if (data?.page === 'autoMarkAttendance') {
+            // App opened from attendance notification
+            setTimeout(() => {
+              autoMarkAttendance();
+            }, 1000); // Small delay to ensure app is ready
+          } else if (data?.page) {
             setTimeout(() => {
               handleNotificationNavigation(data.page as string);
             }, 500);
@@ -665,12 +690,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     return () => {
       isMounted = false;
-      if (notificationListener.current) {
-        notificationListener.current?.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current?.remove();
-      }
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
     };
   }, [token]);
 
@@ -768,6 +789,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }
   };
 
+  // Fetch user data
   useEffect(() => {
     if (!token) return;
     const fetchUserData = async () => {
@@ -819,6 +841,99 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
     fetchUserData();
   }, [token]);
+
+  // Initialize background services AFTER user data is fetched
+  useEffect(() => {
+    if (!token || !userData) return;
+
+    const initializeBackgroundServices = async () => {
+      try {
+        console.log('🚀 Initializing all background attendance services...');
+
+        // Initialize all background methods
+        const results = await BackgroundAttendanceService.initializeAll();
+
+        console.log('📊 Background services status:', results);
+
+        // If user's office location is not set, try to get it from user data
+        if (userData?.office && !results.geofencing) {
+          const officeLocation = userData.office;
+          if (officeLocation.latitude && officeLocation.longitude) {
+            await BackgroundAttendanceService.setOfficeLocation(
+              officeLocation.latitude,
+              officeLocation.longitude,
+              50 // 200 meters radius
+            );
+            console.log('✅ Office location set from user data');
+          }
+        }
+
+      } catch (error) {
+        console.error('❌ Failed to initialize background services:', error);
+      }
+    };
+
+    initializeBackgroundServices();
+  }, [token, userData]);
+
+  // Initialize random location tracking AFTER user data is fetched
+  useEffect(() => {
+    if (!token || !userData) return;
+
+    const initializeLocationTracking = async () => {
+      try {
+        console.log('🎯 Initializing random location tracking service...');
+
+        // Initialize the background location service
+        const initialized = await BackgroundLocationService.initialize();
+
+        if (initialized) {
+          console.log('✅ Random location tracking initialized successfully');
+
+          // Check service status
+          const info = await BackgroundLocationService.getLastTrackedInfo();
+          console.log('📊 Random location tracking status:', info);
+
+          // Test manual capture (optional, for debugging)
+          // await BackgroundLocationService.captureLocationNow();
+
+        } else {
+          console.log('❌ Failed to initialize random location tracking');
+          // Don't show alert immediately, let it fail silently initially
+          // The system will ask for permissions when needed
+        }
+      } catch (error) {
+        console.error('❌ Error initializing random location tracking:', error);
+      }
+    };
+
+    initializeLocationTracking();
+
+    // Cleanup on unmount
+    return () => {
+      console.log('🧹 Dashboard unmounting - location service continues in background');
+    };
+  }, [token, userData]);
+
+  // ============================================================================
+  // CLEANUP ON LOGOUT
+  // ============================================================================
+  const handleLogout = async () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          // Stop all background services before logout
+          await BackgroundAttendanceService.stopAll();
+          await BackgroundLocationService.stop();
+          closeMenu();
+          onLogout();
+        }
+      },
+    ]);
+  };
 
   const getInitials = (fullName: string): string => {
     return fullName.split(' ').map(name => name.charAt(0).toUpperCase()).join('').substring(0, 2);
@@ -960,13 +1075,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const closeMenu = () => {
     Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => { closeMenu(); onLogout(); } },
-    ]);
   };
 
   const handleMenuItemPress = (item: string) => {
@@ -1128,7 +1236,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const AttendanceCard: React.FC<AttendanceCardProps> = ({ value, label, color }) => (
     <View style={[
       styles.card,
-      { 
+      {
         backgroundColor: color,
         width: isDesktop ? '23%' : isTablet ? '48%' : (screenWidth - responsive.horizontalPadding * 2 - responsive.cardSpacing) / 2,
         minHeight: isSmallScreen ? 90 : isDesktop ? 140 : isTablet ? 120 : 110,
@@ -1372,8 +1480,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   ];
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
@@ -1601,7 +1709,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 )}
               </View>
             </ScrollView>
-            
+
             {/* Custom Wave Bottom Bar */}
             <CustomWaveBottomBar
               data={waveBottomBarTabs}
@@ -2133,5 +2241,23 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '600',
     flex: 1
-  }
+  },
+  testButtonContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  testButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  testButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
