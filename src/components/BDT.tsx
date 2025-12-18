@@ -202,6 +202,24 @@ interface AddCommentResponse {
   lead_comment: ApiComment;
 }
 
+interface InvoiceFormData {
+  vendor_name: string;
+  vendor_address: string;
+  vendor_gst_or_pan: string;
+  loi_document?: DocumentPicker.DocumentPickerAsset | null;
+  billing_area: string;
+  property_type: string;
+  car_parking: string;
+  terrace_rent: string;
+  particular_matter_to_mention: string;
+  executive_name: string;
+}
+
+interface CreateInvoiceResponse {
+  message: string;
+  invoice: any;
+}
+
 const beautifyName = (name: string): string => {
   return name
     .split('_')
@@ -266,6 +284,331 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
   );
 };
 
+const InvoiceForm: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  leadId: number;
+  leadName: string;
+  onInvoiceCreated: () => void;
+  onCancel: () => void;
+}> = ({ visible, onClose, leadId, leadName, onInvoiceCreated, onCancel }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<InvoiceFormData>({
+    vendor_name: '',
+    vendor_address: '',
+    vendor_gst_or_pan: '',
+    billing_area: '',
+    property_type: '',
+    car_parking: '',
+    terrace_rent: '',
+    particular_matter_to_mention: '',
+    executive_name: '',
+  });
+  const [loiDocument, setLoiDocument] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
+        setToken(API_TOKEN);
+      } catch (error) {
+        console.error('Error getting token:', error);
+      }
+    };
+    getToken();
+  }, []);
+
+  const handleAttachLOI = async (): Promise<void> => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        type: '*/*',
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setLoiDocument(result.assets[0]);
+        Alert.alert('File Selected', `LOI/Sale Deed: ${result.assets[0].name}`);
+      }
+    } catch (error) {
+      console.error('Error picking LOI document:', error);
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+    }
+  };
+
+  const handleInputChange = (field: keyof InvoiceFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (): Promise<void> => {
+    if (!token) {
+      Alert.alert('Error', 'Authentication token not found');
+      return;
+    }
+
+    // Validate required fields
+    if (!formData.vendor_name.trim()) {
+      Alert.alert('Error', 'Vendor Name is required');
+      return;
+    }
+    if (!formData.vendor_gst_or_pan.trim()) {
+      Alert.alert('Error', 'Vendor GST/PAN is required');
+      return;
+    }
+    if (!formData.billing_area.trim()) {
+      Alert.alert('Error', 'Billing Area is required');
+      return;
+    }
+    if (!formData.property_type.trim()) {
+      Alert.alert('Error', 'Property Type is required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const submitData = new FormData();
+      submitData.append('token', token);
+      submitData.append('lead_id', leadId.toString());
+      submitData.append('vendor_name', formData.vendor_name.trim());
+      submitData.append('vendor_gst_or_pan', formData.vendor_gst_or_pan.trim());
+      submitData.append('billing_area', formData.billing_area.trim());
+      submitData.append('property_type', formData.property_type.trim());
+
+      if (formData.vendor_address.trim()) {
+        submitData.append('vendor_address', formData.vendor_address.trim());
+      }
+      if (formData.car_parking.trim()) {
+        submitData.append('car_parking', formData.car_parking.trim());
+      }
+      if (formData.terrace_rent.trim()) {
+        submitData.append('terrace_rent', formData.terrace_rent.trim());
+      }
+      if (formData.particular_matter_to_mention.trim()) {
+        submitData.append('particular_matter_to_mention', formData.particular_matter_to_mention.trim());
+      }
+      if (formData.executive_name.trim()) {
+        submitData.append('executive_name', formData.executive_name.trim());
+      }
+
+      if (loiDocument) {
+        submitData.append('loi', {
+          uri: loiDocument.uri,
+          type: loiDocument.mimeType || 'application/octet-stream',
+          name: loiDocument.name,
+        } as any);
+      }
+
+      const response = await fetch(`${BACKEND_URL}/employee/createInvoice`, {
+        method: 'POST',
+        body: submitData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+
+      const data: CreateInvoiceResponse = await response.json();
+      
+      if (data.message === 'Invoice created successfully') {
+        Alert.alert('Success', 'Invoice created successfully!');
+        onInvoiceCreated();
+        onClose();
+      } else {
+        Alert.alert('Error', data.message || 'Failed to create invoice');
+      }
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      Alert.alert('Error', 'Failed to create invoice. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    Alert.alert(
+      'Cancel Invoice Creation',
+      'Are you sure you want to cancel? The lead will not be updated.',
+      [
+        { text: 'No, Continue', style: 'cancel' },
+        { 
+          text: 'Yes, Cancel', 
+          style: 'destructive',
+          onPress: () => {
+            onCancel();
+            onClose();
+          }
+        }
+      ]
+    );
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCancel}>
+      <SafeAreaView style={styles.invoiceModalContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+        
+        <View style={styles.invoiceHeader}>
+          <TouchableOpacity style={styles.invoiceBackButton} onPress={handleCancel}>
+            <Text style={styles.invoiceBackButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.invoiceHeaderTitle}>Create Invoice</Text>
+          <TouchableOpacity 
+            style={[styles.invoiceSaveButton, loading && styles.invoiceSaveButtonDisabled]} 
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={styles.invoiceSaveButtonText}>Save</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.invoiceScrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.invoiceFormCard}>
+            <Text style={styles.invoiceFormTitle}>Invoice Details for {leadName}</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Vendor Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.vendor_name}
+                onChangeText={(value) => handleInputChange('vendor_name', value)}
+                placeholder="Enter vendor name"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Vendor Address</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.vendor_address}
+                onChangeText={(value) => handleInputChange('vendor_address', value)}
+                placeholder="Enter vendor address"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Vendor GST/PAN *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.vendor_gst_or_pan}
+                onChangeText={(value) => handleInputChange('vendor_gst_or_pan', value)}
+                placeholder="Enter GST or PAN number"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>LOI or Sale Deed (if any)</Text>
+              <TouchableOpacity style={styles.fileUploadButton} onPress={handleAttachLOI}>
+                <Text style={styles.fileUploadButtonText}>
+                  {loiDocument ? `📎 ${loiDocument.name}` : '📎 Attach LOI/Sale Deed'}
+                </Text>
+              </TouchableOpacity>
+              {loiDocument && (
+                <TouchableOpacity 
+                  style={styles.removeFileButton}
+                  onPress={() => setLoiDocument(null)}
+                >
+                  <Text style={styles.removeFileButtonText}>Remove File</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Billing Area & Rs. Per Sft. / No. days or Month *</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.billing_area}
+                onChangeText={(value) => handleInputChange('billing_area', value)}
+                placeholder="Enter billing area details"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Car Parking / Terrace Rent (if any)</Text>
+              <View style={styles.rowInputs}>
+                <View style={styles.halfInput}>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.car_parking}
+                    onChangeText={(value) => handleInputChange('car_parking', value)}
+                    placeholder="Car Parking"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.halfInput}>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.terrace_rent}
+                    onChangeText={(value) => handleInputChange('terrace_rent', value)}
+                    placeholder="Terrace Rent"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Property Type (SEZ / Non SEZ) *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.property_type}
+                onChangeText={(value) => handleInputChange('property_type', value)}
+                placeholder="Enter property type"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>If any particular matter to mention in narration</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.particular_matter_to_mention}
+                onChangeText={(value) => handleInputChange('particular_matter_to_mention', value)}
+                placeholder="Enter any additional information"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Ref. Executive Name to mention</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.executive_name}
+                onChangeText={(value) => handleInputChange('executive_name', value)}
+                placeholder="Enter executive name"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            <Text style={styles.requiredNote}>* Required fields</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
 const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [viewMode, setViewMode] = useState<'list' | 'detail' | 'incentive'>('list');
@@ -308,6 +651,14 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [showPotentialCollaborators, setShowPotentialCollaborators] = useState(false);
   const [loadingPotentialCollaborators, setLoadingPotentialCollaborators] = useState(false);
   const [collaboratorSearchTimeout, setCollaboratorSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // New state for invoice form
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [pendingLeadUpdate, setPendingLeadUpdate] = useState<{
+    leadData: Partial<Lead>;
+    editingEmails: string[];
+    editingPhones: string[];
+  } | null>(null);
 
   // New state for managing emails and phone numbers in edit mode
   const [editingEmails, setEditingEmails] = useState<string[]>([]);
@@ -659,7 +1010,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   };
 
-  const updateLead = async (leadData: Partial<Lead>): Promise<boolean> => {
+  const updateLead = async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
 
@@ -670,8 +1021,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         lead_id: selectedLead.id
       };
 
-      if (editingEmails.length > 0) updatePayload.emails = editingEmails;
-      if (editingPhones.length > 0) updatePayload.phone_numbers = editingPhones;
+      if (emails.length > 0) updatePayload.emails = emails;
+      if (phones.length > 0) updatePayload.phone_numbers = phones;
       if (leadData.status !== undefined) updatePayload.status = leadData.status;
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
@@ -962,16 +1313,55 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setEditingPhones([]);
     setNewEmail('');
     setNewPhone('');
+    
+    // Clear any pending updates
+    setPendingLeadUpdate(null);
   };
 
   const handleSave = async () => {
     if (!selectedLead) return;
     
-    const success = await updateLead(selectedLead);
-    if (success) {
-      setIsEditMode(false);
-      setNewEmail('');
-      setNewPhone('');
+    // Check if phase is "Post Property Finalization" and subphase is "Raise Invoice"
+    if (selectedLead.phase === 'post_property_finalization' && selectedLead.subphase === 'raise_invoice') {
+      // Store the pending update and show invoice form
+      setPendingLeadUpdate({
+        leadData: selectedLead,
+        editingEmails: [...editingEmails],
+        editingPhones: [...editingPhones]
+      });
+      setShowInvoiceForm(true);
+    } else {
+      // For other phases/subphases, update directly
+      const success = await updateLead(selectedLead, editingEmails, editingPhones);
+      if (success) {
+        setIsEditMode(false);
+        setNewEmail('');
+        setNewPhone('');
+      }
+    }
+  };
+
+  const handleInvoiceCreated = async () => {
+    if (pendingLeadUpdate && selectedLead) {
+      // Now update the lead after invoice is created
+      const success = await updateLead(pendingLeadUpdate.leadData, pendingLeadUpdate.editingEmails, pendingLeadUpdate.editingPhones);
+      if (success) {
+        setIsEditMode(false);
+        setNewEmail('');
+        setNewPhone('');
+        setPendingLeadUpdate(null);
+      }
+    }
+  };
+
+  const handleInvoiceCancel = () => {
+    // Reset to original lead data if invoice creation is cancelled
+    if (selectedLead && pendingLeadUpdate) {
+      // You might want to revert the phase/subphase changes here
+      // For now, just clear the pending update
+      setPendingLeadUpdate(null);
+      // You could also fetch the lead again to get original data
+      // fetchLeadDetails(selectedLead.id);
     }
   };
 
@@ -1696,6 +2086,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
+
+        {selectedLead && (
+          <InvoiceForm
+            visible={showInvoiceForm}
+            onClose={() => setShowInvoiceForm(false)}
+            leadId={selectedLead.id}
+            leadName={selectedLead.name}
+            onInvoiceCreated={handleInvoiceCreated}
+            onCancel={handleInvoiceCancel}
+          />
+        )}
       </SafeAreaView>
     );
   }
@@ -2103,6 +2504,113 @@ const styles = StyleSheet.create({
   clearSearchText: {
     color: colors.error,
     fontWeight: '500',
+  },
+  // Invoice Form Styles
+  invoiceModalContainer: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  invoiceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    ...shadows.sm,
+  },
+  invoiceBackButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  invoiceBackButtonText: {
+    fontSize: fontSize.md,
+    color: colors.error,
+    fontWeight: '500',
+  },
+  invoiceHeaderTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  invoiceSaveButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+  },
+  invoiceSaveButtonDisabled: {
+    backgroundColor: colors.textSecondary,
+    opacity: 0.6,
+  },
+  invoiceSaveButtonText: {
+    fontSize: fontSize.md,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  invoiceScrollView: {
+    flex: 1,
+    padding: spacing.lg,
+  },
+  invoiceFormCard: {
+    backgroundColor: colors.white,
+    padding: spacing.xl,
+    borderRadius: borderRadius.xl,
+    ...shadows.md,
+    marginBottom: spacing.xl,
+  },
+  invoiceFormTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: spacing.xl,
+    textAlign: 'center',
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  fileUploadButton: {
+    borderWidth: 2,
+    borderColor: colors.info,
+    borderStyle: 'dashed',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info + '10',
+    marginTop: spacing.sm,
+  },
+  fileUploadButtonText: {
+    fontSize: fontSize.md,
+    color: colors.info,
+    fontWeight: '500',
+  },
+  removeFileButton: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  removeFileButtonText: {
+    fontSize: fontSize.sm,
+    color: colors.error,
+    fontWeight: '500',
+  },
+  requiredNote: {
+    fontSize: fontSize.sm,
+    color: colors.error,
+    fontStyle: 'italic',
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
   container: { flex: 1, backgroundColor: colors.primary },
   header: {
