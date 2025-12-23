@@ -1,17 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar,
-  Alert, Modal, Animated, KeyboardAvoidingView, Platform, Dimensions, Image, ActivityIndicator,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Dimensions,
+  Animated,
+  StatusBar,
+  Modal,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import * as Location from 'expo-location';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
-import { BACKEND_URL } from '../config/config';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { BackgroundLocationService } from '../services/backgroundLocationTracking';
+
+// Import all the pages
 import Profile from './Profile';
 import HR from './HR';
 import Cab from './Cab';
@@ -26,62 +38,32 @@ import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
-import { BackgroundAttendanceService } from '../services/backgroundAttendance';
 import EmployeeManagement from './EmployeeManagement';
+import { BackgroundAttendanceService } from '../services/backgroundAttendance';
+import { BackgroundLocationService } from '../services/backgroundLocationTracking';
+import { BACKEND_URL } from '../config/config';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-const isTablet = screenWidth >= 768;
-const isSmallScreen = screenHeight < 600;
-const isWeb = Platform.OS === 'web';
+const { width, height } = Dimensions.get('window');
 
-// Get device type for responsive design
-const getDeviceType = () => {
-  if (isWeb) {
-    if (screenWidth >= 1024) return 'desktop';
-    if (screenWidth >= 768) return 'tablet';
-    return 'mobile';
-  }
-  return isTablet ? 'tablet' : 'mobile';
-};
+// Backend URL from config
+const TOKEN_2_KEY = 'token_2';
 
-const deviceType = getDeviceType();
-const isDesktop = deviceType === 'desktop';
-const isMobile = deviceType === 'mobile';
+// Interfaces
+interface IconItem {
+  name: string;
+  color: string;
+  icon: string;
+  library: 'fa5' | 'mci';
+  module_unique_name?: string;
+  iconUrl?: string;
+}
 
-// Get responsive values based on device type
-const getResponsiveValues = () => {
-  const baseSpacing = isDesktop ? 32 : isTablet ? 24 : 20;
-  const baseFontSize = isDesktop ? 16 : isTablet ? 15 : 14;
-
-  return {
-    horizontalPadding: isDesktop ? 30 : isTablet ? 24 : 16,
-    verticalPadding: isDesktop ? 24 : isTablet ? 20 : 16,
-    sectionSpacing: isDesktop ? 28 : isTablet ? 24 : 20,
-    cardSpacing: isDesktop ? 16 : isTablet ? 14 : 12,
-    logoSize: isDesktop ? 120 : isTablet ? 100 : 80,
-    avatarSize: isDesktop ? 80 : isTablet ? 70 : 60,
-    iconSize: isDesktop ? 28 : isTablet ? 24 : 22,
-    bottomBarHeight: isDesktop ? 90 : isTablet ? 80 : 70,
-    waveHeight: isDesktop ? 60 : isTablet ? 50 : 40,
-  };
-};
-
-const responsive = getResponsiveValues();
-
-// Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
-interface DashboardProps {
-  onLogout: () => void;
-  token?: string;
+interface Event {
+  name: string;
+  date: string;
+  image: string;
+  type?: 'birthday' | 'anniversary';
+  years?: number;
 }
 
 interface UserData {
@@ -123,22 +105,20 @@ interface UserData {
   late_arrivals: number;
 }
 
-interface ApiResponse {
-  message: string;
-  modules: Array<{
-    module_name: string;
-    is_generic: boolean;
-    module_id: string;
-    module_unique_name: string;
-    module_icon: string;
-    created_at: string;
-    updated_at: string;
-  }>;
-  user: any;
-  upcoming_birthdays: any[];
-  is_driver: boolean;
-  upcoming_anniversary: any[];
-  autoReconfigure: boolean
+interface Module {
+  title: string;
+  iconUrl: string;
+  module_unique_name: string;
+  is_generic: boolean;
+}
+
+interface ReminderItem {
+  id: string;
+  title: string;
+  time: string;
+  icon: string;
+  meeting_with?: string;
+  meeting_time?: string;
 }
 
 interface UpcomingEvent {
@@ -148,162 +128,58 @@ interface UpcomingEvent {
   years?: number;
 }
 
-// Custom Wave Bottom Bar Component
-interface WaveBottomBarProps {
-  data: Array<{
-    routeName: string;
-    tabLabel: string;
-    tabIcon: (isFocused: boolean) => React.ReactNode;
-  }>;
-  selectedTab: string;
-  onTabPress: (routeName: string) => void;
-  waveColor: string;
-  backgroundColor: string;
-  barColor: string;
-  containerStyle?: any;
-  tabButtonStyle?: any;
-  tabTextStyle?: any;
-  animatedWaveStyle?: any;
-}
-
-const CustomWaveBottomBar: React.FC<WaveBottomBarProps> = ({
-  data,
-  selectedTab,
-  onTabPress,
-  waveColor,
-  backgroundColor,
-  barColor,
-  containerStyle,
-  tabButtonStyle,
-  tabTextStyle,
-  animatedWaveStyle
-}) => {
-  const waveAnim = React.useRef(new Animated.Value(0)).current;
-  const waveHeight = responsive.waveHeight;
-
-  React.useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(waveAnim, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(waveAnim, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  const waveTranslateY = waveAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -15]
-  });
-
-  const waveScaleX = waveAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 1.05, 1]
-  });
-
-  const opacity = waveAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.7, 0.9, 0.7]
-  });
-
-  return (
-    <View style={[styles.customBarContainer, containerStyle, { backgroundColor: barColor }]}>
-      {/* Wave effect with multiple layers for better animation */}
-      <Animated.View 
-        style={[
-          styles.waveEffect,
-          animatedWaveStyle,
-          {
-            backgroundColor: waveColor,
-            height: waveHeight,
-            opacity: opacity,
-            transform: [
-              { translateY: waveTranslateY },
-              { scaleX: waveScaleX }
-            ]
-          }
-        ]}
-      >
-        {/* Wave pattern overlay */}
-        <View style={styles.wavePattern}>
-          {[...Array(10)].map((_, i) => (
-            <View key={i} style={[styles.waveCircle, { 
-              left: `${i * 10}%`,
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              width: waveHeight * 0.6,
-              height: waveHeight * 0.6,
-              borderRadius: waveHeight * 0.3,
-            }]} />
-          ))}
-        </View>
-      </Animated.View>
-      
-      {/* Tabs container */}
-      <View style={[styles.tabsContainer, {
-        backgroundColor,
-        paddingBottom: Platform.OS === 'ios' ? Math.max(responsive.bottomBarHeight * 0.4, 30) : responsive.bottomBarHeight * 0.3,
-        paddingTop: 12,
-      }]}>
-        {data.map((item, index) => {
-          const isFocused = selectedTab === item.routeName;
-          return (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.tabButton,
-                tabButtonStyle,
-                {
-                  paddingVertical: isDesktop ? 12 : isTablet ? 10 : 8,
-                }
-              ]}
-              onPress={() => onTabPress(item.routeName)}
-              activeOpacity={0.7}
-            >
-              <View style={[
-                styles.tabIconContainer,
-                isFocused && styles.tabIconContainerActive,
-                {
-                  backgroundColor: isFocused ? `${waveColor}15` : 'transparent',
-                  padding: isDesktop ? 10 : isTablet ? 8 : 6,
-                  borderRadius: isDesktop ? 16 : isTablet ? 14 : 12,
-                }
-              ]}>
-                {item.tabIcon(isFocused)}
-              </View>
-              <Text style={[
-                styles.tabLabel,
-                tabTextStyle,
-                {
-                  color: isFocused ? waveColor : '#666',
-                  fontSize: isDesktop ? 12 : isTablet ? 11 : 10,
-                  marginTop: isDesktop ? 6 : isTablet ? 5 : 4,
-                  fontWeight: isFocused ? '600' : '500',
-                }
-              ]}>
-                {item.tabLabel}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
+// Theme Colors
+const lightColors = {
+  primary: '#FFFFFF',
+  backgroundSecondary: '#F8F9FA',
+  white: '#FFFFFF',
+  text: '#1A1A1A',
+  textSecondary: '#666666',
+  textLight: '#999999',
+  border: '#E5E7EB',
+  info: '#3B82F6',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  attendanceGreen: '#00D492',
+  hrPink: '#FF637F',
+  cabOrange: '#FFBB64',
+  headerBg: '#2D3748',
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [expoPushToken, setExpoPushToken] = useState<string>('');
-  const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
-  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
-  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
+const darkColors = {
+  primary: '#000D24',
+  backgroundSecondary: '#0C1D33',
+  white: '#0C1D33',
+  text: '#FFFFFF',
+  textSecondary: '#CCCCCC',
+  textLight: '#999999',
+  border: '#404040',
+  info: '#3B82F6',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  attendanceGreen: '#00D492',
+  hrPink: '#FF637F',
+  cabOrange: '#FFBB64',
+  headerBg: '#000D24',
+};
 
+export default function CitadelDashboard({ onLogout }: { onLogout: () => void }) {
+  // State from old dashboard
+  const [token, setToken] = useState<string | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [modules, setModules] = useState<any[]>([]);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
+  const [upcomingAnniversaries, setUpcomingAnniversaries] = useState<any[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastOpenedModules, setLastOpenedModules] = useState<Module[]>([]);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [topModules, setTopModules] = useState<any[]>([]);
+  const [attendanceKey, setAttendanceKey] = useState(0);
+  
+  // Page visibility states
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
@@ -317,412 +193,191 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showBUP, setShowBUP] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
-
-  const insets = useSafeAreaInsets();
-  const [isMenuVisible, setIsMenuVisible] = useState(false);
-  const [slideAnim] = useState(new Animated.Value(-300));
-  const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
-  const [activeNavItem, setActiveNavItem] = useState('home');
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [modules, setModules] = useState<any[]>([]);
-  const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
-  const [upcomingAnniversaries, setUpcomingAnniversaries] = useState<any[]>([]);
-  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [attendanceKey, setAttendanceKey] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  // Add these state variables
   const [showChat, setShowChat] = useState(false);
   const [showChatRoom, setShowChatRoom] = useState(false);
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
-
-  const TOKEN_2_KEY = 'token_2';
-
-  // Function to auto-mark attendance
-  const autoMarkAttendance = async () => {
-    console.log('🎯 AUTO-MARK ATTENDANCE: Starting automatic attendance marking...');
-    try {
-      const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-      if (!token) {
-        console.log('❌ No token found');
-        return;
-      }
-
-      // Check if already marked today
-      const lastMarked = await AsyncStorage.getItem('last_attendance_marked');
-      if (lastMarked) {
-        const lastDate = new Date(lastMarked);
-        const today = new Date();
-        if (
-          lastDate.getDate() === today.getDate() &&
-          lastDate.getMonth() === today.getMonth() &&
-          lastDate.getFullYear() === today.getFullYear()
-        ) {
-          console.log('✅ Attendance already marked today via notification');
-          return;
-        }
-      }
-
-      // Request location permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('❌ Location permission denied');
-
-        // Try background permission as fallback
-        const bgStatus = await Location.requestBackgroundPermissionsAsync();
-        if (bgStatus.status !== 'granted') {
-          console.log('❌ Background location permission also denied');
-          return;
-        }
-      }
-
-      // Get current location
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-      });
-
-      console.log('📍 Location obtained:', location.coords);
-
-      // Make API call to mark attendance
-      const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          latitude: location.coords.latitude.toString(),
-          longitude: location.coords.longitude.toString(),
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Attendance marked successfully:', result);
-
-        // Store last attendance mark time
-        await AsyncStorage.setItem('last_attendance_marked', new Date().toISOString());
-
-        // Show success notification to user
-        Alert.alert(
-          'Attendance Marked',
-          'Your attendance has been marked automatically!',
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.log('❌ Failed to mark attendance:', response.status);
-      }
-
-    } catch (error) {
-      console.error('❌ Auto-mark attendance error:', error);
-    }
+  
+  // Menu state
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
+  const [activeNavItem, setActiveNavItem] = useState('home');
+  
+  // Theme state
+  const [isDark, setIsDark] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  // All modules modal
+  const [allModulesVisible, setAllModulesVisible] = useState(false);
+  
+  // Animations
+  const circleScale = useRef(new Animated.Value(0)).current;
+  const switchToggle = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-300)).current;
+  
+  // Current theme colors
+  const currentColors = isDark ? darkColors : lightColors;
+  
+  // New dashboard theme mapping
+  const theme = {
+    bgColor: isDark ? '#050b18' : '#f8f9fa',
+    cardBg: isDark ? '#111a2d' : '#ffffff',
+    textMain: isDark ? '#ffffff' : '#333333',
+    textSub: isDark ? '#a0a0a0' : '#666666',
+    accentBlue: isDark ? '#3262f1' : '#007bff',
+    navBg: isDark ? '#0a111f' : '#ffffff',
   };
 
-  const debugLog = async (message: string, data?: any) => {
-    console.log(message, data);
-    // Store logs in AsyncStorage for later viewing
-    try {
-      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
-      const logArray = JSON.parse(logs);
-      logArray.push({
-        timestamp: new Date().toISOString(),
-        message,
-        data: data ? JSON.stringify(data) : null
-      });
-      // Keep only last 50 logs
-      const recentLogs = logArray.slice(-50);
-      await AsyncStorage.setItem('debug_logs', JSON.stringify(recentLogs));
-    } catch (error) {
-      console.error('Error storing debug log:', error);
-    }
-  };
+  // Default modules for new users
+  const defaultLastOpened: IconItem[] = [
+    { name: 'HR', color: '#00d285', icon: 'user-tie', library: 'fa5', module_unique_name: 'hr' },
+    { name: 'Cab', color: '#ffb157', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
+    { name: 'Attendance', color: '#ff5e7a', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
+    { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
+  ];
 
-  // Function to register for push notifications
-  async function registerForPushNotificationsAsync() {
-    let token;
+  // Hardcoded stats data (will come from backend)
+  const chartData = [
+    { day: 'Mon', hours: 5.5, target: 6.0 },
+    { day: 'Tue', hours: 7.2, target: 5.8 },
+    { day: 'Wed', hours: 6.8, target: 7.5 },
+    { day: 'Thu', hours: 8.5, target: 6.2 },
+    { day: 'Fri', hours: 7.0, target: 7.8 },
+    { day: 'Sat', hours: 6.2, target: 6.5 },
+    { day: 'Sun', hours: 5.8, target: 7.2 },
+  ];
 
-    try {
-      await debugLog('[Push Token] Starting registration...');
-
-      if (!Device.isDevice) {
-        await debugLog('[Push Token] Not a physical device');
-        Alert.alert('Debug', 'Not a physical device');
-        return undefined;
-      }
-
-      await debugLog('[Push Token] Device check passed');
-
-      // Android notification channel
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#2D3748',
-        });
-        await debugLog('[Push Token] Notification channel created');
-      }
-
-      // Request permissions
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      await debugLog('[Push Token] Existing permission status', existingStatus);
-
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-        await debugLog('[Push Token] New permission status', status);
-      }
-
-      if (finalStatus !== 'granted') {
-        await debugLog('[Push Token] Permission denied');
-        Alert.alert('Permission Denied', 'Please enable notifications in settings');
-        return undefined;
-      }
-
-      // Get Expo Push Token
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId
-        || Constants.easConfig?.projectId;
-
-      await debugLog('[Push Token] Project ID', projectId);
-
-      if (!projectId) {
-        await debugLog('[Push Token] ERROR: No project ID found');
-        Alert.alert(
-          'Configuration Error',
-          'Project ID missing. Please contact support.'
-        );
-        return undefined;
-      }
-
-      await debugLog('[Push Token] Getting token for project', projectId);
-
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId
-      });
-
-      token = tokenData.data;
-      await debugLog('[Push Token] Success', token);
-
-      return token;
-
-    } catch (error: any) {
-      await debugLog('[Push Token Error]', error.message);
-      return undefined;
-    }
-  };
-
-  const sendTokenToBackend = async (expoToken: string, userToken: string) => {
-    await debugLog('=== SENDING TOKEN TO BACKEND ===');
-    await debugLog('Expo Token', expoToken);
-    await debugLog('User Token exists', !!userToken);
-
-    if (!expoToken || !userToken) {
-      await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
-      return;
-    }
-
-    try {
-      await debugLog('Making request to', `${BACKEND_URL}/core/modifyToken`);
-
-      const requestBody = {
-        token: userToken,
-        expo_token: expoToken,
-      };
-
-      await debugLog('Request body', requestBody);
-
-      const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      await debugLog('Response status', response.status);
-
-      const data = await response.json();
-      await debugLog('Backend response', data);
-
-      if (response.ok) {
-        await debugLog('✅ Push token registered successfully');
-        await AsyncStorage.setItem('expo_push_token', expoToken);
-      } else {
-        await debugLog('❌ Failed to register push token', data.message);
-      }
-    } catch (error: any) {
-      await debugLog('❌ Network error', error.message);
-    }
-  };
-
-  const handleBackFromEmployeeManagement = () => {
-    setShowEmployeeManagement(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleNotificationNavigation = (page: string) => {
-    console.log('Handling notification navigation for page:', page);
-
-    // Handle special actions that don't show UI
-    if (page === 'autoMarkAttendance') {
-      console.log('🎯 SPECIAL CODE: Auto-marking attendance...');
-      return; // Don't show any page
-    }
-
-    // Handle regular page navigation
-    switch (page.toLowerCase()) {
-      case 'attendance':
-        setShowAttendance(true);
-        break;
-      case 'hr':
-        setShowHR(true);
-        break;
-      case 'cab':
-        setShowCab(true);
-        break;
-      case 'profile':
-        setShowProfile(true);
-        break;
-      case 'driver':
-        setShowDriver(true);
-        break;
-      case 'bdt':
-        setShowBDT(true);
-        break;
-      case 'medical':
-      case 'mediclaim':
-        setShowMedical(true);
-        break;
-      case 'scoutboy':
-      case 'scout_boy':
-        setShowScoutBoy(true);
-        break;
-      case 'reminder':
-        setShowReminder(true);
-        break;
-      case 'bup':
-        setShowBUP(true);
-        break;
-      case 'employee_management':
-        setShowEmployeeManagement(true);
-        break;
-      default:
-        console.log('Unknown page:', page);
-    }
-  };
-
-  // Setup push notifications
+  // Fetch user data from backend
   useEffect(() => {
-    let isMounted = true;
-
-    const setupNotifications = async () => {
-      if (!token) {
-        await debugLog('Setup aborted: No user token');
-        return;
-      }
-
+    const fetchToken = async () => {
       try {
-        await debugLog('Starting notification setup', { token: !!token });
-
-        const pushToken = await registerForPushNotificationsAsync();
-        await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
-
-        if (pushToken && isMounted) {
-          setExpoPushToken(pushToken);
-          await debugLog('Calling sendTokenToBackend');
-          await sendTokenToBackend(pushToken, token);
-        }
-
-        // Listener for notifications received while app is foregrounded
-        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-          debugLog('📱 Notification received in foreground', notification);
-          setNotification(notification);
-
-          const data = notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
-            // Automatically mark attendance when notification received
-            autoMarkAttendance();
-          }
-        });
-
-        // Listener for when user taps on notification
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-          debugLog('👆 Notification tapped', response);
-          const data = response.notification.request.content.data;
-
-          if (data?.page === 'autoMarkAttendance') {
-            // User tapped attendance notification
-            autoMarkAttendance();
-          } else if (data?.page) {
-            handleNotificationNavigation(data.page as string);
-          }
-        });
-
-        // Check if app was opened from a notification
-        const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
-        if (lastNotificationResponse) {
-          debugLog('📬 App opened from notification', lastNotificationResponse);
-          const data = lastNotificationResponse.notification.request.content.data;
-
-          if (data?.page === 'autoMarkAttendance') {
-            // App opened from attendance notification
-            setTimeout(() => {
-              autoMarkAttendance();
-            }, 1000); // Small delay to ensure app is ready
-          } else if (data?.page) {
-            setTimeout(() => {
-              handleNotificationNavigation(data.page as string);
-            }, 500);
-          }
-        }
-
-      } catch (error: any) {
-        await debugLog('Error in setupNotifications', error.message);
-      }
-    };
-
-    setupNotifications();
-
-    return () => {
-      isMounted = false;
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
-    };
-  }, [token]);
-
-  useEffect(() => {
-    const getToken = async () => {
-      try {
-        const storedToken = await AsyncStorage.getItem('token_2');
+        const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
         setToken(storedToken);
+        return storedToken;
       } catch (error) {
         console.error('Error getting token:', error);
+        return null;
       }
     };
-    getToken();
+
+    const fetchUserData = async () => {
+      try {
+        const token = await AsyncStorage.getItem(TOKEN_2_KEY);
+        if (!token) return;
+
+        setLoading(true);
+        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        console.log("jio")
+        if (response.ok) {
+          const data = await response.json();
+          if (data.message === "Get modules successful") {
+            const transformedUserData: UserData = {
+              ...data.user,
+              profile_picture: data.user.profile_picture || undefined
+            };
+            setUserData(transformedUserData);
+            setModules(data.modules || []);
+            setUpcomingBirthdays(data.upcoming_birthdays || []);
+            setUpcomingAnniversaries(data.upcoming_anniversary || []);
+            
+            // Combine and sort events
+            const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
+            setUpcomingEvents(events);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const loadLastOpenedModules = async () => {
+      try {
+        const storedModules = await AsyncStorage.getItem('last_opened_modules');
+        if (storedModules) {
+          setLastOpenedModules(JSON.parse(storedModules));
+        } else {
+          // Use default modules if none stored
+          setLastOpenedModules(defaultLastOpened.map(item => ({
+            title: item.name,
+            iconUrl: getIconUrl(item),
+            module_unique_name: item.module_unique_name || item.name.toLowerCase()
+          })));
+        }
+      } catch (error) {
+        console.error('Error loading last opened modules:', error);
+      }
+    };
+
+    const fetchReminders = async () => {
+      try {
+        const token = await AsyncStorage.getItem(TOKEN_2_KEY);
+        if (!token) return;
+
+       const response = await fetch(`${BACKEND_URL}/core/getReminders`, {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({ token }),
+             });
+
+        if (response.ok) {
+          const data = await response.json();
+          const mappedReminders: ReminderItem[] = data.reminders?.slice(0, 3).map((reminder: any) => ({
+            id: reminder.id,
+            title: reminder.title || reminder.meeting_with || 'Reminder',
+            time: reminder.time || reminder.meeting_time || 'All day',
+            icon: reminder.icon || 'bell'
+          })) || [];
+          setReminders(mappedReminders);
+        }
+      } catch (error) {
+        console.error('Error fetching reminders:', error);
+      }
+    };
+
+    fetchToken();
+    fetchUserData();
+    loadLastOpenedModules();
+    fetchReminders();
   }, []);
 
-  // Function to calculate years that will be completed on the anniversary date
-  const calculateYearsOnAnniversary = (dateString: string): number => {
-    const joiningDate = new Date(dateString);
-    const today = new Date();
+  // Initialize background services
+  useEffect(() => {
+    if (!token || !userData) return;
 
-    let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
+    const initializeBackgroundServices = async () => {
+      try {
+        console.log('🚀 Initializing background services...');
+        await BackgroundAttendanceService.initializeAll();
+        
+        if (userData?.office) {
+          const officeLocation = userData.office;
+          if (officeLocation.latitude && officeLocation.longitude) {
+            await BackgroundAttendanceService.setOfficeLocation(
+              officeLocation.latitude,
+              officeLocation.longitude,
+              50
+            );
+          }
+        }
 
-    if (anniversaryThisYear < today) {
-      anniversaryThisYear = new Date(today.getFullYear() + 1, joiningDate.getMonth(), joiningDate.getDate());
-    }
+        // Initialize location tracking
+        await BackgroundLocationService.initialize();
+      } catch (error) {
+        console.error('❌ Failed to initialize background services:', error);
+      }
+    };
 
-    const years = anniversaryThisYear.getFullYear() - joiningDate.getFullYear();
-    return years;
-  };
+    initializeBackgroundServices();
+  }, [token, userData]);
 
-  // Function to get upcoming events (birthdays and anniversaries)
+  // Function to get upcoming events
   const getUpcomingEvents = (birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
     const events: UpcomingEvent[] = [];
     const today = new Date();
@@ -752,8 +407,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     events.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
-      const today = new Date();
-
+      
       const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
       const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
 
@@ -763,346 +417,73 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       return eventDateA.getTime() - eventDateB.getTime();
     });
 
-    return events;
+    return events.slice(0, 3); // Return only top 3 events
   };
 
-  const setAutoReconfigure = async () => {
-    const response = await fetch(`${BACKEND_URL}/core/updateDeviceId`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ token }),
-    });
-    let SecureStore: any = null;
-    if (Platform.OS !== 'web') {
-      SecureStore = require('expo-secure-store');
+  const calculateYearsOnAnniversary = (dateString: string): number => {
+    const joiningDate = new Date(dateString);
+    const today = new Date();
+    let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
+
+    if (anniversaryThisYear < today) {
+      anniversaryThisYear = new Date(today.getFullYear() + 1, joiningDate.getMonth(), joiningDate.getDate());
     }
-    if (response.ok) {
-      console.log('Device ID updated successfully');
-      const data = await response.json();
-      if (SecureStore) {
-        await SecureStore.setItemAsync('device_id', data.device_id);
-      }
-    } else {
-      console.error('Failed to update device ID');
-    }
+
+    return anniversaryThisYear.getFullYear() - joiningDate.getFullYear();
   };
 
-  // Fetch user data
-  useEffect(() => {
-    if (!token) return;
-    const fetchUserData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data: ApiResponse = await response.json();
-        if (data.message === "Get modules successful") {
-          console.log('User data:', data.user);
-          const transformedUserData: UserData = {
-            ...data.user,
-            profile_picture: data.user.profile_picture || undefined
-          };
-          setUserData(transformedUserData);
-          setModules(data.modules);
-          setUpcomingBirthdays(data.upcoming_birthdays || []);
-          if (data.autoReconfigure) {
-            setAutoReconfigure();
-          }
-          // Save driver field to AsyncStorage
-          try {
-            await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
-            console.log('Driver status saved:', data.is_driver);
-          } catch (storageError) {
-            console.error('Error saving driver status to storage:', storageError);
-          }
-          setUpcomingAnniversaries(data.upcoming_anniversary || []);
-
-          // Generate upcoming events (birthdays + anniversaries)
-          const birthdays = data.upcoming_birthdays || [];
-          const anniversaries = data.upcoming_anniversary || [];
-          const events = getUpcomingEvents(birthdays, anniversaries);
-          setUpcomingEvents(events);
-        } else {
-          throw new Error(data.message || 'Failed to fetch user data');
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUserData();
-  }, [token]);
-
-  // Initialize background services AFTER user data is fetched
-  useEffect(() => {
-    if (!token || !userData) return;
-
-    const initializeBackgroundServices = async () => {
-      try {
-        console.log('🚀 Initializing all background attendance services...');
-
-        // Initialize all background methods
-        const results = await BackgroundAttendanceService.initializeAll();
-
-        console.log('📊 Background services status:', results);
-
-        // If user's office location is not set, try to get it from user data
-        if (userData?.office && !results.geofencing) {
-          const officeLocation = userData.office;
-          if (officeLocation.latitude && officeLocation.longitude) {
-            await BackgroundAttendanceService.setOfficeLocation(
-              officeLocation.latitude,
-              officeLocation.longitude,
-              50 // 200 meters radius
-            );
-            console.log('✅ Office location set from user data');
-          }
-        }
-
-      } catch (error) {
-        console.error('❌ Failed to initialize background services:', error);
-      }
-    };
-
-    initializeBackgroundServices();
-  }, [token, userData]);
-
-  // Initialize random location tracking AFTER user data is fetched
-  useEffect(() => {
-    if (!token || !userData) return;
-
-    const initializeLocationTracking = async () => {
-      try {
-        console.log('🎯 Initializing random location tracking service...');
-
-        // Initialize the background location service
-        const initialized = await BackgroundLocationService.initialize();
-
-        if (initialized) {
-          console.log('✅ Random location tracking initialized successfully');
-
-          // Check service status
-          const info = await BackgroundLocationService.getLastTrackedInfo();
-          console.log('📊 Random location tracking status:', info);
-
-          // Test manual capture (optional, for debugging)
-          // await BackgroundLocationService.captureLocationNow();
-
-        } else {
-          console.log('❌ Failed to initialize random location tracking');
-          // Don't show alert immediately, let it fail silently initially
-          // The system will ask for permissions when needed
-        }
-      } catch (error) {
-        console.error('❌ Error initializing random location tracking:', error);
-      }
-    };
-
-    initializeLocationTracking();
-
-    // Cleanup on unmount
-    return () => {
-      console.log('🧹 Dashboard unmounting - location service continues in background');
-    };
-  }, [token, userData]);
-
-  // ============================================================================
-  // CLEANUP ON LOGOUT
-  // ============================================================================
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          // Stop all background services before logout
-          await BackgroundAttendanceService.stopAll();
-          await BackgroundLocationService.stop();
-          closeMenu();
-          onLogout();
-        }
-      },
-    ]);
-  };
-
+  // Function to get initials from name
   const getInitials = (fullName: string): string => {
     return fullName.split(' ').map(name => name.charAt(0).toUpperCase()).join('').substring(0, 2);
   };
 
+  // Function to format date
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
 
-  const getDisplayModules = () => {
-    console.log('modules', modules);
-    return modules.map(module => ({
-      title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-      iconUrl: module.module_icon,
-      module_unique_name: module.module_unique_name,
-      is_generic: module.is_generic
-    }));
+  // Get icon URL helper
+  const getIconUrl = (item: IconItem): string => {
+    // This would come from backend in real implementation
+    return `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`;
   };
 
-  interface IconProps {
-    type: 'user' | 'notification' | 'help' | 'lock' | 'info' | 'settings';
-    color?: string;
-    size?: number;
-  }
+  // Handle theme toggle with animation
+  const handleThemeToggle = () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
 
-  const Icon: React.FC<IconProps> = ({ type, color = colors.textSecondary, size = 20 }) => {
-    const iconStyles = {
-      user: { width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3, borderWidth: 2, borderColor: color },
-      notification: { width: size * 0.7, height: size * 0.8, borderRadius: size * 0.1, borderWidth: 2, borderColor: color },
-      help: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color },
-      lock: { width: size * 0.6, height: size * 0.5, borderRadius: size * 0.05, borderWidth: 2, borderColor: color },
-      info: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color },
-      settings: { width: size * 0.8, height: size * 0.8, borderRadius: size * 0.1, borderWidth: 2, borderColor: color },
+    Animated.timing(switchToggle, {
+      toValue: isDark ? 0 : 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.timing(circleScale, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsDark(!isDark);
+      circleScale.setValue(0);
+      setIsAnimating(false);
+    });
+  };
+
+  // Handle module press
+  const handleModulePress = (moduleName: string, moduleUniqueName?: string) => {
+    const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
+
+    // Save to last opened modules
+    const moduleData = {
+      title: moduleName,
+      iconUrl: getIconUrl({ name: moduleName, color: '#007bff', icon: 'apps', library: 'fa5' }),
+      module_unique_name: moduleUniqueName || moduleName.toLowerCase()
     };
-    return (
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={iconStyles[type]} />
-        {type === 'help' && <Text style={{ color, fontSize: size * 0.6, fontWeight: 'bold', position: 'absolute' }}>?</Text>}
-        {type === 'info' && <Text style={{ color, fontSize: size * 0.6, fontWeight: 'bold', position: 'absolute' }}>i</Text>}
-        {type === 'settings' && (
-          <View style={{ position: 'absolute' }}>
-            <View style={{ width: size * 0.3, height: size * 0.3, borderRadius: size * 0.15, backgroundColor: color }} />
-          </View>
-        )}
-      </View>
-    );
-  };
+    saveLastOpenedModule(moduleData);
 
-  const HomeIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: size * 0.75, height: size * 0.65, borderWidth: 2, borderColor: color, borderBottomWidth: 3, borderTopColor: 'transparent', position: 'relative',
-      }}>
-        <View style={{
-          position: 'absolute', top: -size * 0.25, left: -size * 0.125, right: -size * 0.125, height: size * 0.35, borderTopWidth: 2, borderLeftWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: '0deg' }],
-        }}>
-          <View style={{
-            position: 'absolute', top: -2, left: '50%', width: 0, height: 0, borderLeftWidth: size * 0.2, borderRightWidth: size * 0.2, borderBottomWidth: size * 0.15, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: color, transform: [{ translateX: -size * 0.2 }],
-          }} />
-        </View>
-        <View style={{
-          position: 'absolute', bottom: size * 0.05, left: '50%', width: size * 0.15, height: size * 0.25, backgroundColor: color, transform: [{ translateX: -size * 0.075 }],
-        }} />
-      </View>
-    </View>
-  );
-
-  const MessageIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: size * 0.8, height: size * 0.6, borderWidth: 2, borderColor: color, borderRadius: size * 0.12, position: 'relative' }}>
-        <View style={{ position: 'absolute', top: size * 0.12, left: size * 0.12, right: size * 0.12, height: 2, backgroundColor: color }} />
-        <View style={{ position: 'absolute', top: size * 0.22, left: size * 0.12, width: size * 0.35, height: 2, backgroundColor: color }} />
-        <View style={{
-          position: 'absolute', bottom: -size * 0.08, left: size * 0.2, width: 0, height: 0, borderTopWidth: size * 0.12, borderLeftWidth: size * 0.08, borderRightWidth: size * 0.08, borderTopColor: color, borderLeftColor: 'transparent', borderRightColor: 'transparent',
-        }} />
-      </View>
-    </View>
-  );
-
-  const TeamIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ width: size * 0.25, height: size * 0.25, borderRadius: size * 0.125, borderWidth: 2, borderColor: color, marginRight: -size * 0.05 }} />
-        <View style={{ width: size * 0.35, height: size * 0.35, borderRadius: size * 0.175, borderWidth: 2, borderColor: color, zIndex: 1, backgroundColor: 'white' }} />
-        <View style={{ width: size * 0.25, height: size * 0.25, borderRadius: size * 0.125, borderWidth: 2, borderColor: color, marginLeft: -size * 0.05 }} />
-      </View>
-      <View style={{ position: 'absolute', bottom: size * 0.1, width: size * 0.8, height: size * 0.25, borderWidth: 2, borderColor: color, borderRadius: size * 0.125, borderTopColor: 'transparent' }} />
-    </View>
-  );
-
-  const BotIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: size * 0.7, height: size * 0.6, borderWidth: 2, borderColor: color, borderRadius: size * 0.15, position: 'relative' }}>
-        <View style={{ position: 'absolute', top: size * 0.12, left: size * 0.12, width: size * 0.1, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: color }} />
-        <View style={{ position: 'absolute', top: size * 0.12, right: size * 0.12, width: size * 0.1, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: color }} />
-        <View style={{ position: 'absolute', bottom: size * 0.1, left: '50%', width: size * 0.2, height: 2, backgroundColor: color, transform: [{ translateX: -size * 0.1 }] }} />
-      </View>
-      <View style={{ position: 'absolute', top: size * 0.05, left: '50%', width: 2, height: size * 0.15, backgroundColor: color, transform: [{ translateX: -1 }] }}>
-        <View style={{ position: 'absolute', top: -size * 0.04, left: '50%', width: size * 0.06, height: size * 0.06, borderRadius: size * 0.03, backgroundColor: color, transform: [{ translateX: -size * 0.03 }] }} />
-      </View>
-    </View>
-  );
-
-  const SupportIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 24 }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: size * 0.8, height: size * 0.8, borderRadius: size * 0.4, borderWidth: 2, borderColor: color, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-        <View style={{ position: 'absolute', top: size * 0.15, width: size * 0.25, height: size * 0.25, borderTopWidth: 2, borderLeftWidth: 2, borderRightWidth: 2, borderColor: color, borderTopLeftRadius: size * 0.2, borderTopRightRadius: size * 0.2 }} />
-        <View style={{ position: 'absolute', top: size * 0.38, width: size * 0.12, height: size * 0.12, borderRadius: size * 0.06, backgroundColor: color }} />
-        <View style={{ position: 'absolute', bottom: size * 0.12, width: size * 0.06, height: size * 0.12, backgroundColor: color, borderRadius: size * 0.03 }} />
-      </View>
-    </View>
-  );
-
-  const LogoutIcon = ({ color = colors.error, size = 20 }) => (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: size * 0.7, height: size * 0.8, borderWidth: 2, borderColor: color, borderRadius: size * 0.05 }}>
-        <View style={{ position: 'absolute', right: size * 0.1, top: '50%', width: size * 0.08, height: size * 0.08, borderRadius: size * 0.04, backgroundColor: color, transform: [{ translateY: -size * 0.04 }] }} />
-      </View>
-      <View style={{ position: 'absolute', right: -size * 0.1, width: size * 0.4, height: 2, backgroundColor: color }}>
-        <View style={{ position: 'absolute', right: 0, top: -size * 0.05, width: size * 0.1, height: size * 0.1, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }] }} />
-      </View>
-    </View>
-  );
-
-  const menuItems = [
-    { title: 'Profile', icon: <Icon type="user" color={activeMenuItem === 'Profile' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Profile' },
-    { title: 'Settings', icon: <Icon type="settings" color={activeMenuItem === 'Settings' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Settings' },
-    { title: 'Notifications', icon: <Icon type="notification" color={activeMenuItem === 'Notifications' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Notifications' },
-    { title: 'Help & Support', icon: <Icon type="help" color={activeMenuItem === 'Help & Support' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Help & Support' },
-    { title: 'Privacy Policy', icon: <Icon type="lock" color={activeMenuItem === 'Privacy Policy' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'Privacy Policy' },
-    { title: 'About', icon: <Icon type="info" color={activeMenuItem === 'About' ? colors.primary : colors.textSecondary} />, isActive: activeMenuItem === 'About' },
-  ];
-
-  const openMenu = () => {
-    setIsMenuVisible(true);
-    Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-  };
-
-  const closeMenu = () => {
-    Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
-  };
-
-  const handleMenuItemPress = (item: string) => {
-    setActiveMenuItem(item);
-    closeMenu();
-    if (item === 'Profile') {
-      setShowProfile(true);
-    } else if (item === 'Settings') {
-      setShowSettings(true);
-    } else {
-      Alert.alert('Coming Soon', `${item} feature will be available soon!`);
-    }
-  };
-
-  const handleBackFromSettings = () => {
-    setShowSettings(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromCreateSite = () => {
-    setShowCreateSite(false);
-    setShowScoutBoy(true);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleModulePress = (module: string, moduleUniqueName?: string) => {
-    const key = moduleUniqueName?.toLowerCase() ?? '';
-
+    // Navigate to appropriate module
     if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
@@ -1110,13 +491,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setShowHR(true);
     } else if (key.includes('cab')) {
       setShowCab(true);
-    } else if (key === 'employee_management') {
-      setShowEmployeeManagement(true);
     } else if (key.includes('driver')) {
       setShowDriver(true);
     } else if (key.includes('bdt')) {
       setShowBDT(true);
-    } else if (key.includes('mediclaim')) {
+    } else if (key.includes('mediclaim') || key.includes('medical')) {
       setShowMedical(true);
     } else if (key.includes('scout')) {
       setShowScoutBoy(true);
@@ -1124,78 +503,112 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setShowReminder(true);
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
+    } else if (key.includes('employee_management')) {
+      setShowEmployeeManagement(true);
     } else {
-      Alert.alert('Coming Soon', `${module} module will be available soon!`);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
   };
 
-  const handleBackFromAttendance = () => {
+  // Save last opened module
+  const saveLastOpenedModule = async (module: any) => {
+    try {
+      const storedModules = await AsyncStorage.getItem('last_opened_modules');
+      let modulesArray = storedModules ? JSON.parse(storedModules) : [];
+      
+      modulesArray = modulesArray.filter((m: any) => m.module_unique_name !== module.module_unique_name);
+      modulesArray.unshift(module);
+      
+      if (modulesArray.length > 4) {
+        modulesArray = modulesArray.slice(0, 4);
+      }
+      
+      await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+      setLastOpenedModules(modulesArray);
+    } catch (error) {
+      console.error('Error saving last opened module:', error);
+    }
+  };
+
+  // Handle back from pages
+  const handleBackFromPage = () => {
     setShowAttendance(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromProfile = () => {
     setShowProfile(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromHR = () => {
     setShowHR(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromCab = () => {
     setShowCab(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromDriver = () => {
     setShowDriver(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromBDT = () => {
     setShowBDT(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromMedical = () => {
     setShowMedical(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromScoutBoy = () => {
     setShowScoutBoy(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromReminder = () => {
+    setShowCreateSite(false);
     setShowReminder(false);
-    setActiveMenuItem('Dashboard');
-  };
-
-  const handleBackFromBUP = () => {
     setShowBUP(false);
+    setShowSettings(false);
+    setShowEmployeeManagement(false);
+    setShowChat(false);
+    setShowChatRoom(false);
     setActiveMenuItem('Dashboard');
   };
 
-  const handleBackFromChat = () => {
-    setShowChat(false);
-    setActiveNavItem('home');
+  // Handle logout
+  const handleLogout = async () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          await BackgroundAttendanceService.stopAll();
+          await BackgroundLocationService.stop();
+          onLogout();
+        }
+      },
+    ]);
   };
 
-  const handleOpenChatRoom = (chatRoom: any) => {
-    setSelectedChatRoom(chatRoom);
-    setShowChatRoom(true);
+  // Open menu
+  const openMenu = () => {
+    setIsMenuVisible(true);
+    Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
   };
 
-  const handleBackFromChatRoom = () => {
-    setShowChatRoom(false);
-    setSelectedChatRoom(null);
-    setShowChat(true);
+  // Close menu
+  const closeMenu = () => {
+    Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
   };
 
-  // Update the handleNavItemPress function
+  // Menu items
+  const drawerMenuItems = [
+    { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
+    { id: 'edit', title: 'Edit Personal Info', icon: 'edit', color: '#3B82F6' },
+    { id: 'dibi', title: 'Dibi Pass', icon: 'car', color: '#10B981' },
+    { id: 'trips', title: 'My Trips', icon: 'map', color: '#F59E0B' },
+    { id: 'payment', title: 'Payment', icon: 'wallet', color: '#8B5CF6' },
+    { id: 'help', title: 'Help', icon: 'help', color: '#EC4899' },
+    { id: 'messages', title: 'Messages', icon: 'notification', color: '#F59E0B' },
+    { id: 'safety', title: 'Safety Center', icon: 'shield', color: '#1E40AF' },
+    { id: 'settings', title: 'Settings', icon: 'settings', color: '#6B7280' },
+    { id: 'invite', title: 'Invite Friends', icon: 'users', color: '#10B981' },
+    { id: 'drive', title: 'Drive with Us', icon: 'car', color: '#10B981' },
+    { id: 'discounts', title: 'Discounts', icon: 'star', color: '#FBBF24' },
+    { id: 'velocity', title: 'Velocity Points', icon: 'star', color: '#FBBF24' },
+    { id: 'scan', title: 'Scan', icon: 'credit-card', color: '#8B5CF6' },
+  ];
+
+  const handleMenuItemPress = (item: any) => {
+    setActiveMenuItem(item.title);
+    closeMenu();
+    
+    if (item.id === 'profile') {
+      setShowProfile(true);
+    } else if (item.id === 'settings') {
+      setShowSettings(true);
+    } else {
+      Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
+    }
+  };
+
+  // Handle nav item press
   const handleNavItemPress = (navItem: string) => {
     setActiveNavItem(navItem);
     if (navItem === 'message') {
@@ -1205,1059 +618,1386 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }
   };
 
+  // Get display modules
+  const getDisplayModules = () => {
+    if (modules.length > 0) {
+      return modules.map(module => ({
+        title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
+        iconUrl: module.module_icon,
+        module_unique_name: module.module_unique_name,
+        is_generic: module.is_generic
+      }));
+    }
+    // Default modules if none from backend
+    return defaultLastOpened.map(item => ({
+      title: item.name,
+      iconUrl: getIconUrl(item),
+      module_unique_name: item.module_unique_name || item.name.toLowerCase(),
+      is_generic: true
+    }));
+  };
+
+  // Render icon helper
+  const renderIcon = (item: IconItem) => {
+    if (item.library === 'fa5') {
+      return <FontAwesome5 name={item.icon as any} size={20} color="white" />;
+    }
+    return <MaterialCommunityIcons name={item.icon as any} size={20} color="white" />;
+  };
+
+  // Render chart
+  const renderChart = () => {
+    const maxValue = 10;
+    const chartHeight = 100;
+
+    return (
+      <View style={styles.chartContainer}>
+        {chartData.map((item, index) => {
+          const hoursHeight = (item.hours / maxValue) * chartHeight;
+          const targetHeight = (item.target / maxValue) * chartHeight;
+
+          return (
+            <View key={index} style={styles.chartBar}>
+              <View style={[styles.barWrapper, { height: chartHeight }]}>
+                <View style={[styles.targetBar, { height: targetHeight, backgroundColor: 'rgba(255, 94, 122, 0.3)' }]} />
+                <View style={[styles.hoursBar, { height: hoursHeight, backgroundColor: 'rgba(94, 200, 255, 0.5)' }]} />
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  // Animation values
+  const maxRadius = Math.sqrt(width * width + height * height);
+  const circleSize = circleScale.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, maxRadius * 2.5],
+  });
+
+  const switchTranslate = switchToggle.interpolate({
+    inputRange: [0, 1],
+    outputRange: [3, 77],
+  });
+
+  // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, styles.centerContent]}>
-        <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </SafeAreaView>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.bgColor }]}>
+        <ActivityIndicator size="large" color={theme.accentBlue} />
+        <Text style={[styles.loadingText, { color: theme.textMain }]}>Loading...</Text>
+      </View>
     );
   }
 
-  if (error || !userData) {
+  // Render different pages based on state
+  if (showChatRoom && selectedChatRoom) {
     return (
-      <SafeAreaView style={[styles.container, styles.centerContent]}>
-        <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-        <Text style={styles.errorText}>Failed to load data</Text>
-        <TouchableOpacity style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <ChatRoomScreen
+        chatRoom={selectedChatRoom}
+        onBack={handleBackFromPage}
+        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+      />
     );
   }
 
-  interface AttendanceCardProps {
-    value: string;
-    label: string;
-    color: string;
+  if (showChat) {
+    return (
+      <ChatScreen
+        onBack={handleBackFromPage}
+        onOpenChatRoom={setSelectedChatRoom}
+        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+      />
+    );
   }
 
-  const AttendanceCard: React.FC<AttendanceCardProps> = ({ value, label, color }) => (
-    <View style={[
-      styles.card,
-      {
-        backgroundColor: color,
-        width: isDesktop ? '23%' : isTablet ? '48%' : (screenWidth - responsive.horizontalPadding * 2 - responsive.cardSpacing) / 2,
-        minHeight: isSmallScreen ? 90 : isDesktop ? 140 : isTablet ? 120 : 110,
-      }
-    ]}>
-      <View style={styles.cardCircle} />
-      <View style={styles.cardCircleSmall} />
-      <Text style={[
-        styles.cardValue,
-        { fontSize: isDesktop ? 52 : isTablet ? 44 : 40 }
-      ]}>{value}</Text>
-      <Text style={[
-        styles.cardLabel,
-        { fontSize: isDesktop ? 15 : isTablet ? 14 : 13 }
-      ]}>{label}</Text>
-    </View>
-  );
-
-  interface EventAvatarProps {
-    name: string;
-    date: string;
-    initials: string;
-    type: 'birthday' | 'anniversary';
-    years?: number;
+  if (showAttendance) {
+    return <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />;
   }
 
-  const EventAvatar: React.FC<EventAvatarProps> = ({ name, date, initials, type, years }) => (
-    <View style={[
-      styles.eventContainer,
-      { width: isDesktop ? 120 : isTablet ? 100 : 90 }
-    ]}>
-      <View style={styles.avatarContainer}>
-        <View style={[
-          styles.avatar,
-          type === 'anniversary' && styles.avatarAnniversary,
-          {
-            width: isDesktop ? 80 : isTablet ? 70 : 60,
-            height: isDesktop ? 80 : isTablet ? 70 : 60,
-          }
-        ]}>
-          <Text style={[
-            styles.avatarInitials,
-            { fontSize: isDesktop ? 22 : isTablet ? 20 : 18 }
-          ]}>{initials}</Text>
-        </View>
-        <View style={[
-          styles.dateBadge,
-          type === 'anniversary' && styles.dateBadgeAnniversary,
-          {
-            paddingHorizontal: isDesktop ? 14 : isTablet ? 12 : 10,
-            paddingVertical: isDesktop ? 8 : isTablet ? 6 : 5,
-          }
-        ]}>
-          <Text style={[
-            styles.dateText,
-            { fontSize: isDesktop ? 13 : isTablet ? 12 : 11 }
-          ]}>{date}</Text>
-        </View>
-        {type === 'anniversary' && years !== undefined && (
-          <View style={styles.anniversaryBadge}>
-            <Text style={[
-              styles.anniversaryText,
-              { fontSize: isDesktop ? 12 : isTablet ? 11 : 10 }
-            ]}>🎉 {years}yr{years !== 1 ? 's' : ''}</Text>
-          </View>
+  if (showProfile) {
+    return <Profile onBack={handleBackFromPage} userData={userData} />;
+  }
+
+  if (showHR) {
+    return <HR onBack={handleBackFromPage} />;
+  }
+
+  if (showCab) {
+    return <Cab onBack={handleBackFromPage} />;
+  }
+
+  if (showDriver) {
+    return <Driver onBack={handleBackFromPage} />;
+  }
+
+  if (showBDT) {
+    return <BDT onBack={handleBackFromPage} />;
+  }
+
+  if (showMedical) {
+    return <Medical onBack={handleBackFromPage} />;
+  }
+
+  if (showScoutBoy) {
+    return <ScoutBoy onBack={handleBackFromPage} />;
+  }
+
+  if (showReminder) {
+    return <Reminder onBack={handleBackFromPage} />;
+  }
+
+  if (showBUP) {
+    return <BUP onBack={handleBackFromPage} />;
+  }
+
+  if (showSettings) {
+    return <Settings onBack={handleBackFromPage} />;
+  }
+
+  if (showEmployeeManagement) {
+    return <EmployeeManagement onBack={handleBackFromPage} />;
+  }
+
+  if (showCreateSite) {
+    return <CreateSite onBack={handleBackFromPage} />;
+  }
+
+  // Main dashboard render
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={currentColors.headerBg} />
+      
+      {/* Hamburger Menu Modal */}
+      <HamburgerMenu
+        isVisible={isMenuVisible}
+        onClose={closeMenu}
+        userData={userData}
+        menuItems={drawerMenuItems}
+        activeMenuItem={activeMenuItem}
+        onMenuItemPress={handleMenuItemPress}
+        onLogout={handleLogout}
+        isDark={isDark}
+        slideAnim={slideAnim}
+      />
+
+      {/* All Modules Modal */}
+      <AllModulesModal
+        isVisible={allModulesVisible}
+        onClose={() => setAllModulesVisible(false)}
+        modules={getDisplayModules()}
+        onModulePress={handleModulePress}
+        theme={theme}
+      />
+
+      <View style={[styles.mainContent, { backgroundColor: theme.bgColor }]}>
+        {/* Animated Circle Overlay */}
+        {isAnimating && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.circleOverlay,
+              {
+                opacity: circleScale,
+                transform: [{ scale: circleScale }],
+                backgroundColor: isDark ? '#f8f9fa' : '#050b18',
+              },
+            ]}
+          />
         )}
-      </View>
-      <Text style={[
-        styles.eventName,
-        { fontSize: isDesktop ? 14 : isTablet ? 13 : 12 }
-      ]} numberOfLines={2}>{name}</Text>
-      <Text style={[
-        styles.eventType,
-        { fontSize: isDesktop ? 12 : isTablet ? 11 : 10 }
-      ]}>{type === 'birthday' ? '🎂 Birthday' : '💼 Anniversary'}</Text>
-    </View>
-  );
 
-  interface ModuleItemProps {
-    title: string;
-    iconUrl: string;
-    onPress: () => void;
-  }
-
-  const ModuleItem: React.FC<ModuleItemProps> = ({ title, iconUrl, onPress }) => (
-    <TouchableOpacity style={[
-      styles.moduleItem,
-      {
-        width: isDesktop ? 150 : isTablet ? 130 : 110,
-        padding: isDesktop ? 18 : isTablet ? 16 : 12,
-        minHeight: isDesktop ? 150 : isTablet ? 130 : 110,
-      }
-    ]} onPress={onPress} activeOpacity={0.7}>
-      <View style={[
-        styles.moduleIconContainer,
-        {
-          width: isDesktop ? 60 : isTablet ? 56 : 48,
-          height: isDesktop ? 60 : isTablet ? 56 : 48,
-        }
-      ]}>
-        <Image source={{ uri: iconUrl }} style={[
-          styles.moduleIconImage,
-          {
-            width: isDesktop ? 40 : isTablet ? 36 : 32,
-            height: isDesktop ? 40 : isTablet ? 36 : 32,
-          }
-        ]} resizeMode="contain" />
-      </View>
-      <Text style={[
-        styles.moduleTitle,
-        { fontSize: isDesktop ? 14 : isTablet ? 13 : 12 }
-      ]} numberOfLines={2}>{title}</Text>
-    </TouchableOpacity>
-  );
-
-  const HamburgerMenu = () => (
-    <Modal transparent visible={isMenuVisible} animationType="none" onRequestClose={closeMenu}>
-      <SafeAreaView style={styles.overlay}>
-        <TouchableOpacity style={styles.overlayTouchable} activeOpacity={1} onPress={closeMenu} />
-        <Animated.View style={[
-          styles.menuContainer,
-          {
-            width: isDesktop ? 400 : isTablet ? 350 : 300,
-            transform: [{ translateX: slideAnim }]
-          }
-        ]}>
-          <View style={[styles.menuHeader, { paddingTop: insets.top }]}>
-            <View style={styles.menuHeaderContent}>
-              <View style={[
-                styles.menuUserAvatarCircle,
-                {
-                  width: isDesktop ? 70 : isTablet ? 64 : 56,
-                  height: isDesktop ? 70 : isTablet ? 64 : 56,
-                }
-              ]}>
-                <Icon type="user" color={colors.white} size={isDesktop ? 28 : 24} />
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Header Banner */}
+          <LinearGradient
+            colors={[currentColors.headerBg, currentColors.headerBg]}
+            style={styles.headerBanner}
+          >
+            {!isDark && (
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80' }}
+                style={styles.headerImage}
+              />
+            )}
+            <View style={styles.headerContent}>
+              <View style={styles.topNav}>
+                <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
+                  {[1, 2, 3].map(i => (
+                    <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
+                  ))}
+                </TouchableOpacity>
+                <Text style={styles.logoText}>CITADEL</Text>
+                <View style={styles.headerSpacer} />
               </View>
-              <View style={styles.menuUserDetails}>
-                <Text style={[
-                  styles.menuUserRole,
-                  { fontSize: isDesktop ? 16 : isTablet ? 14 : 13 }
-                ]}>{userData.designation || userData.role || 'Employee'}</Text>
-                <Text style={[
-                  styles.menuUserName,
-                  { fontSize: isDesktop ? 22 : isTablet ? 20 : 18 }
-                ]}>{userData.full_name}</Text>
+              <Text style={styles.welcomeText}>Welcome!</Text>
+              <Text style={styles.employeeText}>Employee</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Profile Card */}
+          <View style={[styles.profileCard, { backgroundColor: theme.cardBg }]}>
+            <View>
+              <Text style={[styles.userName, { color: theme.textMain }]}>
+                Hi {userData?.first_name || 'User'}!
+              </Text>
+              <Text style={[styles.userRole, { color: theme.textSub }]}>
+                {userData?.designation || userData?.role || 'SOFTWARE ENGINEER'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowProfile(true)}>
+              {userData?.profile_picture ? (
+                <Image
+                  source={{ uri: userData.profile_picture }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.accentBlue }]}>
+                  <Text style={styles.profileInitials}>
+                    {getInitials(userData?.full_name || 'User')}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Last Opened Section */}
+          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.labelSmall, { color: theme.textSub }]}>LAST OPENED</Text>
+            <View style={styles.iconGrid}>
+              {lastOpenedModules.slice(0, 4).map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.iconItem}
+                  onPress={() => handleModulePress(item.title, item.module_unique_name)}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
+                    <Image 
+                      source={{ uri: item.iconUrl }} 
+                      style={styles.iconImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={[styles.iconLabel, { color: theme.textMain }]}>{item.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Upcoming Reminder */}
+          <View style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.reminderContent}>
+              <View style={styles.reminderBorder} />
+              <View style={styles.reminderText}>
+                <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING REMINDERS</Text>
+                {reminders.length > 0 ? (
+                  <>
+                    <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
+                      {reminders[0].title}
+                    </Text>
+                    <Text style={[styles.reminderTime, { color: theme.textSub }]}>
+                      <Ionicons name="time-outline" size={12} /> {reminders[0].time}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
+                      Meeting with Zsolt
+                    </Text>
+                    <Text style={[styles.reminderTime, { color: theme.textSub }]}>
+                      <Ionicons name="time-outline" size={12} /> 9:00 AM - 10:00 AM
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+            <View style={styles.calendarIcon}>
+              <Ionicons name="calendar-outline" size={40} color="#1da1f2" />
+              <Text style={styles.calendarDate}>{new Date().getDate()}</Text>
+            </View>
+          </View>
+
+          {/* Module Grid */}
+          <View style={styles.moduleGrid}>
+            {/* Attendance Module */}
+            <TouchableOpacity 
+              style={styles.moduleAttendance}
+              onPress={() => handleModulePress('Attendance', 'attendance')}
+            >
+              <LinearGradient
+                colors={['#00d285', '#00b872']}
+                style={styles.moduleGradient}
+              >
+                <Ionicons name="arrow-forward" size={18} color="white" style={styles.moduleArrow} />
+                <View style={styles.moduleIconCircle}>
+                  <FontAwesome5 name="book-open" size={24} color="white" />
+                </View>
+                <Text style={styles.moduleTitle}>Attendance</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={styles.moduleColumn}>
+              {/* Cab Module */}
+              <TouchableOpacity 
+                style={styles.moduleSmall}
+                onPress={() => handleModulePress('Cab', 'cab')}
+              >
+                <LinearGradient
+                  colors={['#ff5e7a', '#ff4168']}
+                  style={styles.moduleGradient}
+                >
+                  <Ionicons name="arrow-forward" size={18} color="white" style={styles.moduleArrow} />
+                  <View style={styles.moduleIconCircle}>
+                    <FontAwesome5 name="id-card" size={24} color="white" />
+                  </View>
+                  <Text style={styles.moduleTitle}>Cab</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* HR Module */}
+              <TouchableOpacity 
+                style={styles.moduleSmall}
+                onPress={() => handleModulePress('HR', 'hr')}
+              >
+                <LinearGradient
+                  colors={['#ffb157', '#ff9d3f']}
+                  style={styles.moduleGradient}
+                >
+                  <Ionicons name="arrow-forward" size={18} color="white" style={styles.moduleArrow} />
+                  <View style={styles.moduleIconCircle}>
+                    <FontAwesome5 name="users" size={24} color="white" />
+                  </View>
+                  <Text style={styles.moduleTitle}>HR</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* View All Modules */}
+          <TouchableOpacity 
+            style={styles.viewAllContainer}
+            onPress={() => setAllModulesVisible(true)}
+          >
+            <Text style={[styles.viewAllText, { color: theme.textSub }]}>
+              View all modules
+            </Text>
+            <View style={styles.chevronGroup}>
+              <Ionicons name="chevron-forward" size={14} color={theme.textSub} />
+              <Ionicons name="chevron-forward" size={14} color={theme.textSub} style={{ marginLeft: -8 }} />
+              <Ionicons name="chevron-forward" size={14} color={theme.textSub} style={{ marginLeft: -8 }} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Stats Section */}
+          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.labelSmall, { color: theme.textSub }]}>STATS</Text>
+            <View style={styles.statsContent}>
+              {renderChart()}
+              <View style={styles.statsNumbers}>
+                <Text style={[styles.statsValue, { color: theme.textMain }]}>
+                  {userData?.days_present || '60'}%
+                </Text>
+                <Text style={[styles.statsLabel, { color: theme.textSub }]}>DAYS PRESENT</Text>
+                <Text style={[styles.statsValue, { color: theme.textMain, marginTop: 15 }]}>
+                  {userData?.leaves_applied || '6.8'}
+                </Text>
+                <Text style={[styles.statsLabel, { color: theme.textSub }]}>LEAVES APPLIED</Text>
               </View>
             </View>
           </View>
-          <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuItemsContent}>
-            {menuItems.map((item, index) => (
-              <TouchableOpacity key={index} style={[
-                styles.menuItem,
-                item.isActive && styles.menuItemActive,
-                {
-                  paddingHorizontal: isDesktop ? 28 : isTablet ? 24 : 20,
-                  paddingVertical: isDesktop ? 18 : isTablet ? 16 : 14,
-                }
-              ]} onPress={() => handleMenuItemPress(item.title)} activeOpacity={0.7}>
-                <View style={[
-                  styles.menuItemIconContainer,
+
+          {/* Upcoming Events */}
+          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING EVENTS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventsScroll}>
+              {upcomingEvents.length > 0 ? (
+                upcomingEvents.map((event, index) => (
+                  <View key={index} style={styles.eventItem}>
+                    <View style={styles.eventAvatarWrapper}>
+                      <View style={[
+                        styles.eventAvatar,
+                        { 
+                          backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : theme.accentBlue,
+                          width: 80,
+                          height: 80,
+                          borderRadius: 40,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }
+                      ]}>
+                        <Text style={styles.eventAvatarInitials}>
+                          {getInitials(event.full_name)}
+                        </Text>
+                      </View>
+                      <View style={styles.eventDateBadge}>
+                        <Text style={styles.eventDateText}>{formatDate(event.date)}</Text>
+                      </View>
+                      {event.type === 'anniversary' && event.years && (
+                        <View style={styles.anniversaryBadge}>
+                          <Text style={styles.anniversaryText}>🎉 {event.years}yr</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.eventName, { color: theme.textMain }]} numberOfLines={2}>
+                      {event.full_name}
+                    </Text>
+                    <Text style={[styles.eventType, { color: theme.textSub }]}>
+                      {event.type === 'birthday' ? '🎂 Birthday' : '💼 Anniversary'}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                // Hardcoded events if none from backend
+                [
+                  { name: 'Ananya Vishnoi', date: '20 Dec', image: '' },
+                  { name: 'Kriti Kharbanda', date: '26 Dec', image: '' },
+                  { name: 'Anup Khanna', date: '13 Jan', image: '' },
+                ].map((event, index) => (
+                  <View key={index} style={styles.eventItem}>
+                    <View style={styles.eventAvatarWrapper}>
+                      <View style={[
+                        styles.eventAvatarPlaceholder,
+                        { backgroundColor: theme.accentBlue }
+                      ]}>
+                        <Text style={styles.eventAvatarInitials}>
+                          {getInitials(event.name)}
+                        </Text>
+                      </View>
+                      <View style={styles.eventDateBadge}>
+                        <Text style={styles.eventDateText}>{event.date}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.eventName, { color: theme.textMain }]} numberOfLines={2}>
+                      {event.name}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+
+          {/* Horizontal Light Switch Theme Switcher */}
+          <View style={styles.themeSwitcher}>
+            <TouchableOpacity
+              style={[styles.lightSwitch, { backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0' }]}
+              onPress={handleThemeToggle}
+              activeOpacity={0.8}
+            >
+              <View style={styles.switchTrack}>
+                <Animated.View
+                  style={[
+                    styles.switchToggleButton,
+                    {
+                      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+                      transform: [{ translateX: switchTranslate }],
+                    },
+                  ]}
+                >
+                  <View style={styles.switchNotch} />
+                </Animated.View>
+              </View>
+              
+              <View style={styles.switchIcons}>
+                <Ionicons 
+                  name="sunny" 
+                  size={22} 
+                  color={isDark ? '#666' : '#ffa500'} 
+                />
+                <Ionicons 
+                  name="moon" 
+                  size={22} 
+                  color={isDark ? '#6b7cff' : '#999'} 
+                />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerLogo}>CITADEL</Text>
+            <Text style={styles.footerText}>Made with ❤️</Text>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Navigation */}
+        <View style={[styles.bottomNav, { backgroundColor: theme.navBg }]}>
+          {[
+            { icon: 'home', label: 'Home' },
+            { icon: 'chatbubbles', label: 'Message' },
+            { icon: 'person', label: 'HR' },
+            { icon: 'headset', label: 'Support' },
+          ].map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.navItem}
+              onPress={() => handleNavItemPress(item.label.toLowerCase())}
+            >
+              {activeNavItem === item.label.toLowerCase() && (
+                <View style={styles.floatingCircle}>
+                  <Ionicons name={item.icon as any} size={22} color="white" />
+                </View>
+              )}
+              {activeNavItem !== item.label.toLowerCase() && (
+                <>
+                  <Ionicons name={item.icon as any} size={20} color="#999" />
+                  <Text style={styles.navLabel}>{item.label}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// Helper function to get module color
+const getModuleColor = (moduleName: string): string => {
+  switch (moduleName.toLowerCase()) {
+    case 'hr':
+      return '#00d285';
+    case 'cab':
+      return '#ffb157';
+    case 'attendance':
+      return '#ff5e7a';
+    case 'bdt':
+      return '#1da1f2';
+    default:
+      return '#3262f1';
+  }
+};
+
+// Hamburger Menu Component
+const HamburgerMenu = ({ 
+  isVisible, 
+  onClose, 
+  userData, 
+  menuItems, 
+  activeMenuItem, 
+  onMenuItemPress,
+  onLogout,
+  isDark,
+  slideAnim 
+}: any) => {
+  if (!isVisible) return null;
+
+  const currentColors = isDark ? darkColors : lightColors;
+
+  return (
+    <Modal transparent visible={isVisible} animationType="none" onRequestClose={onClose}>
+      <SafeAreaView style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+        <TouchableOpacity style={styles.overlayTouchable} activeOpacity={1} onPress={onClose} />
+        <Animated.View style={[
+          styles.menuContainer,
+          {
+            width: 300,
+            transform: [{ translateX: slideAnim }],
+            backgroundColor: currentColors.white,
+          }
+        ]}>
+          <View style={[styles.menuHeader, { backgroundColor: currentColors.headerBg }]}>
+            <View style={styles.menuHeaderContent}>
+              <TouchableOpacity onPress={() => {
+                onClose();
+                // Navigate to profile
+              }}>
+                {userData?.profile_picture ? (
+                  <Image 
+                    source={{ uri: userData.profile_picture }} 
+                    style={styles.menuUserAvatar}
+                  />
+                ) : (
+                  <View style={[styles.menuUserAvatarCircle, { backgroundColor: currentColors.info }]}>
+                    <Text style={styles.menuUserAvatarText}>
+                      {userData?.full_name ? 
+                        userData.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 
+                        'U'
+                      }
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <View style={styles.menuUserDetails}>
+                <Text style={[styles.menuUserRole, { color: currentColors.textLight }]}>
+                  {userData?.designation || userData?.role || 'Employee'}
+                </Text>
+                <Text style={[styles.menuUserName, { color: currentColors.white }]}>
+                  {userData?.full_name || 'User'}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <ScrollView style={[styles.menuItems, { backgroundColor: currentColors.white }]} 
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={styles.menuItemsContent}
+          >
+            {menuItems.map((item: any, index: number) => (
+              <TouchableOpacity 
+                key={index} 
+                style={[
+                  styles.menuItem,
+                  activeMenuItem === item.title && styles.menuItemActive,
                   {
-                    width: isDesktop ? 40 : isTablet ? 36 : 32,
-                    marginRight: isDesktop ? 24 : isTablet ? 20 : 16,
+                    backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
                   }
-                ]}>{item.icon}</View>
+                ]} 
+                onPress={() => onMenuItemPress(item)} 
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuItemIconContainer}>
+                  <Text style={{ fontSize: 20 }}>{item.icon === 'user' ? '👤' : 
+                    item.icon === 'edit' ? '✏️' : 
+                    item.icon === 'car' ? '🚗' : 
+                    item.icon === 'map' ? '🗺️' : 
+                    item.icon === 'wallet' ? '💳' : 
+                    item.icon === 'help' ? '❓' : 
+                    item.icon === 'notification' ? '🔔' : 
+                    item.icon === 'shield' ? '🛡️' : 
+                    item.icon === 'settings' ? '⚙️' : 
+                    item.icon === 'users' ? '👥' : 
+                    item.icon === 'star' ? '⭐' : 
+                    item.icon === 'credit-card' ? '💳' : '📱'}</Text>
+                </View>
                 <Text style={[
                   styles.menuItemText,
-                  item.isActive && styles.menuItemTextActive,
-                  { fontSize: isDesktop ? 18 : isTablet ? 16 : 15 }
+                  activeMenuItem === item.title && styles.menuItemTextActive,
+                  { color: activeMenuItem === item.title ? currentColors.info : currentColors.textSecondary }
                 ]}>{item.title}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <View style={[styles.logoutSection, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={styles.logoutDivider} />
-            <TouchableOpacity style={[
-              styles.logoutButton,
-              {
-                paddingHorizontal: isDesktop ? 28 : isTablet ? 24 : 20,
-                paddingVertical: isDesktop ? 18 : isTablet ? 16 : 14,
-              }
-            ]} onPress={handleLogout} activeOpacity={0.7}>
-              <View style={[
-                styles.logoutIconContainer,
-                {
-                  width: isDesktop ? 40 : isTablet ? 36 : 32,
-                  marginRight: isDesktop ? 24 : isTablet ? 20 : 16,
-                }
-              ]}><LogoutIcon /></View>
-              <Text style={[
-                styles.logoutButtonText,
-                { fontSize: isDesktop ? 18 : isTablet ? 16 : 15 }
-              ]}>Logout</Text>
+          <View style={[styles.logoutSection, { backgroundColor: currentColors.white }]}>
+            <View style={[styles.logoutDivider, { backgroundColor: currentColors.border }]} />
+            <TouchableOpacity 
+              style={[styles.logoutButton, { backgroundColor: '#FEF2F2' }]} 
+              onPress={onLogout} 
+              activeOpacity={0.7}
+            >
+              <View style={styles.logoutIconContainer}>
+                <Text style={{ fontSize: 20, color: currentColors.error }}>🚪</Text>
+              </View>
+              <Text style={[styles.logoutButtonText, { color: currentColors.error }]}>Logout</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
       </SafeAreaView>
     </Modal>
   );
-
-  const displayModules = getDisplayModules();
-
-  // WaveBottomBar configuration
-  const waveBottomBarTabs = [
-    {
-      routeName: 'home',
-      tabLabel: 'Home',
-      tabIcon: (isFocused: boolean) => (
-        <HomeIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
-      ),
-    },
-    {
-      routeName: 'message',
-      tabLabel: 'Messages',
-      tabIcon: (isFocused: boolean) => (
-        <MessageIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
-      ),
-    },
-    {
-      routeName: 'team',
-      tabLabel: 'Organisation',
-      tabIcon: (isFocused: boolean) => (
-        <TeamIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
-      ),
-    },
-    {
-      routeName: 'ai-bot',
-      tabLabel: 'AI Bot',
-      tabIcon: (isFocused: boolean) => (
-        <BotIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
-      ),
-    },
-    {
-      routeName: 'support',
-      tabLabel: 'Support',
-      tabIcon: (isFocused: boolean) => (
-        <SupportIcon color={isFocused ? colors.primary : colors.textSecondary} size={responsive.iconSize} />
-      ),
-    },
-  ];
-
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      {showChatRoom && selectedChatRoom ? (
-        <ChatRoomScreen
-          chatRoom={selectedChatRoom}
-          onBack={handleBackFromChatRoom}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-        />
-      ) : showChat ? (
-        <ChatScreen
-          onBack={handleBackFromChat}
-          onOpenChatRoom={handleOpenChatRoom}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-        />
-      ) : showAttendance ? (
-        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromAttendance} attendanceKey={attendanceKey} />
-      ) : showSettings ? (
-        <Settings onBack={handleBackFromSettings} />
-      ) : showProfile ? (
-        <Profile onBack={handleBackFromProfile} userData={userData} />
-      ) : showHR ? (
-        <HR onBack={handleBackFromHR} />
-      ) : showCab ? (
-        <Cab onBack={handleBackFromCab} />
-      ) : showDriver ? (
-        <Driver onBack={handleBackFromDriver} />
-      ) : showBDT ? (
-        <BDT onBack={handleBackFromBDT} />
-      ) : showMedical ? (
-        <Medical onBack={handleBackFromMedical} />
-      ) : showScoutBoy ? (
-        <ScoutBoy onBack={handleBackFromScoutBoy} />
-      ) : showCreateSite ? (
-        <CreateSite
-          onBack={handleBackFromCreateSite}
-          colors={colors}
-          spacing={spacing}
-          fontSize={fontSize}
-          borderRadius={borderRadius}
-          shadows={shadows}
-        />
-      ) : showReminder ? (
-        <Reminder onBack={handleBackFromReminder} />
-      ) : showBUP ? (
-        <BUP onBack={handleBackFromBUP} />
-      ) : showEmployeeManagement ? (
-        <EmployeeManagement onBack={handleBackFromEmployeeManagement} />
-      ) : (
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-          <View style={[
-            styles.header,
-            {
-              paddingTop: Math.max(insets.top, isDesktop ? 20 : isTablet ? 16 : 12),
-              paddingBottom: isDesktop ? 28 : isTablet ? 24 : 20,
-              paddingHorizontal: responsive.horizontalPadding,
-            }
-          ]}>
-            <View style={styles.headerTop}>
-              <TouchableOpacity style={styles.menuIcon} onPress={openMenu}>
-                {[1, 2, 3].map(i => (
-                  <View key={i} style={[
-                    styles.menuLine,
-                    {
-                      width: isDesktop ? 24 : isTablet ? 22 : 20,
-                      height: 2,
-                    }
-                  ]} />
-                ))}
-              </TouchableOpacity>
-              <View style={styles.logoContainer}>
-                <Image source={require('../assets/logo_back.png')} style={[
-                  styles.logo,
-                  {
-                    width: responsive.logoSize,
-                    height: responsive.logoSize * 0.8,
-                  }
-                ]} resizeMode="contain" />
-              </View>
-              <View style={[
-                styles.headerSpacer,
-                { width: isDesktop ? 44 : isTablet ? 40 : 36 }
-              ]} />
-            </View>
-            <View style={styles.userInfo}>
-              <View style={styles.userDetails}>
-                <Text style={[
-                  styles.greeting,
-                  { fontSize: isDesktop ? 18 : isTablet ? 16 : 14 }
-                ]}>Hi</Text>
-                <Text style={[
-                  styles.userName,
-                  { fontSize: isDesktop ? 36 : isTablet ? 32 : 28 }
-                ]}>{userData.full_name.split(' ')[0]},</Text>
-                <Text style={[
-                  styles.userRole,
-                  { fontSize: isDesktop ? 19 : isTablet ? 17 : 15 }
-                ]}>{userData.designation || userData.role || 'Employee'}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.mainContent}>
-            <ScrollView
-              style={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.scrollContainer,
-                {
-                  paddingHorizontal: responsive.horizontalPadding,
-                  paddingTop: responsive.verticalPadding,
-                  paddingBottom: insets.bottom + responsive.bottomBarHeight + 20,
-                }
-              ]}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={[
-                styles.section,
-                { marginBottom: responsive.sectionSpacing }
-              ]}>
-                <Text style={[
-                  styles.sectionTitle,
-                  { fontSize: isDesktop ? 26 : isTablet ? 24 : 20 }
-                ]}>Attendance</Text>
-                <View style={[
-                  styles.attendanceGrid,
-                  {
-                    gap: responsive.cardSpacing,
-                    marginBottom: isDesktop ? 20 : isTablet ? 16 : 12,
-                  }
-                ]}>
-                  <AttendanceCard value={String(userData.days_present)} label="Days Present" color="#A7F3D0" />
-                  <AttendanceCard
-                    value={String(userData.leaves_applied)}
-                    label="Leaves Applied"
-                    color="#FED7AA"
-                  />
-                  <AttendanceCard value={String(userData.holidays)} label="Holidays" color="#DDD6FE" />
-                  <AttendanceCard value={String(userData.late_arrivals)} label="Late Arrivals" color="#FBCFE8" />
-                </View>
-              </View>
-              <View style={[
-                styles.sectionModules,
-                {
-                  marginTop: Platform.OS === 'android' && isSmallScreen ? -40 : 0,
-                  marginBottom: responsive.sectionSpacing,
-                }
-              ]}>
-                <Text style={[
-                  styles.sectionTitle,
-                  { fontSize: isDesktop ? 26 : isTablet ? 24 : 20 }
-                ]}>Modules</Text>
-                {displayModules.length > 0 ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={[
-                      styles.modulesScrollContent,
-                      { gap: responsive.cardSpacing }
-                    ]}
-                  >
-                    {displayModules.map((module, index) => (
-                      <ModuleItem
-                        key={index}
-                        title={module.title}
-                        iconUrl={module.iconUrl}
-                        onPress={() => handleModulePress(module.title, module.module_unique_name)}
-                      />
-                    ))}
-                  </ScrollView>
-                ) : (
-                  <Text style={[
-                    styles.noModulesText,
-                    { fontSize: isDesktop ? 16 : isTablet ? 15 : 14 }
-                  ]}>No modules available</Text>
-                )}
-              </View>
-              <View style={[
-                styles.section,
-                { marginBottom: responsive.sectionSpacing }
-              ]}>
-                <Text style={[
-                  styles.sectionTitle,
-                  { fontSize: isDesktop ? 26 : isTablet ? 24 : 20 }
-                ]}>Upcoming Events</Text>
-                {upcomingEvents.length > 0 ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.eventsScroll}
-                    contentContainerStyle={[
-                      styles.eventsScrollContent,
-                      { gap: isDesktop ? 24 : isTablet ? 20 : 16 }
-                    ]}
-                  >
-                    {upcomingEvents.map((event, index) => (
-                      <EventAvatar
-                        key={index}
-                        name={event.full_name}
-                        date={formatDate(event.date)}
-                        initials={getInitials(event.full_name)}
-                        type={event.type}
-                        years={event.years}
-                      />
-                    ))}
-                  </ScrollView>
-                ) : (
-                  <View style={styles.noEventsContainer}>
-                    <Image
-                      source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2965/2965140.png' }}
-                      style={[
-                        styles.noEventsImage,
-                        {
-                          width: isDesktop ? 120 : isTablet ? 100 : 80,
-                          height: isDesktop ? 120 : isTablet ? 100 : 80,
-                        }
-                      ]}
-                      resizeMode="contain"
-                    />
-                    <Text style={[
-                      styles.noEventsText,
-                      { fontSize: isDesktop ? 18 : isTablet ? 16 : 14 }
-                    ]}>No upcoming events</Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-
-            {/* Custom Wave Bottom Bar */}
-            <CustomWaveBottomBar
-              data={waveBottomBarTabs}
-              selectedTab={activeNavItem}
-              onTabPress={(routeName: string) => handleNavItemPress(routeName)}
-              waveColor={colors.primary}
-              backgroundColor={colors.white}
-              barColor={colors.white}
-              containerStyle={[
-                styles.waveBarContainer,
-                { height: responsive.bottomBarHeight }
-              ]}
-              tabButtonStyle={styles.waveTabButton}
-              tabTextStyle={styles.waveTabText}
-              animatedWaveStyle={[
-                styles.waveAnimation,
-                { height: responsive.waveHeight }
-              ]}
-            />
-          </View>
-          <HamburgerMenu />
-        </SafeAreaView>
-      )}
-    </KeyboardAvoidingView>
-  );
 };
 
-export default Dashboard;
+// All Modules Modal Component
+const AllModulesModal = ({ isVisible, onClose, modules, onModulePress, theme }: any) => {
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={isVisible}
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.bgColor }]}>
+        <View style={styles.modalHeader}>
+          <Text style={[styles.modalTitle, { color: theme.textMain }]}>All Modules</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color={theme.accentBlue} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.modalContent}>
+          <View style={styles.allModulesGrid}>
+            {modules.map((module: any, index: number) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.moduleItemModal,
+                  { backgroundColor: theme.cardBg }
+                ]}
+                onPress={() => {
+                  onModulePress(module.title, module.module_unique_name);
+                  onClose();
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.moduleIconContainerModal,
+                  { backgroundColor: theme.bgColor }
+                ]}>
+                  <Image 
+                    source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} 
+                    style={styles.moduleIconImageModal}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={[styles.moduleTitleModal, { color: theme.textMain }]} numberOfLines={2}>
+                  {module.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primary
   },
-  centerContent: {
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   loadingText: {
-    color: colors.white,
-    fontSize: isDesktop ? 18 : isTablet ? 16 : 14,
-    marginTop: 16
-  },
-  errorText: {
-    color: colors.white,
-    fontSize: isDesktop ? 18 : isTablet ? 16 : 14,
-    textAlign: 'center',
-    marginBottom: 24
-  },
-  retryButton: {
-    backgroundColor: colors.white,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8
-  },
-  retryButtonText: {
-    color: colors.primary,
-    fontSize: isDesktop ? 16 : isTablet ? 15 : 14,
-    fontWeight: '600'
-  },
-  noModulesText: {
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 32,
-    width: '100%'
-  },
-  header: {
-    backgroundColor: colors.primary,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: isDesktop ? 28 : isTablet ? 24 : 20,
-  },
-  menuIcon: {
-    padding: 8,
-    borderRadius: 4
-  },
-  menuLine: {
-    backgroundColor: colors.white,
-    marginVertical: 3,
-    borderRadius: 1
-  },
-  logoContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  logo: {
-    backgroundColor: 'transparent'
-  },
-  headerSpacer: {
-    width: 36
-  },
-  userInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start'
-  },
-  userDetails: {
-    flex: 1
-  },
-  greeting: {
-    color: colors.textLight,
-    marginBottom: 4
-  },
-  userName: {
-    color: colors.white,
-    fontWeight: '700',
-    marginBottom: 4
-  },
-  userRole: {
-    color: colors.textLight,
-    fontWeight: '400'
+    marginTop: 16,
+    fontSize: 16,
   },
   mainContent: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: isDesktop ? 40 : isTablet ? 32 : 28,
-    borderTopRightRadius: isDesktop ? 40 : isTablet ? 32 : 28,
-    marginTop: -16,
-    position: 'relative',
+  },
+  circleOverlay: {
+    position: 'absolute',
+    top: height / 2,
+    left: width / 2,
+    width: Math.sqrt(width * width + height * height) * 2.5,
+    height: Math.sqrt(width * width + height * height) * 2.5,
+    borderRadius: Math.sqrt(width * width + height * height) * 1.25,
+    marginLeft: -Math.sqrt(width * width + height * height) * 1.25,
+    marginTop: -Math.sqrt(width * width + height * height) * 1.25,
+    zIndex: 1000,
   },
   scrollContent: {
-    flex: 1
+    paddingBottom: 100,
   },
-  scrollContainer: {
-    flexGrow: 1,
-  },
-  section: {
-    width: '100%',
-  },
-  sectionModules: {
-    width: '100%',
-  },
-  sectionTitle: {
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: isDesktop ? 24 : isTablet ? 20 : 16,
-    letterSpacing: -0.5
-  },
-  attendanceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  card: {
-    borderRadius: 20,
-    padding: isDesktop ? 28 : isTablet ? 24 : 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+  headerBanner: {
+    height: 220,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
     overflow: 'hidden',
+    position: 'relative',
   },
-  cardCircle: {
+  headerImage: {
     position: 'absolute',
-    top: -20,
-    right: -20,
-    width: isDesktop ? 120 : isTablet ? 100 : 80,
-    height: isDesktop ? 120 : isTablet ? 100 : 80,
-    borderRadius: isDesktop ? 60 : isTablet ? 50 : 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)'
-  },
-  cardCircleSmall: {
-    position: 'absolute',
-    bottom: -10,
-    left: -10,
-    width: isDesktop ? 70 : isTablet ? 60 : 50,
-    height: isDesktop ? 70 : isTablet ? 60 : 50,
-    borderRadius: isDesktop ? 35 : isTablet ? 30 : 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)'
-  },
-  cardValue: {
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 6,
-    zIndex: 1,
-    letterSpacing: -1
-  },
-  cardLabel: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    fontWeight: '600',
-    zIndex: 1
-  },
-  modulesScrollContent: {
-    paddingRight: isDesktop ? 24 : isTablet ? 20 : 16,
-  },
-  moduleItem: {
-    borderRadius: 18,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  moduleIconContainer: {
-    borderRadius: isDesktop ? 16 : isTablet ? 14 : 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: isDesktop ? 14 : isTablet ? 12 : 10,
-    overflow: 'hidden'
-  },
-  moduleIconImage: {
     width: '100%',
     height: '100%',
   },
-  moduleTitle: {
+  headerContent: {
+    padding: 30,
+    paddingTop: 50,
+  },
+  topNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  menuButton: {
+    padding: 8,
+  },
+  menuLine: {
+    width: 24,
+    height: 2,
+    marginVertical: 3,
+    borderRadius: 1,
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  welcomeText: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: '700',
+    marginTop: 20,
+  },
+  employeeText: {
+    color: 'white',
+    fontSize: 14,
+    opacity: 0.8,
+    marginTop: 5,
+  },
+  profileCard: {
+    marginHorizontal: 20,
+    marginTop: 18,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    elevation: 5,
+  },
+  userName: {
+    fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
-    textAlign: 'center',
-    lineHeight: isDesktop ? 20 : isTablet ? 18 : 16
+    marginBottom: 5,
   },
-  eventsScroll: {
-    marginTop: 8
+  userRole: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  eventsScrollContent: {
-    paddingRight: isDesktop ? 24 : isTablet ? 20 : 16,
-    paddingTop: 4,
-    paddingBottom: 4
+  profileImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
-  eventContainer: {
-    alignItems: 'center',
-    paddingTop: 12
-  },
-  avatarContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 8
-  },
-  avatar: {
-    backgroundColor: colors.info,
-    borderRadius: isDesktop ? 40 : isTablet ? 35 : 30,
+  profileImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.white,
+  },
+  profileInitials: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  sectionCard: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3,
   },
-  avatarAnniversary: {
-    backgroundColor: '#8B5CF6'
+  labelSmall: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 15,
   },
-  avatarInitials: {
-    color: colors.white,
-    fontWeight: 'bold'
+  iconGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
-  dateBadge: {
-    position: 'absolute',
-    bottom: -12,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    minWidth: isDesktop ? 60 : isTablet ? 56 : 52,
+  iconItem: {
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3
+    flex: 1,
   },
-  dateBadgeAnniversary: {
-    backgroundColor: '#7C3AED'
+  iconBox: {
+    width: 55,
+    height: 55,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  dateText: {
-    color: colors.white,
-    fontWeight: '700'
+  iconImage: {
+    width: 30,
+    height: 30,
+  },
+  iconLabel: {
+    fontSize: 11,
+  },
+  reminderCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reminderContent: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  reminderBorder: {
+    width: 4,
+    backgroundColor: '#1da1f2',
+    borderRadius: 2,
+    marginRight: 15,
+  },
+  reminderText: {
+    flex: 1,
+  },
+  reminderTitle: {
+    fontWeight: '600',
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  reminderTime: {
+    fontSize: 12,
+  },
+  calendarIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDate: {
+    fontWeight: 'bold',
+    fontSize: 14,
+    color: '#1da1f2',
+    marginTop: -25,
+  },
+  moduleGrid: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    height: 295,
+    gap: 15,
+  },
+  moduleAttendance: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  moduleColumn: {
+    flex: 1,
+    gap: 15,
+  },
+  moduleSmall: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  moduleGradient: {
+    flex: 1,
+    padding: 25,
+    justifyContent: 'space-between',
+  },
+  moduleArrow: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+  },
+  moduleIconCircle: {
+    width: 50,
+    height: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moduleTitle: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  viewAllContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 15,
+    gap: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+  },
+  chevronGroup: {
+    flexDirection: 'row',
+  },
+  statsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 20,
+  },
+  chartContainer: {
+    flexDirection: 'row',
+    height: 100,
+    alignItems: 'flex-end',
+    gap: 8,
+    flex: 1,
+  },
+  chartBar: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  barWrapper: {
+    width: '100%',
+    justifyContent: 'flex-end',
+    position: 'relative',
+  },
+  hoursBar: {
+    width: '100%',
+    borderRadius: 4,
+    position: 'absolute',
+    bottom: 0,
+  },
+  targetBar: {
+    width: '100%',
+    borderRadius: 4,
+    position: 'absolute',
+    bottom: 0,
+  },
+  statsNumbers: {
+    alignItems: 'flex-end',
+  },
+  statsValue: {
+    fontSize: 29,
+    fontWeight: '700',
+  },
+  statsLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  eventsScroll: {
+    marginHorizontal: -5,
+  },
+  eventItem: {
+    alignItems: 'center',
+    marginHorizontal: 10,
+    width: 90,
+  },
+  eventAvatarWrapper: {
+    position: 'relative',
+    marginBottom: 10,
+  },
+  eventAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  eventAvatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventAvatarInitials: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  eventDateBadge: {
+    position: 'absolute',
+    top: -5,
+    left: '50%',
+    transform: [{ translateX: -25 }],
+    backgroundColor: '#ff5e7a',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#ff5e7a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
   },
   anniversaryBadge: {
     position: 'absolute',
-    top: -4,
+    top: -5,
     right: -10,
     backgroundColor: '#FCD34D',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3
   },
   anniversaryText: {
     color: '#78350F',
-    fontWeight: '700'
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  eventDateText: {
+    color: 'white',
+    fontSize: 9,
+    fontWeight: '600',
   },
   eventName: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: isDesktop ? 20 : isTablet ? 18 : 16,
+    fontSize: 12,
     fontWeight: '500',
-    marginBottom: 4
+    textAlign: 'center',
   },
   eventType: {
-    color: colors.textSecondary,
+    fontSize: 10,
     textAlign: 'center',
-    fontWeight: '600',
-    opacity: 0.7
+    marginTop: 2,
   },
-  noEventsContainer: {
+  themeSwitcher: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    backgroundColor: colors.white,
-    borderRadius: 20,
+    marginVertical: 30,
+  },
+  lightSwitch: {
+    width: 160,
+    height: 70,
+    borderRadius: 35,
+    padding: 8,
+    position: 'relative',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 2
+    elevation: 5,
+    justifyContent: 'center',
   },
-  noEventsImage: {
-    marginBottom: 16,
-    opacity: 0.5
-  },
-  noEventsText: {
-    color: colors.textSecondary,
-    fontStyle: 'italic'
-  },
-  // Custom Wave Bottom Bar Styles
-  customBarContainer: {
+  switchTrack: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    overflow: 'hidden',
+    left: 8,
+    top: 8,
+    right: 8,
+    bottom: 8,
   },
-  waveEffect: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
+  switchToggleButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  wavePattern: {
+  switchNotch: {
+    width: 4,
+    height: 30,
+    borderRadius: 2,
+  },
+  switchIcons: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    width: '100%',
+    height: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  waveCircle: {
-    position: 'absolute',
-    opacity: 0.3,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -3
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  tabButton: {
-    flex: 1,
+  footer: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingBottom: 40,
   },
-  tabIconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  footerLogo: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: 5,
+    color: '#a9a9a9b6',
   },
-  tabIconContainerActive: {},
-  tabLabel: {
-    textAlign: 'center',
+  footerText: {
+    fontSize: 10,
+    marginTop: 5,
   },
-  // Wave Bar Container Styles
-  waveBarContainer: {
+  bottomNav: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
+    height: 70,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  waveTabButton: {
-    paddingVertical: 10,
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
   },
-  waveTabText: {
-    fontWeight: '600',
-  },
-  waveAnimation: {
+  floatingCircle: {
+    position: 'absolute',
+    top: -22,
+    width: 60,
     height: 60,
+    backgroundColor: '#007bff',
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#007bff',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
   },
+  navLabel: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 5,
+  },
+  // Hamburger Menu Styles
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    flexDirection: 'row'
+    flexDirection: 'row',
   },
   overlayTouchable: {
-    flex: 1
+    flex: 1,
   },
   menuContainer: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: colors.white,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 2,
-      height: 0
-    },
+    shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 10,
-    flexDirection: 'column'
   },
   menuHeader: {
-    backgroundColor: colors.primary,
-    position: 'relative'
+    paddingTop: 50,
+    paddingBottom: 24,
   },
   menuHeaderContent: {
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 24,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+  },
+  menuUserAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   menuUserAvatarCircle: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 56,
+    height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  menuUserAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   menuUserDetails: {
-    flex: 1
+    flex: 1,
+    marginLeft: 16,
   },
   menuUserRole: {
-    color: colors.textLight,
-    marginBottom: 4
+    fontSize: 13,
+    marginBottom: 4,
   },
   menuUserName: {
-    color: colors.white,
-    fontWeight: '600'
+    fontSize: 18,
+    fontWeight: '600',
   },
   menuItems: {
     flex: 1,
-    backgroundColor: colors.white
   },
   menuItemsContent: {
     paddingTop: 20,
-    paddingBottom: 12
+    paddingBottom: 12,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 10,
-    marginBottom: 4
+    marginBottom: 4,
   },
   menuItemActive: {
-    backgroundColor: colors.backgroundSecondary,
     borderLeftWidth: 4,
-    borderLeftColor: colors.primary
+    borderLeftColor: '#3B82F6',
   },
   menuItemIconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 32,
+    marginRight: 16,
   },
   menuItemText: {
-    color: colors.textSecondary,
     fontWeight: '500',
-    flex: 1
+    flex: 1,
+    fontSize: 15,
   },
   menuItemTextActive: {
-    color: colors.primary,
-    fontWeight: '600'
+    fontWeight: '600',
   },
   logoutSection: {
-    backgroundColor: colors.white,
-    paddingTop: 12
+    paddingTop: 12,
   },
   logoutDivider: {
     height: 1,
-    backgroundColor: colors.border,
     marginHorizontal: 20,
-    marginBottom: 12
+    marginBottom: 12,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
     marginHorizontal: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 10,
     borderLeftWidth: 4,
-    borderLeftColor: colors.error
+    borderLeftColor: '#EF4444',
   },
   logoutIconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 32,
+    marginRight: 16,
   },
   logoutButtonText: {
-    color: colors.error,
     fontWeight: '600',
-    flex: 1
+    flex: 1,
+    fontSize: 15,
   },
-  testButtonContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
+  // All Modules Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 20,
-    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  testButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  allModulesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  moduleItemModal: {
+    width: '48%',
+    padding: 16,
     borderRadius: 12,
-    width: '100%',
     alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  testButtonText: {
-    color: colors.white,
-    fontSize: 16,
+  moduleIconContainerModal: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  moduleIconImageModal: {
+    width: 40,
+    height: 40,
+  },
+  moduleTitleModal: {
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
