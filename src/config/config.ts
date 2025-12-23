@@ -24,7 +24,7 @@ const configs: Record<string, AppConfig> = {
 };
 
 // Determine environment - you can change this logic as needed
-const environment = 'development'; // development
+const environment = 'production'; // development
 
 export const config = configs[environment];
 // Export individual values for convenience
