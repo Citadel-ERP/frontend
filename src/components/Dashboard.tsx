@@ -50,7 +50,7 @@ const { width, height } = Dimensions.get('window');
 // Backend URL from config
 const TOKEN_2_KEY = 'token_2';
 
-// Interfaces (same as before)
+// Interfaces
 interface IconItem {
   name: string;
   color: string;
@@ -131,6 +131,25 @@ interface UpcomingEvent {
   anniversaryYears?: number;
 }
 
+// Add ApiResponse interface
+interface ApiResponse {
+  message: string;
+  modules: Array<{
+    module_name: string;
+    is_generic: boolean;
+    module_id: string;
+    module_unique_name: string;
+    module_icon: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+  user: any;
+  upcoming_birthdays: any[];
+  is_driver: boolean;
+  upcoming_anniversary: any[];
+  autoReconfigure: boolean;
+}
+
 // Theme Colors
 const lightColors = {
   primary: '#FFFFFF',
@@ -174,12 +193,27 @@ const darkColors = {
   gradientEnd: '#0056CC',
 };
 
+// Configure notification handler
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 // Main Dashboard Component
 function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  
+
   // State from old dashboard
   const [token, setToken] = useState<string | null>(null);
+  const [expoPushToken, setExpoPushToken] = useState<string>('');
+  const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
+  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
+  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [modules, setModules] = useState<any[]>([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
@@ -190,7 +224,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [topModules, setTopModules] = useState<any[]>([]);
   const [attendanceKey, setAttendanceKey] = useState(0);
-  
+  const [error, setError] = useState<string | null>(null);
+
   // Page visibility states
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -208,30 +243,30 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showChat, setShowChat] = useState(false);
   const [showChatRoom, setShowChatRoom] = useState(false);
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
-  
+
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
   const [activeNavItem, setActiveNavItem] = useState('home');
-  
+
   // Theme state
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  
+
   // All modules modal
   const [allModulesVisible, setAllModulesVisible] = useState(false);
-  
+
   // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-300)).current;
-  
+
   // Current theme colors
   const currentColors = isDark ? darkColors : lightColors;
-  
+
   // New dashboard theme mapping
   const theme = {
     bgColor: isDark ? '#050b18' : '#f8f9fa',
@@ -245,7 +280,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Default modules for new users
   const defaultLastOpened: IconItem[] = [
     { name: 'HR', color: '#00d285', icon: 'user-tie', library: 'fa5', module_unique_name: 'hr' },
-    { name: 'Cab', color: '#ffb157', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
+    { name: 'Car', color: '#ffb157', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
     { name: 'Attendance', color: '#ff5e7a', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
     { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
   ];
@@ -267,6 +302,318 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     return size * scale;
   };
 
+  // Debug logging function
+  const debugLog = async (message: string, data?: any) => {
+    console.log(message, data);
+    try {
+      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
+      const logArray = JSON.parse(logs);
+      logArray.push({
+        timestamp: new Date().toISOString(),
+        message,
+        data: data ? JSON.stringify(data) : null
+      });
+      const recentLogs = logArray.slice(-50);
+      await AsyncStorage.setItem('debug_logs', JSON.stringify(recentLogs));
+    } catch (error) {
+      console.error('Error storing debug log:', error);
+    }
+  };
+
+  // Function to register for push notifications
+  async function registerForPushNotificationsAsync() {
+    let token;
+    try {
+      await debugLog('[Push Token] Starting registration...');
+      if (!Device.isDevice) {
+        await debugLog('[Push Token] Not a physical device');
+        Alert.alert('Debug', 'Not a physical device');
+        return undefined;
+      }
+      await debugLog('[Push Token] Device check passed');
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#2D3748',
+        });
+        await debugLog('[Push Token] Notification channel created');
+      }
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      await debugLog('[Push Token] Existing permission status', existingStatus);
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+        await debugLog('[Push Token] New permission status', status);
+      }
+      if (finalStatus !== 'granted') {
+        await debugLog('[Push Token] Permission denied');
+        Alert.alert('Permission Denied', 'Please enable notifications in settings');
+        return undefined;
+      }
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId
+        || Constants.easConfig?.projectId;
+      await debugLog('[Push Token] Project ID', projectId);
+      if (!projectId) {
+        await debugLog('[Push Token] ERROR: No project ID found');
+        Alert.alert(
+          'Configuration Error',
+          'Project ID missing. Please contact support.'
+        );
+        return undefined;
+      }
+      await debugLog('[Push Token] Getting token for project', projectId);
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId
+      });
+      token = tokenData.data;
+      await debugLog('[Push Token] Success', token);
+      return token;
+    } catch (error: any) {
+      await debugLog('[Push Token Error]', error.message);
+      return undefined;
+    }
+  };
+
+  // Function to send token to backend
+  const sendTokenToBackend = async (expoToken: string, userToken: string) => {
+    await debugLog('=== SENDING TOKEN TO BACKEND ===');
+    await debugLog('Expo Token', expoToken);
+    await debugLog('User Token exists', !!userToken);
+    if (!expoToken || !userToken) {
+      await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
+      return;
+    }
+    try {
+      await debugLog('Making request to', `${BACKEND_URL}/core/modifyToken`);
+      const requestBody = {
+        token: userToken,
+        expo_token: expoToken,
+      };
+      await debugLog('Request body', requestBody);
+      const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      await debugLog('Response status', response.status);
+      const data = await response.json();
+      await debugLog('Backend response', data);
+      if (response.ok) {
+        await debugLog('✅ Push token registered successfully');
+        await AsyncStorage.setItem('expo_push_token', expoToken);
+      } else {
+        await debugLog('❌ Failed to register push token', data.message);
+      }
+    } catch (error: any) {
+      await debugLog('❌ Network error', error.message);
+    }
+  };
+
+  // Function to auto-mark attendance
+  const autoMarkAttendance = async () => {
+    console.log('🎯 AUTO-MARK ATTENDANCE: Starting automatic attendance marking...');
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_2_KEY);
+      if (!token) {
+        console.log('❌ No token found');
+        return;
+      }
+      const lastMarked = await AsyncStorage.getItem('last_attendance_marked');
+      if (lastMarked) {
+        const lastDate = new Date(lastMarked);
+        const today = new Date();
+        if (
+          lastDate.getDate() === today.getDate() &&
+          lastDate.getMonth() === today.getMonth() &&
+          lastDate.getFullYear() === today.getFullYear()
+        ) {
+          console.log('✅ Attendance already marked today via notification');
+          return;
+        }
+      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('❌ Location permission denied');
+        const bgStatus = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus.status !== 'granted') {
+          console.log('❌ Background location permission also denied');
+          return;
+        }
+      }
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        timeInterval: 5000,
+      });
+      console.log('📍 Location obtained:', location.coords);
+      const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          latitude: location.coords.latitude.toString(),
+          longitude: location.coords.longitude.toString(),
+        }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Attendance marked successfully:', result);
+        await AsyncStorage.setItem('last_attendance_marked', new Date().toISOString());
+        Alert.alert(
+          'Attendance Marked',
+          'Your attendance has been marked automatically!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        console.log('❌ Failed to mark attendance:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Auto-mark attendance error:', error);
+    }
+  };
+
+  // Setup push notifications
+  useEffect(() => {
+    let isMounted = true;
+    const setupNotifications = async () => {
+      if (!token) {
+        await debugLog('Setup aborted: No user token');
+        return;
+      }
+      try {
+        await debugLog('Starting notification setup', { token: !!token });
+        const pushToken = await registerForPushNotificationsAsync();
+        await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
+        if (pushToken && isMounted) {
+          setExpoPushToken(pushToken);
+          await debugLog('Calling sendTokenToBackend');
+          await sendTokenToBackend(pushToken, token);
+        }
+        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+          debugLog('📱 Notification received in foreground', notification);
+          setNotification(notification);
+          const data = notification.request.content.data;
+          if (data?.page === 'autoMarkAttendance') {
+            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
+            autoMarkAttendance();
+          }
+        });
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+          debugLog('👆 Notification tapped', response);
+          const data = response.notification.request.content.data;
+          if (data?.page === 'autoMarkAttendance') {
+            autoMarkAttendance();
+          } else if (data?.page) {
+            handleNotificationNavigation(data.page as string);
+          }
+        });
+        const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastNotificationResponse) {
+          debugLog('📬 App opened from notification', lastNotificationResponse);
+          const data = lastNotificationResponse.notification.request.content.data;
+          if (data?.page === 'autoMarkAttendance') {
+            setTimeout(() => {
+              autoMarkAttendance();
+            }, 1000);
+          } else if (data?.page) {
+            setTimeout(() => {
+              handleNotificationNavigation(data.page as string);
+            }, 500);
+          }
+        }
+      } catch (error: any) {
+        await debugLog('Error in setupNotifications', error.message);
+      }
+    };
+    setupNotifications();
+    return () => {
+      isMounted = false;
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, [token]);
+
+  // Function to handle notification navigation
+  const handleNotificationNavigation = (page: string) => {
+    console.log('Handling notification navigation for page:', page);
+    if (page === 'autoMarkAttendance') {
+      console.log('🎯 SPECIAL CODE: Auto-marking attendance...');
+      return;
+    }
+    switch (page.toLowerCase()) {
+      case 'attendance':
+        setAttendanceKey(prev => prev + 1);
+        setShowAttendance(true);
+        break;
+      case 'hr':
+        setShowHR(true);
+        break;
+      case 'cab':
+        setShowCab(true);
+        break;
+      case 'profile':
+        setShowProfile(true);
+        break;
+      case 'driver':
+        setShowDriver(true);
+        break;
+      case 'bdt':
+        setShowBDT(true);
+        break;
+      case 'medical':
+      case 'mediclaim':
+        setShowMedical(true);
+        break;
+      case 'scoutboy':
+      case 'scout_boy':
+        setShowScoutBoy(true);
+        break;
+      case 'reminder':
+        setShowReminder(true);
+        break;
+      case 'bup':
+        setShowBUP(true);
+        break;
+      case 'employee_management':
+        setShowEmployeeManagement(true);
+        break;
+      default:
+        console.log('Unknown page:', page);
+    }
+  };
+
+  // Function to set autoReconfigure
+  const setAutoReconfigure = async () => {
+    if (!token) return;
+
+    const response = await fetch(`${BACKEND_URL}/core/updateDeviceId`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+    let SecureStore: any = null;
+    if (Platform.OS !== 'web') {
+      SecureStore = require('expo-secure-store');
+    }
+    if (response.ok) {
+      console.log('Device ID updated successfully');
+      const data = await response.json();
+      if (SecureStore) {
+        await SecureStore.setItemAsync('device_id', data.device_id);
+      }
+    } else {
+      console.error('Failed to update device ID');
+    }
+  };
+
   // Fetch user data from backend
   useEffect(() => {
     const fetchToken = async () => {
@@ -284,16 +631,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       try {
         const token = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!token) return;
-
         setLoading(true);
         const response = await fetch(`${BACKEND_URL}/core/getUser`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
-        
+
         if (response.ok) {
-          const data = await response.json();
+          const data: ApiResponse = await response.json();
           if (data.message === "Get modules successful") {
             const transformedUserData: UserData = {
               ...data.user,
@@ -303,111 +649,202 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setModules(data.modules || []);
             setUpcomingBirthdays(data.upcoming_birthdays || []);
             setUpcomingAnniversaries(data.upcoming_anniversary || []);
-            
+
             // Combine and sort events
             const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
             setUpcomingEvents(events);
+
+            // Save driver status
+            try {
+              await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
+              console.log('Driver status saved:', data.is_driver);
+            } catch (storageError) {
+              console.error('Error saving driver status to storage:', storageError);
+            }
+
+            // Set autoReconfigure if needed
+            if (data.autoReconfigure) {
+              setAutoReconfigure();
+            }
+
+            // After setting modules, refresh last opened modules with backend icons
+            const storedModules = await AsyncStorage.getItem('last_opened_modules');
+            if (storedModules) {
+              let modulesArray = JSON.parse(storedModules);
+
+              // Update icons with backend data
+              if (data.modules && data.modules.length > 0) {
+                modulesArray = modulesArray.map((storedModule: any) => {
+                  const backendModule = data.modules.find(
+                    (m: any) => m.module_unique_name === storedModule.module_unique_name
+                  );
+
+                  if (backendModule) {
+                    return {
+                      ...storedModule,
+                      iconUrl: backendModule.module_icon,
+                      title: backendModule.module_name.charAt(0).toUpperCase() +
+                        backendModule.module_name.slice(1).replace('_', ' ')
+                    };
+                  }
+                  return storedModule;
+                });
+
+                // Remove duplicates after update
+                const uniqueModules: any[] = [];
+                const seen = new Set();
+
+                for (const module of modulesArray) {
+                  if (!seen.has(module.module_unique_name)) {
+                    seen.add(module.module_unique_name);
+                    uniqueModules.push(module);
+                  }
+                }
+
+                modulesArray = uniqueModules.slice(0, 4);
+
+                await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+                setLastOpenedModules(modulesArray);
+
+                // If we have less than 4 modules, populate with random ones from backend
+                if (modulesArray.length < 4 && data.modules.length > 0) {
+                  populateMissingLastOpenedModules();
+                }
+              }
+            } else {
+              // If no stored modules, initialize with random modules from backend
+              populateMissingLastOpenedModules();
+            }
           }
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
       } finally {
         setLoading(false);
       }
     };
 
-    const loadLastOpenedModules = async () => {
-      try {
-        const storedModules = await AsyncStorage.getItem('last_opened_modules');
-        if (storedModules) {
-          setLastOpenedModules(JSON.parse(storedModules));
-        }
-      } catch (error) {
-        console.error('Error loading last opened modules:', error);
-      }
-    };
-
-    const fetchReminders = async () => {
-      try {
-        const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-        if (!token) return;
-
-        const response = await fetch(`${BACKEND_URL}/core/getReminders`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const mappedReminders: ReminderItem[] = data.reminders?.slice(0, 3).map((reminder: any) => ({
-            id: reminder.id,
-            title: reminder.title || reminder.meeting_with || 'Reminder',
-            time: reminder.time || reminder.meeting_time || 'All day',
-            icon: reminder.icon || 'bell'
-          })) || [];
-          setReminders(mappedReminders);
-        }
-      } catch (error) {
-        console.error('Error fetching reminders:', error);
-      }
-    };
-
     fetchToken();
     fetchUserData();
-    loadLastOpenedModules();
-    fetchReminders();
   }, []);
+
+  const loadLastOpenedModules = async () => {
+    try {
+      const storedModules = await AsyncStorage.getItem('last_opened_modules');
+      if (storedModules) {
+        let modulesArray = JSON.parse(storedModules);
+
+        // Remove any duplicates
+        const uniqueModules: any[] = [];
+        const seen = new Set();
+
+        for (const module of modulesArray) {
+          if (!seen.has(module.module_unique_name)) {
+            seen.add(module.module_unique_name);
+            uniqueModules.push(module);
+          }
+        }
+
+        modulesArray = uniqueModules.slice(0, 4);
+
+        // If we have backend modules, update the icons
+        if (modules.length > 0) {
+          modulesArray = modulesArray.map((storedModule: any) => {
+            // Try to find matching module from backend
+            const backendModule = modules.find(
+              m => m.module_unique_name === storedModule.module_unique_name ||
+                m.module_name.toLowerCase().replace('_', ' ') === storedModule.title.toLowerCase()
+            );
+
+            if (backendModule) {
+              return {
+                ...storedModule,
+                title: backendModule.module_name.charAt(0).toUpperCase() +
+                  backendModule.module_name.slice(1).replace('_', ' '),
+                iconUrl: backendModule.module_icon,
+                module_unique_name: backendModule.module_unique_name
+              };
+            }
+
+            // If not found, try to find by partial match
+            const partialMatch = modules.find(m =>
+              m.module_name.toLowerCase().includes(storedModule.title.toLowerCase()) ||
+              storedModule.title.toLowerCase().includes(m.module_name.toLowerCase())
+            );
+
+            if (partialMatch) {
+              return {
+                ...storedModule,
+                title: partialMatch.module_name.charAt(0).toUpperCase() +
+                  partialMatch.module_name.slice(1).replace('_', ' '),
+                iconUrl: partialMatch.module_icon,
+                module_unique_name: partialMatch.module_unique_name
+              };
+            }
+
+            return storedModule;
+          });
+
+          // Save the updated modules back to storage
+          await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+        }
+
+        setLastOpenedModules(modulesArray);
+
+        // If we have less than 4 modules, populate with random ones
+        if (modulesArray.length < 4) {
+          populateMissingLastOpenedModules();
+        }
+      } else {
+        // If no stored modules, initialize with random modules from backend or defaults
+        populateMissingLastOpenedModules();
+      }
+    } catch (error) {
+      console.error('Error loading last opened modules:', error);
+    }
+  };
+
   const requestLocationPermissions = async () => {
-  try {
-    // 1️⃣ Foreground permission (MANDATORY FIRST)
-    const foreground = await Location.requestForegroundPermissionsAsync();
-
-    if (foreground.status !== 'granted') {
-      Alert.alert(
-        'Location Permission Required',
-        'Location access is required to mark attendance.'
-      );
-      return;
+    try {
+      const foreground = await Location.requestForegroundPermissionsAsync();
+      if (foreground.status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Location access is required to mark attendance.'
+        );
+        return;
+      }
+      const background = await Location.requestBackgroundPermissionsAsync();
+      if (background.status !== 'granted') {
+        Alert.alert(
+          'Background Location Required',
+          'Please allow "Always Allow" location access to enable automatic attendance.'
+        );
+      }
+      console.log('✅ Location permissions granted');
+    } catch (error) {
+      console.error('❌ Location permission error:', error);
     }
+  };
 
-    // 2️⃣ Background permission (REQUIRED FOR GEOFENCING)
-    const background = await Location.requestBackgroundPermissionsAsync();
-
-    if (background.status !== 'granted') {
-      Alert.alert(
-        'Background Location Required',
-        'Please allow "Always Allow" location access to enable automatic attendance.'
-      );
-    }
-
-    console.log('✅ Location permissions granted');
-  } catch (error) {
-    console.error('❌ Location permission error:', error);
-  }
-};
-
-  // Initialize background services with proper error handling
+  // Initialize background services
   useEffect(() => {
     if (!token || !userData) return;
-    
+
     const initializeBackgroundServices = async () => {
       try {
         console.log('🚀 Initializing background services...');
         await requestLocationPermissions();
-        // Check if running in Expo Go
         const isExpoGo = Constants.appOwnership === 'expo';
-        
+
         if (!isExpoGo) {
           try {
-            // Check location permissions
             const { status } = await Location.requestForegroundPermissionsAsync();
-            
+
             if (status === 'granted') {
               await BackgroundAttendanceService.initializeAll();
-              
+
               if (userData?.office) {
                 const officeLocation = userData.office;
                 if (officeLocation.latitude && officeLocation.longitude) {
@@ -418,8 +855,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   );
                 }
               }
-
-              // Initialize location tracking
               await BackgroundLocationService.initialize();
             } else {
               console.log('⚠️ Location permission not granted');
@@ -434,15 +869,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         console.warn('⚠️ Failed to initialize background services:', error);
       }
     };
-
     initializeBackgroundServices();
   }, [token, userData]);
 
-  // Function to get upcoming events with proper date formatting
+  // Function to get upcoming events
   const getUpcomingEvents = (birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
     const events: UpcomingEvent[] = [];
     const today = new Date();
-
     birthdays.forEach(user => {
       if (user.birth_date) {
         events.push({
@@ -452,7 +885,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         });
       }
     });
-
     anniversaries.forEach(user => {
       if (user.joining_date) {
         const anniversaryDate = new Date(user.joining_date);
@@ -462,24 +894,20 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           date: user.joining_date,
           type: 'anniversary',
           years: years,
-          anniversaryYears: years + 1 // Next anniversary year
+          anniversaryYears: years + 1
         });
       }
     });
-
     events.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
-      
+
       const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
       const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
-
       const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
       const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
-
       return eventDateA.getTime() - eventDateB.getTime();
     });
-
     return events.slice(0, 3);
   };
 
@@ -508,7 +936,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Get icon URL helper
   const getIconUrl = (item: IconItem): string => {
-    // This would come from backend in real implementation
+    console.log("this is what i need to fix", item)
+    if (item.iconUrl) return item.iconUrl;
     return `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`;
   };
 
@@ -516,13 +945,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const handleThemeToggle = () => {
     if (isAnimating) return;
     setIsAnimating(true);
-
     Animated.timing(switchToggle, {
       toValue: isDark ? 0 : 1,
       duration: 300,
       useNativeDriver: true,
     }).start();
-
     Animated.timing(circleScale, {
       toValue: 1,
       duration: 600,
@@ -538,15 +965,37 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const handleModulePress = (moduleName: string, moduleUniqueName?: string) => {
     const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
 
-    // Save to last opened modules
-    const moduleData = {
-      title: moduleName,
-      iconUrl: getIconUrl({ name: moduleName, color: '#007bff', icon: 'apps', library: 'fa5' }),
-      module_unique_name: moduleUniqueName || moduleName.toLowerCase()
-    };
+    // Try to find the module in backend modules first
+    let moduleData = null;
+
+    if (modules.length > 0) {
+      const backendModule = modules.find(
+        m => m.module_unique_name === moduleUniqueName ||
+          m.module_name.toLowerCase().replace('_', ' ') === moduleName.toLowerCase()
+      );
+
+      if (backendModule) {
+        moduleData = {
+          title: backendModule.module_name.charAt(0).toUpperCase() +
+            backendModule.module_name.slice(1).replace('_', ' '),
+          iconUrl: backendModule.module_icon,
+          module_unique_name: backendModule.module_unique_name
+        };
+      }
+    }
+
+    // If not found in backend modules, create a basic module object
+    if (!moduleData) {
+      moduleData = {
+        title: moduleName,
+        iconUrl: `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`, // Backup URL
+        module_unique_name: moduleUniqueName || moduleName.toLowerCase()
+      };
+    }
+
     saveLastOpenedModule(moduleData);
 
-    // Navigate to appropriate module
+    // Rest of your existing navigation logic...
     if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
@@ -572,26 +1021,158 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
   };
+  const populateMissingLastOpenedModules = async () => {
+    try {
+      const storedModules = await AsyncStorage.getItem('last_opened_modules');
+      let modulesArray = storedModules ? JSON.parse(storedModules) : [];
 
+      // If we have less than 4 modules and we have backend modules available
+      if (modulesArray.length < 4 && modules.length > 0) {
+        const existingModuleNames = new Set(modulesArray.map((m: any) => m.module_unique_name));
+
+        // Get all available backend modules that aren't already in the list
+        const availableBackendModules = modules.filter(
+          (backendModule: any) => !existingModuleNames.has(backendModule.module_unique_name)
+        );
+
+        // Shuffle the available modules to pick random ones
+        const shuffledModules = [...availableBackendModules].sort(() => 0.5 - Math.random());
+
+        // Add random modules until we have 4 total
+        while (modulesArray.length < 4 && shuffledModules.length > 0) {
+          const randomModule = shuffledModules.pop();
+          if (randomModule) {
+            modulesArray.push({
+              title: randomModule.module_name.charAt(0).toUpperCase() +
+                randomModule.module_name.slice(1).replace('_', ' '),
+              iconUrl: randomModule.module_icon,
+              module_unique_name: randomModule.module_unique_name
+            });
+          }
+        }
+
+        // If we still don't have 4 modules and we have default modules, use them
+        if (modulesArray.length < 4) {
+          const defaultModules = [...defaultLastOpened];
+
+          // Shuffle default modules
+          const shuffledDefaults = [...defaultModules].sort(() => 0.5 - Math.random());
+
+          while (modulesArray.length < 4 && shuffledDefaults.length > 0) {
+            const defaultModule = shuffledDefaults.pop();
+            if (defaultModule) {
+              // Check if this default module already exists
+              const alreadyExists = modulesArray.some(
+                (m: any) => m.module_unique_name === defaultModule.module_unique_name
+              );
+
+              if (!alreadyExists) {
+                // Try to find if there's a backend module for this default
+                const backendModule = modules.find(
+                  (m: any) => m.module_unique_name === defaultModule.module_unique_name
+                );
+
+                if (backendModule) {
+                  modulesArray.push({
+                    title: backendModule.module_name.charAt(0).toUpperCase() +
+                      backendModule.module_name.slice(1).replace('_', ' '),
+                    iconUrl: backendModule.module_icon,
+                    module_unique_name: backendModule.module_unique_name
+                  });
+                } else {
+                  modulesArray.push({
+                    title: defaultModule.name,
+                    iconUrl: getIconUrl(defaultModule),
+                    module_unique_name: defaultModule.module_unique_name || defaultModule.name.toLowerCase()
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        // Ensure no duplicates
+        const uniqueModules: any[] = [];
+        const seen = new Set();
+
+        for (const module of modulesArray) {
+          if (!seen.has(module.module_unique_name)) {
+            seen.add(module.module_unique_name);
+            uniqueModules.push(module);
+          }
+        }
+
+        // Keep only first 4 unique modules
+        modulesArray = uniqueModules.slice(0, 4);
+
+        await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+        setLastOpenedModules(modulesArray);
+      }
+    } catch (error) {
+      console.error('Error populating missing modules:', error);
+    }
+  };
   // Save last opened module
   const saveLastOpenedModule = async (module: any) => {
     try {
       const storedModules = await AsyncStorage.getItem('last_opened_modules');
       let modulesArray = storedModules ? JSON.parse(storedModules) : [];
-      
-      modulesArray = modulesArray.filter((m: any) => m.module_unique_name !== module.module_unique_name);
-      modulesArray.unshift(module);
-      
+
+      // Find the full module data from backend modules to get the correct icon
+      let moduleData = module;
+
+      // If we have backend modules loaded, try to find the matching module
+      if (modules.length > 0) {
+        const backendModule = modules.find(
+          m => m.module_unique_name === module.module_unique_name ||
+            m.module_name.toLowerCase().replace('_', ' ') === module.title.toLowerCase()
+        );
+
+        if (backendModule) {
+          // Use the backend module data including the proper icon
+          moduleData = {
+            title: backendModule.module_name.charAt(0).toUpperCase() +
+              backendModule.module_name.slice(1).replace('_', ' '),
+            iconUrl: backendModule.module_icon,
+            module_unique_name: backendModule.module_unique_name
+          };
+        } else if (module.module_unique_name) {
+          // Try to find by module_unique_name if not found by title
+          const backendModuleByName = modules.find(
+            m => m.module_unique_name === module.module_unique_name
+          );
+
+          if (backendModuleByName) {
+            moduleData = {
+              title: backendModuleByName.module_name.charAt(0).toUpperCase() +
+                backendModuleByName.module_name.slice(1).replace('_', ' '),
+              iconUrl: backendModuleByName.module_icon,
+              module_unique_name: backendModuleByName.module_unique_name
+            };
+          }
+        }
+      }
+
+      // Remove existing module if it exists
+      modulesArray = modulesArray.filter((m: any) =>
+        m.module_unique_name !== moduleData.module_unique_name
+      );
+
+      // Add to beginning of array
+      modulesArray.unshift(moduleData);
+
+      // Keep only last 4 modules
       if (modulesArray.length > 4) {
         modulesArray = modulesArray.slice(0, 4);
       }
-      
+
       await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
       setLastOpenedModules(modulesArray);
     } catch (error) {
       console.error('Error saving last opened module:', error);
     }
   };
+
 
   // Handle back from pages
   const handleBackFromPage = () => {
@@ -640,7 +1221,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
   };
 
-  // Menu items - Updated to only show required items
+  // Menu items
   const drawerMenuItems = [
     { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
     { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
@@ -652,13 +1233,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const handleMenuItemPress = (item: any) => {
     setActiveMenuItem(item.title);
     closeMenu();
-    
+
     if (item.id === 'profile') {
       setShowProfile(true);
     } else if (item.id === 'settings') {
       setShowSettings(true);
     } else if (item.id === 'messages') {
       setShowChat(true);
+    } else if (item.id === 'notifications') {
+      Alert.alert('Notifications', 'Notification settings will be available soon!');
     } else {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     }
@@ -683,18 +1266,27 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (modules.length > 0) {
       return modules.map(module => ({
         title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-        iconUrl: module.module_icon,
+        iconUrl: module.module_icon, // This should now be the backend icon URL
         module_unique_name: module.module_unique_name,
         is_generic: module.is_generic
       }));
     }
-    // Default modules if none from backend
-    return defaultLastOpened.map(item => ({
-      title: item.name,
-      iconUrl: getIconUrl(item),
-      module_unique_name: item.module_unique_name || item.name.toLowerCase(),
-      is_generic: true
-    }));
+
+    // Only use default icons as fallback when no backend modules are available
+    return defaultLastOpened.map(item => {
+      // Try to find if this module exists in backend modules (for initial load)
+      const backendModule = modules.find(m =>
+        m.module_unique_name === item.module_unique_name ||
+        m.module_name.toLowerCase().replace('_', ' ') === item.name.toLowerCase()
+      );
+
+      return {
+        title: item.name,
+        iconUrl: backendModule ? backendModule.module_icon : getIconUrl(item),
+        module_unique_name: item.module_unique_name || item.name.toLowerCase(),
+        is_generic: true
+      };
+    });
   };
 
   // Filter modules based on search query
@@ -710,17 +1302,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     return <MaterialCommunityIcons name={item.icon as any} size={20} color="white" />;
   };
 
-  // Render chart with proper day alignment
+  // Render chart
   const renderChart = () => {
     const maxValue = 10;
     const chartHeight = 100;
-
     return (
       <View style={styles.chartContainer}>
         {chartData.map((item, index) => {
           const hoursHeight = (item.hours / maxValue) * chartHeight;
           const targetHeight = (item.target / maxValue) * chartHeight;
-
           return (
             <View key={index} style={[styles.chartBar, { flex: 1 }]}>
               <Text style={[styles.chartDay, { color: theme.textSub, fontSize: 12, textAlign: 'center' }]}>
@@ -743,7 +1333,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     inputRange: [0, 1],
     outputRange: [0, maxRadius * 2.5],
   });
-
   const switchTranslate = switchToggle.interpolate({
     inputRange: [0, 1],
     outputRange: [4, screenWidth * 0.43 - 54],
@@ -759,7 +1348,20 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  // Render different pages based on state
+  // Error state
+  if (error || !userData) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }]}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={currentColors.headerBg} />
+        <Text style={[styles.errorText, { color: currentColors.text }]}>Failed to load data</Text>
+        <TouchableOpacity style={[styles.retryButton, { backgroundColor: currentColors.info }]}>
+          <Text style={[styles.retryButtonText, { color: currentColors.white }]}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // Render different pages
   if (showChatRoom && selectedChatRoom) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
@@ -771,7 +1373,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showChat) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
@@ -783,7 +1384,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showAttendance) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -791,7 +1391,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showProfile) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -799,7 +1398,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showHR) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -807,7 +1405,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showCab) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -815,7 +1412,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showDriver) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -823,7 +1419,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showBDT) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -831,7 +1426,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showMedical) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -839,7 +1433,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showScoutBoy) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -847,7 +1440,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showReminder) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -855,7 +1447,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showBUP) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -863,7 +1454,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showSettings) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -871,7 +1461,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showEmployeeManagement) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -879,7 +1468,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </SafeAreaView>
     );
   }
-
   if (showCreateSite) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -888,15 +1476,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
+  for (let i = 0; i < lastOpenedModules.length; i++) {
+    console.log(lastOpenedModules[i]);
+
+  }
   // Main dashboard render
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      <StatusBar 
-        barStyle={isDark ? 'light-content' : 'dark-content'} 
-        backgroundColor={currentColors.headerBg} 
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={currentColors.headerBg}
         translucent={false}
       />
-      
+
       {/* Hamburger Menu Modal */}
       <HamburgerMenu
         isVisible={isMenuVisible}
@@ -908,6 +1500,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         onLogout={handleLogout}
         isDark={isDark}
         slideAnim={slideAnim}
+        getInitials={getInitials}
+        currentColors={currentColors}
       />
 
       {/* All Modules Modal */}
@@ -938,11 +1532,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           />
         )}
 
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Header Banner with background.png - Fixed for dark theme */}
+          {/* Header Banner with dark overlay */}
           <LinearGradient
             colors={isDark ? ['#000D24', '#000D24'] : ['#2D3748', '#2D3748']}
             start={{ x: 0, y: 0 }}
@@ -950,16 +1544,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             style={styles.headerBanner}
           >
             <Image
-              source={require('../assets/background.png')}
-              style={[
-                styles.headerImage,
-                { 
-                  tintColor: isDark ? 'rgba(255,255,255,0.2)' : undefined,
-                  opacity: isDark ? 0.3 : 0.8 
-                }
-              ]}
+              source={require('../assets/background.jpg')}
+              style={styles.headerImage}
               resizeMode="cover"
             />
+            {/* Dark overlay for text visibility */}
+            <View style={styles.headerOverlay} />
+
             <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 10 : 20 }]}>
               <View style={[styles.topNav, { marginBottom: 10 }]}>
                 <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
@@ -970,64 +1561,100 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 <Text style={styles.logoText}>CITADEL</Text>
                 <View style={styles.headerSpacer} />
               </View>
-              <View style={{ marginTop: 10 }}>
+              <View style={{ marginTop: 135 }}>
                 <Text style={styles.welcomeText}>Welcome!</Text>
-                <Text style={styles.employeeText}>Employee</Text>
+                <Text style={styles.employeeText}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
               </View>
             </View>
           </LinearGradient>
 
-          {/* Profile Card - Tappable Section */}
-          <TouchableOpacity 
-            style={[styles.profileCard, { backgroundColor: theme.cardBg }]}
-            onPress={() => setShowProfile(true)}
-            activeOpacity={0.7}
-          >
-            <View>
-              <Text style={[styles.userName, { color: theme.textMain }]}>
-                Hi {userData?.first_name || 'User'}!
-              </Text>
-              <Text style={[styles.userRole, { color: theme.textSub }]}>
-                {userData?.designation || userData?.role || 'SOFTWARE ENGINEER'}
-              </Text>
-            </View>
-            <View>
-              {userData?.profile_picture ? (
-                <Image
-                  source={{ uri: userData.profile_picture }}
-                  style={styles.profileImage}
-                />
-              ) : (
-                <View style={[styles.profileImagePlaceholder, { backgroundColor: currentColors.primaryBlue }]}>
-                  <Text style={styles.profileInitials}>
-                    {getInitials(userData?.full_name || 'User')}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-
-          {/* Last Opened Section - Improved spacing */}
+          {/* Last Opened Section - All 4 in 1 row */}
           {lastOpenedModules.length > 0 && (
-            <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
+            <View style={[styles.sectionCard, { backgroundColor: theme.cardBg, marginTop: 20 }]}>
               <Text style={[styles.labelSmall, { color: theme.textSub }]}>LAST OPENED</Text>
-              <View style={[styles.iconGrid, { justifyContent: 'flex-start', gap: 10 }]}>
-                {lastOpenedModules.slice(0, 4).map((item, index) => (
-                  <TouchableOpacity 
-                    key={index} 
-                    style={[styles.iconItem, { width: '23%' }]}
-                    onPress={() => handleModulePress(item.title, item.module_unique_name)}
-                  >
-                    <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
-                      <Image 
-                        source={{ uri: item.iconUrl }} 
-                        style={styles.iconImage}
-                        resizeMode="contain"
-                      />
-                    </View>
-                    <Text style={[styles.iconLabel, { color: theme.textMain }]}>{item.title}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.iconGridFull}>
+                {lastOpenedModules.slice(0, 4).map((item, index) => {
+                  // Ensure we have a unique key and handle missing items
+                  if (!item) return null;
+
+                  return (
+                    <TouchableOpacity
+                      key={`${item.module_unique_name || item.title}-${index}`}
+                      style={styles.iconItemFull}
+                      onPress={() => handleModulePress(item.title, item.module_unique_name)}
+                    >
+                      <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
+                        <Image
+                          source={{ uri: item.iconUrl || `https://cdn-icons-png.flaticon.com/512/3135/3135715.png` }}
+                          style={styles.iconImage}
+                          resizeMode="contain"
+                          onError={(e) => {
+                            console.log('Error loading icon:', item.iconUrl);
+                            // You could set a default icon here if needed
+                          }}
+                        />
+                      </View>
+                      <Text style={[styles.iconLabel, { color: theme.textMain }]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* If we have less than 4 modules, render placeholder or additional modules */}
+                {lastOpenedModules.length < 4 && (
+                  <>
+                    {Array.from({ length: 4 - lastOpenedModules.length }).map((_, index) => {
+                      // Get a random module from backend that's not already shown
+                      const availableModules = modules.filter(
+                        (backendModule: any) =>
+                          !lastOpenedModules.some(
+                            (m: any) => m.module_unique_name === backendModule.module_unique_name
+                          )
+                      );
+
+                      const randomModule = availableModules.length > 0
+                        ? availableModules[Math.floor(Math.random() * availableModules.length)]
+                        : null;
+
+                      if (randomModule) {
+                        return (
+                          <TouchableOpacity
+                            key={`placeholder-${index}`}
+                            style={styles.iconItemFull}
+                            onPress={() => handleModulePress(
+                              randomModule.module_name.charAt(0).toUpperCase() +
+                              randomModule.module_name.slice(1).replace('_', ' '),
+                              randomModule.module_unique_name
+                            )}
+                          >
+                            <View style={[styles.iconBox, { backgroundColor: getModuleColor(randomModule.module_name) }]}>
+                              <Image
+                                source={{ uri: randomModule.module_icon }}
+                                style={styles.iconImage}
+                                resizeMode="contain"
+                              />
+                            </View>
+                            <Text style={[styles.iconLabel, { color: theme.textMain }]} numberOfLines={1}>
+                              {randomModule.module_name.charAt(0).toUpperCase() +
+                                randomModule.module_name.slice(1).replace('_', ' ')}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }
+
+                      // If no backend modules available, show a placeholder
+                      return (
+                        <View key={`placeholder-${index}`} style={styles.iconItemFull}>
+                          <View style={[styles.iconBox, { backgroundColor: '#e5e7eb' }]}>
+                            <Ionicons name="apps" size={25} color="#9ca3af" />
+                          </View>
+                          <Text style={[styles.iconLabel, { color: theme.textSub }]}>Module</Text>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
               </View>
             </View>
           )}
@@ -1037,7 +1664,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             <View style={styles.reminderContent}>
               <View style={[styles.reminderBorder, { backgroundColor: currentColors.primaryBlue }]} />
               <View style={styles.reminderText}>
-                <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING REMINDERS</Text>
+                <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 20 }]}>UPCOMING REMINDERS</Text>
                 {reminders.length > 0 ? (
                   <>
                     <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
@@ -1049,9 +1676,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </>
                 ) : (
                   <>
-                    <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
+                    <Text style={[styles.reminderTitle, { color: theme.textMain, marginBottom: 5 }]}>
                       Meeting with Zsolt
                     </Text>
+
                     <Text style={[styles.reminderTime, { color: theme.textSub }]}>
                       <Ionicons name="time-outline" size={12} /> 9:00 AM - 10:00 AM
                     </Text>
@@ -1061,14 +1689,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
             <View style={styles.calendarIcon}>
               <Ionicons name="calendar-outline" size={40} color={currentColors.primaryBlue} />
-              <Text style={[styles.calendarDate, { color: currentColors.primaryBlue }]}>{new Date().getDate()}</Text>
+              {/* <Text style={[styles.calendarDate, { color: currentColors.primaryBlue }]}>{new Date().getDate()}</Text> */}
             </View>
           </View>
 
-          {/* Module Grid with Diagonal Arrows */}
+          {/* Module Grid - Improved Attendance sizing */}
           <View style={styles.moduleGrid}>
             {/* Attendance Module */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.moduleAttendance}
               onPress={() => handleModulePress('Attendance', 'attendance')}
               activeOpacity={0.9}
@@ -1079,24 +1707,24 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 end={{ x: 1, y: 1 }}
                 style={styles.moduleGradient}
               >
-                <Ionicons 
-                  name="arrow-up" 
-                  size={20} 
-                  color="white" 
-                  style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]} 
+                <Ionicons
+                  name="arrow-up"
+                  size={18}
+                  color="white"
+                  style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
                 />
                 <View style={styles.moduleIconCircle}>
-                  <FontAwesome5 name="book-open" size={24} color="white" />
+                  <FontAwesome5 name="book-open" size={22} color="white" />
                 </View>
-                <Text style={styles.moduleTitle}>Attendance</Text>
+                <Text style={[styles.moduleTitle, { fontSize: 22, marginBottom: 15 }]}>Attendance</Text>
               </LinearGradient>
             </TouchableOpacity>
 
             <View style={styles.moduleColumn}>
               {/* Cab Module */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.moduleSmall}
-                onPress={() => handleModulePress('Cab', 'cab')}
+                onPress={() => handleModulePress('Car', 'cab')}
                 activeOpacity={0.9}
               >
                 <LinearGradient
@@ -1105,21 +1733,21 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   end={{ x: 1, y: 1 }}
                   style={styles.moduleGradient}
                 >
-                  <Ionicons 
-                    name="arrow-up" 
-                    size={18} 
-                    color="white" 
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]} 
+                  <Ionicons
+                    name="arrow-up"
+                    size={16}
+                    color="white"
+                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
                   />
-                  <View style={styles.moduleIconCircle}>
-                    <FontAwesome5 name="id-card" size={20} color="white" />
+                  <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
+                    <FontAwesome5 name="id-card" size={18} color="white" />
                   </View>
-                  <Text style={styles.moduleTitle}>Cab</Text>
+                  <Text style={[styles.moduleTitle, { fontSize: 14 }]}>Car</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               {/* HR Module */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.moduleSmall}
                 onPress={() => handleModulePress('HR', 'hr')}
                 activeOpacity={0.9}
@@ -1130,23 +1758,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   end={{ x: 1, y: 1 }}
                   style={styles.moduleGradient}
                 >
-                  <Ionicons 
-                    name="arrow-up" 
-                    size={18} 
-                    color="white" 
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]} 
+                  <Ionicons
+                    name="arrow-up"
+                    size={16}
+                    color="white"
+                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
                   />
-                  <View style={styles.moduleIconCircle}>
-                    <FontAwesome5 name="users" size={20} color="white" />
+                  <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
+                    <FontAwesome5 name="users" size={18} color="white" />
                   </View>
-                  <Text style={styles.moduleTitle}>HR</Text>
+                  <Text style={[styles.moduleTitle, { fontSize: 14 }]}>HR</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* View All Modules Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
             onPress={() => setAllModulesVisible(true)}
             activeOpacity={0.7}
@@ -1166,9 +1794,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* Stats Section - Fixed day alignment */}
+          {/* Stats Section */}
           <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.labelSmall, { color: theme.textSub }]}>STATS</Text>
+            <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 30 }]}>STATS</Text>
             <View style={styles.statsContent}>
               {renderChart()}
               <View style={[styles.statsNumbers, { marginLeft: 20 }]}>
@@ -1184,12 +1812,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
           </View>
 
-          {/* Upcoming Events - Improved design */}
+          {/* Upcoming Events */}
           <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
             <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING EVENTS</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
               style={styles.eventsScroll}
               contentContainerStyle={styles.eventsScrollContent}
             >
@@ -1202,7 +1830,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                         <View style={styles.eventAvatarWrapper}>
                           <View style={[
                             styles.eventAvatar,
-                            { 
+                            {
                               backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : currentColors.primaryBlue,
                               width: 70,
                               height: 70,
@@ -1212,11 +1840,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                               {getInitials(event.full_name)}
                             </Text>
                           </View>
-                          
-                          {/* Date Badge - Improved design */}
+
                           <View style={[
                             styles.eventDateBadge,
-                            { 
+                            {
                               top: -5,
                               right: -5,
                               backgroundColor: theme.cardBg,
@@ -1228,12 +1855,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                             <Text style={[styles.eventDateDay, { fontSize: 12 }]}>{formattedDate.day}</Text>
                             <Text style={[styles.eventDateMonth, { fontSize: 9 }]}>{formattedDate.month}</Text>
                           </View>
-                          
-                          {/* Anniversary Badge */}
+
                           {event.type === 'anniversary' && event.anniversaryYears && (
                             <View style={[
                               styles.anniversaryBadge,
-                              { 
+                              {
                                 bottom: -5,
                                 left: -5,
                               }
@@ -1244,15 +1870,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                             </View>
                           )}
                         </View>
-                        
+
                         <Text style={[styles.eventName, { color: theme.textMain, fontSize: 12, marginTop: 8 }]} numberOfLines={1}>
                           {event.full_name}
                         </Text>
                         <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
-                          <Ionicons 
-                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"} 
-                            size={12} 
-                            color={theme.textSub} 
+                          <Ionicons
+                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"}
+                            size={12}
+                            color={theme.textSub}
                           />
                           <Text style={[styles.eventType, { color: theme.textSub, fontSize: 10, marginLeft: 4 }]}>
                             {event.type === 'birthday' ? 'Birthday' : 'Anniversary'}
@@ -1263,7 +1889,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   );
                 })
               ) : (
-                // Hardcoded events if none from backend - Improved design
                 [
                   { name: 'Ananya Vishnoi', date: '2023-12-20', type: 'birthday' as const },
                   { name: 'Kriti Kharbanda', date: '2023-12-26', type: 'birthday' as const },
@@ -1276,7 +1901,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                         <View style={styles.eventAvatarWrapper}>
                           <View style={[
                             styles.eventAvatar,
-                            { 
+                            {
                               backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : currentColors.primaryBlue,
                               width: 70,
                               height: 70,
@@ -1286,10 +1911,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                               {getInitials(event.name)}
                             </Text>
                           </View>
-                          
+
                           <View style={[
                             styles.eventDateBadge,
-                            { 
+                            {
                               top: -5,
                               right: -5,
                               backgroundColor: theme.cardBg,
@@ -1301,11 +1926,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                             <Text style={[styles.eventDateDay, { fontSize: 12 }]}>{formattedDate.day}</Text>
                             <Text style={[styles.eventDateMonth, { fontSize: 9 }]}>{formattedDate.month}</Text>
                           </View>
-                          
+
                           {event.type === 'anniversary' && (
                             <View style={[
                               styles.anniversaryBadge,
-                              { 
+                              {
                                 bottom: -5,
                                 left: -5,
                               }
@@ -1316,15 +1941,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                             </View>
                           )}
                         </View>
-                        
+
                         <Text style={[styles.eventName, { color: theme.textMain, fontSize: 12, marginTop: 8 }]} numberOfLines={1}>
                           {event.name}
                         </Text>
                         <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
-                          <Ionicons 
-                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"} 
-                            size={12} 
-                            color={theme.textSub} 
+                          <Ionicons
+                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"}
+                            size={12}
+                            color={theme.textSub}
                           />
                           <Text style={[styles.eventType, { color: theme.textSub, fontSize: 10, marginLeft: 4 }]}>
                             {event.type === 'birthday' ? 'Birthday' : 'Anniversary'}
@@ -1341,7 +1966,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           {/* Theme Switcher */}
           <View style={styles.themeSwitcher}>
             <TouchableOpacity
-              style={[styles.lightSwitch, { 
+              style={[styles.lightSwitch, {
                 backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0',
                 width: screenWidth * 0.43,
               }]}
@@ -1369,21 +1994,21 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   ]} />
                 </Animated.View>
               </View>
-              
+
               <View style={[styles.switchIcons, { width: '100%' }]}>
                 <View style={[styles.switchIconContainer, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons 
-                    name="sunny" 
-                    size={22} 
-                    color={isDark ? '#666' : '#ffa500'} 
+                  <Ionicons
+                    name="sunny"
+                    size={22}
+                    color={isDark ? '#666' : '#ffa500'}
                     style={{ alignSelf: 'center' }}
                   />
                 </View>
                 <View style={[styles.switchIconContainer, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons 
-                    name="moon" 
-                    size={22} 
-                    color={isDark ? '#6b7cff' : '#999'} 
+                  <Ionicons
+                    name="moon"
+                    size={22}
+                    color={isDark ? '#6b7cff' : '#999'}
                     style={{ alignSelf: 'center' }}
                   />
                 </View>
@@ -1405,7 +2030,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           colors={['transparent', 'rgba(0, 0, 0, 0.1)']}
           style={styles.bottomNavGradient}
         >
-          <View style={[styles.bottomNav, { 
+          <View style={[styles.bottomNav, {
             backgroundColor: theme.navBg,
             borderTopLeftRadius: 25,
             borderTopRightRadius: 25,
@@ -1418,7 +2043,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             {[
               { icon: 'home', label: 'Home' },
               { icon: 'chatbubbles', label: 'Message' },
-              { icon: 'people', label: 'HR' },
+              { icon: 'people', label: 'HrPedia' },
               { icon: 'headset', label: 'Support' },
             ].map((item, index) => (
               <TouchableOpacity
@@ -1432,18 +2057,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     colors={[currentColors.gradientStart, currentColors.gradientEnd]}
                     style={styles.floatingCircle}
                   >
-                    <Ionicons 
-                      name={item.icon as any} 
-                      size={22} 
-                      color="white" 
+                    <Ionicons
+                      name={item.icon as any}
+                      size={22}
+                      color="white"
                     />
                   </LinearGradient>
                 ) : (
                   <>
-                    <Ionicons 
-                      name={item.icon as any} 
-                      size={20} 
-                      color={theme.textSub} 
+                    <Ionicons
+                      name={item.icon as any}
+                      size={20}
+                      color={theme.textSub}
                     />
                     <Text style={[styles.navLabel, { color: theme.textSub }]}>
                       {item.label}
@@ -1459,7 +2084,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-// Main Export with SafeAreaProvider
+// Main Export
 export default function CitadelDashboard({ onLogout }: { onLogout: () => void }) {
   return (
     <SafeAreaProvider>
@@ -1485,21 +2110,20 @@ const getModuleColor = (moduleName: string): string => {
 };
 
 // Hamburger Menu Component
-const HamburgerMenu = ({ 
-  isVisible, 
-  onClose, 
-  userData, 
-  menuItems, 
-  activeMenuItem, 
+const HamburgerMenu = ({
+  isVisible,
+  onClose,
+  userData,
+  menuItems,
+  activeMenuItem,
   onMenuItemPress,
   onLogout,
   isDark,
-  slideAnim 
+  slideAnim,
+  getInitials,
+  currentColors
 }: any) => {
   if (!isVisible) return null;
-
-  const currentColors = isDark ? darkColors : lightColors;
-
   return (
     <Modal transparent visible={isVisible} animationType="none" onRequestClose={onClose}>
       <SafeAreaView style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
@@ -1515,22 +2139,19 @@ const HamburgerMenu = ({
           <View style={[styles.menuHeader, { backgroundColor: currentColors.headerBg }]}>
             <View style={styles.menuHeaderContent}>
               {userData?.profile_picture ? (
-                <Image 
-                  source={{ uri: userData.profile_picture }} 
+                <Image
+                  source={{ uri: userData.profile_picture }}
                   style={styles.menuUserAvatar}
                 />
               ) : (
                 <View style={[styles.menuUserAvatarCircle, { backgroundColor: currentColors.info }]}>
                   <Text style={styles.menuUserAvatarText}>
-                    {userData?.full_name ? 
-                      userData.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 
-                      'U'
-                    }
+                    {getInitials(userData?.full_name || 'User')}
                   </Text>
                 </View>
               )}
               <View style={styles.menuUserDetails}>
-                <Text style={[styles.menuUserName, { color: currentColors.white }]}>
+                <Text style={[styles.menuUserName, { color: '#FFFFFF' }]}>
                   {userData?.full_name || 'User'}
                 </Text>
                 <Text style={[styles.menuUserRole, { color: currentColors.textLight }]}>
@@ -1539,27 +2160,27 @@ const HamburgerMenu = ({
               </View>
             </View>
           </View>
-          <ScrollView style={[styles.menuItems, { backgroundColor: currentColors.white }]} 
-            showsVerticalScrollIndicator={false} 
+          <ScrollView style={[styles.menuItems, { backgroundColor: currentColors.white }]}
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.menuItemsContent}
           >
             {menuItems.map((item: any, index: number) => (
-              <TouchableOpacity 
-                key={index} 
+              <TouchableOpacity
+                key={index}
                 style={[
                   styles.menuItem,
                   activeMenuItem === item.title && styles.menuItemActive,
                   {
                     backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
                   }
-                ]} 
-                onPress={() => onMenuItemPress(item)} 
+                ]}
+                onPress={() => onMenuItemPress(item)}
                 activeOpacity={0.7}
               >
                 <View style={styles.menuItemIconContainer}>
-                  <Ionicons 
-                    name={item.icon as any} 
-                    size={22} 
+                  <Ionicons
+                    name={item.icon as any}
+                    size={22}
                     color={activeMenuItem === item.title ? currentColors.info : currentColors.textSecondary}
                   />
                 </View>
@@ -1573,9 +2194,9 @@ const HamburgerMenu = ({
           </ScrollView>
           <View style={[styles.logoutSection, { backgroundColor: currentColors.white }]}>
             <View style={[styles.logoutDivider, { backgroundColor: currentColors.border }]} />
-            <TouchableOpacity 
-              style={[styles.logoutButton, { backgroundColor: '#FEF2F2' }]} 
-              onPress={onLogout} 
+            <TouchableOpacity
+              style={[styles.logoutButton, { backgroundColor: '#FEF2F2' }]}
+              onPress={onLogout}
               activeOpacity={0.7}
             >
               <View style={styles.logoutIconContainer}>
@@ -1590,20 +2211,19 @@ const HamburgerMenu = ({
   );
 };
 
-// All Modules Modal Component
-const AllModulesModal = ({ 
-  isVisible, 
-  onClose, 
-  modules, 
-  searchQuery, 
-  onSearchChange, 
-  onModulePress, 
-  theme, 
-  currentColors 
+// All Modules Modal Component - Updated for 2 columns square design
+const AllModulesModal = ({
+  isVisible,
+  onClose,
+  modules,
+  searchQuery,
+  onSearchChange,
+  onModulePress,
+  theme,
+  currentColors
 }: any) => {
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const numColumns = screenWidth > 400 ? 4 : 3;
-  const itemWidth = (screenWidth - 48) / numColumns;
+  const { width: screenWidth } = useWindowDimensions();
+  const itemWidth = (screenWidth - 60) / 2; // 2 columns with padding
 
   return (
     <Modal
@@ -1619,15 +2239,18 @@ const AllModulesModal = ({
           style={styles.modalHeaderGradient}
         >
           <View style={styles.modalHeader}>
-            <View style={styles.modalHeaderLeft}>
+            <View style={styles.modalHeaderRow}>
               <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
                 <Ionicons name="arrow-back" size={24} color="white" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>All Modules</Text>
+              <View style={styles.modalTitleContainer}>
+                <Text style={styles.modalTitle}>All Modules</Text>
+                <Text style={styles.modalSubtitle}>{modules.length} Available</Text>
+              </View>
+              <View style={{ width: 40 }} />
             </View>
-            <Text style={styles.modalSubtitle}>{modules.length} Available</Text>
           </View>
-          
+
           {/* Search Bar */}
           <View style={styles.searchContainer}>
             <View style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
@@ -1649,8 +2272,8 @@ const AllModulesModal = ({
             </View>
           </View>
         </LinearGradient>
-        
-        <ScrollView 
+
+        <ScrollView
           style={styles.modalContent}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -1674,12 +2297,11 @@ const AllModulesModal = ({
                 <TouchableOpacity
                   key={index}
                   style={[
-                    styles.moduleItemModal,
-                    { 
+                    styles.moduleItemModalSquare,
+                    {
                       backgroundColor: theme.cardBg,
                       width: itemWidth,
-                      marginBottom: 16,
-                      marginHorizontal: (screenWidth - (itemWidth * numColumns) - 32) / (numColumns * 2),
+                      height: itemWidth,
                     }
                   ]}
                   onPress={() => {
@@ -1688,39 +2310,20 @@ const AllModulesModal = ({
                   }}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={[currentColors.gradientStart + '20', currentColors.gradientEnd + '20']}
-                    style={styles.moduleIconContainerModal}
-                  >
-                    <Image 
-                      source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} 
-                      style={styles.moduleIconImageModal}
+                  <View style={styles.moduleIconContainerModalSimple}>
+                    <Image
+                      source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
+                      style={styles.moduleIconImageModalSimple}
                       resizeMode="contain"
                     />
-                  </LinearGradient>
-                  <Text style={[styles.moduleTitleModal, { color: theme.textMain }]} numberOfLines={2}>
+                  </View>
+                  <Text style={[styles.moduleTitleModalSimple, { color: theme.textMain }]} numberOfLines={2}>
                     {module.title}
                   </Text>
-                  <View style={styles.moduleArrowContainer}>
-                    <Ionicons 
-                      name="arrow-up" 
-                      size={16} 
-                      color={currentColors.primaryBlue} 
-                      style={{ transform: [{ rotate: '45deg' }] }}
-                    />
-                  </View>
                 </TouchableOpacity>
               ))}
             </View>
           )}
-          
-          {/* Decorative Footer */}
-          <View style={styles.modalFooter}>
-            <LinearGradient
-              colors={['transparent', currentColors.gradientStart + '20']}
-              style={styles.modalFooterGradient}
-            />
-          </View>
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -1735,6 +2338,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1743,6 +2350,20 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  errorText: {
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 24
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600'
   },
   mainContent: {
     flex: 1,
@@ -1762,7 +2383,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   headerBanner: {
-    height: 180,
+    height: 300,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: 'hidden',
@@ -1772,9 +2393,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   headerContent: {
     padding: 20,
+    position: 'relative',
+    zIndex: 1,
   },
   topNav: {
     flexDirection: 'row',
@@ -1805,60 +2435,14 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     color: 'white',
-    fontSize: 24,
+    fontSize: 35,
     fontWeight: '700',
   },
   employeeText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 20,
     opacity: 0.8,
     marginTop: 2,
-  },
-  profileCard: {
-    marginHorizontal: 20,
-    marginTop: 15,
-    marginBottom: 15,
-    padding: 16,
-    borderRadius: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 5,
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  userRole: {
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
-  profileImagePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
-  profileInitials: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   sectionCard: {
     marginHorizontal: 20,
@@ -1878,13 +2462,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: '600',
   },
-  iconGrid: {
+  iconGridFull: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  iconItem: {
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  iconItemFull: {
+    alignItems: 'center',
+    width: '23%',
   },
   iconBox: {
     width: 50,
@@ -1912,10 +2497,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    height: 125,
   },
   reminderContent: {
     flexDirection: 'row',
     flex: 1,
+    height: '75%',
   },
   reminderBorder: {
     width: 4,
@@ -1938,8 +2525,8 @@ const styles = StyleSheet.create({
   calendarIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 50,
-    height: 50,
+    width: 70,
+    height: 70,
     borderRadius: 25,
     backgroundColor: 'rgba(0, 122, 255, 0.1)',
   },
@@ -1952,7 +2539,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 15,
     flexDirection: 'row',
-    height: 250,
+    height: 220,
     gap: 12,
   },
   moduleAttendance: {
@@ -1981,13 +2568,13 @@ const styles = StyleSheet.create({
   },
   moduleGradient: {
     flex: 1,
-    padding: 20,
+    padding: 16,
     justifyContent: 'space-between',
   },
   moduleArrow: {
     position: 'absolute',
-    top: 15,
-    right: 15,
+    top: 12,
+    right: 12,
   },
   moduleIconCircle: {
     width: 45,
@@ -2138,12 +2725,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 11,
   },
-  eventDateYear: {
-    color: '#8B5CF6',
-    fontSize: 8,
-    fontWeight: '600',
-    marginTop: 2,
-  },
   anniversaryBadge: {
     position: 'absolute',
     backgroundColor: '#FCD34D',
@@ -2221,7 +2802,7 @@ const styles = StyleSheet.create({
   switchIconContainer: {
     width: 44,
     height: 44,
-    paddingLeft:20,
+    paddingLeft: 20,
   },
   footer: {
     alignItems: 'center',
@@ -2282,7 +2863,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '500',
   },
-  // Hamburger Menu Styles
   overlay: {
     flex: 1,
     flexDirection: 'row',
@@ -2403,7 +2983,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
   },
-  // All Modules Modal Styles
   modalContainer: {
     flex: 1,
   },
@@ -2417,20 +2996,23 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
   },
-  modalHeaderLeft: {
+  modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'space-between',
   },
   modalBackButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+  },
+  modalTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -2438,6 +3020,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
+    marginTop: 4,
   },
   searchContainer: {
     paddingHorizontal: 20,
@@ -2461,56 +3044,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContentContainer: {
-    padding: 16,
+    padding: 20,
   },
   allModulesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  moduleItemModal: {
-    padding: 16,
+  moduleItemModalSquare: {
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
-    width: 150,
-    position: 'relative',
+    marginBottom: 20,
+    padding: 16,
   },
-  moduleIconContainerModal: {
-    width: 70,
-    height: 70,
-    borderRadius: 20,
+  moduleIconContainerModalSimple: {
+    width: 60,
+    height: 60,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  moduleIconImageModal: {
-    width: 35,
-    height: 35,
+  moduleIconImageModalSimple: {
+    width: 40,
+    height: 40,
   },
-  moduleTitleModal: {
-    fontSize: 13,
+  moduleTitleModalSimple: {
+    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 16,
-  },
-  moduleArrowContainer: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-  },
-  modalFooter: {
-    height: 50,
-    marginTop: 20,
-  },
-  modalFooterGradient: {
-    height: '100%',
-    borderRadius: 25,
+    lineHeight: 18,
   },
   noResultsContainer: {
     flex: 1,
