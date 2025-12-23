@@ -9,75 +9,94 @@
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
     "scheme": "citadel",
+
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "web": {
-      "bundler": "webpack",
-      "favicon": "./assets/images/logo.png"
-    },
+
     "assetBundlePatterns": ["**/*"],
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
+
       "infoPlist": {
-        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate users and protect your sensitive data.",
-        "NSCameraUsageDescription": "This app uses the camera for Face ID authentication.",
-        "UIBackgroundModes": ["fetch", "location", "remote-notification"],
-        "NSLocationWhenInUseUsageDescription": "This app needs location access to mark attendance when you're at the office.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to automatically mark your attendance.",
-        "NSLocationAlwaysUsageDescription": "This app needs location access to automatically mark your attendance even when the app is not in use."
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ],
+
+        "NSLocationWhenInUseUsageDescription":
+          "Citadel uses your location to mark attendance when you are at the office.",
+
+        "NSLocationAlwaysAndWhenInUseUsageDescription":
+          "Citadel requires background location access to automatically detect office entry and exit for attendance.",
+
+        "NSLocationAlwaysUsageDescription":
+          "Citadel uses your location even when the app is closed to enable geofencing-based attendance.",
+
+        "NSCameraUsageDescription":
+          "Camera access is required for Face ID authentication.",
+
+        "NSFaceIDUsageDescription":
+          "Face ID is used to securely authenticate you."
       }
     },
+
     "android": {
+      "package": "com.citadelnetinc.app",
+
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.citadelnetinc.app",
-      "googleServicesFile": "./google-services.json",
+
       "permissions": [
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT",
-        "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT",
-        "android.permission.CAMERA",
-        "android.permission.FACE_LOCK",
-        "android.permission.USE_FACE_RECOGNITION",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.WAKE_LOCK"
-      ],
-      "useNextNotificationsApi": true
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "CAMERA",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
     },
+
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "This app uses Face ID to authenticate users and protect your sensitive data."
-        }
-      ],
+
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Citadel to use your location for automatic attendance marking.",
-          "locationAlwaysPermission": "Allow Citadel to use your location for automatic attendance marking even when the app is closed.",
-          "locationWhenInUsePermission": "Allow Citadel to use your location for attendance marking.",
+          "locationWhenInUsePermission":
+            "Allow Citadel to access your location while using the app.",
+
+          "locationAlwaysAndWhenInUsePermission":
+            "Allow Citadel to access your location in the background for attendance tracking.",
+
+          "locationAlwaysPermission":
+            "Allow Citadel to access your location even when the app is closed.",
+
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
+
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission":
+            "Allow Citadel to use Face ID for secure authentication."
+        }
+      ],
+
       [
         "expo-notifications",
         {
@@ -86,27 +105,16 @@
           "useNextNotificationsApi": true
         }
       ],
-      [
-        "expo-task-manager"
-      ],
-      [
-        "expo-background-fetch",
-        {
-          "android": {
-            "useNextScheduleExact": true
-          }
-        }
-      ],
+
+      "expo-task-manager",
+      "expo-background-fetch",
       "expo-web-browser"
     ],
+
     "extra": {
       "eas": {
         "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f"
       }
-    },
-    "notification": {
-      "icon": "./assets/images/logo.png",
-      "color": "#2D3748"
     }
   }
 }

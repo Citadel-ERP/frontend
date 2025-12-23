@@ -10,10 +10,11 @@ import {
   Animated,
   StatusBar,
   Modal,
-  SafeAreaView,
-  Alert,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
+  TextInput,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 // Import all the pages
 import Profile from './Profile';
@@ -48,7 +50,7 @@ const { width, height } = Dimensions.get('window');
 // Backend URL from config
 const TOKEN_2_KEY = 'token_2';
 
-// Interfaces
+// Interfaces (same as before)
 interface IconItem {
   name: string;
   color: string;
@@ -126,6 +128,7 @@ interface UpcomingEvent {
   date: string;
   type: 'birthday' | 'anniversary';
   years?: number;
+  anniversaryYears?: number;
 }
 
 // Theme Colors
@@ -145,6 +148,9 @@ const lightColors = {
   hrPink: '#FF637F',
   cabOrange: '#FFBB64',
   headerBg: '#2D3748',
+  primaryBlue: '#007AFF',
+  gradientStart: '#007AFF',
+  gradientEnd: '#0056CC',
 };
 
 const darkColors = {
@@ -163,9 +169,15 @@ const darkColors = {
   hrPink: '#FF637F',
   cabOrange: '#FFBB64',
   headerBg: '#000D24',
+  primaryBlue: '#007AFF',
+  gradientStart: '#007AFF',
+  gradientEnd: '#0056CC',
 };
 
-export default function CitadelDashboard({ onLogout }: { onLogout: () => void }) {
+// Main Dashboard Component
+function DashboardContent({ onLogout }: { onLogout: () => void }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  
   // State from old dashboard
   const [token, setToken] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -209,6 +221,9 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
   // All modules modal
   const [allModulesVisible, setAllModulesVisible] = useState(false);
   
+  // Search state for modules
+  const [searchQuery, setSearchQuery] = useState('');
+  
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
@@ -235,7 +250,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
   ];
 
-  // Hardcoded stats data (will come from backend)
+  // Updated chart data with proper day alignment
   const chartData = [
     { day: 'Mon', hours: 5.5, target: 6.0 },
     { day: 'Tue', hours: 7.2, target: 5.8 },
@@ -245,6 +260,12 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     { day: 'Sat', hours: 6.2, target: 6.5 },
     { day: 'Sun', hours: 5.8, target: 7.2 },
   ];
+
+  // Responsive font sizes
+  const responsiveFont = (size: number) => {
+    const scale = Math.min(screenWidth / 375, 1.2);
+    return size * scale;
+  };
 
   // Fetch user data from backend
   useEffect(() => {
@@ -270,7 +291,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
-        console.log("jio")
+        
         if (response.ok) {
           const data = await response.json();
           if (data.message === "Get modules successful") {
@@ -300,13 +321,6 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
         const storedModules = await AsyncStorage.getItem('last_opened_modules');
         if (storedModules) {
           setLastOpenedModules(JSON.parse(storedModules));
-        } else {
-          // Use default modules if none stored
-          setLastOpenedModules(defaultLastOpened.map(item => ({
-            title: item.name,
-            iconUrl: getIconUrl(item),
-            module_unique_name: item.module_unique_name || item.name.toLowerCase()
-          })));
         }
       } catch (error) {
         console.error('Error loading last opened modules:', error);
@@ -318,13 +332,13 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
         const token = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!token) return;
 
-       const response = await fetch(`${BACKEND_URL}/core/getReminders`, {
-               method: 'POST',
-               headers: {
-                 'Content-Type': 'application/json',
-               },
-               body: JSON.stringify({ token }),
-             });
+        const response = await fetch(`${BACKEND_URL}/core/getReminders`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
 
         if (response.ok) {
           const data = await response.json();
@@ -346,38 +360,85 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     loadLastOpenedModules();
     fetchReminders();
   }, []);
+  const requestLocationPermissions = async () => {
+  try {
+    // 1️⃣ Foreground permission (MANDATORY FIRST)
+    const foreground = await Location.requestForegroundPermissionsAsync();
 
-  // Initialize background services
+    if (foreground.status !== 'granted') {
+      Alert.alert(
+        'Location Permission Required',
+        'Location access is required to mark attendance.'
+      );
+      return;
+    }
+
+    // 2️⃣ Background permission (REQUIRED FOR GEOFENCING)
+    const background = await Location.requestBackgroundPermissionsAsync();
+
+    if (background.status !== 'granted') {
+      Alert.alert(
+        'Background Location Required',
+        'Please allow "Always Allow" location access to enable automatic attendance.'
+      );
+    }
+
+    console.log('✅ Location permissions granted');
+  } catch (error) {
+    console.error('❌ Location permission error:', error);
+  }
+};
+
+  // Initialize background services with proper error handling
   useEffect(() => {
     if (!token || !userData) return;
-
+    
     const initializeBackgroundServices = async () => {
       try {
         console.log('🚀 Initializing background services...');
-        await BackgroundAttendanceService.initializeAll();
+        await requestLocationPermissions();
+        // Check if running in Expo Go
+        const isExpoGo = Constants.appOwnership === 'expo';
         
-        if (userData?.office) {
-          const officeLocation = userData.office;
-          if (officeLocation.latitude && officeLocation.longitude) {
-            await BackgroundAttendanceService.setOfficeLocation(
-              officeLocation.latitude,
-              officeLocation.longitude,
-              50
-            );
-          }
-        }
+        if (!isExpoGo) {
+          try {
+            // Check location permissions
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            
+            if (status === 'granted') {
+              await BackgroundAttendanceService.initializeAll();
+              
+              if (userData?.office) {
+                const officeLocation = userData.office;
+                if (officeLocation.latitude && officeLocation.longitude) {
+                  await BackgroundAttendanceService.setOfficeLocation(
+                    officeLocation.latitude,
+                    officeLocation.longitude,
+                    50
+                  );
+                }
+              }
 
-        // Initialize location tracking
-        await BackgroundLocationService.initialize();
+              // Initialize location tracking
+              await BackgroundLocationService.initialize();
+            } else {
+              console.log('⚠️ Location permission not granted');
+            }
+          } catch (error) {
+            console.warn('⚠️ Background services not available in this environment:', error);
+          }
+        } else {
+          console.log('⚠️ Running in Expo Go - background services limited');
+        }
       } catch (error) {
-        console.error('❌ Failed to initialize background services:', error);
+        console.warn('⚠️ Failed to initialize background services:', error);
       }
     };
 
     initializeBackgroundServices();
   }, [token, userData]);
 
-  // Function to get upcoming events
+  // Function to get upcoming events with proper date formatting
   const getUpcomingEvents = (birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
     const events: UpcomingEvent[] = [];
     const today = new Date();
@@ -394,12 +455,14 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
 
     anniversaries.forEach(user => {
       if (user.joining_date) {
-        const years = calculateYearsOnAnniversary(user.joining_date);
+        const anniversaryDate = new Date(user.joining_date);
+        const years = today.getFullYear() - anniversaryDate.getFullYear();
         events.push({
           full_name: user.full_name,
           date: user.joining_date,
           type: 'anniversary',
-          years: years
+          years: years,
+          anniversaryYears: years + 1 // Next anniversary year
         });
       }
     });
@@ -417,19 +480,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
       return eventDateA.getTime() - eventDateB.getTime();
     });
 
-    return events.slice(0, 3); // Return only top 3 events
-  };
-
-  const calculateYearsOnAnniversary = (dateString: string): number => {
-    const joiningDate = new Date(dateString);
-    const today = new Date();
-    let anniversaryThisYear = new Date(today.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
-
-    if (anniversaryThisYear < today) {
-      anniversaryThisYear = new Date(today.getFullYear() + 1, joiningDate.getMonth(), joiningDate.getDate());
-    }
-
-    return anniversaryThisYear.getFullYear() - joiningDate.getFullYear();
+    return events.slice(0, 3);
   };
 
   // Function to get initials from name
@@ -437,10 +488,22 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     return fullName.split(' ').map(name => name.charAt(0).toUpperCase()).join('').substring(0, 2);
   };
 
-  // Function to format date
-  const formatDate = (dateString: string): string => {
+  // Function to format date beautifully
+  const formatEventDate = (dateString: string): { day: string, month: string, year?: string } => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return {
+      day: date.getDate().toString().padStart(2, '0'),
+      month: date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+      year: date.getFullYear().toString()
+    };
+  };
+
+  // Function to format anniversary years
+  const formatAnniversaryYears = (years: number): string => {
+    if (years === 1) return '1st';
+    if (years === 2) return '2nd';
+    if (years === 3) return '3rd';
+    return `${years}th`;
   };
 
   // Get icon URL helper
@@ -577,22 +640,13 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
   };
 
-  // Menu items
+  // Menu items - Updated to only show required items
   const drawerMenuItems = [
     { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
-    { id: 'edit', title: 'Edit Personal Info', icon: 'edit', color: '#3B82F6' },
-    { id: 'dibi', title: 'Dibi Pass', icon: 'car', color: '#10B981' },
-    { id: 'trips', title: 'My Trips', icon: 'map', color: '#F59E0B' },
-    { id: 'payment', title: 'Payment', icon: 'wallet', color: '#8B5CF6' },
-    { id: 'help', title: 'Help', icon: 'help', color: '#EC4899' },
-    { id: 'messages', title: 'Messages', icon: 'notification', color: '#F59E0B' },
-    { id: 'safety', title: 'Safety Center', icon: 'shield', color: '#1E40AF' },
-    { id: 'settings', title: 'Settings', icon: 'settings', color: '#6B7280' },
-    { id: 'invite', title: 'Invite Friends', icon: 'users', color: '#10B981' },
-    { id: 'drive', title: 'Drive with Us', icon: 'car', color: '#10B981' },
-    { id: 'discounts', title: 'Discounts', icon: 'star', color: '#FBBF24' },
-    { id: 'velocity', title: 'Velocity Points', icon: 'star', color: '#FBBF24' },
-    { id: 'scan', title: 'Scan', icon: 'credit-card', color: '#8B5CF6' },
+    { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
+    { id: 'notifications', title: 'Notifications', icon: 'notification', color: '#F59E0B' },
+    { id: 'privacy', title: 'Privacy Policy', icon: 'shield', color: '#1E40AF' },
+    { id: 'messages', title: 'Messages', icon: 'chatbubbles', color: '#10B981' },
   ];
 
   const handleMenuItemPress = (item: any) => {
@@ -603,6 +657,8 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
       setShowProfile(true);
     } else if (item.id === 'settings') {
       setShowSettings(true);
+    } else if (item.id === 'messages') {
+      setShowChat(true);
     } else {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     }
@@ -613,6 +669,10 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     setActiveNavItem(navItem);
     if (navItem === 'message') {
       setShowChat(true);
+    } else if (navItem === 'hr') {
+      setShowHR(true);
+    } else if (navItem === 'support') {
+      Alert.alert('Support', 'Support feature will be available soon!');
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
     }
@@ -637,6 +697,11 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     }));
   };
 
+  // Filter modules based on search query
+  const filteredModules = getDisplayModules().filter(module =>
+    module.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   // Render icon helper
   const renderIcon = (item: IconItem) => {
     if (item.library === 'fa5') {
@@ -645,7 +710,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     return <MaterialCommunityIcons name={item.icon as any} size={20} color="white" />;
   };
 
-  // Render chart
+  // Render chart with proper day alignment
   const renderChart = () => {
     const maxValue = 10;
     const chartHeight = 100;
@@ -657,10 +722,13 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
           const targetHeight = (item.target / maxValue) * chartHeight;
 
           return (
-            <View key={index} style={styles.chartBar}>
+            <View key={index} style={[styles.chartBar, { flex: 1 }]}>
+              <Text style={[styles.chartDay, { color: theme.textSub, fontSize: 12, textAlign: 'center' }]}>
+                {item.day}
+              </Text>
               <View style={[styles.barWrapper, { height: chartHeight }]}>
                 <View style={[styles.targetBar, { height: targetHeight, backgroundColor: 'rgba(255, 94, 122, 0.3)' }]} />
-                <View style={[styles.hoursBar, { height: hoursHeight, backgroundColor: 'rgba(94, 200, 255, 0.5)' }]} />
+                <View style={[styles.hoursBar, { height: hoursHeight, backgroundColor: currentColors.primaryBlue }]} />
               </View>
             </View>
           );
@@ -670,7 +738,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
   };
 
   // Animation values
-  const maxRadius = Math.sqrt(width * width + height * height);
+  const maxRadius = Math.sqrt(screenWidth * screenWidth + screenHeight * screenHeight);
   const circleSize = circleScale.interpolate({
     inputRange: [0, 1],
     outputRange: [0, maxRadius * 2.5],
@@ -678,7 +746,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
 
   const switchTranslate = switchToggle.interpolate({
     inputRange: [0, 1],
-    outputRange: [3, 77],
+    outputRange: [4, screenWidth * 0.43 - 54],
   });
 
   // Loading state
@@ -694,80 +762,140 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
   // Render different pages based on state
   if (showChatRoom && selectedChatRoom) {
     return (
-      <ChatRoomScreen
-        chatRoom={selectedChatRoom}
-        onBack={handleBackFromPage}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
+        <ChatRoomScreen
+          chatRoom={selectedChatRoom}
+          onBack={handleBackFromPage}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      </SafeAreaView>
     );
   }
 
   if (showChat) {
     return (
-      <ChatScreen
-        onBack={handleBackFromPage}
-        onOpenChatRoom={setSelectedChatRoom}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
+        <ChatScreen
+          onBack={handleBackFromPage}
+          onOpenChatRoom={setSelectedChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      </SafeAreaView>
     );
   }
 
   if (showAttendance) {
-    return <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
+      </SafeAreaView>
+    );
   }
 
   if (showProfile) {
-    return <Profile onBack={handleBackFromPage} userData={userData} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Profile onBack={handleBackFromPage} userData={userData} />
+      </SafeAreaView>
+    );
   }
 
   if (showHR) {
-    return <HR onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <HR onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showCab) {
-    return <Cab onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Cab onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showDriver) {
-    return <Driver onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Driver onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showBDT) {
-    return <BDT onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <BDT onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showMedical) {
-    return <Medical onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Medical onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showScoutBoy) {
-    return <ScoutBoy onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScoutBoy onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showReminder) {
-    return <Reminder onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Reminder onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showBUP) {
-    return <BUP onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <BUP onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showSettings) {
-    return <Settings onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Settings onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showEmployeeManagement) {
-    return <EmployeeManagement onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <EmployeeManagement onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   if (showCreateSite) {
-    return <CreateSite onBack={handleBackFromPage} />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <CreateSite onBack={handleBackFromPage} />
+      </SafeAreaView>
+    );
   }
 
   // Main dashboard render
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={currentColors.headerBg} />
+    <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+      <StatusBar 
+        barStyle={isDark ? 'light-content' : 'dark-content'} 
+        backgroundColor={currentColors.headerBg} 
+        translucent={false}
+      />
       
       {/* Hamburger Menu Modal */}
       <HamburgerMenu
@@ -786,9 +914,12 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
       <AllModulesModal
         isVisible={allModulesVisible}
         onClose={() => setAllModulesVisible(false)}
-        modules={getDisplayModules()}
+        modules={filteredModules}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
         onModulePress={handleModulePress}
         theme={theme}
+        currentColors={currentColors}
       />
 
       <View style={[styles.mainContent, { backgroundColor: theme.bgColor }]}>
@@ -811,19 +942,26 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Header Banner */}
+          {/* Header Banner with background.png - Fixed for dark theme */}
           <LinearGradient
-            colors={[currentColors.headerBg, currentColors.headerBg]}
+            colors={isDark ? ['#000D24', '#000D24'] : ['#2D3748', '#2D3748']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.headerBanner}
           >
-            {!isDark && (
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80' }}
-                style={styles.headerImage}
-              />
-            )}
-            <View style={styles.headerContent}>
-              <View style={styles.topNav}>
+            <Image
+              source={require('../assets/background.png')}
+              style={[
+                styles.headerImage,
+                { 
+                  tintColor: isDark ? 'rgba(255,255,255,0.2)' : undefined,
+                  opacity: isDark ? 0.3 : 0.8 
+                }
+              ]}
+              resizeMode="cover"
+            />
+            <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+              <View style={[styles.topNav, { marginBottom: 10 }]}>
                 <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
                   {[1, 2, 3].map(i => (
                     <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
@@ -832,13 +970,19 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
                 <Text style={styles.logoText}>CITADEL</Text>
                 <View style={styles.headerSpacer} />
               </View>
-              <Text style={styles.welcomeText}>Welcome!</Text>
-              <Text style={styles.employeeText}>Employee</Text>
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.welcomeText}>Welcome!</Text>
+                <Text style={styles.employeeText}>Employee</Text>
+              </View>
             </View>
           </LinearGradient>
 
-          {/* Profile Card */}
-          <View style={[styles.profileCard, { backgroundColor: theme.cardBg }]}>
+          {/* Profile Card - Tappable Section */}
+          <TouchableOpacity 
+            style={[styles.profileCard, { backgroundColor: theme.cardBg }]}
+            onPress={() => setShowProfile(true)}
+            activeOpacity={0.7}
+          >
             <View>
               <Text style={[styles.userName, { color: theme.textMain }]}>
                 Hi {userData?.first_name || 'User'}!
@@ -847,49 +991,51 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
                 {userData?.designation || userData?.role || 'SOFTWARE ENGINEER'}
               </Text>
             </View>
-            <TouchableOpacity onPress={() => setShowProfile(true)}>
+            <View>
               {userData?.profile_picture ? (
                 <Image
                   source={{ uri: userData.profile_picture }}
                   style={styles.profileImage}
                 />
               ) : (
-                <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.accentBlue }]}>
+                <View style={[styles.profileImagePlaceholder, { backgroundColor: currentColors.primaryBlue }]}>
                   <Text style={styles.profileInitials}>
                     {getInitials(userData?.full_name || 'User')}
                   </Text>
                 </View>
               )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Last Opened Section */}
-          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.labelSmall, { color: theme.textSub }]}>LAST OPENED</Text>
-            <View style={styles.iconGrid}>
-              {lastOpenedModules.slice(0, 4).map((item, index) => (
-                <TouchableOpacity 
-                  key={index} 
-                  style={styles.iconItem}
-                  onPress={() => handleModulePress(item.title, item.module_unique_name)}
-                >
-                  <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
-                    <Image 
-                      source={{ uri: item.iconUrl }} 
-                      style={styles.iconImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <Text style={[styles.iconLabel, { color: theme.textMain }]}>{item.title}</Text>
-                </TouchableOpacity>
-              ))}
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {/* Last Opened Section - Improved spacing */}
+          {lastOpenedModules.length > 0 && (
+            <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
+              <Text style={[styles.labelSmall, { color: theme.textSub }]}>LAST OPENED</Text>
+              <View style={[styles.iconGrid, { justifyContent: 'flex-start', gap: 10 }]}>
+                {lastOpenedModules.slice(0, 4).map((item, index) => (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={[styles.iconItem, { width: '23%' }]}
+                    onPress={() => handleModulePress(item.title, item.module_unique_name)}
+                  >
+                    <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
+                      <Image 
+                        source={{ uri: item.iconUrl }} 
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text style={[styles.iconLabel, { color: theme.textMain }]}>{item.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Upcoming Reminder */}
           <View style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}>
             <View style={styles.reminderContent}>
-              <View style={styles.reminderBorder} />
+              <View style={[styles.reminderBorder, { backgroundColor: currentColors.primaryBlue }]} />
               <View style={styles.reminderText}>
                 <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING REMINDERS</Text>
                 {reminders.length > 0 ? (
@@ -914,23 +1060,31 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
               </View>
             </View>
             <View style={styles.calendarIcon}>
-              <Ionicons name="calendar-outline" size={40} color="#1da1f2" />
-              <Text style={styles.calendarDate}>{new Date().getDate()}</Text>
+              <Ionicons name="calendar-outline" size={40} color={currentColors.primaryBlue} />
+              <Text style={[styles.calendarDate, { color: currentColors.primaryBlue }]}>{new Date().getDate()}</Text>
             </View>
           </View>
 
-          {/* Module Grid */}
+          {/* Module Grid with Diagonal Arrows */}
           <View style={styles.moduleGrid}>
             {/* Attendance Module */}
             <TouchableOpacity 
               style={styles.moduleAttendance}
               onPress={() => handleModulePress('Attendance', 'attendance')}
+              activeOpacity={0.9}
             >
               <LinearGradient
                 colors={['#00d285', '#00b872']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.moduleGradient}
               >
-                <Ionicons name="arrow-forward" size={18} color="white" style={styles.moduleArrow} />
+                <Ionicons 
+                  name="arrow-up" 
+                  size={20} 
+                  color="white" 
+                  style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]} 
+                />
                 <View style={styles.moduleIconCircle}>
                   <FontAwesome5 name="book-open" size={24} color="white" />
                 </View>
@@ -943,14 +1097,22 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
               <TouchableOpacity 
                 style={styles.moduleSmall}
                 onPress={() => handleModulePress('Cab', 'cab')}
+                activeOpacity={0.9}
               >
                 <LinearGradient
                   colors={['#ff5e7a', '#ff4168']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={styles.moduleGradient}
                 >
-                  <Ionicons name="arrow-forward" size={18} color="white" style={styles.moduleArrow} />
+                  <Ionicons 
+                    name="arrow-up" 
+                    size={18} 
+                    color="white" 
+                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]} 
+                  />
                   <View style={styles.moduleIconCircle}>
-                    <FontAwesome5 name="id-card" size={24} color="white" />
+                    <FontAwesome5 name="id-card" size={20} color="white" />
                   </View>
                   <Text style={styles.moduleTitle}>Cab</Text>
                 </LinearGradient>
@@ -960,14 +1122,22 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
               <TouchableOpacity 
                 style={styles.moduleSmall}
                 onPress={() => handleModulePress('HR', 'hr')}
+                activeOpacity={0.9}
               >
                 <LinearGradient
                   colors={['#ffb157', '#ff9d3f']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={styles.moduleGradient}
                 >
-                  <Ionicons name="arrow-forward" size={18} color="white" style={styles.moduleArrow} />
+                  <Ionicons 
+                    name="arrow-up" 
+                    size={18} 
+                    color="white" 
+                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]} 
+                  />
                   <View style={styles.moduleIconCircle}>
-                    <FontAwesome5 name="users" size={24} color="white" />
+                    <FontAwesome5 name="users" size={20} color="white" />
                   </View>
                   <Text style={styles.moduleTitle}>HR</Text>
                 </LinearGradient>
@@ -975,113 +1145,206 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
             </View>
           </View>
 
-          {/* View All Modules */}
+          {/* View All Modules Button */}
           <TouchableOpacity 
-            style={styles.viewAllContainer}
+            style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
             onPress={() => setAllModulesVisible(true)}
+            activeOpacity={0.7}
           >
-            <Text style={[styles.viewAllText, { color: theme.textSub }]}>
-              View all modules
-            </Text>
-            <View style={styles.chevronGroup}>
-              <Ionicons name="chevron-forward" size={14} color={theme.textSub} />
-              <Ionicons name="chevron-forward" size={14} color={theme.textSub} style={{ marginLeft: -8 }} />
-              <Ionicons name="chevron-forward" size={14} color={theme.textSub} style={{ marginLeft: -8 }} />
-            </View>
+            <LinearGradient
+              colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.viewAllButton}
+            >
+              <Text style={styles.viewAllText}>View all modules</Text>
+              <View style={styles.chevronGroup}>
+                <Ionicons name="chevron-forward" size={16} color="white" />
+                <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+                <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+              </View>
+            </LinearGradient>
           </TouchableOpacity>
 
-          {/* Stats Section */}
+          {/* Stats Section - Fixed day alignment */}
           <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
             <Text style={[styles.labelSmall, { color: theme.textSub }]}>STATS</Text>
             <View style={styles.statsContent}>
               {renderChart()}
-              <View style={styles.statsNumbers}>
+              <View style={[styles.statsNumbers, { marginLeft: 20 }]}>
                 <Text style={[styles.statsValue, { color: theme.textMain }]}>
                   {userData?.days_present || '60'}%
                 </Text>
-                <Text style={[styles.statsLabel, { color: theme.textSub }]}>DAYS PRESENT</Text>
+                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>DAYS PRESENT</Text>
                 <Text style={[styles.statsValue, { color: theme.textMain, marginTop: 15 }]}>
                   {userData?.leaves_applied || '6.8'}
                 </Text>
-                <Text style={[styles.statsLabel, { color: theme.textSub }]}>LEAVES APPLIED</Text>
+                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>LEAVES APPLIED</Text>
               </View>
             </View>
           </View>
 
-          {/* Upcoming Events */}
+          {/* Upcoming Events - Improved design */}
           <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
             <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING EVENTS</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventsScroll}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.eventsScroll}
+              contentContainerStyle={styles.eventsScrollContent}
+            >
               {upcomingEvents.length > 0 ? (
-                upcomingEvents.map((event, index) => (
-                  <View key={index} style={styles.eventItem}>
-                    <View style={styles.eventAvatarWrapper}>
-                      <View style={[
-                        styles.eventAvatar,
-                        { 
-                          backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : theme.accentBlue,
-                          width: 80,
-                          height: 80,
-                          borderRadius: 40,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }
-                      ]}>
-                        <Text style={styles.eventAvatarInitials}>
-                          {getInitials(event.full_name)}
-                        </Text>
-                      </View>
-                      <View style={styles.eventDateBadge}>
-                        <Text style={styles.eventDateText}>{formatDate(event.date)}</Text>
-                      </View>
-                      {event.type === 'anniversary' && event.years && (
-                        <View style={styles.anniversaryBadge}>
-                          <Text style={styles.anniversaryText}>🎉 {event.years}yr</Text>
+                upcomingEvents.map((event, index) => {
+                  const formattedDate = formatEventDate(event.date);
+                  return (
+                    <View key={index} style={styles.eventItem}>
+                      <View style={[styles.eventCard, { backgroundColor: 'transparent' }]}>
+                        <View style={styles.eventAvatarWrapper}>
+                          <View style={[
+                            styles.eventAvatar,
+                            { 
+                              backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : currentColors.primaryBlue,
+                              width: 70,
+                              height: 70,
+                            }
+                          ]}>
+                            <Text style={[styles.eventAvatarInitials, { fontSize: 20 }]}>
+                              {getInitials(event.full_name)}
+                            </Text>
+                          </View>
+                          
+                          {/* Date Badge - Improved design */}
+                          <View style={[
+                            styles.eventDateBadge,
+                            { 
+                              top: -5,
+                              right: -5,
+                              backgroundColor: theme.cardBg,
+                              paddingHorizontal: 6,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }
+                          ]}>
+                            <Text style={[styles.eventDateDay, { fontSize: 12 }]}>{formattedDate.day}</Text>
+                            <Text style={[styles.eventDateMonth, { fontSize: 9 }]}>{formattedDate.month}</Text>
+                          </View>
+                          
+                          {/* Anniversary Badge */}
+                          {event.type === 'anniversary' && event.anniversaryYears && (
+                            <View style={[
+                              styles.anniversaryBadge,
+                              { 
+                                bottom: -5,
+                                left: -5,
+                              }
+                            ]}>
+                              <Text style={[styles.anniversaryText, { fontSize: 9 }]}>
+                                {formatAnniversaryYears(event.anniversaryYears)}
+                              </Text>
+                            </View>
+                          )}
                         </View>
-                      )}
-                    </View>
-                    <Text style={[styles.eventName, { color: theme.textMain }]} numberOfLines={2}>
-                      {event.full_name}
-                    </Text>
-                    <Text style={[styles.eventType, { color: theme.textSub }]}>
-                      {event.type === 'birthday' ? '🎂 Birthday' : '💼 Anniversary'}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                // Hardcoded events if none from backend
-                [
-                  { name: 'Ananya Vishnoi', date: '20 Dec', image: '' },
-                  { name: 'Kriti Kharbanda', date: '26 Dec', image: '' },
-                  { name: 'Anup Khanna', date: '13 Jan', image: '' },
-                ].map((event, index) => (
-                  <View key={index} style={styles.eventItem}>
-                    <View style={styles.eventAvatarWrapper}>
-                      <View style={[
-                        styles.eventAvatarPlaceholder,
-                        { backgroundColor: theme.accentBlue }
-                      ]}>
-                        <Text style={styles.eventAvatarInitials}>
-                          {getInitials(event.name)}
+                        
+                        <Text style={[styles.eventName, { color: theme.textMain, fontSize: 12, marginTop: 8 }]} numberOfLines={1}>
+                          {event.full_name}
                         </Text>
-                      </View>
-                      <View style={styles.eventDateBadge}>
-                        <Text style={styles.eventDateText}>{event.date}</Text>
+                        <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
+                          <Ionicons 
+                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"} 
+                            size={12} 
+                            color={theme.textSub} 
+                          />
+                          <Text style={[styles.eventType, { color: theme.textSub, fontSize: 10, marginLeft: 4 }]}>
+                            {event.type === 'birthday' ? 'Birthday' : 'Anniversary'}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                    <Text style={[styles.eventName, { color: theme.textMain }]} numberOfLines={2}>
-                      {event.name}
-                    </Text>
-                  </View>
-                ))
+                  );
+                })
+              ) : (
+                // Hardcoded events if none from backend - Improved design
+                [
+                  { name: 'Ananya Vishnoi', date: '2023-12-20', type: 'birthday' as const },
+                  { name: 'Kriti Kharbanda', date: '2023-12-26', type: 'birthday' as const },
+                  { name: 'Anup Khanna', date: '2024-01-13', type: 'anniversary' as const, years: 3 },
+                ].map((event, index) => {
+                  const formattedDate = formatEventDate(event.date);
+                  return (
+                    <View key={index} style={styles.eventItem}>
+                      <View style={[styles.eventCard, { backgroundColor: 'transparent' }]}>
+                        <View style={styles.eventAvatarWrapper}>
+                          <View style={[
+                            styles.eventAvatar,
+                            { 
+                              backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : currentColors.primaryBlue,
+                              width: 70,
+                              height: 70,
+                            }
+                          ]}>
+                            <Text style={[styles.eventAvatarInitials, { fontSize: 20 }]}>
+                              {getInitials(event.name)}
+                            </Text>
+                          </View>
+                          
+                          <View style={[
+                            styles.eventDateBadge,
+                            { 
+                              top: -5,
+                              right: -5,
+                              backgroundColor: theme.cardBg,
+                              paddingHorizontal: 6,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }
+                          ]}>
+                            <Text style={[styles.eventDateDay, { fontSize: 12 }]}>{formattedDate.day}</Text>
+                            <Text style={[styles.eventDateMonth, { fontSize: 9 }]}>{formattedDate.month}</Text>
+                          </View>
+                          
+                          {event.type === 'anniversary' && (
+                            <View style={[
+                              styles.anniversaryBadge,
+                              { 
+                                bottom: -5,
+                                left: -5,
+                              }
+                            ]}>
+                              <Text style={[styles.anniversaryText, { fontSize: 9 }]}>
+                                {formatAnniversaryYears(event.years || 1)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        
+                        <Text style={[styles.eventName, { color: theme.textMain, fontSize: 12, marginTop: 8 }]} numberOfLines={1}>
+                          {event.name}
+                        </Text>
+                        <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
+                          <Ionicons 
+                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"} 
+                            size={12} 
+                            color={theme.textSub} 
+                          />
+                          <Text style={[styles.eventType, { color: theme.textSub, fontSize: 10, marginLeft: 4 }]}>
+                            {event.type === 'birthday' ? 'Birthday' : 'Anniversary'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
               )}
             </ScrollView>
           </View>
 
-          {/* Horizontal Light Switch Theme Switcher */}
+          {/* Theme Switcher */}
           <View style={styles.themeSwitcher}>
             <TouchableOpacity
-              style={[styles.lightSwitch, { backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0' }]}
+              style={[styles.lightSwitch, { 
+                backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0',
+                width: screenWidth * 0.43,
+              }]}
               onPress={handleThemeToggle}
               activeOpacity={0.8}
             >
@@ -1092,24 +1355,38 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
                     {
                       backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
                       transform: [{ translateX: switchTranslate }],
+                      shadowColor: isDark ? '#000' : '#666',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 3,
+                      elevation: 3,
                     },
                   ]}
                 >
-                  <View style={styles.switchNotch} />
+                  <View style={[
+                    styles.switchNotch,
+                    { backgroundColor: isDark ? '#6b7cff' : '#ffa500' }
+                  ]} />
                 </Animated.View>
               </View>
               
-              <View style={styles.switchIcons}>
-                <Ionicons 
-                  name="sunny" 
-                  size={22} 
-                  color={isDark ? '#666' : '#ffa500'} 
-                />
-                <Ionicons 
-                  name="moon" 
-                  size={22} 
-                  color={isDark ? '#6b7cff' : '#999'} 
-                />
+              <View style={[styles.switchIcons, { width: '100%' }]}>
+                <View style={[styles.switchIconContainer, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons 
+                    name="sunny" 
+                    size={22} 
+                    color={isDark ? '#666' : '#ffa500'} 
+                    style={{ alignSelf: 'center' }}
+                  />
+                </View>
+                <View style={[styles.switchIconContainer, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons 
+                    name="moon" 
+                    size={22} 
+                    color={isDark ? '#6b7cff' : '#999'} 
+                    style={{ alignSelf: 'center' }}
+                  />
+                </View>
               </View>
             </TouchableOpacity>
           </View>
@@ -1120,36 +1397,74 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
             <Text style={styles.footerText}>Made with ❤️</Text>
           </View>
         </ScrollView>
+      </View>
 
-        {/* Bottom Navigation */}
-        <View style={[styles.bottomNav, { backgroundColor: theme.navBg }]}>
-          {[
-            { icon: 'home', label: 'Home' },
-            { icon: 'chatbubbles', label: 'Message' },
-            { icon: 'person', label: 'HR' },
-            { icon: 'headset', label: 'Support' },
-          ].map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.navItem}
-              onPress={() => handleNavItemPress(item.label.toLowerCase())}
-            >
-              {activeNavItem === item.label.toLowerCase() && (
-                <View style={styles.floatingCircle}>
-                  <Ionicons name={item.icon as any} size={22} color="white" />
-                </View>
-              )}
-              {activeNavItem !== item.label.toLowerCase() && (
-                <>
-                  <Ionicons name={item.icon as any} size={20} color="#999" />
-                  <Text style={styles.navLabel}>{item.label}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+      {/* Updated Bottom Bar */}
+      <View style={[styles.bottomNavContainer, { backgroundColor: 'transparent' }]}>
+        <LinearGradient
+          colors={['transparent', 'rgba(0, 0, 0, 0.1)']}
+          style={styles.bottomNavGradient}
+        >
+          <View style={[styles.bottomNav, { 
+            backgroundColor: theme.navBg,
+            borderTopLeftRadius: 25,
+            borderTopRightRadius: 25,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -5 },
+            shadowOpacity: 0.1,
+            shadowRadius: 20,
+            elevation: 10,
+          }]}>
+            {[
+              { icon: 'home', label: 'Home' },
+              { icon: 'chatbubbles', label: 'Message' },
+              { icon: 'people', label: 'HR' },
+              { icon: 'headset', label: 'Support' },
+            ].map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.navItem}
+                onPress={() => handleNavItemPress(item.label.toLowerCase())}
+                activeOpacity={0.7}
+              >
+                {activeNavItem === item.label.toLowerCase() ? (
+                  <LinearGradient
+                    colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+                    style={styles.floatingCircle}
+                  >
+                    <Ionicons 
+                      name={item.icon as any} 
+                      size={22} 
+                      color="white" 
+                    />
+                  </LinearGradient>
+                ) : (
+                  <>
+                    <Ionicons 
+                      name={item.icon as any} 
+                      size={20} 
+                      color={theme.textSub} 
+                    />
+                    <Text style={[styles.navLabel, { color: theme.textSub }]}>
+                      {item.label}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </LinearGradient>
       </View>
     </SafeAreaView>
+  );
+}
+
+// Main Export with SafeAreaProvider
+export default function CitadelDashboard({ onLogout }: { onLogout: () => void }) {
+  return (
+    <SafeAreaProvider>
+      <DashboardContent onLogout={onLogout} />
+    </SafeAreaProvider>
   );
 }
 
@@ -1165,7 +1480,7 @@ const getModuleColor = (moduleName: string): string => {
     case 'bdt':
       return '#1da1f2';
     default:
-      return '#3262f1';
+      return '#007AFF';
   }
 };
 
@@ -1199,32 +1514,27 @@ const HamburgerMenu = ({
         ]}>
           <View style={[styles.menuHeader, { backgroundColor: currentColors.headerBg }]}>
             <View style={styles.menuHeaderContent}>
-              <TouchableOpacity onPress={() => {
-                onClose();
-                // Navigate to profile
-              }}>
-                {userData?.profile_picture ? (
-                  <Image 
-                    source={{ uri: userData.profile_picture }} 
-                    style={styles.menuUserAvatar}
-                  />
-                ) : (
-                  <View style={[styles.menuUserAvatarCircle, { backgroundColor: currentColors.info }]}>
-                    <Text style={styles.menuUserAvatarText}>
-                      {userData?.full_name ? 
-                        userData.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 
-                        'U'
-                      }
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              {userData?.profile_picture ? (
+                <Image 
+                  source={{ uri: userData.profile_picture }} 
+                  style={styles.menuUserAvatar}
+                />
+              ) : (
+                <View style={[styles.menuUserAvatarCircle, { backgroundColor: currentColors.info }]}>
+                  <Text style={styles.menuUserAvatarText}>
+                    {userData?.full_name ? 
+                      userData.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 
+                      'U'
+                    }
+                  </Text>
+                </View>
+              )}
               <View style={styles.menuUserDetails}>
-                <Text style={[styles.menuUserRole, { color: currentColors.textLight }]}>
-                  {userData?.designation || userData?.role || 'Employee'}
-                </Text>
                 <Text style={[styles.menuUserName, { color: currentColors.white }]}>
                   {userData?.full_name || 'User'}
+                </Text>
+                <Text style={[styles.menuUserRole, { color: currentColors.textLight }]}>
+                  {userData?.designation || userData?.role || 'Employee'}
                 </Text>
               </View>
             </View>
@@ -1247,18 +1557,11 @@ const HamburgerMenu = ({
                 activeOpacity={0.7}
               >
                 <View style={styles.menuItemIconContainer}>
-                  <Text style={{ fontSize: 20 }}>{item.icon === 'user' ? '👤' : 
-                    item.icon === 'edit' ? '✏️' : 
-                    item.icon === 'car' ? '🚗' : 
-                    item.icon === 'map' ? '🗺️' : 
-                    item.icon === 'wallet' ? '💳' : 
-                    item.icon === 'help' ? '❓' : 
-                    item.icon === 'notification' ? '🔔' : 
-                    item.icon === 'shield' ? '🛡️' : 
-                    item.icon === 'settings' ? '⚙️' : 
-                    item.icon === 'users' ? '👥' : 
-                    item.icon === 'star' ? '⭐' : 
-                    item.icon === 'credit-card' ? '💳' : '📱'}</Text>
+                  <Ionicons 
+                    name={item.icon as any} 
+                    size={22} 
+                    color={activeMenuItem === item.title ? currentColors.info : currentColors.textSecondary}
+                  />
                 </View>
                 <Text style={[
                   styles.menuItemText,
@@ -1276,7 +1579,7 @@ const HamburgerMenu = ({
               activeOpacity={0.7}
             >
               <View style={styles.logoutIconContainer}>
-                <Text style={{ fontSize: 20, color: currentColors.error }}>🚪</Text>
+                <Ionicons name="log-out-outline" size={22} color={currentColors.error} />
               </View>
               <Text style={[styles.logoutButtonText, { color: currentColors.error }]}>Logout</Text>
             </TouchableOpacity>
@@ -1288,51 +1591,135 @@ const HamburgerMenu = ({
 };
 
 // All Modules Modal Component
-const AllModulesModal = ({ isVisible, onClose, modules, onModulePress, theme }: any) => {
+const AllModulesModal = ({ 
+  isVisible, 
+  onClose, 
+  modules, 
+  searchQuery, 
+  onSearchChange, 
+  onModulePress, 
+  theme, 
+  currentColors 
+}: any) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const numColumns = screenWidth > 400 ? 4 : 3;
+  const itemWidth = (screenWidth - 48) / numColumns;
+
   return (
     <Modal
       animationType="slide"
-      transparent={true}
+      transparent={false}
       visible={isVisible}
       onRequestClose={onClose}
+      statusBarTranslucent={true}
     >
       <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.bgColor }]}>
-        <View style={styles.modalHeader}>
-          <Text style={[styles.modalTitle, { color: theme.textMain }]}>All Modules</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color={theme.accentBlue} />
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={styles.modalContent}>
-          <View style={styles.allModulesGrid}>
-            {modules.map((module: any, index: number) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.moduleItemModal,
-                  { backgroundColor: theme.cardBg }
-                ]}
-                onPress={() => {
-                  onModulePress(module.title, module.module_unique_name);
-                  onClose();
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.moduleIconContainerModal,
-                  { backgroundColor: theme.bgColor }
-                ]}>
-                  <Image 
-                    source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} 
-                    style={styles.moduleIconImageModal}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={[styles.moduleTitleModal, { color: theme.textMain }]} numberOfLines={2}>
-                  {module.title}
-                </Text>
+        <LinearGradient
+          colors={[currentColors.headerBg, currentColors.headerBg]}
+          style={styles.modalHeaderGradient}
+        >
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderLeft}>
+              <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
+                <Ionicons name="arrow-back" size={24} color="white" />
               </TouchableOpacity>
-            ))}
+              <Text style={styles.modalTitle}>All Modules</Text>
+            </View>
+            <Text style={styles.modalSubtitle}>{modules.length} Available</Text>
+          </View>
+          
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
+              <Ionicons name="search" size={20} color="rgba(255, 255, 255, 0.7)" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search modules..."
+                placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                value={searchQuery}
+                onChangeText={onSearchChange}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => onSearchChange('')}>
+                  <Ionicons name="close-circle" size={20} color="rgba(255, 255, 255, 0.7)" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </LinearGradient>
+        
+        <ScrollView 
+          style={styles.modalContent}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.modalContentContainer,
+            { paddingBottom: Platform.OS === 'ios' ? 100 : 80 }
+          ]}
+        >
+          {modules.length === 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Ionicons name="search-outline" size={60} color={theme.textSub} />
+              <Text style={[styles.noResultsText, { color: theme.textMain }]}>
+                No modules found
+              </Text>
+              <Text style={[styles.noResultsSubtext, { color: theme.textSub }]}>
+                Try searching with different keywords
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.allModulesGrid}>
+              {modules.map((module: any, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.moduleItemModal,
+                    { 
+                      backgroundColor: theme.cardBg,
+                      width: itemWidth,
+                      marginBottom: 16,
+                      marginHorizontal: (screenWidth - (itemWidth * numColumns) - 32) / (numColumns * 2),
+                    }
+                  ]}
+                  onPress={() => {
+                    onModulePress(module.title, module.module_unique_name);
+                    onClose();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[currentColors.gradientStart + '20', currentColors.gradientEnd + '20']}
+                    style={styles.moduleIconContainerModal}
+                  >
+                    <Image 
+                      source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} 
+                      style={styles.moduleIconImageModal}
+                      resizeMode="contain"
+                    />
+                  </LinearGradient>
+                  <Text style={[styles.moduleTitleModal, { color: theme.textMain }]} numberOfLines={2}>
+                    {module.title}
+                  </Text>
+                  <View style={styles.moduleArrowContainer}>
+                    <Ionicons 
+                      name="arrow-up" 
+                      size={16} 
+                      color={currentColors.primaryBlue} 
+                      style={{ transform: [{ rotate: '45deg' }] }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          
+          {/* Decorative Footer */}
+          <View style={styles.modalFooter}>
+            <LinearGradient
+              colors={['transparent', currentColors.gradientStart + '20']}
+              style={styles.modalFooterGradient}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1341,6 +1728,10 @@ const AllModulesModal = ({ isVisible, onClose, modules, onModulePress, theme }: 
 };
 
 const styles = StyleSheet.create({
+  safeContainer: {
+    flex: 1,
+    backgroundColor: '#000D24',
+  },
   container: {
     flex: 1,
   },
@@ -1371,9 +1762,9 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   headerBanner: {
-    height: 220,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    height: 180,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -1383,17 +1774,19 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   headerContent: {
-    padding: 30,
-    paddingTop: 50,
+    padding: 20,
   },
   topNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
   },
   menuButton: {
     padding: 8,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   menuLine: {
     width: 24,
@@ -1403,31 +1796,30 @@ const styles = StyleSheet.create({
   },
   logoText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
   },
   headerSpacer: {
-    width: 36,
+    width: 40,
   },
   welcomeText: {
     color: 'white',
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '700',
-    marginTop: 20,
   },
   employeeText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 12,
     opacity: 0.8,
-    marginTop: 5,
+    marginTop: 2,
   },
   profileCard: {
     marginHorizontal: 20,
-    marginTop: 18,
-    marginBottom: 20,
-    padding: 20,
-    borderRadius: 20,
+    marginTop: 15,
+    marginBottom: 15,
+    padding: 16,
+    borderRadius: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1438,12 +1830,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   userName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   userRole: {
-    fontSize: 10,
+    fontSize: 9,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -1451,6 +1843,8 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#007AFF',
   },
   profileImagePlaceholder: {
     width: 50,
@@ -1458,6 +1852,8 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#007AFF',
   },
   profileInitials: {
     color: 'white',
@@ -1466,9 +1862,9 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 20,
-    borderRadius: 20,
+    marginBottom: 15,
+    padding: 16,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -1479,30 +1875,38 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 15,
+    marginBottom: 12,
+    fontWeight: '600',
   },
   iconGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   iconItem: {
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 8,
   },
   iconBox: {
-    width: 55,
-    height: 55,
+    width: 50,
+    height: 50,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   iconImage: {
-    width: 30,
-    height: 30,
+    width: 25,
+    height: 25,
   },
   iconLabel: {
-    fontSize: 11,
+    fontSize: 10,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   reminderCard: {
     flexDirection: 'row',
@@ -1515,121 +1919,153 @@ const styles = StyleSheet.create({
   },
   reminderBorder: {
     width: 4,
-    backgroundColor: '#1da1f2',
     borderRadius: 2,
-    marginRight: 15,
+    marginRight: 12,
   },
   reminderText: {
     flex: 1,
   },
   reminderTitle: {
     fontWeight: '600',
-    fontSize: 16,
-    marginBottom: 10,
+    fontSize: 14,
+    marginBottom: 8,
   },
   reminderTime: {
-    fontSize: 12,
+    fontSize: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   calendarIcon: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
   },
   calendarDate: {
     fontWeight: 'bold',
-    fontSize: 14,
-    color: '#1da1f2',
-    marginTop: -25,
+    fontSize: 12,
+    marginTop: -20,
   },
   moduleGrid: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 15,
     flexDirection: 'row',
-    height: 295,
-    gap: 15,
+    height: 250,
+    gap: 12,
   },
   moduleAttendance: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
   },
   moduleColumn: {
     flex: 1,
-    gap: 15,
+    gap: 12,
   },
   moduleSmall: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
   },
   moduleGradient: {
     flex: 1,
-    padding: 25,
+    padding: 20,
     justifyContent: 'space-between',
   },
   moduleArrow: {
     position: 'absolute',
-    top: 20,
-    right: 20,
+    top: 15,
+    right: 15,
   },
   moduleIconCircle: {
-    width: 50,
-    height: 50,
+    width: 45,
+    height: 45,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 25,
+    borderRadius: 22.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   moduleTitle: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   viewAllContainer: {
+    marginBottom: 15,
+  },
+  viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 15,
-    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   viewAllText: {
     fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
+    marginRight: 8,
   },
   chevronGroup: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
   statsContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 20,
   },
   chartContainer: {
     flexDirection: 'row',
-    height: 100,
+    height: 90,
     alignItems: 'flex-end',
-    gap: 8,
     flex: 1,
   },
   chartBar: {
-    flex: 1,
     alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  chartDay: {
+    marginBottom: 4,
+    fontWeight: '500',
   },
   barWrapper: {
-    width: '100%',
+    width: 10,
     justifyContent: 'flex-end',
     position: 'relative',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginHorizontal: 2,
   },
   hoursBar: {
     width: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
     position: 'absolute',
     bottom: 0,
   },
   targetBar: {
     width: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
     position: 'absolute',
     bottom: 0,
   },
@@ -1637,97 +2073,115 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   statsValue: {
-    fontSize: 29,
+    fontSize: 24,
     fontWeight: '700',
   },
   statsLabel: {
-    fontSize: 11,
+    fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 2,
+    fontWeight: '500',
   },
   eventsScroll: {
     marginHorizontal: -5,
   },
+  eventsScrollContent: {
+    paddingHorizontal: 5,
+  },
   eventItem: {
+    marginHorizontal: 8,
+    width: 100,
+  },
+  eventCard: {
     alignItems: 'center',
-    marginHorizontal: 10,
-    width: 90,
   },
   eventAvatarWrapper: {
     position: 'relative',
-    marginBottom: 10,
-  },
-  eventAvatar: {
+    marginBottom: 0,
     width: 80,
     height: 80,
-    borderRadius: 40,
-  },
-  eventAvatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  eventAvatar: {
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
   eventAvatarInitials: {
     color: 'white',
-    fontSize: 24,
     fontWeight: 'bold',
   },
   eventDateBadge: {
     position: 'absolute',
-    top: -5,
-    left: '50%',
-    transform: [{ translateX: -25 }],
-    backgroundColor: '#ff5e7a',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#ff5e7a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
+  },
+  eventDateDay: {
+    color: '#FF5E7A',
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  eventDateMonth: {
+    color: '#666666',
+    fontWeight: '600',
+    lineHeight: 11,
+  },
+  eventDateYear: {
+    color: '#8B5CF6',
+    fontSize: 8,
+    fontWeight: '600',
+    marginTop: 2,
   },
   anniversaryBadge: {
     position: 'absolute',
-    top: -5,
-    right: -10,
     backgroundColor: '#FCD34D',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   anniversaryText: {
     color: '#78350F',
-    fontSize: 10,
     fontWeight: '700',
   },
-  eventDateText: {
-    color: 'white',
-    fontSize: 9,
-    fontWeight: '600',
-  },
   eventName: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 14,
+  },
+  eventTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   eventType: {
-    fontSize: 10,
     textAlign: 'center',
-    marginTop: 2,
+    fontWeight: '500',
   },
   themeSwitcher: {
     alignItems: 'center',
-    marginVertical: 30,
+    marginVertical: 25,
+    paddingHorizontal: 20,
   },
   lightSwitch: {
-    width: 160,
-    height: 70,
-    borderRadius: 35,
-    padding: 8,
+    height: 56,
+    borderRadius: 28,
+    padding: 6,
     position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1738,92 +2192,95 @@ const styles = StyleSheet.create({
   },
   switchTrack: {
     position: 'absolute',
-    left: 8,
-    top: 8,
-    right: 8,
-    bottom: 8,
+    left: 6,
+    top: 6,
+    right: 6,
+    bottom: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
   },
   switchToggleButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
   },
   switchNotch: {
-    width: 4,
-    height: 30,
-    borderRadius: 2,
+    width: 0,
+    borderRadius: 3,
   },
   switchIcons: {
     position: 'absolute',
-    width: '100%',
     height: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
+  },
+  switchIconContainer: {
+    width: 44,
+    height: 44,
+    paddingLeft:20,
   },
   footer: {
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingBottom: 30,
+    paddingTop: 15,
   },
   footerLogo: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     letterSpacing: 5,
     color: '#a9a9a9b6',
+    marginBottom: 5,
   },
   footerText: {
     fontSize: 10,
-    marginTop: 5,
+    color: '#666',
   },
-  bottomNav: {
+  bottomNavContainer: {
     position: 'absolute',
     bottom: 0,
-    width: '100%',
-    height: 70,
+    left: 0,
+    right: 0,
+  },
+  bottomNavGradient: {
+    height: 75,
+    justifyContent: 'flex-end',
+  },
+  bottomNav: {
+    height: 65,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    paddingHorizontal: 20,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
+    position: 'relative',
   },
   floatingCircle: {
     position: 'absolute',
-    top: -22,
-    width: 60,
-    height: 60,
-    backgroundColor: '#007bff',
-    borderRadius: 30,
+    top: -20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#007bff',
+    shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
     elevation: 8,
   },
   navLabel: {
-    fontSize: 11,
-    color: '#999',
-    marginTop: 5,
+    fontSize: 10,
+    marginTop: 4,
+    fontWeight: '500',
   },
   // Hamburger Menu Styles
   overlay: {
@@ -1845,7 +2302,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   menuHeader: {
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 24,
   },
   menuHeaderContent: {
@@ -1920,6 +2377,7 @@ const styles = StyleSheet.create({
   },
   logoutSection: {
     paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
   },
   logoutDivider: {
     height: 1,
@@ -1949,55 +2407,125 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
   },
+  modalHeaderGradient: {
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    paddingBottom: 20,
+  },
   modalHeader: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 20,
+  },
+  modalHeaderLeft: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 10,
+  },
+  modalBackButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: 'bold',
+    color: 'white',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  searchContainer: {
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  searchInput: {
+    flex: 1,
+    color: 'white',
+    fontSize: 16,
+    marginLeft: 10,
+    padding: 0,
   },
   modalContent: {
     flex: 1,
+  },
+  modalContentContainer: {
     padding: 16,
   },
   allModulesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
+    justifyContent: 'flex-start',
+    gap: 10,
   },
   moduleItemModal: {
-    width: '48%',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+    width: 150,
+    position: 'relative',
   },
   moduleIconContainerModal: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
+    width: 70,
+    height: 70,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   moduleIconImageModal: {
-    width: 40,
-    height: 40,
+    width: 35,
+    height: 35,
   },
   moduleTitleModal: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  moduleArrowContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+  },
+  modalFooter: {
+    height: 50,
+    marginTop: 20,
+  },
+  modalFooterGradient: {
+    height: '100%',
+    borderRadius: 25,
+  },
+  noResultsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  noResultsText: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  noResultsSubtext: {
+    fontSize: 14,
     textAlign: 'center',
   },
 });
