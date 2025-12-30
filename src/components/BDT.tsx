@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Alert, Modal, TextInput, FlatList, Dimensions, ActivityIndicator
+  StatusBar, Alert, Modal, TextInput, FlatList, Dimensions, ActivityIndicator,
+  Image
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
@@ -220,6 +221,73 @@ interface CreateInvoiceResponse {
   invoice: any;
 }
 
+// Theme colors - UPDATED with your specific colors
+const lightTheme = {
+  primary: '#007AFF',
+  primaryBlue: '#007AFF',
+  background: '#f5f7fa',
+  backgroundSecondary: '#FFFFFF',
+  cardBg: '#FFFFFF',
+  text: '#1A1A1A',
+  textSecondary: '#666666',
+  textLight: '#999999',
+  border: '#E5E7EB',
+  white: '#FFFFFF',
+  gray: '#6B7280',
+  info: '#3B82F6',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  moduleColors: {
+    bdt: '#1da1f2',
+    hr: '#00d285',
+    cab: '#ff5e7a',
+    attendance: '#ffb157',
+  },
+  headerBg: '#0a1128',
+  gradientStart: '#007AFF',
+  gradientEnd: '#0056CC',
+  // NEW: Lead status colors for light mode
+  leadStatusColors: {
+    active: '#00D492',
+    pending: '#F59E0B',
+    cold: '#FF637F',
+  }
+};
+
+const darkTheme = {
+  primary: '#1C5CFB',
+  primaryBlue: '#1C5CFB',
+  background: '#050b18',
+  backgroundSecondary: '#111a2d',
+  cardBg: '#111a2d',
+  text: '#FFFFFF',
+  textSecondary: '#CCCCCC',
+  textLight: '#999999',
+  border: '#404040',
+  white: '#111a2d',
+  gray: '#4B5563',
+  info: '#3B82F6',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  moduleColors: {
+    bdt: '#1C5CFB',
+    hr: '#00A73A',
+    cab: '#FE395C',
+    attendance: '#FAAB21',
+  },
+  headerBg: '#0a1128',
+  gradientStart: '#1C5CFB',
+  gradientEnd: '#0F3FD9',
+  // NEW: Lead status colors for dark mode
+  leadStatusColors: {
+    active: '#007AFF',
+    pending: '#FFBB64',
+    cold: '#FF637F',
+  }
+};
+
 const beautifyName = (name: string): string => {
   return name
     .split('_')
@@ -236,6 +304,21 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
   visible, onClose, options, onSelect, title, searchable = false 
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  useEffect(() => {
+    const checkDarkMode = async () => {
+      try {
+        const darkMode = await AsyncStorage.getItem('dark_mode');
+        setIsDarkMode(darkMode === 'true');
+      } catch (error) {
+        console.error('Error checking dark mode:', error);
+      }
+    };
+    checkDarkMode();
+  }, []);
+  
+  const theme = isDarkMode ? darkTheme : lightTheme;
   
   const filteredOptions = searchable 
     ? options.filter(option => option.label.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -243,18 +326,22 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.dropdownContainer}>
-            <Text style={styles.dropdownTitle}>{title}</Text>
+          <View style={[styles.dropdownContainer, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.dropdownTitle, { color: theme.text }]}>{title}</Text>
             {searchable && (
               <View style={styles.searchContainer}>
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { 
+                    backgroundColor: theme.backgroundSecondary,
+                    color: theme.text,
+                    borderColor: theme.border
+                  }]}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder="Search..."
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={theme.textSecondary}
                 />
               </View>
             )}
@@ -265,15 +352,15 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
               style={styles.dropdownList}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.dropdownItem}
+                  style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
                   onPress={() => { onSelect(item.value); onClose(); }}
                 >
-                  <Text style={styles.dropdownItemText}>{item.label}</Text>
+                  <Text style={[styles.dropdownItemText, { color: theme.text }]}>{item.label}</Text>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={() => (
                 <View style={styles.emptyDropdown}>
-                  <Text style={styles.emptyDropdownText}>No options found</Text>
+                  <Text style={[styles.emptyDropdownText, { color: theme.textSecondary }]}>No options found</Text>
                 </View>
               )}
             />
@@ -306,18 +393,23 @@ const InvoiceForm: React.FC<{
   });
   const [loiDocument, setLoiDocument] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     const getToken = async () => {
       try {
         const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
         setToken(API_TOKEN);
+        const darkMode = await AsyncStorage.getItem('dark_mode');
+        setIsDarkMode(darkMode === 'true');
       } catch (error) {
         console.error('Error getting token:', error);
       }
     };
     getToken();
   }, []);
+
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handleAttachLOI = async (): Promise<void> => {
     try {
@@ -449,50 +541,65 @@ const InvoiceForm: React.FC<{
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCancel}>
-      <SafeAreaView style={styles.invoiceModalContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+      <SafeAreaView style={[styles.invoiceModalContainer, { backgroundColor: theme.background }]}>
+        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme.background} />
         
-        <View style={styles.invoiceHeader}>
+        <View style={[styles.invoiceHeader, { 
+          backgroundColor: theme.cardBg,
+          borderBottomColor: theme.border 
+        }]}>
           <TouchableOpacity style={styles.invoiceBackButton} onPress={handleCancel}>
-            <Text style={styles.invoiceBackButtonText}>Cancel</Text>
+            <Text style={[styles.invoiceBackButtonText, { color: theme.error }]}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.invoiceHeaderTitle}>Create Invoice</Text>
+          <Text style={[styles.invoiceHeaderTitle, { color: theme.text }]}>Create Invoice</Text>
           <TouchableOpacity 
-            style={[styles.invoiceSaveButton, loading && styles.invoiceSaveButtonDisabled]} 
+            style={[
+              styles.invoiceSaveButton, 
+              loading && styles.invoiceSaveButtonDisabled,
+              { backgroundColor: theme.primary }
+            ]} 
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={colors.white} size="small" />
+              <ActivityIndicator color={theme.white} size="small" />
             ) : (
-              <Text style={styles.invoiceSaveButtonText}>Save</Text>
+              <Text style={[styles.invoiceSaveButtonText, { color: theme.white }]}>Save</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.invoiceScrollView} showsVerticalScrollIndicator={false}>
-          <View style={styles.invoiceFormCard}>
-            <Text style={styles.invoiceFormTitle}>Invoice Details for {leadName}</Text>
+        <ScrollView style={[styles.invoiceScrollView, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
+          <View style={[styles.invoiceFormCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.invoiceFormTitle, { color: theme.primary }]}>Invoice Details for {leadName}</Text>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vendor Name *</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Vendor Name *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.vendor_name}
                 onChangeText={(value) => handleInputChange('vendor_name', value)}
                 placeholder="Enter vendor name"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vendor Address</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Vendor Address</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.vendor_address}
                 onChangeText={(value) => handleInputChange('vendor_address', value)}
                 placeholder="Enter vendor address"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
@@ -500,20 +607,27 @@ const InvoiceForm: React.FC<{
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vendor GST/PAN *</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Vendor GST/PAN *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.vendor_gst_or_pan}
                 onChangeText={(value) => handleInputChange('vendor_gst_or_pan', value)}
                 placeholder="Enter GST or PAN number"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>LOI or Sale Deed (if any)</Text>
-              <TouchableOpacity style={styles.fileUploadButton} onPress={handleAttachLOI}>
-                <Text style={styles.fileUploadButtonText}>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>LOI or Sale Deed (if any)</Text>
+              <TouchableOpacity style={[styles.fileUploadButton, { 
+                borderColor: theme.info,
+                backgroundColor: theme.info + '10'
+              }]} onPress={handleAttachLOI}>
+                <Text style={[styles.fileUploadButtonText, { color: theme.info }]}>
                   {loiDocument ? `📎 ${loiDocument.name}` : '📎 Attach LOI/Sale Deed'}
                 </Text>
               </TouchableOpacity>
@@ -522,19 +636,23 @@ const InvoiceForm: React.FC<{
                   style={styles.removeFileButton}
                   onPress={() => setLoiDocument(null)}
                 >
-                  <Text style={styles.removeFileButtonText}>Remove File</Text>
+                  <Text style={[styles.removeFileButtonText, { color: theme.error }]}>Remove File</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Billing Area & Rs. Per Sft. / No. days or Month *</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Billing Area & Rs. Per Sft. / No. days or Month *</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.billing_area}
                 onChangeText={(value) => handleInputChange('billing_area', value)}
                 placeholder="Enter billing area details"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
                 multiline
                 numberOfLines={2}
                 textAlignVertical="top"
@@ -542,48 +660,64 @@ const InvoiceForm: React.FC<{
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Car Parking / Terrace Rent (if any)</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Car Parking / Terrace Rent (if any)</Text>
               <View style={styles.rowInputs}>
                 <View style={styles.halfInput}>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { 
+                      backgroundColor: theme.white,
+                      borderColor: theme.border,
+                      color: theme.text
+                    }]}
                     value={formData.car_parking}
                     onChangeText={(value) => handleInputChange('car_parking', value)}
                     placeholder="Car Parking"
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor={theme.textSecondary}
                   />
                 </View>
                 <View style={styles.halfInput}>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { 
+                      backgroundColor: theme.white,
+                      borderColor: theme.border,
+                      color: theme.text
+                    }]}
                     value={formData.terrace_rent}
                     onChangeText={(value) => handleInputChange('terrace_rent', value)}
                     placeholder="Terrace Rent"
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor={theme.textSecondary}
                   />
                 </View>
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Property Type (SEZ / Non SEZ) *</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Property Type (SEZ / Non SEZ) *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.property_type}
                 onChangeText={(value) => handleInputChange('property_type', value)}
                 placeholder="Enter property type"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>If any particular matter to mention in narration</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>If any particular matter to mention in narration</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.particular_matter_to_mention}
                 onChangeText={(value) => handleInputChange('particular_matter_to_mention', value)}
                 placeholder="Enter any additional information"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
@@ -591,17 +725,21 @@ const InvoiceForm: React.FC<{
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Ref. Executive Name to mention</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Ref. Executive Name to mention</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={formData.executive_name}
                 onChangeText={(value) => handleInputChange('executive_name', value)}
                 placeholder="Enter executive name"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
               />
             </View>
 
-            <Text style={styles.requiredNote}>* Required fields</Text>
+            <Text style={[styles.requiredNote, { color: theme.error }]}>* Required fields</Text>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -622,6 +760,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -683,6 +822,28 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     { value: 'subphase', label: 'Filter by Subphase' }
   ];
 
+  const tabs = [
+    { id: 'all', label: 'All leads (10,007)' },
+    { id: 'nurtured', label: 'Nurtured' },
+    { id: 'engaged', label: 'Engaged' },
+    { id: 'ready-to-inspect', label: 'Ready to inspect' },
+  ];
+  const [activeTab, setActiveTab] = useState('all');
+
+  const theme = isDarkMode ? darkTheme : lightTheme;
+
+  useEffect(() => {
+    const checkDarkMode = async () => {
+      try {
+        const darkMode = await AsyncStorage.getItem('dark_mode');
+        setIsDarkMode(darkMode === 'true');
+      } catch (error) {
+        console.error('Error checking dark mode:', error);
+      }
+    };
+    checkDarkMode();
+  }, []);
+
   useEffect(() => {
     if (token) {
       fetchLeads(1);
@@ -701,6 +862,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     };
     getToken();
   }, []);
+
+  const toggleDarkMode = async () => {
+    const newDarkMode = !isDarkMode;
+    setIsDarkMode(newDarkMode);
+    await AsyncStorage.setItem('dark_mode', newDarkMode.toString());
+  };
 
   const fetchPotentialCollaborators = async (query: string): Promise<void> => {
     if (!query.trim() || !token) {
@@ -1490,17 +1657,60 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     });
   };
 
-  const getStatusColor = (status: string): string => {
+  // UPDATED: Get lead card background color based on status
+  const getLeadCardBackgroundColor = (status: string): string => {
+    const statusColor = theme.leadStatusColors;
+    
     switch (status) {
-      case 'active': return colors.success;
-      case 'hold': return colors.warning;
-      case 'mandate': return colors.info;
-      case 'closed': return colors.error;
-      case 'no-requirement': return colors.gray;
-      case 'transaction-complete': return colors.primary;
-      case 'non-responsive': return colors.textSecondary;
-      default: return colors.textSecondary;
+      case 'active':
+      case 'transaction-complete':
+        return isDarkMode ? 
+          `rgba(${hexToRgb(statusColor.active)}, 0.15)` : 
+          `rgba(${hexToRgb(statusColor.active)}, 0.08)`;
+      case 'hold':
+      case 'mandate':
+        return isDarkMode ? 
+          `rgba(${hexToRgb(statusColor.pending)}, 0.15)` : 
+          `rgba(${hexToRgb(statusColor.pending)}, 0.08)`;
+      case 'no-requirement':
+      case 'closed':
+      case 'non-responsive':
+        return isDarkMode ? 
+          `rgba(${hexToRgb(statusColor.cold)}, 0.15)` : 
+          `rgba(${hexToRgb(statusColor.cold)}, 0.08)`;
+      default:
+        return isDarkMode ? 
+          'rgba(255, 255, 255, 0.05)' : 
+          'rgba(0, 0, 0, 0.02)';
     }
+  };
+
+  // UPDATED: Get status badge color based on status
+  const getStatusBadgeColor = (status: string): string => {
+    const statusColor = theme.leadStatusColors;
+    
+    switch (status) {
+      case 'active':
+      case 'transaction-complete':
+        return statusColor.active;
+      case 'hold':
+      case 'mandate':
+        return statusColor.pending;
+      case 'no-requirement':
+      case 'closed':
+      case 'non-responsive':
+        return statusColor.cold;
+      default:
+        return theme.textSecondary;
+    }
+  };
+
+  // Helper function to convert hex to rgb
+  const hexToRgb = (hex: string): string => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? 
+      `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : 
+      '0, 0, 0';
   };
 
   const getFilterLabel = (filterKey: string, value: string): string => {
@@ -1559,9 +1769,57 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
+      <Text style={styles.backIconText}>‹</Text>
     </View>
   );
+
+  // Bottom Navigation Component
+  const BottomNavigation = () => {
+    const navItems = [
+      { id: 'home', label: 'Home', icon: '🏠' },
+      { id: 'message', label: 'Message', icon: '💬' },
+      { id: 'hr', label: 'HR', icon: '📮' },
+      { id: 'support', label: 'Support', icon: '👤' },
+    ];
+    const [activeNavItem, setActiveNavItem] = useState('home');
+
+    return (
+      <View style={styles.bottomNavContainer}>
+        <View style={[styles.navBar, { backgroundColor: isDarkMode ? '#0a111f' : '#ffffff' }]}>
+          {navItems.map((item, index) => {
+            const isActive = activeNavItem === item.id;
+            const itemPosition = 12.5 + (index * 25);
+            
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.navItem, isActive && styles.navItemActive]}
+                onPress={() => setActiveNavItem(item.id)}
+              >
+                {isActive && (
+                  <View style={[styles.bulge, { left: `${itemPosition}%` }]} />
+                )}
+                <View style={styles.navItemContent}>
+                  {isActive ? (
+                    <View style={[styles.iconCircle, { backgroundColor: theme.primary }]}>
+                      <Text style={styles.activeNavIcon}>{item.icon}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.navIcon}>{item.icon}</Text>
+                  )}
+                  <Text style={[styles.navLabel, isActive && styles.activeNavLabel, { 
+                    color: isActive ? theme.primary : (isDarkMode ? '#a0a0a0' : '#666666')
+                  }]}>
+                    {item.label}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
 
   if (viewMode === 'incentive' && selectedLead) {
     return (
@@ -1575,10 +1833,10 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   if (viewMode === 'detail' && selectedLead) {
     return (
-      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <SafeAreaView style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.background }]}>
+        <StatusBar barStyle={isDarkMode ? "light-content" : "light-content"} backgroundColor={theme.headerBg} />
 
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackToList}>
             <BackIcon />
           </TouchableOpacity>
@@ -1586,16 +1844,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           <View style={styles.headerActions}>
             {!isEditMode ? (
               <>
-                <TouchableOpacity style={styles.editButton} onPress={() => setIsEditMode(true)}>
-                  <Text style={styles.editButtonText}>Edit</Text>
+                <TouchableOpacity style={[styles.editButton, { backgroundColor: theme.info }]} onPress={() => setIsEditMode(true)}>
+                  <Text style={[styles.editButtonText, { color: theme.white }]}>Edit</Text>
                 </TouchableOpacity>
               </>
             ) : (
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
+              <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.success }]} onPress={handleSave} disabled={loading}>
                 {loading ? (
-                  <ActivityIndicator color={colors.white} size="small" />
+                  <ActivityIndicator color={theme.white} size="small" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  <Text style={[styles.saveButtonText, { color: theme.white }]}>Save</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -1603,134 +1861,151 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         </View>
 
         <ScrollView 
-          style={styles.detailScrollView} 
+          style={[styles.detailScrollView, { backgroundColor: theme.background }]} 
           showsVerticalScrollIndicator={false}
           onScroll={handleCommentsScroll}
           scrollEventThrottle={16}
         >
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
             <View style={styles.leadHeader}>
               <View style={styles.leadInfo}>
                 <View style={styles.leadNameRow}>
-                  <Text style={styles.leadName}>{selectedLead.name}</Text>
-                  <TouchableOpacity style={styles.incentiveIconButton} onPress={handleIncentivePress}>
-                    <Text style={styles.incentiveIconText}>Incentive</Text>
+                  <Text style={[styles.leadName, { color: theme.text }]}>{selectedLead.name}</Text>
+                  <TouchableOpacity style={[styles.incentiveIconButton, { backgroundColor: theme.success }]} onPress={handleIncentivePress}>
+                    <Text style={[styles.incentiveIconText, { color: theme.white }]}>Incentive</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.statusIndicatorRow}>
-                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(selectedLead.status) }]} />
-                  <Text style={styles.statusText}>{beautifyName(selectedLead.status)}</Text>
+                  <View style={[styles.statusDot, { backgroundColor: getStatusBadgeColor(selectedLead.status) }]} />
+                  <Text style={[styles.statusText, { color: theme.text }]}>{beautifyName(selectedLead.status)}</Text>
                 </View>
-                <Text style={styles.leadCompany}>{selectedLead.company || 'No company'}</Text>
-                <Text style={styles.leadDate}>Created: {formatDateTime(selectedLead.created_at || selectedLead.createdAt)}</Text>
-                <Text style={styles.leadDate}>Updated: {formatDateTime(selectedLead.updated_at)}</Text>
+                <Text style={[styles.leadCompany, { color: theme.textSecondary }]}>{selectedLead.company || 'No company'}</Text>
+                <Text style={[styles.leadDate, { color: theme.textLight }]}>Created: {formatDateTime(selectedLead.created_at || selectedLead.createdAt)}</Text>
+                <Text style={[styles.leadDate, { color: theme.textLight }]}>Updated: {formatDateTime(selectedLead.updated_at)}</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Email Addresses ({editingEmails.length})</Text>
+          <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Email Addresses ({editingEmails.length})</Text>
             
             {editingEmails.length > 0 ? (
               editingEmails.map((email, index) => (
-                <View key={index} style={styles.contactItemContainer}>
+                <View key={index} style={[styles.contactItemContainer, { 
+                  backgroundColor: theme.backgroundSecondary,
+                  borderLeftColor: theme.info
+                }]}>
                   <View style={styles.contactItemContent}>
-                    <Text style={styles.contactItemText}>📧 {email}</Text>
+                    <Text style={[styles.contactItemText, { color: theme.text }]}>📧 {email}</Text>
                   </View>
                   {isEditMode && (
                     <TouchableOpacity 
-                      style={styles.removeContactButton}
+                      style={[styles.removeContactButton, { backgroundColor: theme.error }]}
                       onPress={() => handleRemoveEmail(index)}
                     >
-                      <Text style={styles.removeContactButtonText}>×</Text>
+                      <Text style={[styles.removeContactButtonText, { color: theme.white }]}>×</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               ))
             ) : (
-              <View style={styles.emptyContactContainer}>
-                <Text style={styles.emptyContactText}>No emails added</Text>
+              <View style={[styles.emptyContactContainer, { backgroundColor: theme.gray + '20' }]}>
+                <Text style={[styles.emptyContactText, { color: theme.textSecondary }]}>No emails added</Text>
               </View>
             )}
 
             {isEditMode && (
-              <View style={styles.addContactContainer}>
+              <View style={[styles.addContactContainer, { borderTopColor: theme.border }]}>
                 <TextInput
-                  style={[styles.input, { flex: 1 }]}
+                  style={[styles.input, { flex: 1, 
+                    backgroundColor: theme.white,
+                    borderColor: theme.border,
+                    color: theme.text
+                  }]}
                   value={newEmail}
                   onChangeText={setNewEmail}
                   placeholder="Add email..."
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={theme.textSecondary}
                   keyboardType="email-address"
                 />
-                <TouchableOpacity style={styles.addButton} onPress={handleAddEmail}>
-                  <Text style={styles.addButtonText}>+</Text>
+                <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddEmail}>
+                  <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
 
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Phone Numbers ({editingPhones.length})</Text>
+          <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Phone Numbers ({editingPhones.length})</Text>
             
             {editingPhones.length > 0 ? (
               editingPhones.map((phone, index) => (
-                <View key={index} style={styles.contactItemContainer}>
+                <View key={index} style={[styles.contactItemContainer, { 
+                  backgroundColor: theme.backgroundSecondary,
+                  borderLeftColor: theme.info
+                }]}>
                   <View style={styles.contactItemContent}>
-                    <Text style={styles.contactItemText}>📱 {phone}</Text>
+                    <Text style={[styles.contactItemText, { color: theme.text }]}>📱 {phone}</Text>
                   </View>
                   {isEditMode && (
                     <TouchableOpacity 
-                      style={styles.removeContactButton}
+                      style={[styles.removeContactButton, { backgroundColor: theme.error }]}
                       onPress={() => handleRemovePhone(index)}
                     >
-                      <Text style={styles.removeContactButtonText}>×</Text>
+                      <Text style={[styles.removeContactButtonText, { color: theme.white }]}>×</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               ))
             ) : (
-              <View style={styles.emptyContactContainer}>
-                <Text style={styles.emptyContactText}>No phone numbers added</Text>
+              <View style={[styles.emptyContactContainer, { backgroundColor: theme.gray + '20' }]}>
+                <Text style={[styles.emptyContactText, { color: theme.textSecondary }]}>No phone numbers added</Text>
               </View>
             )}
 
             {isEditMode && (
-              <View style={styles.addContactContainer}>
+              <View style={[styles.addContactContainer, { borderTopColor: theme.border }]}>
                 <TextInput
-                  style={[styles.input, { flex: 1 }]}
+                  style={[styles.input, { flex: 1, 
+                    backgroundColor: theme.white,
+                    borderColor: theme.border,
+                    color: theme.text
+                  }]}
                   value={newPhone}
                   onChangeText={setNewPhone}
                   placeholder="Add phone..."
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={theme.textSecondary}
                   keyboardType="phone-pad"
                 />
-                <TouchableOpacity style={styles.addButton} onPress={handleAddPhone}>
-                  <Text style={styles.addButtonText}>+</Text>
+                <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddPhone}>
+                  <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
 
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>Lead Management</Text>
+          <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Lead Management</Text>
             
             <View style={styles.managementRow}>
               <View style={styles.managementItem}>
-                <Text style={styles.inputLabel}>Status</Text>
+                <Text style={[styles.inputLabel, { color: theme.text }]}>Status</Text>
                 {isEditMode ? (
                   <TouchableOpacity
-                    style={styles.dropdown}
+                    style={[styles.dropdown, { 
+                      backgroundColor: theme.white,
+                      borderColor: theme.border
+                    }]}
                     onPress={() => setActiveDropdown('status')}
                   >
-                    <Text style={styles.dropdownText}>
+                    <Text style={[styles.dropdownText, { color: theme.text }]}>
                       {getFilterLabel('status', selectedLead.status)}
                     </Text>
-                    <Text style={styles.dropdownArrow}>▼</Text>
+                    <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
                   </TouchableOpacity>
                 ) : (
-                  <View style={styles.readOnlyField}>
-                    <Text style={styles.readOnlyText}>
+                  <View style={[styles.readOnlyField, { backgroundColor: theme.gray }]}>
+                    <Text style={[styles.readOnlyText, { color: theme.textSecondary }]}>
                       {getFilterLabel('status', selectedLead.status)}
                     </Text>
                   </View>
@@ -1738,20 +2013,23 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               </View>
 
               <View style={styles.managementItem}>
-                <Text style={styles.inputLabel}>Phase</Text>
+                <Text style={[styles.inputLabel, { color: theme.text }]}>Phase</Text>
                 {isEditMode ? (
                   <TouchableOpacity
-                    style={styles.dropdown}
+                    style={[styles.dropdown, { 
+                      backgroundColor: theme.white,
+                      borderColor: theme.border
+                    }]}
                     onPress={() => setActiveDropdown('phase')}
                   >
-                    <Text style={styles.dropdownText}>
+                    <Text style={[styles.dropdownText, { color: theme.text }]}>
                       {getFilterLabel('phase', selectedLead.phase)}
                     </Text>
-                    <Text style={styles.dropdownArrow}>▼</Text>
+                    <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
                   </TouchableOpacity>
                 ) : (
-                  <View style={styles.readOnlyField}>
-                    <Text style={styles.readOnlyText}>
+                  <View style={[styles.readOnlyField, { backgroundColor: theme.gray }]}>
+                    <Text style={[styles.readOnlyText, { color: theme.textSecondary }]}>
                       {getFilterLabel('phase', selectedLead.phase)}
                     </Text>
                   </View>
@@ -1760,20 +2038,23 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Subphase</Text>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>Subphase</Text>
               {isEditMode ? (
                 <TouchableOpacity
-                  style={styles.dropdown}
+                  style={[styles.dropdown, { 
+                    backgroundColor: theme.white,
+                    borderColor: theme.border
+                  }]}
                   onPress={() => setActiveDropdown('subphase')}
                 >
-                  <Text style={styles.dropdownText}>
+                  <Text style={[styles.dropdownText, { color: theme.text }]}>
                     {getFilterLabel('subphase', selectedLead.subphase)}
                   </Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
+                  <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
                 </TouchableOpacity>
               ) : (
-                <View style={styles.readOnlyField}>
-                  <Text style={styles.readOnlyText}>
+                <View style={[styles.readOnlyField, { backgroundColor: theme.gray }]}>
+                  <Text style={[styles.readOnlyText, { color: theme.textSecondary }]}>
                     {getFilterLabel('subphase', selectedLead.subphase)}
                   </Text>
                 </View>
@@ -1781,39 +2062,39 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             </View>
           </View>
 
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>
+          <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
               Collaborators ({collaborators.length})
             </Text>
             
             {loadingCollaborators ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading collaborators...</Text>
+                <ActivityIndicator size="small" color={theme.primary} />
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading collaborators...</Text>
               </View>
             ) : collaborators.length > 0 ? (
               collaborators.map((collaborator) => (
-                <View key={collaborator.id} style={styles.collaboratorItem}>
+                <View key={collaborator.id} style={[styles.collaboratorItem, { backgroundColor: theme.backgroundSecondary }]}>
                   <View style={styles.collaboratorInfo}>
-                    <Text style={styles.collaboratorName}>{collaborator.user.full_name}</Text>
-                    <Text style={styles.collaboratorEmail}>{collaborator.user.email}</Text>
-                    <Text style={styles.collaboratorRole}>
+                    <Text style={[styles.collaboratorName, { color: theme.text }]}>{collaborator.user.full_name}</Text>
+                    <Text style={[styles.collaboratorEmail, { color: theme.textSecondary }]}>{collaborator.user.email}</Text>
+                    <Text style={[styles.collaboratorRole, { color: theme.textSecondary }]}>
                       {collaborator.user.designation || collaborator.user.role}
                     </Text>
                   </View>
                   {isEditMode && (
                     <TouchableOpacity
-                      style={styles.removeButton}
+                      style={[styles.removeButton, { backgroundColor: theme.error }]}
                       onPress={() => handleRemoveCollaborator(collaborator)}
                     >
-                      <Text style={styles.removeButtonText}>×</Text>
+                      <Text style={[styles.removeButtonText, { color: theme.white }]}>×</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               ))
             ) : (
               <View style={styles.emptyCollaborators}>
-                <Text style={styles.emptyCollaboratorsText}>No collaborators yet</Text>
+                <Text style={[styles.emptyCollaboratorsText, { color: theme.textSecondary }]}>No collaborators yet</Text>
               </View>
             )}
             
@@ -1821,20 +2102,27 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               <View style={styles.addCollaboratorContainer}>
                 <View style={{ flex: 1, position: 'relative' }}>
                   <TextInput
-                    style={[styles.input, { flex: 1 }]}
+                    style={[styles.input, { flex: 1, 
+                      backgroundColor: theme.white,
+                      borderColor: theme.border,
+                      color: theme.text
+                    }]}
                     value={newCollaborator}
                     onChangeText={handleCollaboratorInputChange}
                     placeholder="Enter collaborator email..."
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor={theme.textSecondary}
                     keyboardType="email-address"
                   />
                   
                   {showPotentialCollaborators && (
-                    <View style={styles.potentialCollaboratorsDropdown}>
+                    <View style={[styles.potentialCollaboratorsDropdown, { 
+                      backgroundColor: theme.cardBg,
+                      borderColor: theme.border
+                    }]}>
                       {loadingPotentialCollaborators ? (
                         <View style={styles.potentialCollaboratorLoadingItem}>
-                          <ActivityIndicator size="small" color={colors.primary} />
-                          <Text style={styles.potentialCollaboratorLoadingText}>Searching...</Text>
+                          <ActivityIndicator size="small" color={theme.primary} />
+                          <Text style={[styles.potentialCollaboratorLoadingText, { color: theme.textSecondary }]}>Searching...</Text>
                         </View>
                       ) : (
                         <ScrollView
@@ -1845,17 +2133,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                           {potentialCollaborators.map((collaborator) => (
                             <TouchableOpacity
                               key={collaborator.employee_id}
-                              style={styles.potentialCollaboratorItem}
+                              style={[styles.potentialCollaboratorItem, { borderBottomColor: theme.border }]}
                               onPress={() => handlePotentialCollaboratorSelect(collaborator)}
                             >
                               <View style={styles.potentialCollaboratorInfo}>
-                                <Text style={styles.potentialCollaboratorName}>
+                                <Text style={[styles.potentialCollaboratorName, { color: theme.text }]}>
                                   {collaborator.full_name}
                                 </Text>
-                                <Text style={styles.potentialCollaboratorEmail}>
+                                <Text style={[styles.potentialCollaboratorEmail, { color: theme.textSecondary }]}>
                                   {collaborator.email}
                                 </Text>
-                                <Text style={styles.potentialCollaboratorRole}>
+                                <Text style={[styles.potentialCollaboratorRole, { color: theme.primary }]}>
                                   {collaborator.designation || collaborator.role}
                                 </Text>
                               </View>
@@ -1867,65 +2155,71 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                   )}
                 </View>
                 
-                <TouchableOpacity style={styles.addButton} onPress={handleAddCollaborator}>
-                  <Text style={styles.addButtonText}>+</Text>
+                <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddCollaborator}>
+                  <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
 
-          <View style={styles.detailCard}>
-            <Text style={styles.sectionTitle}>
+          <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
               Comments ({comments.length}
               {commentsPagination && ` of ${commentsPagination.total_items}`})
             </Text>
             
             {loadingComments ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading comments...</Text>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading comments...</Text>
               </View>
             ) : comments.length > 0 ? (
               <>
                 {comments.map((comment) => (
-                  <View key={comment.id} style={styles.commentItem}>
+                  <View key={comment.id} style={[styles.commentItem, { 
+                    backgroundColor: theme.white,
+                    borderLeftColor: theme.info
+                  }]}>
                     <View style={styles.commentHeaderRow}>
                       <View style={styles.commentMetaItem}>
-                        <Text style={styles.commentLabel}>Comment By:</Text>
-                        <Text style={styles.commentValue}>{comment.commentBy}</Text>
+                        <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Comment By:</Text>
+                        <Text style={[styles.commentValue, { color: theme.text }]}>{comment.commentBy}</Text>
                       </View>
                       <View style={styles.commentMetaItem}>
-                        <Text style={styles.commentLabel}>Date:</Text>
-                        <Text style={styles.commentValue}>{formatDateTime(comment.date)}</Text>
+                        <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Date:</Text>
+                        <Text style={[styles.commentValue, { color: theme.text }]}>{formatDateTime(comment.date)}</Text>
                       </View>
                     </View>
                     <View style={styles.commentHeaderRow}>
                       <View style={styles.commentMetaItem}>
-                        <Text style={styles.commentLabel}>Phase:</Text>
-                        <Text style={styles.commentValue}>{beautifyName(comment.phase)}</Text>
+                        <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Phase:</Text>
+                        <Text style={[styles.commentValue, { color: theme.text }]}>{beautifyName(comment.phase)}</Text>
                       </View>
                       <View style={styles.commentMetaItem}>
-                        <Text style={styles.commentLabel}>Subphase:</Text>
-                        <Text style={styles.commentValue}>{beautifyName(comment.subphase)}</Text>
+                        <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Subphase:</Text>
+                        <Text style={[styles.commentValue, { color: theme.text }]}>{beautifyName(comment.subphase)}</Text>
                       </View>
                     </View>
                     <View style={styles.commentContentRow}>
-                      <Text style={styles.commentLabel}>Content:</Text>
-                      <Text style={styles.commentContentText}>{comment.content}</Text>
+                      <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Content:</Text>
+                      <Text style={[styles.commentContentText, { 
+                        color: theme.text,
+                        backgroundColor: theme.backgroundSecondary
+                      }]}>{comment.content}</Text>
                     </View>
                     {comment.documents && comment.documents.length > 0 && (
                       <View style={styles.documentsContainer}>
-                        <Text style={styles.documentsLabel}>Attachments:</Text>
+                        <Text style={[styles.documentsLabel, { color: theme.textSecondary }]}>Attachments:</Text>
                         {comment.documents.map((doc, index) => (
-                          <TouchableOpacity key={doc.id} style={styles.fileButton}>
-                            <Text style={styles.fileButtonText}>📎 {doc.document_name}</Text>
+                          <TouchableOpacity key={doc.id} style={[styles.fileButton, { backgroundColor: theme.info + '20' }]}>
+                            <Text style={[styles.fileButtonText, { color: theme.info }]}>📎 {doc.document_name}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
                     )}
                     {comment.hasFile && !comment.documents && (
-                      <TouchableOpacity style={styles.fileButton}>
-                        <Text style={styles.fileButtonText}>📎 {comment.fileName}</Text>
+                      <TouchableOpacity style={[styles.fileButton, { backgroundColor: theme.info + '20' }]}>
+                        <Text style={[styles.fileButtonText, { color: theme.info }]}>📎 {comment.fileName}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1933,14 +2227,14 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
                 {loadingMoreComments && (
                   <View style={styles.loadMoreContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.loadMoreText}>Loading more comments...</Text>
+                    <ActivityIndicator size="small" color={theme.primary} />
+                    <Text style={[styles.loadMoreText, { color: theme.textSecondary }]}>Loading more comments...</Text>
                   </View>
                 )}
 
                 {commentsPagination && !commentsPagination.has_next && comments.length > 0 && (
                   <View style={styles.endOfListContainer}>
-                    <Text style={styles.endOfListText}>
+                    <Text style={[styles.endOfListText, { color: theme.textSecondary }]}>
                       You've reached the end of the comments
                     </Text>
                   </View>
@@ -1948,45 +2242,54 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               </>
             ) : (
               <View style={styles.emptyComments}>
-                <Text style={styles.emptyCommentsText}>No comments yet</Text>
-                <Text style={styles.emptyCommentsSubtext}>Start the conversation by adding a comment below</Text>
+                <Text style={[styles.emptyCommentsText, { color: theme.textSecondary }]}>No comments yet</Text>
+                <Text style={[styles.emptyCommentsSubtext, { color: theme.textLight }]}>Start the conversation by adding a comment below</Text>
               </View>
             )}
 
-            <View style={styles.addCommentSection}>
+            <View style={[styles.addCommentSection, { borderTopColor: theme.border }]}>
               <View style={styles.commentActions}>
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={[styles.actionButton, { 
+                    borderColor: theme.primary,
+                    backgroundColor: theme.primary + '10'
+                  }]}
                   onPress={handleShowDefaultComments}
                   disabled={loadingDefaultComments}
                 >
                   {loadingDefaultComments ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={theme.primary} />
                   ) : (
-                    <Text style={styles.actionButtonText}>Default Comments</Text>
+                    <Text style={[styles.actionButtonText, { color: theme.primary }]}>Default Comments</Text>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.actionButton} 
+                  style={[styles.actionButton, { 
+                    borderColor: theme.primary,
+                    backgroundColor: theme.primary + '10'
+                  }]} 
                   onPress={handleAttachDocuments}
                 >
-                  <Text style={styles.actionButtonText}>📎 Attach ({selectedDocuments.length})</Text>
+                  <Text style={[styles.actionButtonText, { color: theme.primary }]}>📎 Attach ({selectedDocuments.length})</Text>
                 </TouchableOpacity>
               </View>
 
               {selectedDocuments.length > 0 && (
-                <View style={styles.selectedDocumentsContainer}>
-                  <Text style={styles.selectedDocumentsTitle}>Selected Files:</Text>
+                <View style={[styles.selectedDocumentsContainer, { 
+                  backgroundColor: theme.background,
+                  borderColor: theme.border
+                }]}>
+                  <Text style={[styles.selectedDocumentsTitle, { color: theme.primary }]}>Selected Files:</Text>
                   {selectedDocuments.map((doc, index) => (
-                    <View key={index} style={styles.selectedDocumentItem}>
-                      <Text style={styles.selectedDocumentName} numberOfLines={1}>
+                    <View key={index} style={[styles.selectedDocumentItem, { backgroundColor: theme.white }]}>
+                      <Text style={[styles.selectedDocumentName, { color: theme.primary }]} numberOfLines={1}>
                         📎 {doc.name}
                       </Text>
                       <TouchableOpacity 
-                        style={styles.removeDocumentButton}
+                        style={[styles.removeDocumentButton, { backgroundColor: theme.error }]}
                         onPress={() => handleRemoveDocument(index)}
                       >
-                        <Text style={styles.removeDocumentButtonText}>×</Text>
+                        <Text style={[styles.removeDocumentButtonText, { color: theme.white }]}>×</Text>
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -1994,25 +2297,33 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               )}
 
               <TextInput
-                style={styles.commentInput}
+                style={[styles.commentInput, { 
+                  backgroundColor: theme.white,
+                  borderColor: theme.border,
+                  color: theme.text
+                }]}
                 value={newComment}
                 onChangeText={setNewComment}
                 placeholder="Add your comment here..."
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={theme.textSecondary}
               />
 
               <TouchableOpacity 
-                style={[styles.submitButton, addingComment && styles.submitButtonDisabled]} 
+                style={[
+                  styles.submitButton, 
+                  addingComment && styles.submitButtonDisabled,
+                  { backgroundColor: theme.primary }
+                ]} 
                 onPress={handleAddComment}
                 disabled={addingComment}
               >
                 {addingComment ? (
-                  <ActivityIndicator color={colors.white} size="small" />
+                  <ActivityIndicator color={theme.white} size="small" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Comment</Text>
+                  <Text style={[styles.submitButtonText, { color: theme.white }]}>Add Comment</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2044,26 +2355,26 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         />
 
         <Modal visible={showDefaultComments} transparent animationType="fade" onRequestClose={() => setShowDefaultComments(false)}>
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowDefaultComments(false)}>
+          <TouchableOpacity style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]} activeOpacity={1} onPress={() => setShowDefaultComments(false)}>
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.defaultCommentsModal}>
-                <Text style={styles.modalTitle}>
+              <View style={[styles.defaultCommentsModal, { backgroundColor: theme.cardBg }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
                   Default Comments - {beautifyName(selectedLead.phase)} → {beautifyName(selectedLead.subphase)}
                 </Text>
                 <ScrollView style={styles.defaultCommentsList}>
                   {loadingDefaultComments ? (
                     <View style={styles.loadingContainer}>
-                      <ActivityIndicator size="large" color={colors.primary} />
-                      <Text style={styles.loadingText}>Loading default comments...</Text>
+                      <ActivityIndicator size="large" color={theme.primary} />
+                      <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading default comments...</Text>
                     </View>
                   ) : defaultComments.length > 0 ? (
                     defaultComments.map((comment) => (
                       <TouchableOpacity
                         key={comment.id}
-                        style={styles.defaultCommentItem}
+                        style={[styles.defaultCommentItem, { borderBottomColor: theme.border }]}
                         onPress={() => handleDefaultCommentSelect(comment)}
                       >
-                        <Text style={styles.defaultCommentText}>
+                        <Text style={[styles.defaultCommentText, { color: theme.text }]}>
                           {(() => {
                             try {
                               return JSON.parse(comment.data);
@@ -2076,7 +2387,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
                     ))
                   ) : (
                     <View style={styles.emptyState}>
-                      <Text style={styles.emptyStateText}>
+                      <Text style={[styles.emptyStateText, { color: theme.textSecondary }]}>
                         No default comments available for this phase/subphase
                       </Text>
                     </View>
@@ -2102,42 +2413,73 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   }
   
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.background }]}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "light-content"} backgroundColor={theme.headerBg} />
 
-      <View style={styles.header}>
+      {/* Header Section */}
+      <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <BackIcon />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>BDT Module</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={styles.headerTitle}>BDT</Text>
+        <View style={styles.headerSpacer}>
+          <TouchableOpacity onPress={toggleDarkMode} style={styles.themeToggleButton}>
+            <Text style={styles.themeIcon}>
+              {isDarkMode ? '☀️' : '🌙'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={styles.searchFilterContainer}>
-        <View style={styles.searchContainer}>
+      {/* Search Section */}
+      <View style={styles.searchContainer}>
+        <View style={[styles.searchBar, { backgroundColor: theme.cardBg }]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search leads... (Press Enter)"
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Search Leads"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearchSubmit}
             returnKeyType="search"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={theme.textSecondary}
           />
+          <TouchableOpacity onPress={() => setActiveDropdown('filter')}>
+            <Text style={styles.slidersIcon}>⚙️</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
-          style={styles.filterButton} 
-          onPress={() => setActiveDropdown('filter')}
-        >
-          <Text style={styles.filterIcon}>⚙️</Text>
-          <Text style={styles.filterText}>Filter</Text>
-        </TouchableOpacity>
       </View>
 
+      {/* Filter Tabs */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={[styles.tabsContainer, { backgroundColor: theme.cardBg }]}
+      >
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[
+              styles.tab, 
+              activeTab === tab.id && [styles.activeTab, { backgroundColor: theme.primary }]
+            ]}
+            onPress={() => setActiveTab(tab.id)}
+          >
+            <Text style={[
+              styles.tabText, 
+              { color: theme.textSecondary },
+              activeTab === tab.id && [styles.activeTabText, { color: theme.white }]
+            ]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Active Filter Indicator */}
       {filterBy && filterValue && (
-        <View style={styles.activeFilterContainer}>
-          <Text style={styles.activeFilterText}>
+        <View style={[styles.activeFilterContainer, { backgroundColor: theme.info + '20' }]}>
+          <Text style={[styles.activeFilterText, { color: theme.info }]}>
             {getFilterLabel(filterBy, filterValue)}
           </Text>
           <TouchableOpacity onPress={() => { 
@@ -2148,14 +2490,14 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
               fetchLeads(1);
             }
           }}>
-            <Text style={styles.clearFilterText}>Clear</Text>
+            <Text style={[styles.clearFilterText, { color: theme.error }]}>Clear</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {isSearchMode && (
-        <View style={styles.searchModeIndicator}>
-          <Text style={styles.searchModeText}>
+        <View style={[styles.searchModeIndicator, { backgroundColor: theme.success + '20' }]}>
+          <Text style={[styles.searchModeText, { color: theme.success }]}>
             Search results for: "{searchQuery}"
           </Text>
           <TouchableOpacity onPress={() => {
@@ -2163,121 +2505,135 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
             setIsSearchMode(false);
             fetchLeads(1);
           }}>
-            <Text style={styles.clearSearchText}>Clear Search</Text>
+            <Text style={[styles.clearSearchText, { color: theme.error }]}>Clear Search</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      <View style={styles.contentContainer}>
-        <ScrollView 
-          style={styles.tabContent} 
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                if (isSearchMode) {
-                  searchLeads(searchQuery);
-                } else {
-                  fetchLeads(1);
-                }
-              }}
-              tintColor={colors.primary}
-            />
-          }
-        >
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Leads ({filteredLeads.length}
-              {pagination && !isSearchMode && (
-                ` of ${pagination.total_items}`
-              )})
-              {isSearchMode && ' - Search Results'}
-            </Text>
-            
-            {loading && leads.length === 0 ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading leads...</Text>
-              </View>
-            ) : filteredLeads.length > 0 ? (
-              <>
-                {filteredLeads.map((lead) => (
-                  <TouchableOpacity
-                    key={lead.id}
-                    style={styles.leadCard}
-                    onPress={() => handleLeadPress(lead)}
-                  >
-                    <View style={styles.leadCardHeader}>
-                      <View style={styles.leadCardInfo}>
-                        <Text style={styles.leadCardName}>{lead.name}</Text>
-                        <View style={styles.leadCardStatusRow}>
-                          <View style={[styles.leadStatusDot, { backgroundColor: getStatusColor(lead.status) }]} />
-                          <Text style={styles.leadCardStatusText}>{beautifyName(lead.status)}</Text>
-                        </View>
-                        <Text style={styles.leadCardCompany}>
-                          {lead.company || 'No company specified'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.leadCardContact} numberOfLines={1}>
-                      {lead.emails && lead.emails.length > 0 
-                        ? lead.emails.map(e => e.email).join(', ') 
-                        : 'No email'} • {lead.phone_numbers && lead.phone_numbers.length > 0 
-                        ? lead.phone_numbers.map(p => p.number).join(', ') 
-                        : 'No phone'}
-                    </Text>
-                    <View style={styles.leadCardMeta}>
-                      <Text style={styles.leadCardPhase}>
-                        {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
-                      </Text>
-                      <View style={styles.leadCardDateContainer}>
-                        <Text style={styles.leadCardDate}>
-                          {formatDate(lead.created_at || lead.createdAt)}
-                        </Text>
-                        <Text style={styles.leadCardTime}>
-                          {formatTime(lead.created_at || lead.createdAt)}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                
-                {loadingMore && (
-                  <View style={styles.loadMoreContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.loadMoreText}>Loading more leads...</Text>
-                  </View>
-                )}
-                
-                {pagination && !pagination.has_next && !isSearchMode && leads.length > 0 && (
-                  <View style={styles.endOfListContainer}>
-                    <Text style={styles.endOfListText}>
-                      You've reached the end of the list
-                    </Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>
-                  {searchQuery || filterValue ? 'No leads match your criteria' : 'No leads found'}
-                </Text>
-                <Text style={styles.emptyStateSubtext}>
-                  {searchQuery || filterValue 
-                    ? 'Try adjusting your search or filters' 
-                    : 'Your leads will appear here when they are created'
-                  }
-                </Text>
-              </View>
-            )}
+      {/* Leads List */}
+      <ScrollView 
+        style={[styles.leadsContainer, { backgroundColor: theme.background }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              if (isSearchMode) {
+                searchLeads(searchQuery);
+              } else {
+                fetchLeads(1);
+              }
+            }}
+            tintColor={theme.primary}
+          />
+        }
+      >
+        {loading && leads.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading leads...</Text>
           </View>
-        </ScrollView>
-      </View>
+        ) : filteredLeads.length > 0 ? (
+          filteredLeads.map((lead, index) => {
+            // Get background color and status badge color based on lead status
+            const cardBackgroundColor = getLeadCardBackgroundColor(lead.status);
+            const statusBadgeColor = getStatusBadgeColor(lead.status);
+            
+            return (
+              <View 
+                key={lead.id} 
+                style={[
+                  styles.leadCard,
+                  { backgroundColor: cardBackgroundColor }
+                ]}
+              >
+                {/* Status Badge */}
+                <View style={[styles.statusBadgeContainer, { backgroundColor: statusBadgeColor }]}>
+                  <Text style={styles.statusBadgeText}>
+                    {beautifyName(lead.status)}
+                  </Text>
+                </View>
+                
+                <TouchableOpacity onPress={() => handleLeadPress(lead)}>
+                  <View style={styles.leadHeader}>
+                    <Image
+                      source={{ uri: `https://i.pravatar.cc/150?u=${lead.name}` }}
+                      style={styles.avatar}
+                    />
+                    <View style={styles.leadInfo}>
+                      <Text style={[styles.leadName, { color: theme.text }]}>{lead.name}</Text>
+                      <Text style={[styles.leadContact, { color: theme.textSecondary }]}>
+                        {lead.emails && lead.emails.length > 0 
+                          ? lead.emails[0].email 
+                          : 'No email'} • {lead.phone_numbers && lead.phone_numbers.length > 0 
+                          ? lead.phone_numbers[0].number 
+                          : 'No phone'}
+                      </Text>
+                    </View>
+                  </View>
 
+                  <View style={styles.tagContainer}>
+                    <View style={[styles.tag, { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.7)' }]}>
+                      <Text style={[styles.tagText, { color: theme.text }]}>{beautifyName(lead.phase)}</Text>
+                    </View>
+                    <View style={[styles.tag, { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.7)' }]}>
+                      <Text style={[styles.tagText, { color: theme.text }]}>{beautifyName(lead.subphase)}</Text>
+                    </View>
+                    <View style={[styles.tag, styles.preApprovedTag, { backgroundColor: isDarkMode ? '#1C3A5E' : '#e1f5fe' }]}>
+                      <Text style={[styles.preApprovedTagText, { color: isDarkMode ? '#64B5F6' : '#0288d1' }]}>Pre-approved</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <View>
+                      <Text style={[styles.companyName, { color: theme.text }]}>{lead.company || 'No company specified'}</Text>
+                      <Text style={[styles.lastOpened, { color: theme.textSecondary }]}>
+                        Last opened: {formatDateTime(lead.created_at || lead.createdAt)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={[styles.viewButton, { borderColor: theme.primary }]}
+                      onPress={() => handleLeadPress(lead)}
+                    >
+                      <Text style={[styles.viewButtonText, { color: theme.primary }]}>View Details</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        ) : (
+          <View style={[styles.emptyState, { 
+            backgroundColor: theme.cardBg,
+            borderColor: theme.border
+          }]}>
+            <Text style={[styles.emptyStateText, { color: theme.textSecondary }]}>
+              {searchQuery || filterValue ? 'No leads match your criteria' : 'No leads found'}
+            </Text>
+            <Text style={[styles.emptyStateSubtext, { color: theme.textSecondary }]}>
+              {searchQuery || filterValue 
+                ? 'Try adjusting your search or filters' 
+                : 'Your leads will appear here when they are created'
+              }
+            </Text>
+          </View>
+        )}
+
+        {loadingMore && (
+          <View style={styles.loadMoreContainer}>
+            <ActivityIndicator size="small" color={theme.primary} />
+            <Text style={[styles.loadMoreText, { color: theme.textSecondary }]}>Loading more leads...</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Bottom Navigation */}
+      <BottomNavigation />
+
+      {/* Filter Modals */}
       <DropdownModal
         visible={activeDropdown === 'filter'}
         onClose={() => setActiveDropdown(null)}
@@ -2314,27 +2670,299 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 };
 
 const styles = StyleSheet.create({
+  container: { 
+    flex: 1
+  },
+  header: {
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  backButton: { 
+    padding: 8 
+  },
+  backIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIconText: {
+    fontSize: 24,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+  },
+  headerSpacer: { 
+    width: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  themeToggleButton: {
+    padding: 8,
+  },
+  themeIcon: {
+    fontSize: 20,
+  },
+  
+  // Search Section
+  searchContainer: {
+    padding: 15,
+  },
+  searchBar: {
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  searchIcon: {
+    fontSize: 16,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  slidersIcon: {
+    fontSize: 16,
+  },
+  
+  // Tabs
+  tabsContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    maxHeight:55,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 10,
+    backgroundColor: 'transparent',
+  },
+  activeTab: {
+    maxHeight:30, 
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: 'white',
+  },
+  
+  // Lead Cards
+  leadsContainer: {
+    flex: 1,
+    padding: 15,
+  },
+  leadCard: {
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  // UPDATED: Status Badge styles
+  statusBadgeContainer: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
+    letterSpacing: 0.5,
+  },
+  leadHeader: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#ddd',
+  },
+  leadInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  leadName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  leadContact: {
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  tagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginVertical: 10,
+  },
+  tag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 15,
+  },
+  tagText: {
+    fontSize: 11,
+  },
+  preApprovedTag: {
+  },
+  preApprovedTagText: {
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  companyName: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  lastOpened: {
+    fontSize: 10,
+  },
+  viewButton: {
+    borderWidth: 1,
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  viewButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  
+  // Bottom Navigation
+  bottomNavContainer: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 80,
+    zIndex: 1000,
+  },
+  navBar: {
+    height: 70,
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    position: 'relative',
+  },
+  navItemActive: {
+    zIndex: 2,
+  },
+  navItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  activeNavIcon: {
+    color: 'white',
+    fontSize: 20,
+  },
+  navLabel: {
+    fontSize: 12,
+  },
+  activeNavLabel: {
+    fontWeight: 'bold',
+    marginTop: 35,
+  },
+  iconCircle: {
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: -25,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  bulge: {
+    position: 'absolute',
+    top: -20,
+    width: 70,
+    height: 40,
+    backgroundColor: '#f5f7fa',
+    borderRadius: 20,
+    zIndex: 1,
+  },
+
+  // Existing styles (kept for detail view functionality)
   contactItemContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
     borderLeftWidth: 3,
-    borderLeftColor: colors.info,
   },
   contactItemContent: {
     flex: 1,
   },
   contactItemText: {
     fontSize: fontSize.md,
-    color: colors.text,
     fontWeight: '500',
   },
   removeContactButton: {
-    backgroundColor: colors.error,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -2343,7 +2971,6 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   removeContactButtonText: {
-    color: colors.white,
     fontSize: fontSize.lg,
     fontWeight: 'bold',
   },
@@ -2354,18 +2981,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   emptyContactContainer: {
     paddingVertical: spacing.md,
     alignItems: 'center',
-    backgroundColor: colors.gray + '20',
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
   },
   emptyContactText: {
     fontSize: fontSize.md,
-    color: colors.textSecondary,
     fontStyle: 'italic',
   },
   potentialCollaboratorsDropdown: {
@@ -2373,13 +2997,10 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: colors.white,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
     maxHeight: 200,
     zIndex: 1000,
-    ...shadows.md,
   },
   potentialCollaboratorsList: {
     maxHeight: 200,
@@ -2388,7 +3009,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   potentialCollaboratorInfo: {
     flex: 1,
@@ -2396,17 +3016,14 @@ const styles = StyleSheet.create({
   potentialCollaboratorName: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 2,
   },
   potentialCollaboratorEmail: {
     fontSize: fontSize.xs,
-    color: colors.textSecondary,
     marginBottom: 2,
   },
   potentialCollaboratorRole: {
     fontSize: fontSize.xs,
-    color: colors.primary,
     fontWeight: '500',
   },
   potentialCollaboratorLoadingItem: {
@@ -2418,20 +3035,16 @@ const styles = StyleSheet.create({
   },
   potentialCollaboratorLoadingText: {
     fontSize: fontSize.sm,
-    color: colors.textSecondary,
   },
   selectedDocumentsContainer: {
     marginBottom: spacing.md,
     padding: spacing.sm,
-    backgroundColor: colors.background,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   selectedDocumentsTitle: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.primary,
     marginBottom: spacing.xs,
   },
   selectedDocumentItem: {
@@ -2439,30 +3052,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    backgroundColor: colors.white,
     borderRadius: borderRadius.sm,
     marginBottom: spacing.xs,
   },
   selectedDocumentName: {
     flex: 1,
     fontSize: fontSize.sm,
-    color: colors.primary,
   },
   removeDocumentButton: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.error,
     alignItems: 'center',
     justifyContent: 'center',
   },
   removeDocumentButtonText: {
-    color: colors.white,
     fontSize: fontSize.md,
     fontWeight: 'bold',
   },
   submitButtonDisabled: {
-    backgroundColor: colors.textSecondary,
     opacity: 0.6,
   },
   emptyCollaborators: {
@@ -2471,19 +3079,16 @@ const styles = StyleSheet.create({
   },
   emptyCollaboratorsText: {
     fontSize: fontSize.md,
-    color: colors.textSecondary,
     textAlign: 'center',
   },
   documentsContainer: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   documentsLabel: {
     fontSize: fontSize.xs,
     fontWeight: '600',
-    color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
   searchModeIndicator: {
@@ -2492,23 +3097,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.success + '20',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   searchModeText: {
-    color: colors.success,
     fontWeight: '500',
     flex: 1,
   },
   clearSearchText: {
-    color: colors.error,
     fontWeight: '500',
   },
   // Invoice Form Styles
   invoiceModalContainer: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
   },
   invoiceHeader: {
     flexDirection: 'row',
@@ -2516,10 +3116,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    ...shadows.sm,
   },
   invoiceBackButton: {
     paddingHorizontal: spacing.md,
@@ -2527,27 +3124,22 @@ const styles = StyleSheet.create({
   },
   invoiceBackButtonText: {
     fontSize: fontSize.md,
-    color: colors.error,
     fontWeight: '500',
   },
   invoiceHeaderTitle: {
     fontSize: fontSize.lg,
     fontWeight: '600',
-    color: colors.text,
   },
   invoiceSaveButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.primary,
     borderRadius: borderRadius.lg,
   },
   invoiceSaveButtonDisabled: {
-    backgroundColor: colors.textSecondary,
     opacity: 0.6,
   },
   invoiceSaveButtonText: {
     fontSize: fontSize.md,
-    color: colors.white,
     fontWeight: '600',
   },
   invoiceScrollView: {
@@ -2555,16 +3147,13 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   invoiceFormCard: {
-    backgroundColor: colors.white,
     padding: spacing.xl,
     borderRadius: borderRadius.xl,
-    ...shadows.md,
     marginBottom: spacing.xl,
   },
   invoiceFormTitle: {
     fontSize: fontSize.xl,
     fontWeight: '700',
-    color: colors.primary,
     marginBottom: spacing.xl,
     textAlign: 'center',
   },
@@ -2581,18 +3170,15 @@ const styles = StyleSheet.create({
   },
   fileUploadButton: {
     borderWidth: 2,
-    borderColor: colors.info,
     borderStyle: 'dashed',
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.info + '10',
     marginTop: spacing.sm,
   },
   fileUploadButtonText: {
     fontSize: fontSize.md,
-    color: colors.info,
     fontWeight: '500',
   },
   removeFileButton: {
@@ -2602,31 +3188,14 @@ const styles = StyleSheet.create({
   },
   removeFileButtonText: {
     fontSize: fontSize.sm,
-    color: colors.error,
     fontWeight: '500',
   },
   requiredNote: {
     fontSize: fontSize.sm,
-    color: colors.error,
     fontStyle: 'italic',
     marginTop: spacing.lg,
     textAlign: 'center',
   },
-  container: { flex: 1, backgroundColor: colors.primary },
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md, backgroundColor: colors.primary,
-  },
-  backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
-  backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  backArrow: {
-    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
-  },
-  headerTitle: {
-    fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center',
-  },
-  headerSpacer: { width: 40 },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2635,128 +3204,55 @@ const styles = StyleSheet.create({
   incentiveButton: {
     width: 36,
     height: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   incentiveButtonText: {
     fontSize: 18,
   },
   editButton: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: colors.info, borderRadius: borderRadius.lg, ...shadows.sm,
+    borderRadius: borderRadius.lg,
   },
-  editButtonText: { color: colors.white, fontSize: fontSize.sm, fontWeight: '600' },
+  editButtonText: { fontSize: fontSize.sm, fontWeight: '600' },
   saveButton: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: colors.success, borderRadius: borderRadius.lg, ...shadows.sm,
+    borderRadius: borderRadius.lg,
   },
-  saveButtonText: { color: colors.white, fontSize: fontSize.sm, fontWeight: '600' },
-
-  searchFilterContainer: {
-    flexDirection: 'row', paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    backgroundColor: colors.primary, gap: spacing.md,
-  },
-  searchContainer: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white,
-    borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, ...shadows.sm,
-  },
-  searchIcon: { fontSize: fontSize.lg, marginRight: spacing.sm },
-  searchInput: { flex: 1, fontSize: fontSize.md, color: colors.text, paddingVertical: spacing.sm },
-  filterButton: {
-    backgroundColor: colors.white, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm, justifyContent: 'center', alignItems: 'center', ...shadows.sm,
-    flexDirection: 'row', gap: spacing.xs,
-  },
-  filterIcon: { fontSize: fontSize.md },
-  filterText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  saveButtonText: { fontSize: fontSize.sm, fontWeight: '600' },
 
   activeFilterContainer: {
-    backgroundColor: colors.info + '20', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  activeFilterText: { fontSize: fontSize.sm, color: colors.info, fontWeight: '600' },
-  clearFilterText: { fontSize: fontSize.sm, color: colors.error, fontWeight: '600' },
+  activeFilterText: { fontSize: fontSize.sm, fontWeight: '600' },
+  clearFilterText: { fontSize: fontSize.sm, fontWeight: '600' },
 
-  contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  contentContainer: { flex: 1 },
   tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   section: { marginBottom: spacing.xl },
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
-
-  leadCard: {
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  leadCardHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-start', 
-    marginBottom: spacing.sm 
-  },
-  leadCardInfo: { flex: 1, marginRight: spacing.sm },
-  leadCardName: { 
-    fontSize: fontSize.md, 
-    fontWeight: '600', 
-    color: colors.text, 
-    marginBottom: spacing.xs 
-  },
-  leadCardStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  leadStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing.xs,
-  },
-  leadCardStatusText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  leadCardStatusButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    alignSelf: 'flex-start',
-  },
-  leadCardStatusButtonText: {
-    fontSize: fontSize.xs,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  leadCardCompany: { 
-    fontSize: fontSize.sm, 
-    color: colors.textSecondary, 
-    fontWeight: '500' 
-  },
-  leadCardContact: { 
-    fontSize: fontSize.sm, 
-    color: colors.textSecondary, 
-    marginBottom: spacing.sm 
-  },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', marginBottom: spacing.md },
 
   emptyState: {
-    backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.xl,
-    alignItems: 'center', ...shadows.md, borderWidth: 1, borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    borderWidth: 1,
   },
-  emptyStateText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs },
-  emptyStateSubtext: { fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
+  emptyStateText: { fontSize: fontSize.md, textAlign: 'center', marginBottom: spacing.xs },
+  emptyStateSubtext: { fontSize: fontSize.sm, textAlign: 'center', fontStyle: 'italic' },
 
-  detailScrollView: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  detailScrollView: { flex: 1 },
   detailCard: {
-    backgroundColor: colors.white, marginHorizontal: spacing.lg, marginBottom: spacing.lg,
-    padding: spacing.lg, borderRadius: borderRadius.xl, ...shadows.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
   },
 
   leadNameRow: {
@@ -2767,24 +3263,20 @@ const styles = StyleSheet.create({
   },
   leadName: { 
     fontSize: fontSize.xxl, 
-    fontWeight: '700', 
-    color: colors.text,
+    fontWeight: '700',
     flex: 1,
   },
   incentiveIconButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.success,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    ...shadows.md,
     minWidth: 90,
   },
   incentiveIconText: {
     fontSize: fontSize.sm,
-    color: colors.white,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
@@ -2809,173 +3301,178 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: fontSize.sm,
     fontWeight: '600',
-    color: colors.text,
   },
   leadCompany: { 
     fontSize: fontSize.md, 
-    color: colors.textSecondary, 
     fontWeight: '500', 
     marginBottom: spacing.sm 
   },
-  leadDate: { fontSize: fontSize.sm, color: colors.textLight },
+  leadDate: { fontSize: fontSize.sm },
 
   inputGroup: { marginBottom: spacing.md },
-  inputLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  inputLabel: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.sm },
   input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md,
-    color: colors.text, backgroundColor: colors.white, ...shadows.sm,
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: fontSize.md,
   },
-  inputDisabled: { backgroundColor: colors.gray, color: colors.textSecondary },
+  inputDisabled: { color: colors.textSecondary },
 
   managementRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   managementItem: { flex: 1 },
   dropdown: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.white,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...shadows.sm,
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  dropdownText: { fontSize: fontSize.md, color: colors.text, flex: 1 },
-  dropdownArrow: { fontSize: fontSize.sm, color: colors.textSecondary },
+  dropdownText: { fontSize: fontSize.md, flex: 1 },
+  dropdownArrow: { fontSize: fontSize.sm },
   readOnlyField: {
-    backgroundColor: colors.gray, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  readOnlyText: { fontSize: fontSize.md, color: colors.textSecondary },
+  readOnlyText: { fontSize: fontSize.md },
 
   collaboratorItem: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
   },
-  collaboratorName: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  collaboratorName: { fontSize: fontSize.md, fontWeight: '500' },
   removeButton: {
-    backgroundColor: colors.error, width: 24, height: 24, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  removeButtonText: { color: colors.white, fontSize: fontSize.lg, fontWeight: '600' },
+  removeButtonText: { fontSize: fontSize.lg, fontWeight: '600' },
   addCollaboratorContainer: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' },
   addButton: {
-    backgroundColor: colors.primary, width: 40, height: 40, borderRadius: borderRadius.lg,
-    alignItems: 'center', justifyContent: 'center', ...shadows.sm,
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addButtonText: { color: colors.white, fontSize: fontSize.lg, fontWeight: '600' },
+  addButtonText: { fontSize: fontSize.lg, fontWeight: '600' },
 
   commentItem: {
-    backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg,
-    marginBottom: spacing.md, ...shadows.sm, borderLeftWidth: 4, borderLeftColor: colors.info,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    borderLeftWidth: 4,
   },
   commentHeaderRow: { 
     flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm,
   },
   commentMetaItem: { flex: 1, marginRight: spacing.sm },
   commentLabel: { 
-    fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs,
+    fontSize: fontSize.xs, fontWeight: '600', marginBottom: spacing.xs,
   },
   endOfListContainer: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
   },
   endOfListText: {
-    color: colors.textSecondary,
     fontStyle: 'italic',
   },
-  commentValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  commentValue: { fontSize: fontSize.sm, fontWeight: '500' },
   commentContentRow: { marginTop: spacing.sm },
   commentContentText: { 
-    fontSize: fontSize.md, color: colors.text, lineHeight: 22, marginTop: spacing.xs,
-    backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md,
+    fontSize: fontSize.md, lineHeight: 22, marginTop: spacing.xs,
+    padding: spacing.md, borderRadius: borderRadius.md,
   },
   fileButton: { 
-    backgroundColor: colors.info + '20', 
     paddingHorizontal: spacing.sm, 
     paddingVertical: spacing.sm, 
     borderRadius: borderRadius.sm, 
     alignSelf: 'flex-start', 
     marginTop: spacing.xs 
   },
-  fileButtonText: { fontSize: fontSize.sm, color: colors.info, fontWeight: '500' },
+  fileButtonText: { fontSize: fontSize.sm, fontWeight: '500' },
 
   emptyComments: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyCommentsText: { 
     fontSize: fontSize.lg, 
     fontWeight: '600', 
-    color: colors.textSecondary, 
     marginBottom: spacing.sm 
   },
   emptyCommentsSubtext: { 
     fontSize: fontSize.sm, 
-    color: colors.textLight, 
     textAlign: 'center' 
   },
 
   addCommentSection: { 
     marginTop: spacing.lg, 
     paddingTop: spacing.lg, 
-    borderTopWidth: 1, 
-    borderTopColor: colors.border 
+    borderTopWidth: 1,
   },
   commentActions: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   actionButton: {
     flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderWidth: 1,
-    borderColor: colors.primary, borderRadius: borderRadius.lg, alignItems: 'center',
-    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.lg, alignItems: 'center',
   },
-  actionButtonText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
+  actionButtonText: { fontSize: fontSize.sm, fontWeight: '600' },
   commentInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, padding: spacing.md,
-    backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md,
-    textAlignVertical: 'top', minHeight: 100, ...shadows.sm,
+    borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md,
+    fontSize: fontSize.sm, marginBottom: spacing.md,
+    textAlignVertical: 'top', minHeight: 100,
   },
   submitButton: {
-    backgroundColor: colors.primary, paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg, alignItems: 'center', ...shadows.md,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg, alignItems: 'center',
   },
-  submitButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  submitButtonText: { fontSize: fontSize.md, fontWeight: '600' },
 
   modalOverlay: { 
     flex: 1, 
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
     justifyContent: 'center', 
     paddingHorizontal: spacing.xl 
   },
   dropdownContainer: {
-    backgroundColor: colors.white, 
-    borderRadius: borderRadius.xl, 
-    maxHeight: screenHeight * 0.6, 
-    ...shadows.lg,
+    borderRadius: borderRadius.xl,
+    maxHeight: screenHeight * 0.6,
   },
   dropdownTitle: {
-    fontSize: fontSize.lg, fontWeight: '600', color: colors.text, textAlign: 'center',
-    padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border,
+    fontSize: fontSize.lg, fontWeight: '600', textAlign: 'center',
+    padding: spacing.lg, borderBottomWidth: 1,
   },
   dropdownList: { maxHeight: screenHeight * 0.4 },
   dropdownItem: { 
     paddingHorizontal: spacing.md, 
     paddingVertical: spacing.md, 
-    borderBottomWidth: 1, 
-    borderBottomColor: colors.border 
+    borderBottomWidth: 1,
   },
-  dropdownItemText: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  dropdownItemText: { fontSize: fontSize.md, fontWeight: '500' },
   emptyDropdown: { padding: spacing.xl, alignItems: 'center' },
-  emptyDropdownText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center' },
+  emptyDropdownText: { fontSize: fontSize.md, textAlign: 'center' },
 
   defaultCommentsModal: { 
-    backgroundColor: colors.white, 
-    borderRadius: borderRadius.xl, 
-    maxHeight: screenHeight * 0.6, 
-    ...shadows.lg 
+    borderRadius: borderRadius.xl,
+    maxHeight: screenHeight * 0.6,
   },
   modalTitle: {
-    fontSize: fontSize.lg, fontWeight: '600', color: colors.text, textAlign: 'center',
-    padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border,
+    fontSize: fontSize.lg, fontWeight: '600', textAlign: 'center',
+    padding: spacing.lg, borderBottomWidth: 1,
   },
   defaultCommentsList: { maxHeight: screenHeight * 0.4, padding: spacing.sm },
   defaultCommentItem: { 
     paddingHorizontal: spacing.md, 
     paddingVertical: spacing.md, 
-    borderBottomWidth: 1, 
-    borderBottomColor: colors.border 
+    borderBottomWidth: 1,
   },
-  defaultCommentText: { fontSize: fontSize.md, color: colors.text },
+  defaultCommentText: { fontSize: fontSize.md },
   loadingContainer: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
@@ -2988,11 +3485,9 @@ const styles = StyleSheet.create({
   },
   loadMoreText: {
     marginLeft: spacing.sm,
-    color: colors.textSecondary,
   },
   loadingText: {
     marginTop: spacing.sm,
-    color: colors.textSecondary,
   },
   leadCardMeta: {
     flexDirection: 'row',
@@ -3001,7 +3496,6 @@ const styles = StyleSheet.create({
   },
   leadCardPhase: {
     fontSize: fontSize.sm,
-    color: colors.primary,
     fontWeight: '500',
     flex: 1,
   },
@@ -3010,12 +3504,10 @@ const styles = StyleSheet.create({
   },
   leadCardDate: {
     fontSize: fontSize.xs,
-    color: colors.textSecondary,
     fontWeight: '500',
   },
   leadCardTime: {
     fontSize: fontSize.xs,
-    color: colors.textSecondary,
     marginTop: 2,
   },
   collaboratorInfo: {
@@ -3023,12 +3515,10 @@ const styles = StyleSheet.create({
   },
   collaboratorEmail: {
     fontSize: fontSize.sm,
-    color: colors.textSecondary,
     marginTop: 2,
   },
   collaboratorRole: {
     fontSize: fontSize.sm,
-    color: colors.textSecondary,
     marginTop: 2,
     fontStyle: 'italic',
   },
