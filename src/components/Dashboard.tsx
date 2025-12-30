@@ -35,7 +35,7 @@ import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';
 import Reminder from './Reminder';
-import BUP from './BUP/BUP';
+import BUP from './BUP';
 import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
@@ -117,12 +117,12 @@ interface Module {
 interface ReminderItem {
   id: string;
   title: string;
-  time: string;
-  icon: string;
-  meeting_with?: string;
-  meeting_time?: string;
+  reminder_date: string;  // Changed from 'time'
+  description?: string;
+  created_by?: any;
+  color?: string;
+  is_completed?: boolean;
 }
-
 interface UpcomingEvent {
   full_name: string;
   date: string;
@@ -148,6 +148,9 @@ interface ApiResponse {
   is_driver: boolean;
   upcoming_anniversary: any[];
   autoReconfigure: boolean;
+  hours_worked_last_7_attendance: any[];
+  overtime_hours: any[];
+  upcoming_reminder: any[];
 }
 
 // Theme Colors
@@ -170,6 +173,7 @@ const lightColors = {
   primaryBlue: '#007AFF',
   gradientStart: '#007AFF',
   gradientEnd: '#0056CC',
+
 };
 
 const darkColors = {
@@ -187,10 +191,11 @@ const darkColors = {
   attendanceGreen: '#00D492',
   hrPink: '#FF637F',
   cabOrange: '#FFBB64',
-  headerBg: '#000D24',
+  headerBg: '#141414ff',
   primaryBlue: '#007AFF',
   gradientStart: '#007AFF',
   gradientEnd: '#0056CC',
+  headerBgLight: '#d8d8d8ff',
 };
 
 // Configure notification handler
@@ -203,7 +208,6 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
-
 // Main Dashboard Component
 function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -225,6 +229,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [topModules, setTopModules] = useState<any[]>([]);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hoursWorked, setHoursWorked] = useState<number[]>([]);
+  const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
+  const { width, height } = Dimensions.get('window');
 
   // Page visibility states
   const [showAttendance, setShowAttendance] = useState(false);
@@ -264,6 +271,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const switchToggle = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-300)).current;
 
+  const bulgeAnim = useRef(new Animated.Value(0)).current;
+
   // Current theme colors
   const currentColors = isDark ? darkColors : lightColors;
 
@@ -280,22 +289,34 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Default modules for new users
   const defaultLastOpened: IconItem[] = [
     { name: 'HR', color: '#00d285', icon: 'user-tie', library: 'fa5', module_unique_name: 'hr' },
-    { name: 'Car', color: '#ffb157', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
-    { name: 'Attendance', color: '#ff5e7a', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
+    { name: 'Car', color: '#ff5e7a', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
+    { name: 'Attendance', color: '#ffb157', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
     { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
   ];
 
   // Updated chart data with proper day alignment
-  const chartData = [
-    { day: 'Mon', hours: 5.5, target: 6.0 },
-    { day: 'Tue', hours: 7.2, target: 5.8 },
-    { day: 'Wed', hours: 6.8, target: 7.5 },
-    { day: 'Thu', hours: 8.5, target: 6.2 },
-    { day: 'Fri', hours: 7.0, target: 7.8 },
-    { day: 'Sat', hours: 6.2, target: 6.5 },
-    { day: 'Sun', hours: 5.8, target: 7.2 },
-  ];
+  const getChartData = () => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+    // Pad arrays to ensure we have 7 days
+    const paddedHoursWorked = [...hoursWorked];
+    while (paddedHoursWorked.length < 7) {
+      paddedHoursWorked.push(0);
+    }
+
+    const paddedOvertime = [...overtimeHours];
+    while (paddedOvertime.length < 7) {
+      paddedOvertime.push(0);
+    }
+
+    return days.map((day, index) => ({
+      day,
+      hours: paddedHoursWorked[index] === 0 ? 0.1 : paddedHoursWorked[index],
+      target: paddedOvertime[index] === 0 ? 0.1 : paddedOvertime[index],
+    }));
+  };
+
+  const chartData = getChartData();
   // Responsive font sizes
   const responsiveFont = (size: number) => {
     const scale = Math.min(screenWidth / 375, 1.2);
@@ -319,6 +340,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('Error storing debug log:', error);
     }
   };
+  
 
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
@@ -477,6 +499,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('❌ Auto-mark attendance error:', error);
     }
   };
+
+  useEffect(() => {
+    const navItems = ['home', 'message', 'hrpedia', 'support'];
+    const activeIndex = navItems.indexOf(activeNavItem);
+
+    Animated.spring(bulgeAnim, {
+      toValue: activeIndex,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40,
+    }).start();
+  }, [activeNavItem]);
 
   // Setup push notifications
   useEffect(() => {
@@ -649,9 +683,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setModules(data.modules || []);
             setUpcomingBirthdays(data.upcoming_birthdays || []);
             setUpcomingAnniversaries(data.upcoming_anniversary || []);
+            if (Array.isArray(data.upcoming_reminder)) {
+              setReminders(data.upcoming_reminder);
+            } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
+              setReminders([data.upcoming_reminder]); // Wrap single reminder in array
+            } else {
+              setReminders([]);
+            }
+            setHoursWorked(data.hours_worked_last_7_attendance || []);
+            setOvertimeHours(data.overtime_hours || []);
 
             // Combine and sort events
             const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
+            console.log('Upcoming events:', events);
             setUpcomingEvents(events);
 
             // Save driver status
@@ -874,30 +918,60 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Function to get upcoming events
   const getUpcomingEvents = (birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
+    console.log('🎉 Getting upcoming events...', birthdays, anniversaries);
     const events: UpcomingEvent[] = [];
     const today = new Date();
+    const threeMonthsFromNow = new Date();
+    threeMonthsFromNow.setMonth(today.getMonth() + 3);
+
+    // Process birthdays
     birthdays.forEach(user => {
       if (user.birth_date) {
-        events.push({
-          full_name: user.full_name,
-          date: user.birth_date,
-          type: 'birthday'
-        });
+        const birthDate = new Date(user.birth_date);
+        const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+
+        // If birthday has already passed this year, get next year's birthday
+        if (nextBirthday < today) {
+          nextBirthday.setFullYear(today.getFullYear() + 1);
+        }
+
+        // Only include if within next 3 months
+        if (nextBirthday <= threeMonthsFromNow) {
+          events.push({
+            full_name: user.full_name,
+            date: user.birth_date,
+            type: 'birthday'
+          });
+        }
       }
     });
+
+    // Process anniversaries
     anniversaries.forEach(user => {
       if (user.joining_date) {
         const anniversaryDate = new Date(user.joining_date);
-        const years = today.getFullYear() - anniversaryDate.getFullYear();
-        events.push({
-          full_name: user.full_name,
-          date: user.joining_date,
-          type: 'anniversary',
-          years: years,
-          anniversaryYears: years + 1
-        });
+        const nextAnniversary = new Date(today.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
+
+        // If anniversary has already passed this year, get next year's
+        if (nextAnniversary < today) {
+          nextAnniversary.setFullYear(today.getFullYear() + 1);
+        }
+
+        // Only include if within next 3 months
+        if (nextAnniversary <= threeMonthsFromNow) {
+          const years = today.getFullYear() - anniversaryDate.getFullYear();
+          events.push({
+            full_name: user.full_name,
+            date: user.joining_date,
+            type: 'anniversary',
+            years: years,
+            anniversaryYears: years + 1
+          });
+        }
       }
     });
+
+    // Sort events by date
     events.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
@@ -906,10 +980,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
       const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
       const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
+
       return eventDateA.getTime() - eventDateB.getTime();
     });
-    return events.slice(0, 3);
+
+    console.log(`Found ${events.length} upcoming events within next 3 months`);
+    return events.slice(0, 3); // Return max 3 events
   };
+
 
   // Function to get initials from name
   const getInitials = (fullName: string): string => {
@@ -1317,8 +1395,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 {item.day}
               </Text>
               <View style={[styles.barWrapper, { height: chartHeight }]}>
-                <View style={[styles.targetBar, { height: targetHeight, backgroundColor: 'rgba(255, 94, 122, 0.3)' }]} />
-                <View style={[styles.hoursBar, { height: hoursHeight, backgroundColor: currentColors.primaryBlue }]} />
+                <View style={[styles.targetBar, {
+                  height: targetHeight,
+                  backgroundColor: 'rgba(255, 94, 122, 0.5)' // Pink for overtime
+                }]} />
+                <View style={[styles.hoursBar, {
+                  height: hoursHeight,
+                  backgroundColor: currentColors.primaryBlue // Blue for hours worked
+                }]} />
               </View>
             </View>
           );
@@ -1352,7 +1436,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   if (error || !userData) {
     return (
       <SafeAreaView style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }]}>
-        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={currentColors.headerBg} />
+        <StatusBar barStyle={isDark ? "light-content" : "light-content"} backgroundColor={currentColors.headerBg} />
         <Text style={[styles.errorText, { color: currentColors.text }]}>Failed to load data</Text>
         <TouchableOpacity style={[styles.retryButton, { backgroundColor: currentColors.info }]}>
           <Text style={[styles.retryButtonText, { color: currentColors.white }]}>Retry</Text>
@@ -1484,7 +1568,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
       <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
+        barStyle={isDark ? 'light-content' : 'light-content'}
         backgroundColor={currentColors.headerBg}
         translucent={false}
       />
@@ -1538,7 +1622,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         >
           {/* Header Banner with dark overlay */}
           <LinearGradient
-            colors={isDark ? ['#000D24', '#000D24'] : ['#2D3748', '#2D3748']}
+            colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']} // Lighter for light mode
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.headerBanner}
@@ -1548,6 +1632,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               style={styles.headerImage}
               resizeMode="cover"
             />
+            {/* Adjust overlay opacity for better contrast */}
+            <View style={[styles.headerOverlay, {
+              backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
+            }]} />
             {/* Dark overlay for text visibility */}
             <View style={styles.headerOverlay} />
 
@@ -1571,7 +1659,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           {/* Last Opened Section - All 4 in 1 row */}
           {lastOpenedModules.length > 0 && (
             <View style={[styles.sectionCard, { backgroundColor: theme.cardBg, marginTop: 20 }]}>
-              <Text style={[styles.labelSmall, { color: theme.textSub }]}>LAST OPENED</Text>
+              <Text style={[styles.labelSmall, { color: theme.textSub }]}>QUICK ACTIONS</Text>
               <View style={styles.iconGridFull}>
                 {lastOpenedModules.slice(0, 4).map((item, index) => {
                   // Ensure we have a unique key and handle missing items
@@ -1590,7 +1678,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                           resizeMode="contain"
                           onError={(e) => {
                             console.log('Error loading icon:', item.iconUrl);
-                            // You could set a default icon here if needed
                           }}
                         />
                       </View>
@@ -1659,29 +1746,40 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
           )}
 
-          {/* Upcoming Reminder */}
           <View style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}>
             <View style={styles.reminderContent}>
               <View style={[styles.reminderBorder, { backgroundColor: currentColors.primaryBlue }]} />
               <View style={styles.reminderText}>
-                <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 20 }]}>UPCOMING REMINDERS</Text>
-                {reminders.length > 0 ? (
-                  <>
-                    <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
-                      {reminders[0].title}
-                    </Text>
-                    <Text style={[styles.reminderTime, { color: theme.textSub }]}>
-                      <Ionicons name="time-outline" size={12} /> {reminders[0].time}
-                    </Text>
-                  </>
+                <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 20 }]}>
+                  UPCOMING REMINDERS
+                </Text>
+
+                {reminders && reminders.length > 0 ? (
+                  reminders.map((reminder, index) => (
+                    <View key={reminder.id || index} style={index > 0 ? { marginTop: 10 } : null}>
+                      <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
+                        {reminder.title}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="time-outline" size={12} />
+                        <Text style={[styles.reminderTime, { color: theme.textSub, marginLeft: 2 }]}>
+                          {new Date(reminder.reminder_date).toLocaleString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
                 ) : (
                   <>
                     <Text style={[styles.reminderTitle, { color: theme.textMain, marginBottom: 5 }]}>
-                      Meeting with Zsolt
+                      No upcoming Reminders
                     </Text>
-
                     <Text style={[styles.reminderTime, { color: theme.textSub }]}>
-                      <Ionicons name="time-outline" size={12} /> 9:00 AM - 10:00 AM
+                      Kickback and Relax
                     </Text>
                   </>
                 )}
@@ -1689,7 +1787,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
             <View style={styles.calendarIcon}>
               <Ionicons name="calendar-outline" size={40} color={currentColors.primaryBlue} />
-              {/* <Text style={[styles.calendarDate, { color: currentColors.primaryBlue }]}>{new Date().getDate()}</Text> */}
             </View>
           </View>
 
@@ -1740,7 +1837,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
                   />
                   <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
-                    <FontAwesome5 name="id-card" size={18} color="white" />
+                    <FontAwesome5 name="car" size={18} color="white" />
                   </View>
                   <Text style={[styles.moduleTitle, { fontSize: 14 }]}>Car</Text>
                 </LinearGradient>
@@ -1795,19 +1892,25 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           </TouchableOpacity>
 
           {/* Stats Section */}
-          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 30 }]}>STATS</Text>
-            <View style={styles.statsContent}>
-              {renderChart()}
+          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg, marginTop: 15 }]}>
+            <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 10 }]}>WORK STATISTICS</Text>
+            <View style={[styles.statsContent, { marginTop: 20 }]}>
+              <View style={styles.chartContainer}>
+                {renderChart()}
+              </View>
               <View style={[styles.statsNumbers, { marginLeft: 20 }]}>
                 <Text style={[styles.statsValue, { color: theme.textMain }]}>
-                  {userData?.days_present || '60'}%
+                  {userData?.days_present || 0}
                 </Text>
-                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>DAYS PRESENT</Text>
+                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>
+                  DAYS PRESENT
+                </Text>
                 <Text style={[styles.statsValue, { color: theme.textMain, marginTop: 15 }]}>
-                  {userData?.leaves_applied || '6.8'}
+                  {userData?.leaves_applied || 0}
                 </Text>
-                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>LEAVES APPLIED</Text>
+                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>
+                  LEAVES APPLIED
+                </Text>
               </View>
             </View>
           </View>
@@ -1876,7 +1979,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                         </Text>
                         <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
                           <Ionicons
-                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"}
+                            name={event.type === 'birthday' ? "ice-cream" : "briefcase-outline"}
                             size={12}
                             color={theme.textSub}
                           />
@@ -1889,82 +1992,26 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   );
                 })
               ) : (
-                [
-                  { name: 'Ananya Vishnoi', date: '2023-12-20', type: 'birthday' as const },
-                  { name: 'Kriti Kharbanda', date: '2023-12-26', type: 'birthday' as const },
-                  { name: 'Anup Khanna', date: '2024-01-13', type: 'anniversary' as const, years: 3 },
-                ].map((event, index) => {
-                  const formattedDate = formatEventDate(event.date);
-                  return (
-                    <View key={index} style={styles.eventItem}>
-                      <View style={[styles.eventCard, { backgroundColor: 'transparent' }]}>
-                        <View style={styles.eventAvatarWrapper}>
-                          <View style={[
-                            styles.eventAvatar,
-                            {
-                              backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : currentColors.primaryBlue,
-                              width: 70,
-                              height: 70,
-                            }
-                          ]}>
-                            <Text style={[styles.eventAvatarInitials, { fontSize: 20 }]}>
-                              {getInitials(event.name)}
-                            </Text>
-                          </View>
-
-                          <View style={[
-                            styles.eventDateBadge,
-                            {
-                              top: -5,
-                              right: -5,
-                              backgroundColor: theme.cardBg,
-                              paddingHorizontal: 6,
-                              paddingVertical: 4,
-                              borderRadius: 6,
-                            }
-                          ]}>
-                            <Text style={[styles.eventDateDay, { fontSize: 12 }]}>{formattedDate.day}</Text>
-                            <Text style={[styles.eventDateMonth, { fontSize: 9 }]}>{formattedDate.month}</Text>
-                          </View>
-
-                          {event.type === 'anniversary' && (
-                            <View style={[
-                              styles.anniversaryBadge,
-                              {
-                                bottom: -5,
-                                left: -5,
-                              }
-                            ]}>
-                              <Text style={[styles.anniversaryText, { fontSize: 9 }]}>
-                                {formatAnniversaryYears(event.years || 1)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <Text style={[styles.eventName, { color: theme.textMain, fontSize: 12, marginTop: 8 }]} numberOfLines={1}>
-                          {event.name}
-                        </Text>
-                        <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
-                          <Ionicons
-                            name={event.type === 'birthday' ? "cake-outline" : "briefcase-outline"}
-                            size={12}
-                            color={theme.textSub}
-                          />
-                          <Text style={[styles.eventType, { color: theme.textSub, fontSize: 10, marginLeft: 4 }]}>
-                            {event.type === 'birthday' ? 'Birthday' : 'Anniversary'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })
+                <View style={styles.noEventsContainer}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={50}
+                    color={currentColors.primaryBlue}
+                    style={styles.noEventsIcon}
+                  />
+                  <Text style={[styles.noEventsText, { color: theme.textMain }]}>
+                    No upcoming events
+                  </Text>
+                  <Text style={[styles.noEventsSubtext, { color: theme.textSub }]}>
+                    in the next 3 months
+                  </Text>
+                </View>
               )}
             </ScrollView>
           </View>
 
           {/* Theme Switcher */}
-          <View style={styles.themeSwitcher}>
+          {/* <View style={styles.themeSwitcher}>
             <TouchableOpacity
               style={[styles.lightSwitch, {
                 backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0',
@@ -2014,7 +2061,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 </View>
               </View>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Footer */}
           <View style={styles.footer}>
@@ -2039,7 +2086,40 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             shadowOpacity: 0.1,
             shadowRadius: 20,
             elevation: 10,
+            overflow: 'visible',
           }]}>
+            {/* Animated Bulge Background */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.downBulgeWrapper,
+                {
+                  transform: [
+                    {
+                      translateX: bulgeAnim.interpolate({
+                        inputRange: [0, 1, 2, 3],
+                        outputRange: [
+                          screenWidth * 0.125,
+                          screenWidth * 0.375,
+                          screenWidth * 0.625,
+                          screenWidth * 0.875,
+                        ],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.downBulge,
+                  {
+                    backgroundColor: theme.bgColor, // 👈 CUT-OUT color
+                  },
+                ]}
+              />
+            </Animated.View>
+
             {[
               { icon: 'home', label: 'Home' },
               { icon: 'chatbubbles', label: 'Message' },
@@ -2098,10 +2178,10 @@ const getModuleColor = (moduleName: string): string => {
   switch (moduleName.toLowerCase()) {
     case 'hr':
       return '#00d285';
-    case 'cab':
-      return '#ffb157';
-    case 'attendance':
+    case 'car':
       return '#ff5e7a';
+    case 'attendance':
+      return '#ffb157';
     case 'bdt':
       return '#1da1f2';
     default:
@@ -2223,7 +2303,7 @@ const AllModulesModal = ({
   currentColors
 }: any) => {
   const { width: screenWidth } = useWindowDimensions();
-  const itemWidth = (screenWidth - 60) / 2; // 2 columns with padding
+  const itemWidth = (screenWidth - 60) / 2;
 
   return (
     <Modal
@@ -2231,7 +2311,7 @@ const AllModulesModal = ({
       transparent={false}
       visible={isVisible}
       onRequestClose={onClose}
-      statusBarTranslucent={true}
+      statusBarTranslucent={false}
     >
       <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.bgColor }]}>
         <LinearGradient
@@ -2331,6 +2411,7 @@ const AllModulesModal = ({
 };
 
 const styles = StyleSheet.create({
+
   safeContainer: {
     flex: 1,
     backgroundColor: '#000D24',
@@ -2487,6 +2568,7 @@ const styles = StyleSheet.create({
   iconImage: {
     width: 25,
     height: 25,
+    tintColor: 'white',
   },
   iconLabel: {
     fontSize: 10,
@@ -2836,6 +2918,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingBottom: 6,   // 👈 gives breathing space
   },
   navItem: {
     flex: 1,
@@ -2846,17 +2929,13 @@ const styles = StyleSheet.create({
   },
   floatingCircle: {
     position: 'absolute',
-    top: -20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    top: -25,    // keep icon slightly above bar
+    width: 65,
+    height: 65,
+    borderRadius: 32.5,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 8,
+    elevation: 10,
   },
   navLabel: {
     fontSize: 10,
@@ -2925,6 +3004,29 @@ const styles = StyleSheet.create({
   },
   menuItems: {
     flex: 1,
+  },
+  noEventsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 30,
+    minWidth: width - 40, // Full width minus padding
+  },
+  noEventsIcon: {
+    marginBottom: 15,
+    opacity: 0.6,
+  },
+  noEventsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  noEventsSubtext: {
+    fontSize: 13,
+    textAlign: 'center',
+    opacity: 0.7,
   },
   menuItemsContent: {
     paddingTop: 20,
@@ -3097,4 +3199,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  downBulgeWrapper: {
+    position: 'absolute',
+    bottom: -34,          // slightly more than half height
+    left: 0,
+    width: 0,
+    height: 0,
+    zIndex: 5,            // 👈 ABOVE nav bg
+    elevation: 5,
+  },
+
+  downBulge: {
+    width: 76,
+    height: 76,
+    borderBottomLeftRadius: 38,
+    borderBottomRightRadius: 38,
+
+    // smoothness tricks
+    transform: [{ scaleX: 1.15 }],
+
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+
+    elevation: 8,
+  },
+
+
 });

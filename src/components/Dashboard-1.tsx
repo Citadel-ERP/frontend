@@ -21,7 +21,7 @@ import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';
 import Reminder from './Reminder';
-import BUP from './BUP/BUP';
+import BUP from './BUP';
 import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
@@ -3348,3 +3348,5 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 });
+
+
