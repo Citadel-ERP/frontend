@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, StatusBar, Image
+    View, Text, StyleSheet, Platform, TouchableOpacity, ScrollView, TextInput, StatusBar, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -76,7 +76,9 @@ const CityScreen: React.FC<CityScreenProps> = ({
                         {/* Dark overlay for better text visibility */}
                         <View style={styles.headerOverlay} />
                         {/* Header Content */}
-                        <View style={styles.headerContent}>
+                        <View style={[styles.headerContent, { 
+    paddingTop: Platform.OS === 'ios' ? 50 : 40 
+}]}>
                             {/* Top row with Citadel logo and close button */}
                             <View style={styles.headerTopRow}>
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -165,7 +167,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f5f5f5',
     },
     scrollContainer: {
-        flex: 1,
+        flex: 1
     },
     scrollContent: {
         flexGrow: 1,

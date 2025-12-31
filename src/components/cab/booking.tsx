@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
-    TextInput, ActivityIndicator, Alert, Image
+    TextInput, ActivityIndicator, Alert, Image, StatusBar
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,6 +65,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
 
     return (
         <View style={styles.screenContainer}>
+            <StatusBar barStyle="light-content" backgroundColor="#017bf9" />
             <ScrollView
                 style={styles.scrollContainer}
                 contentContainerStyle={styles.scrollContent}

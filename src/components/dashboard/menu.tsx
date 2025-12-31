@@ -9,10 +9,11 @@ import {
     Platform,
     Modal,
     Animated,
+    StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface UserData {
     full_name: string;
@@ -55,6 +56,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     getInitials,
     currentColors,
 }) => {
+    const insets = useSafeAreaInsets();
+    
     if (!isVisible) return null;
 
     return (
@@ -62,9 +65,14 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             transparent 
             visible={isVisible} 
             animationType="none" 
-            onRequestClose={onClose} 
+            onRequestClose={onClose}
             statusBarTranslucent={true}
         >
+            <StatusBar
+                barStyle="light-content"
+                backgroundColor="rgba(0, 0, 0, 0.5)"
+                translucent={true}
+            />
             <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
                 <TouchableOpacity 
                     style={styles.overlayTouchable} 
@@ -77,87 +85,89 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         width: 300,
                         transform: [{ translateX: slideAnim }],
                         backgroundColor: currentColors.white,
+                        paddingTop: insets.top,
                     }
                 ]}>
-                    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-                        <LinearGradient
-                            colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.menuHeader}
-                        >
-                            <View style={styles.menuHeaderContent}>
-                                {userData?.profile_picture ? (
-                                    <Image
-                                        source={{ uri: userData.profile_picture }}
-                                        style={styles.menuUserAvatar}
-                                    />
-                                ) : (
-                                    <View style={[styles.menuUserAvatarCircle, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
-                                        <Text style={styles.menuUserAvatarText}>
-                                            {getInitials(userData?.full_name || 'User')}
-                                        </Text>
-                                    </View>
-                                )}
-                                <View style={styles.menuUserDetails}>
-                                    <Text style={[styles.menuUserName, { color: '#FFFFFF' }]}>
-                                        {userData?.full_name || 'User'}
-                                    </Text>
-                                    <Text style={[styles.menuUserRole, { color: 'rgba(255, 255, 255, 0.8)' }]}>
-                                        {userData?.designation || userData?.role || 'Employee'}
+                    <LinearGradient
+                        colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.menuHeader}
+                    >
+                        <View style={styles.menuHeaderContent}>
+                            {userData?.profile_picture ? (
+                                <Image
+                                    source={{ uri: userData.profile_picture }}
+                                    style={styles.menuUserAvatar}
+                                />
+                            ) : (
+                                <View style={[styles.menuUserAvatarCircle, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                                    <Text style={styles.menuUserAvatarText}>
+                                        {getInitials(userData?.full_name || 'User')}
                                     </Text>
                                 </View>
+                            )}
+                            <View style={styles.menuUserDetails}>
+                                <Text style={[styles.menuUserName, { color: '#FFFFFF' }]}>
+                                    {userData?.full_name || 'User'}
+                                </Text>
+                                <Text style={[styles.menuUserRole, { color: 'rgba(255, 255, 255, 0.8)' }]}>
+                                    {userData?.designation || userData?.role || 'Employee'}
+                                </Text>
                             </View>
-                        </LinearGradient>
+                        </View>
+                    </LinearGradient>
 
-                        <ScrollView 
-                            style={[styles.menuItems, { backgroundColor: currentColors.white }]}
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={styles.menuItemsContent}
-                        >
-                            {menuItems.map((item: any, index: number) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={[
-                                        styles.menuItem,
-                                        activeMenuItem === item.title && styles.menuItemActive,
-                                        {
-                                            backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
-                                        }
-                                    ]}
-                                    onPress={() => onMenuItemPress(item)}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.menuItemIconContainer}>
-                                        <Ionicons
-                                            name={item.icon as any}
-                                            size={22}
-                                            color={activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary}
-                                        />
-                                    </View>
-                                    <Text style={[
-                                        styles.menuItemText,
-                                        activeMenuItem === item.title && styles.menuItemTextActive,
-                                        { color: activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary }
-                                    ]}>{item.title}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-
-                        <View style={[styles.logoutSection, { backgroundColor: currentColors.white }]}>
-                            <View style={[styles.logoutDivider, { backgroundColor: currentColors.border }]} />
+                    <ScrollView 
+                        style={[styles.menuItems, { backgroundColor: currentColors.white }]}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.menuItemsContent}
+                    >
+                        {menuItems.map((item: any, index: number) => (
                             <TouchableOpacity
-                                style={[styles.logoutButton, { backgroundColor: '#FEF2F2' }]}
-                                onPress={onLogout}
+                                key={index}
+                                style={[
+                                    styles.menuItem,
+                                    activeMenuItem === item.title && styles.menuItemActive,
+                                    {
+                                        backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
+                                    }
+                                ]}
+                                onPress={() => onMenuItemPress(item)}
                                 activeOpacity={0.7}
                             >
-                                <View style={styles.logoutIconContainer}>
-                                    <Ionicons name="log-out-outline" size={22} color={currentColors.error} />
+                                <View style={styles.menuItemIconContainer}>
+                                    <Ionicons
+                                        name={item.icon as any}
+                                        size={22}
+                                        color={activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary}
+                                    />
                                 </View>
-                                <Text style={[styles.logoutButtonText, { color: currentColors.error }]}>Logout</Text>
+                                <Text style={[
+                                    styles.menuItemText,
+                                    activeMenuItem === item.title && styles.menuItemTextActive,
+                                    { color: activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary }
+                                ]}>{item.title}</Text>
                             </TouchableOpacity>
-                        </View>
-                    </SafeAreaView>
+                        ))}
+                    </ScrollView>
+
+                    <View style={[styles.logoutSection, { 
+                        backgroundColor: currentColors.white,
+                        paddingBottom: Math.max(insets.bottom, 20),
+                    }]}>
+                        <View style={[styles.logoutDivider, { backgroundColor: currentColors.border }]} />
+                        <TouchableOpacity
+                            style={[styles.logoutButton, { backgroundColor: '#FEF2F2' }]}
+                            onPress={onLogout}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.logoutIconContainer}>
+                                <Ionicons name="log-out-outline" size={22} color={currentColors.error} />
+                            </View>
+                            <Text style={[styles.logoutButtonText, { color: currentColors.error }]}>Logout</Text>
+                        </TouchableOpacity>
+                    </View>
                 </Animated.View>
             </View>
         </Modal>
@@ -182,9 +192,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 8,
         elevation: 10,
-    },
-    safeArea: {
-        flex: 1,
     },
     menuHeader: {
         paddingVertical: 24,
@@ -261,7 +268,6 @@ const styles = StyleSheet.create({
     },
     logoutSection: {
         paddingTop: 12,
-        paddingBottom: 20,
     },
     logoutDivider: {
         height: 1,

@@ -5,9 +5,11 @@ import {
   TouchableOpacity,
   Text,
   Animated,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface BottomBarProps {
   activeNavItem: string;
@@ -26,12 +28,18 @@ const BottomBar: React.FC<BottomBarProps> = ({
   bulgeAnim,
   screenWidth,
 }) => {
+  const insets = useSafeAreaInsets();
+  
+  // Calculate total height including safe area
+  const bottomNavHeight = 65;
+  const totalHeight = bottomNavHeight + insets.bottom;
+
   return (
     <View style={[styles.bottomNavContainer, { backgroundColor: 'transparent' }]}>
-      <LinearGradient
+      {/* <LinearGradient
         colors={['transparent', 'rgba(0, 0, 0, 0.1)']}
-        style={styles.bottomNavGradient}
-      >
+        style={[styles.bottomNavGradient, { height: totalHeight + 10 }]}
+      > */}
         <View style={[styles.bottomNav, {
           backgroundColor: theme.navBg,
           borderTopLeftRadius: 25,
@@ -42,6 +50,8 @@ const BottomBar: React.FC<BottomBarProps> = ({
           shadowRadius: 20,
           elevation: 10,
           overflow: 'visible',
+          paddingBottom: insets.bottom || 6,
+          height: totalHeight,
         }]}>
           {/* Animated Bulge Background */}
           <Animated.View
@@ -74,45 +84,48 @@ const BottomBar: React.FC<BottomBarProps> = ({
               ]}
             />
           </Animated.View>
-          {[
-            { icon: 'home', label: 'Home' },
-            { icon: 'chatbubbles', label: 'Message' },
-            { icon: 'people', label: 'HrPedia' },
-            { icon: 'headset', label: 'Support' },
-          ].map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.navItem}
-              onPress={() => handleNavItemPress(item.label.toLowerCase())}
-              activeOpacity={0.7}
-            >
-              {activeNavItem === item.label.toLowerCase() ? (
-                <LinearGradient
-                  colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                  style={styles.floatingCircle}
-                >
-                  <Ionicons
-                    name={item.icon as any}
-                    size={22}
-                    color="white"
-                  />
-                </LinearGradient>
-              ) : (
-                <>
-                  <Ionicons
-                    name={item.icon as any}
-                    size={20}
-                    color={theme.textSub}
-                  />
-                  <Text style={[styles.navLabel, { color: theme.textSub }]}>
-                    {item.label}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ))}
+
+          <View style={styles.navItemsContainer}>
+            {[
+              { icon: 'home', label: 'Home' },
+              { icon: 'chatbubbles', label: 'Message' },
+              { icon: 'people', label: 'HrPedia' },
+              { icon: 'headset', label: 'Support' },
+            ].map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.navItem}
+                onPress={() => handleNavItemPress(item.label.toLowerCase())}
+                activeOpacity={0.7}
+              >
+                {activeNavItem === item.label.toLowerCase() ? (
+                  <LinearGradient
+                    colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+                    style={styles.floatingCircle}
+                  >
+                    <Ionicons
+                      name={item.icon as any}
+                      size={22}
+                      color="white"
+                    />
+                  </LinearGradient>
+                ) : (
+                  <>
+                    <Ionicons
+                      name={item.icon as any}
+                      size={20}
+                      color={theme.textSub}
+                    />
+                    <Text style={[styles.navLabel, { color: theme.textSub }]}>
+                      {item.label}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </LinearGradient>
+      {/* </LinearGradient> */}
     </View>
   );
 };
@@ -125,16 +138,17 @@ const styles = StyleSheet.create({
     right: 0,
   },
   bottomNavGradient: {
-    height: 75,
     justifyContent: 'flex-end',
   },
   bottomNav: {
-    height: 65,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+  },
+  navItemsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 6,
+    height: 65,
   },
   navItem: {
     flex: 1,
@@ -151,7 +165,11 @@ const styles = StyleSheet.create({
     borderRadius: 32.5,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 10,
+    // shadowColor: '#000',
+    // shadowOffset: { width: 0, height: 4 },
+    // shadowOpacity: 0.3,
+    // shadowRadius: 8,
+    // elevation: 10,
   },
   navLabel: {
     fontSize: 10,
@@ -173,11 +191,11 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 38,
     borderBottomRightRadius: 38,
     transform: [{ scaleX: 1.15 }],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 8,
+    // shadowColor: '#000',
+    // shadowOffset: { width: 0, height: -6 },
+    // shadowOpacity: 0.12,
+    // shadowRadius: 12,
+    // elevation: 8,
   },
 });
 
