@@ -607,7 +607,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         setShowScoutBoy(true);
         break;
       case 'reminder':
-        setShowReminder(true);
+        setShowReminder(true); // Handle reminder notification
         break;
       case 'bup':
         setShowBUP(true);
@@ -1042,7 +1042,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     saveLastOpenedModule(moduleData);
 
-    // Rest of your existing navigation logic...
+    // Navigation logic
     if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
@@ -1059,7 +1059,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (key.includes('scout')) {
       setShowScoutBoy(true);
     } else if (key.includes('reminder')) {
-      setShowReminder(true);
+      setShowReminder(true); // This opens the Reminder page
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
     } else if (key.includes('employee_management')) {
@@ -1217,7 +1217,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowMedical(false);
     setShowScoutBoy(false);
     setShowCreateSite(false);
-    setShowReminder(false);
+    setShowReminder(false); // Add this line to reset reminder page
     setShowBUP(false);
     setShowSettings(false);
     setShowEmployeeManagement(false);
@@ -1362,129 +1362,99 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Render different pages
   if (showChatRoom && selectedChatRoom) {
     return (
-      // <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
       <ChatRoomScreen
         chatRoom={selectedChatRoom}
         onBack={handleBackFromPage}
         currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
       />
-      // // </SafeAreaView>
     );
   }
 
   if (showChat) {
     return (
-      // <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
       <ChatScreen
         onBack={handleBackFromPage}
         onOpenChatRoom={setSelectedChatRoom}
         currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
       />
-      // // </SafeAreaView>
     );
   }
 
   if (showAttendance) {
     return (
-      ////  <SafeAreaView style={{ flex: 1 }}>
       <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
-      // // </SafeAreaView>
     );
   }
 
   if (showProfile) {
     return (
-      ////  <SafeAreaView style={{ flex: 1 }}>
       <Profile onBack={handleBackFromPage} userData={userData} />
-      // // </SafeAreaView>
     );
   }
 
   if (showHR) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <HR onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showCab) {
     return (
-      ////  <SafeAreaView style={{ flex: 1 }}>
       <Cab onBack={handleBackFromPage} />
-      // // </SafeAreaView>
     );
   }
 
   if (showDriver) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <Driver onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showBDT) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <BDT onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showMedical) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <Medical onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showScoutBoy) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <ScoutBoy onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showReminder) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <Reminder onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showBUP) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <BUP onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showSettings) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <Settings onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showEmployeeManagement) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
       <EmployeeManagement onBack={handleBackFromPage} />
-      // </SafeAreaView>
     );
   }
 
   if (showCreateSite) {
     return (
-      //  <SafeAreaView style={{ flex: 1 }}>
-      <CreateSite onBack={handleBackFromPage} />
-      // </SafeAreaView>
+      <CreateSite onBack={handleBackFromPage} colors={undefined} spacing={undefined} fontSize={undefined} borderRadius={undefined} shadows={undefined} />
     );
   }
 
@@ -1593,7 +1563,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Main dashboard render
   return (
-    // <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
     <View style={styles.safeContainer}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'light-content'}
@@ -1666,7 +1635,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             }]} />
             {/* Dark overlay for text visibility */}
             <View style={styles.headerOverlay} />
-            <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+            <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 40 : 20 }]}>
               <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
                 <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
                   {[1, 2, 3].map(i => (
@@ -1691,11 +1660,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             handleModulePress={handleModulePress}
           />
 
-          {/* Upcoming Reminder */}
+          {/* Upcoming Reminder - ADDED onPress PROP */}
           <UpcomingReminder
             reminders={reminders}
             theme={theme}
             currentColors={currentColors}
+            onPress={() => setShowReminder(true)} // This makes the reminder card clickable
           />
 
           {/* Module Grid */}
@@ -1792,8 +1762,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         bulgeAnim={bulgeAnim}
         screenWidth={screenWidth}
       />
-    </View >
-    // </SafeAreaView>
+    </View>
   );
 }
 

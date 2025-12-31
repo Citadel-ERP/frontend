@@ -13,11 +13,21 @@ interface QuickActionsProps {
     title: string;
     iconUrl: string;
     module_unique_name: string;
+    isFromBackend?: boolean;
+    isPlaceholder?: boolean;
   }>;
   modules: Array<any>;
   theme: any;
   handleModulePress: (moduleName: string, moduleUniqueName?: string) => void;
 }
+
+// Predefined colors in the required order
+const QUICK_ACTION_COLORS = [
+  '#00d285',
+  '#ff5e7a',
+  '#ffb157',
+  '#1da1f2'
+];
 
 const QuickActions: React.FC<QuickActionsProps> = ({
   lastOpenedModules,
@@ -25,36 +35,81 @@ const QuickActions: React.FC<QuickActionsProps> = ({
   theme,
   handleModulePress,
 }) => {
-  // Helper function to get module color
-  const getModuleColor = (moduleName: string): string => {
-    switch (moduleName.toLowerCase()) {
-      case 'hr':
-        return '#00d285';
-      case 'car':
-        return '#ff5e7a';
-      case 'attendance':
-        return '#ffb157';
-      case 'bdt':
-        return '#1da1f2';
-      default:
-        return '#007AFF';
-    }
+  // Get a consistent color for each position/index
+  const getColorForIndex = (index: number): string => {
+    // Use modulo to ensure we always use one of the 4 colors
+    return QUICK_ACTION_COLORS[index % QUICK_ACTION_COLORS.length];
   };
+
+  // Get all displayed items (last opened + placeholders)
+  const getDisplayedItems = () => {
+    const displayedItems = [...lastOpenedModules.slice(0, 4)];
+
+    // If we have less than 4 modules, fill with placeholders from backend modules
+    if (displayedItems.length < 4) {
+      const availableModules = modules.filter(
+        (backendModule: any) =>
+          !displayedItems.some(
+            (m: any) => m.module_unique_name === backendModule.module_unique_name
+          )
+      );
+
+      for (let i = displayedItems.length; i < 4; i++) {
+        if (availableModules.length > 0) {
+          const randomModule = availableModules[
+            Math.floor(Math.random() * availableModules.length)
+          ];
+          displayedItems.push({
+            title: randomModule.module_name.charAt(0).toUpperCase() +
+              randomModule.module_name.slice(1).replace('_', ' '),
+            iconUrl: randomModule.module_icon,
+            module_unique_name: randomModule.module_unique_name,
+            isFromBackend: true
+          });
+        } else {
+          // Placeholder item
+          displayedItems.push({
+            title: 'Module',
+            iconUrl: '',
+            module_unique_name: `placeholder-${i}`,
+            isPlaceholder: true
+          });
+        }
+      }
+    }
+
+    return displayedItems;
+  };
+
+  const displayedItems = getDisplayedItems();
 
   return (
     <View style={[styles.sectionCard, { backgroundColor: theme.cardBg, marginTop: 20 }]}>
       <Text style={[styles.labelSmall, { color: theme.textSub }]}>QUICK ACTIONS</Text>
       <View style={styles.iconGridFull}>
-        {lastOpenedModules.slice(0, 4).map((item, index) => {
-          // Ensure we have a unique key and handle missing items
-          if (!item) return null;
+        {displayedItems.slice(0, 4).map((item, index) => {
+          const color = getColorForIndex(index);
+
+          if (item.isPlaceholder) {
+            return (
+              <View key={`placeholder-${index}`} style={styles.iconItemFull}>
+                <View style={[styles.iconBox, { backgroundColor: '#e5e7eb' }]}>
+                  <Ionicons name="apps" size={25} color="#9ca3af" />
+                </View>
+                <Text style={[styles.iconLabel, { color: theme.textSub }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+              </View>
+            );
+          }
+
           return (
             <TouchableOpacity
-              key={`${item.module_unique_name || item.title}-${index}`}
+              key={`${item.module_unique_name}-${index}`}
               style={styles.iconItemFull}
               onPress={() => handleModulePress(item.title, item.module_unique_name)}
             >
-              <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
+              <View style={[styles.iconBox, { backgroundColor: color }]}>
                 <Image
                   source={{ uri: item.iconUrl || `https://cdn-icons-png.flaticon.com/512/3135/3135715.png` }}
                   style={styles.iconImage}
@@ -70,57 +125,6 @@ const QuickActions: React.FC<QuickActionsProps> = ({
             </TouchableOpacity>
           );
         })}
-        {/* If we have less than 4 modules, render placeholder or additional modules */}
-        {lastOpenedModules.length < 4 && (
-          <>
-            {Array.from({ length: 4 - lastOpenedModules.length }).map((_, index) => {
-              // Get a random module from backend that's not already shown
-              const availableModules = modules.filter(
-                (backendModule: any) =>
-                  !lastOpenedModules.some(
-                    (m: any) => m.module_unique_name === backendModule.module_unique_name
-                  )
-              );
-              const randomModule = availableModules.length > 0
-                ? availableModules[Math.floor(Math.random() * availableModules.length)]
-                : null;
-              if (randomModule) {
-                return (
-                  <TouchableOpacity
-                    key={`placeholder-${index}`}
-                    style={styles.iconItemFull}
-                    onPress={() => handleModulePress(
-                      randomModule.module_name.charAt(0).toUpperCase() +
-                      randomModule.module_name.slice(1).replace('_', ' '),
-                      randomModule.module_unique_name
-                    )}
-                  >
-                    <View style={[styles.iconBox, { backgroundColor: getModuleColor(randomModule.module_name) }]}>
-                      <Image
-                        source={{ uri: randomModule.module_icon }}
-                        style={styles.iconImage}
-                        resizeMode="contain"
-                      />
-                    </View>
-                    <Text style={[styles.iconLabel, { color: theme.textMain }]} numberOfLines={1}>
-                      {randomModule.module_name.charAt(0).toUpperCase() +
-                        randomModule.module_name.slice(1).replace('_', ' ')}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }
-              // If no backend modules available, show a placeholder
-              return (
-                <View key={`placeholder-${index}`} style={styles.iconItemFull}>
-                  <View style={[styles.iconBox, { backgroundColor: '#e5e7eb' }]}>
-                    <Ionicons name="apps" size={25} color="#9ca3af" />
-                  </View>
-                  <Text style={[styles.iconLabel, { color: theme.textSub }]}>Module</Text>
-                </View>
-              );
-            })}
-          </>
-        )}
       </View>
     </View>
   );
