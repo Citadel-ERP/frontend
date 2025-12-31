@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -20,15 +21,28 @@ interface UpcomingReminderProps {
   reminders: ReminderItem[];
   theme: any;
   currentColors: any;
+  onPress?: () => void; 
 }
 
 const UpcomingReminder: React.FC<UpcomingReminderProps> = ({
   reminders,
   theme,
   currentColors,
+  onPress, 
 }) => {
+  
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+    }
+  };
+
   return (
-    <View style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}>
+    <TouchableOpacity 
+      style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}
+      onPress={handlePress}
+      activeOpacity={0.7} 
+    >
       <View style={styles.reminderContent}>
         <View style={[styles.reminderBorder, { backgroundColor: currentColors.primaryBlue }]} />
         <View style={styles.reminderText}>
@@ -69,7 +83,7 @@ const UpcomingReminder: React.FC<UpcomingReminderProps> = ({
       <View style={styles.calendarIcon}>
         <Ionicons name="calendar-outline" size={40} color={currentColors.primaryBlue} />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 

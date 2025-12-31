@@ -58,25 +58,34 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     if (!isVisible) return null;
 
     return (
-        <Modal transparent visible={isVisible} animationType="none" onRequestClose={onClose} statusBarTranslucent={true}>
-            {/* <SafeAreaView style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}> */}
+        <Modal 
+            transparent 
+            visible={isVisible} 
+            animationType="none" 
+            onRequestClose={onClose} 
+            statusBarTranslucent={true}
+        >
             <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
-                <LinearGradient
-                    colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.modalHeaderGradient, styles.linearGradient]}
-                >
-                    <TouchableOpacity style={styles.overlayTouchable} activeOpacity={1} onPress={onClose} />
-                    <Animated.View style={[
-                        styles.menuContainer,
-                        {
-                            width: 300,
-                            transform: [{ translateX: slideAnim }],
-                            backgroundColor: currentColors.white,
-                        }
-                    ]}>
-                        <View style={[styles.menuHeader, { backgroundColor: '#3262f1' }]}>
+                <TouchableOpacity 
+                    style={styles.overlayTouchable} 
+                    activeOpacity={1} 
+                    onPress={onClose} 
+                />
+                <Animated.View style={[
+                    styles.menuContainer,
+                    {
+                        width: 300,
+                        transform: [{ translateX: slideAnim }],
+                        backgroundColor: currentColors.white,
+                    }
+                ]}>
+                    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+                        <LinearGradient
+                            colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.menuHeader}
+                        >
                             <View style={styles.menuHeaderContent}>
                                 {userData?.profile_picture ? (
                                     <Image
@@ -99,8 +108,10 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                                     </Text>
                                 </View>
                             </View>
-                        </View>
-                        <ScrollView style={[styles.menuItems, { backgroundColor: currentColors.white }]}
+                        </LinearGradient>
+
+                        <ScrollView 
+                            style={[styles.menuItems, { backgroundColor: currentColors.white }]}
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={styles.menuItemsContent}
                         >
@@ -132,6 +143,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
+
                         <View style={[styles.logoutSection, { backgroundColor: currentColors.white }]}>
                             <View style={[styles.logoutDivider, { backgroundColor: currentColors.border }]} />
                             <TouchableOpacity
@@ -145,10 +157,9 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                                 <Text style={[styles.logoutButtonText, { color: currentColors.error }]}>Logout</Text>
                             </TouchableOpacity>
                         </View>
-                    </Animated.View>
-                </LinearGradient>
+                    </SafeAreaView>
+                </Animated.View>
             </View>
-            {/* </SafeAreaView> */}
         </Modal>
     );
 };
@@ -172,13 +183,14 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 10,
     },
+    safeArea: {
+        flex: 1,
+    },
     menuHeader: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 60,
-        paddingBottom: 24,
-        
+        paddingVertical: 24,
+        paddingHorizontal: 20,
     },
     menuHeaderContent: {
-        paddingHorizontal: 20,
         flexDirection: 'row',
         alignItems: 'center',
     },
@@ -249,7 +261,7 @@ const styles = StyleSheet.create({
     },
     logoutSection: {
         paddingTop: 12,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+        paddingBottom: 20,
     },
     logoutDivider: {
         height: 1,
@@ -275,16 +287,6 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 15,
     },
-    modalHeaderGradient: {
-        paddingBottom: 20,
-        height: '100%',
-    },
-    linearGradient: {
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        elevation: 6,
-    }
 });
 
 export default HamburgerMenu;
