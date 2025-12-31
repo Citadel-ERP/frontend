@@ -1,0 +1,63 @@
+export const lightTheme = {
+  primary: '#007AFF',
+  primaryBlue: '#007AFF',
+  background: '#f5f7fa',
+  backgroundSecondary: '#FFFFFF',
+  cardBg: '#FFFFFF',
+  text: '#1A1A1A',
+  textSecondary: '#666666',
+  textLight: '#999999',
+  border: '#E5E7EB',
+  white: '#FFFFFF',
+  gray: '#6B7280',
+  info: '#3B82F6',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  moduleColors: {
+    bdt: '#1da1f2',
+    hr: '#00d285',
+    cab: '#ff5e7a',
+    attendance: '#ffb157',
+  },
+  headerBg: '#0a1128',
+  gradientStart: '#007AFF',
+  gradientEnd: '#0056CC',
+  leadStatusColors: {
+    active: '#00D492',
+    pending: '#F59E0B',
+    cold: '#FF637F',
+  }
+};
+
+export const darkTheme = {
+  primary: '#1C5CFB',
+  primaryBlue: '#1C5CFB',
+  background: '#050b18',
+  backgroundSecondary: '#111a2d',
+  cardBg: '#111a2d',
+  text: '#FFFFFF',
+  textSecondary: '#CCCCCC',
+  textLight: '#999999',
+  border: '#404040',
+  white: '#111a2d',
+  gray: '#4B5563',
+  info: '#3B82F6',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  moduleColors: {
+    bdt: '#1C5CFB',
+    hr: '#00A73A',
+    cab: '#FE395C',
+    attendance: '#FAAB21',
+  },
+  headerBg: '#0a1128',
+  gradientStart: '#1C5CFB',
+  gradientEnd: '#0F3FD9',
+  leadStatusColors: {
+    active: '#007AFF',
+    pending: '#FFBB64',
+    cold: '#FF637F',
+  }
+};

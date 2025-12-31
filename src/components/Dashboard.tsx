@@ -30,7 +30,7 @@ import Profile from './Profile';
 import HR from './HR';
 import Cab from './cab/Cab';
 import Driver from './Driver';
-import BDT from './BDT';
+import BDT from './bdt/BDT';
 import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';

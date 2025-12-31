@@ -4,9 +4,9 @@ import {
   StatusBar, Alert, TextInput, ActivityIndicator
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
+import { colors, spacing, fontSize, borderRadius, shadows } from '../../styles/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BACKEND_URL } from '../config/config';
+import { BACKEND_URL } from '../../config/config';
 
 const TOKEN_KEY = 'token_2';
 

@@ -23,6 +23,22 @@ const BackIcon = () => (
     </View>
 );
 
+// Helper function to get city icon
+const getCityIcon = (cityName: string) => {
+    const cityLower = cityName.toLowerCase();
+    if (cityLower.includes('mumbai')) return require('../../assets/mumbai.png');
+    if (cityLower.includes('delhi')) return require('../../assets/delhi.png');
+    if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return require('../../assets/bangalore.png');
+    if (cityLower.includes('chennai')) return require('../../assets/chennai.png');
+    if (cityLower.includes('kolkata')) return require('../../assets/kolkata.png');
+    if (cityLower.includes('hyderabad')) return require('../../assets/hyderabad.png');
+    if (cityLower.includes('pune')) return require('../../assets/pune.png');
+    if (cityLower.includes('gurgaon')) return require('../../assets/gurgaon.png');
+    if (cityLower.includes('noida')) return require('../../assets/noida.png');
+    if (cityLower.includes('jaipur')) return require('../../assets/jaipur.png');
+    return null; // Return null for cities without icons
+};
+
 const CityScreen: React.FC<CityScreenProps> = ({
     onBack,
     onCitySelect,
@@ -32,11 +48,13 @@ const CityScreen: React.FC<CityScreenProps> = ({
     filteredCities
 }) => {
     const insets = useSafeAreaInsets();
+    
+    // Filter cities that have icons
+    const citiesWithIcons = filteredCities.filter(city => getCityIcon(city.name) !== null);
 
     return (
         <View style={styles.screenContainer}>
             <StatusBar barStyle="light-content" backgroundColor="#017bf9" />
-
             <ScrollView
                 style={styles.scrollContainer}
                 contentContainerStyle={styles.scrollContent}
@@ -57,7 +75,6 @@ const CityScreen: React.FC<CityScreenProps> = ({
                         />
                         {/* Dark overlay for better text visibility */}
                         <View style={styles.headerOverlay} />
-
                         {/* Header Content */}
                         <View style={styles.headerContent}>
                             {/* Top row with Citadel logo and close button */}
@@ -74,10 +91,7 @@ const CityScreen: React.FC<CityScreenProps> = ({
                         </View>
                     </LinearGradient>
                 </View>
-
-                {/* Title Section - Blue background with rounded bottom */}
-
-
+                
                 {/* Search Box */}
                 <View style={styles.searchBox}>
                     <View style={styles.searchInputWrapper}>
@@ -99,18 +113,28 @@ const CityScreen: React.FC<CityScreenProps> = ({
 
                 {/* Cities Grid */}
                 <View style={styles.citiesGrid}>
-                    {filteredCities.map((city, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={styles.cityCard}
-                            onPress={() => onCitySelect(city.name)}
-                        >
-                            <View style={styles.cityIcon}>
-                                <Text style={styles.cityIconText}>{city.icon}</Text>
-                            </View>
-                            <Text style={styles.cityName}>{city.name}</Text>
-                        </TouchableOpacity>
-                    ))}
+                    {citiesWithIcons.map((city, index) => {
+                        const cityIcon = getCityIcon(city.name);
+                        return (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.cityCard}
+                                onPress={() => onCitySelect(city.name)}
+                                activeOpacity={0.7}
+                            >
+                                <View style={styles.cityIconContainer}>
+                                    {cityIcon && (
+                                        <Image
+                                            source={cityIcon}
+                                            style={styles.cityIconImage}
+                                            resizeMode="contain"
+                                        />
+                                    )}
+                                </View>
+                                <Text style={styles.cityName}>{city.name}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
                 {/* View Previous Bookings Section */}
@@ -147,7 +171,6 @@ const styles = StyleSheet.create({
         flexGrow: 1,
     },
     header: {
-        // backgroundColor: '#017bf9',
         height: 180,
         position: 'relative',
         overflow: 'hidden',
@@ -196,12 +219,10 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        // backgroundColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
     },
     titleSection: {
-        // backgroundColor: '#017bf9',
         paddingHorizontal: 20,
         paddingVertical: 25,
         borderBottomLeftRadius: 30,
@@ -252,34 +273,33 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     cityCard: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        padding: 15,
-        width: '48%',
+        width: '30%',
         alignItems: 'center',
-        marginBottom: 15,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 2,
+        marginBottom: 25,
     },
-    cityIcon: {
-        width: 50,
-        height: 50,
-        borderRadius: 12,
-        backgroundColor: '#017bf9',
+    cityIconContainer: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 10,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    cityIconText: {
-        fontSize: 24,
+    cityIconImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 50,
     },
     cityName: {
         fontSize: 13,
         color: '#333',
-        fontWeight: '500',
+        fontWeight: '600',
         textAlign: 'center',
     },
     bookingsLinkContainer: {

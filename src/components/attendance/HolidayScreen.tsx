@@ -162,17 +162,33 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
     return '✨';
   };
 
+  // const getCityIcon = (cityName: string) => {
+  //   const cityLower = cityName.toLowerCase();
+  //   if (cityLower.includes('mumbai')) return '🏙️';
+  //   if (cityLower.includes('delhi')) return '🏛️';
+  //   if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return '🌳';
+  //   if (cityLower.includes('chennai')) return '🏖️';
+  //   if (cityLower.includes('kolkata')) return '🎭';
+  //   if (cityLower.includes('hyderabad')) return '💎';
+  //   if (cityLower.includes('pune')) return '🎓';
+  //   if (cityLower.includes('ahmedabad')) return '🕌';
+  //   return '📍';
+  // };
+
   const getCityIcon = (cityName: string) => {
     const cityLower = cityName.toLowerCase();
-    if (cityLower.includes('mumbai')) return '🏙️';
-    if (cityLower.includes('delhi')) return '🏛️';
-    if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return '🌳';
-    if (cityLower.includes('chennai')) return '🏖️';
-    if (cityLower.includes('kolkata')) return '🎭';
-    if (cityLower.includes('hyderabad')) return '💎';
-    if (cityLower.includes('pune')) return '🎓';
-    if (cityLower.includes('ahmedabad')) return '🕌';
-    return '📍';
+
+    if (cityLower.includes('mumbai')) return require('../../assets/mumbai.png');
+    if (cityLower.includes('delhi')) return require('../../assets/delhi.png');
+    if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return require('../../assets/bangalore.png');
+    if (cityLower.includes('chennai')) return require('../../assets/chennai.png');
+    if (cityLower.includes('kolkata')) return require('../../assets/kolkata.png');
+    if (cityLower.includes('hyderabad')) return require('../../assets/hyderabad.png');
+    if (cityLower.includes('pune')) return require('../../assets/pune.png');
+    if (cityLower.includes('gurgaon')) return require('../../assets/gurgaon.png');
+    if (cityLower.includes('noida')) return require('../../assets/noida.png');
+    if (cityLower.includes('jaipur')) return require('../../assets/jaipur.png');
+    return require('../../assets/pune.png');
   };
 
   const renderCityModal = () => (
@@ -220,7 +236,11 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
                       styles.cityIconContainer,
                       isSelected && styles.selectedCityIconContainer
                     ]}>
-                      <Text style={styles.cityIconText}>{getCityIcon(city.name)}</Text>
+                      <Image
+                        source={getCityIcon(city.name)}
+                        style={styles.cityIconImage}
+                        resizeMode="contain"
+                      />
                     </View>
                     <Text style={[
                       styles.cityItemText,
@@ -268,7 +288,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
         </View>
       </View>
 
-      <View style={styles.filterContainer}>
+      {/* <View style={styles.filterContainer}>
         <TouchableOpacity
           style={styles.cityFilterButton}
           onPress={() => setShowCityModal(true)}
@@ -282,6 +302,42 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
               <View style={styles.filterLeftSection}>
                 <View style={styles.filterIconContainer}>
                   <Text style={styles.filterIcon}>📍</Text>
+                </View>
+                <View style={styles.filterTextContainer}>
+                  <Text style={styles.filterLabel}>Location</Text>
+                  <Text style={styles.filterValue}>
+                    {selectedCity || 'Select City'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.dropdownArrow}>›</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View> */}
+
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={styles.cityFilterButton}
+          onPress={() => setShowCityModal(true)}
+          disabled={citiesLoading}
+          activeOpacity={0.8}
+        >
+          {citiesLoading ? (
+            <ActivityIndicator color="#5b21b6" size="small" />
+          ) : (
+            <>
+              <View style={styles.filterLeftSection}>
+                <View style={styles.filterIconContainer}>
+                  {selectedCity ? (
+                    <Image
+                      source={getCityIcon(selectedCity)}
+                      style={styles.filterIconImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <Text style={styles.filterIcon}>📍</Text>
+                  )}
                 </View>
                 <View style={styles.filterTextContainer}>
                   <Text style={styles.filterLabel}>Location</Text>
@@ -715,13 +771,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
-  backIcon: { 
-    height: 24, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    display: 'flex', 
-    flexDirection: 'row', 
-    alignContent: 'center' 
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center'
   },
   backArrow: {
     width: 12,
@@ -745,7 +801,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
     textAlign: 'center',
-  },backText: {
+  }, backText: {
     color: colors.white,
     fontSize: 14,
     marginLeft: 2,
@@ -788,6 +844,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  cityIconImage: {
+    width: 40,
+    height: 40,
+  },
+  filterIconImage: {
+    width: 40,
+    height: 40
   },
 });
 
