@@ -28,7 +28,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 // Import all the pages
 import Profile from './Profile';
 import HR from './HR';
-import Cab from './Cab';
+import Cab from './cab/Cab';
 import Driver from './Driver';
 import BDT from './BDT';
 import Medical from './Medical';
@@ -41,13 +41,21 @@ import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './EmployeeManagement';
+
+// Import components
+import HamburgerMenu from './dashboard/menu';
+import AllModulesModal from './dashboard/allModules';
+import QuickActions from './dashboard/quickActions';
+import UpcomingReminder from './dashboard/upcomingReminder';
+import WorkStatistics from './dashboard/workStatistics';
+import UpcomingEvents from './dashboard/upcomingEvents';
+import BottomBar from './dashboard/bottomBar';
+
 import { BackgroundAttendanceService } from '../services/backgroundAttendance';
 import { BackgroundLocationService } from '../services/backgroundLocationTracking';
 import { BACKEND_URL } from '../config/config';
 
 const { width, height } = Dimensions.get('window');
-
-// Backend URL from config
 const TOKEN_2_KEY = 'token_2';
 
 // Interfaces
@@ -117,12 +125,13 @@ interface Module {
 interface ReminderItem {
   id: string;
   title: string;
-  reminder_date: string;  // Changed from 'time'
+  reminder_date: string;
   description?: string;
   created_by?: any;
   color?: string;
   is_completed?: boolean;
 }
+
 interface UpcomingEvent {
   full_name: string;
   date: string;
@@ -131,7 +140,6 @@ interface UpcomingEvent {
   anniversaryYears?: number;
 }
 
-// Add ApiResponse interface
 interface ApiResponse {
   message: string;
   modules: Array<{
@@ -173,7 +181,6 @@ const lightColors = {
   primaryBlue: '#007AFF',
   gradientStart: '#007AFF',
   gradientEnd: '#0056CC',
-
 };
 
 const darkColors = {
@@ -208,11 +215,12 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
 // Main Dashboard Component
 function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  // State from old dashboard
+  // State
   const [token, setToken] = useState<string | null>(null);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
@@ -226,12 +234,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [loading, setLoading] = useState(true);
   const [lastOpenedModules, setLastOpenedModules] = useState<Module[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
-  const [topModules, setTopModules] = useState<any[]>([]);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
-  const { width, height } = Dimensions.get('window');
 
   // Page visibility states
   const [showAttendance, setShowAttendance] = useState(false);
@@ -270,7 +276,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-300)).current;
-
   const bulgeAnim = useRef(new Animated.Value(0)).current;
 
   // Current theme colors
@@ -294,35 +299,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
   ];
 
-  // Updated chart data with proper day alignment
-  const getChartData = () => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    // Pad arrays to ensure we have 7 days
-    const paddedHoursWorked = [...hoursWorked];
-    while (paddedHoursWorked.length < 7) {
-      paddedHoursWorked.push(0);
-    }
-
-    const paddedOvertime = [...overtimeHours];
-    while (paddedOvertime.length < 7) {
-      paddedOvertime.push(0);
-    }
-
-    return days.map((day, index) => ({
-      day,
-      hours: paddedHoursWorked[index] === 0 ? 0.1 : paddedHoursWorked[index],
-      target: paddedOvertime[index] === 0 ? 0.1 : paddedOvertime[index],
-    }));
-  };
-
-  const chartData = getChartData();
-  // Responsive font sizes
-  const responsiveFont = (size: number) => {
-    const scale = Math.min(screenWidth / 375, 1.2);
-    return size * scale;
-  };
-
   // Debug logging function
   const debugLog = async (message: string, data?: any) => {
     console.log(message, data);
@@ -340,7 +316,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('Error storing debug log:', error);
     }
   };
-  
 
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
@@ -353,6 +328,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         return undefined;
       }
       await debugLog('[Push Token] Device check passed');
+
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'default',
@@ -362,22 +338,27 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         });
         await debugLog('[Push Token] Notification channel created');
       }
+
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       await debugLog('[Push Token] Existing permission status', existingStatus);
       let finalStatus = existingStatus;
+
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
         await debugLog('[Push Token] New permission status', status);
       }
+
       if (finalStatus !== 'granted') {
         await debugLog('[Push Token] Permission denied');
         Alert.alert('Permission Denied', 'Please enable notifications in settings');
         return undefined;
       }
+
       const projectId = Constants.expoConfig?.extra?.eas?.projectId
         || Constants.easConfig?.projectId;
       await debugLog('[Push Token] Project ID', projectId);
+
       if (!projectId) {
         await debugLog('[Push Token] ERROR: No project ID found');
         Alert.alert(
@@ -386,6 +367,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         );
         return undefined;
       }
+
       await debugLog('[Push Token] Getting token for project', projectId);
       const tokenData = await Notifications.getExpoPushTokenAsync({
         projectId
@@ -404,16 +386,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     await debugLog('=== SENDING TOKEN TO BACKEND ===');
     await debugLog('Expo Token', expoToken);
     await debugLog('User Token exists', !!userToken);
+
     if (!expoToken || !userToken) {
       await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
       return;
     }
+
     try {
       await debugLog('Making request to', `${BACKEND_URL}/core/modifyToken`);
       const requestBody = {
         token: userToken,
         expo_token: expoToken,
       };
+
       await debugLog('Request body', requestBody);
       const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
         method: 'POST',
@@ -422,9 +407,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         },
         body: JSON.stringify(requestBody),
       });
+
       await debugLog('Response status', response.status);
       const data = await response.json();
       await debugLog('Backend response', data);
+
       if (response.ok) {
         await debugLog('✅ Push token registered successfully');
         await AsyncStorage.setItem('expo_push_token', expoToken);
@@ -445,6 +432,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         console.log('❌ No token found');
         return;
       }
+
       const lastMarked = await AsyncStorage.getItem('last_attendance_marked');
       if (lastMarked) {
         const lastDate = new Date(lastMarked);
@@ -458,6 +446,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           return;
         }
       }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.log('❌ Location permission denied');
@@ -467,10 +456,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           return;
         }
       }
+
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
         timeInterval: 5000,
       });
+
       console.log('📍 Location obtained:', location.coords);
       const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
         method: 'POST',
@@ -483,6 +474,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           longitude: location.coords.longitude.toString(),
         }),
       });
+
       if (response.ok) {
         const result = await response.json();
         console.log('✅ Attendance marked successfully:', result);
@@ -503,7 +495,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     const navItems = ['home', 'message', 'hrpedia', 'support'];
     const activeIndex = navItems.indexOf(activeNavItem);
-
     Animated.spring(bulgeAnim, {
       toValue: activeIndex,
       useNativeDriver: true,
@@ -524,11 +515,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         await debugLog('Starting notification setup', { token: !!token });
         const pushToken = await registerForPushNotificationsAsync();
         await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
+
         if (pushToken && isMounted) {
           setExpoPushToken(pushToken);
           await debugLog('Calling sendTokenToBackend');
           await sendTokenToBackend(pushToken, token);
         }
+
         notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
           debugLog('📱 Notification received in foreground', notification);
           setNotification(notification);
@@ -538,6 +531,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             autoMarkAttendance();
           }
         });
+
         responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
           debugLog('👆 Notification tapped', response);
           const data = response.notification.request.content.data;
@@ -547,6 +541,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             handleNotificationNavigation(data.page as string);
           }
         });
+
         const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
         if (lastNotificationResponse) {
           debugLog('📬 App opened from notification', lastNotificationResponse);
@@ -565,7 +560,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         await debugLog('Error in setupNotifications', error.message);
       }
     };
+
     setupNotifications();
+
     return () => {
       isMounted = false;
       notificationListener.current?.remove();
@@ -580,6 +577,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.log('🎯 SPECIAL CODE: Auto-marking attendance...');
       return;
     }
+
     switch (page.toLowerCase()) {
       case 'attendance':
         setAttendanceKey(prev => prev + 1);
@@ -625,7 +623,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Function to set autoReconfigure
   const setAutoReconfigure = async () => {
     if (!token) return;
-
     const response = await fetch(`${BACKEND_URL}/core/updateDeviceId`, {
       method: 'POST',
       headers: {
@@ -633,10 +630,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       },
       body: JSON.stringify({ token }),
     });
+
     let SecureStore: any = null;
     if (Platform.OS !== 'web') {
       SecureStore = require('expo-secure-store');
     }
+
     if (response.ok) {
       console.log('Device ID updated successfully');
       const data = await response.json();
@@ -665,6 +664,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       try {
         const token = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!token) return;
+
         setLoading(true);
         const response = await fetch(`${BACKEND_URL}/core/getUser`, {
           method: 'POST',
@@ -683,6 +683,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setModules(data.modules || []);
             setUpcomingBirthdays(data.upcoming_birthdays || []);
             setUpcomingAnniversaries(data.upcoming_anniversary || []);
+
             if (Array.isArray(data.upcoming_reminder)) {
               setReminders(data.upcoming_reminder);
             } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
@@ -690,6 +691,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             } else {
               setReminders([]);
             }
+
             setHoursWorked(data.hours_worked_last_7_attendance || []);
             setOvertimeHours(data.overtime_hours || []);
 
@@ -715,14 +717,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             const storedModules = await AsyncStorage.getItem('last_opened_modules');
             if (storedModules) {
               let modulesArray = JSON.parse(storedModules);
-
               // Update icons with backend data
               if (data.modules && data.modules.length > 0) {
                 modulesArray = modulesArray.map((storedModule: any) => {
                   const backendModule = data.modules.find(
                     (m: any) => m.module_unique_name === storedModule.module_unique_name
                   );
-
                   if (backendModule) {
                     return {
                       ...storedModule,
@@ -733,23 +733,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   }
                   return storedModule;
                 });
-
                 // Remove duplicates after update
                 const uniqueModules: any[] = [];
                 const seen = new Set();
-
                 for (const module of modulesArray) {
                   if (!seen.has(module.module_unique_name)) {
                     seen.add(module.module_unique_name);
                     uniqueModules.push(module);
                   }
                 }
-
                 modulesArray = uniqueModules.slice(0, 4);
-
                 await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
                 setLastOpenedModules(modulesArray);
-
                 // If we have less than 4 modules, populate with random ones from backend
                 if (modulesArray.length < 4 && data.modules.length > 0) {
                   populateMissingLastOpenedModules();
@@ -778,20 +773,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       const storedModules = await AsyncStorage.getItem('last_opened_modules');
       if (storedModules) {
         let modulesArray = JSON.parse(storedModules);
-
         // Remove any duplicates
         const uniqueModules: any[] = [];
         const seen = new Set();
-
         for (const module of modulesArray) {
           if (!seen.has(module.module_unique_name)) {
             seen.add(module.module_unique_name);
             uniqueModules.push(module);
           }
         }
-
         modulesArray = uniqueModules.slice(0, 4);
-
         // If we have backend modules, update the icons
         if (modules.length > 0) {
           modulesArray = modulesArray.map((storedModule: any) => {
@@ -800,7 +791,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               m => m.module_unique_name === storedModule.module_unique_name ||
                 m.module_name.toLowerCase().replace('_', ' ') === storedModule.title.toLowerCase()
             );
-
             if (backendModule) {
               return {
                 ...storedModule,
@@ -810,13 +800,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 module_unique_name: backendModule.module_unique_name
               };
             }
-
             // If not found, try to find by partial match
             const partialMatch = modules.find(m =>
               m.module_name.toLowerCase().includes(storedModule.title.toLowerCase()) ||
               storedModule.title.toLowerCase().includes(m.module_name.toLowerCase())
             );
-
             if (partialMatch) {
               return {
                 ...storedModule,
@@ -826,16 +814,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 module_unique_name: partialMatch.module_unique_name
               };
             }
-
             return storedModule;
           });
-
           // Save the updated modules back to storage
           await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
         }
-
         setLastOpenedModules(modulesArray);
-
         // If we have less than 4 modules, populate with random ones
         if (modulesArray.length < 4) {
           populateMissingLastOpenedModules();
@@ -875,20 +859,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Initialize background services
   useEffect(() => {
     if (!token || !userData) return;
-
     const initializeBackgroundServices = async () => {
       try {
         console.log('🚀 Initializing background services...');
         await requestLocationPermissions();
         const isExpoGo = Constants.appOwnership === 'expo';
-
         if (!isExpoGo) {
           try {
             const { status } = await Location.requestForegroundPermissionsAsync();
-
             if (status === 'granted') {
               await BackgroundAttendanceService.initializeAll();
-
               if (userData?.office) {
                 const officeLocation = userData.office;
                 if (officeLocation.latitude && officeLocation.longitude) {
@@ -929,12 +909,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       if (user.birth_date) {
         const birthDate = new Date(user.birth_date);
         const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-
         // If birthday has already passed this year, get next year's birthday
         if (nextBirthday < today) {
           nextBirthday.setFullYear(today.getFullYear() + 1);
         }
-
         // Only include if within next 3 months
         if (nextBirthday <= threeMonthsFromNow) {
           events.push({
@@ -951,12 +929,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       if (user.joining_date) {
         const anniversaryDate = new Date(user.joining_date);
         const nextAnniversary = new Date(today.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-
         // If anniversary has already passed this year, get next year's
         if (nextAnniversary < today) {
           nextAnniversary.setFullYear(today.getFullYear() + 1);
         }
-
         // Only include if within next 3 months
         if (nextAnniversary <= threeMonthsFromNow) {
           const years = today.getFullYear() - anniversaryDate.getFullYear();
@@ -975,19 +951,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     events.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
-
       const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
       const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
       const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
       const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
-
       return eventDateA.getTime() - eventDateB.getTime();
     });
 
     console.log(`Found ${events.length} upcoming events within next 3 months`);
     return events.slice(0, 3); // Return max 3 events
   };
-
 
   // Function to get initials from name
   const getInitials = (fullName: string): string => {
@@ -1042,16 +1015,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Handle module press
   const handleModulePress = (moduleName: string, moduleUniqueName?: string) => {
     const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
-
     // Try to find the module in backend modules first
     let moduleData = null;
-
     if (modules.length > 0) {
       const backendModule = modules.find(
         m => m.module_unique_name === moduleUniqueName ||
           m.module_name.toLowerCase().replace('_', ' ') === moduleName.toLowerCase()
       );
-
       if (backendModule) {
         moduleData = {
           title: backendModule.module_name.charAt(0).toUpperCase() +
@@ -1061,12 +1031,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         };
       }
     }
-
     // If not found in backend modules, create a basic module object
     if (!moduleData) {
       moduleData = {
         title: moduleName,
-        iconUrl: `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`, // Backup URL
+        iconUrl: `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`,
         module_unique_name: moduleUniqueName || moduleName.toLowerCase()
       };
     }
@@ -1099,23 +1068,20 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
   };
+
   const populateMissingLastOpenedModules = async () => {
     try {
       const storedModules = await AsyncStorage.getItem('last_opened_modules');
       let modulesArray = storedModules ? JSON.parse(storedModules) : [];
-
       // If we have less than 4 modules and we have backend modules available
       if (modulesArray.length < 4 && modules.length > 0) {
         const existingModuleNames = new Set(modulesArray.map((m: any) => m.module_unique_name));
-
         // Get all available backend modules that aren't already in the list
         const availableBackendModules = modules.filter(
           (backendModule: any) => !existingModuleNames.has(backendModule.module_unique_name)
         );
-
         // Shuffle the available modules to pick random ones
         const shuffledModules = [...availableBackendModules].sort(() => 0.5 - Math.random());
-
         // Add random modules until we have 4 total
         while (modulesArray.length < 4 && shuffledModules.length > 0) {
           const randomModule = shuffledModules.pop();
@@ -1128,14 +1094,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             });
           }
         }
-
         // If we still don't have 4 modules and we have default modules, use them
         if (modulesArray.length < 4) {
           const defaultModules = [...defaultLastOpened];
-
           // Shuffle default modules
           const shuffledDefaults = [...defaultModules].sort(() => 0.5 - Math.random());
-
           while (modulesArray.length < 4 && shuffledDefaults.length > 0) {
             const defaultModule = shuffledDefaults.pop();
             if (defaultModule) {
@@ -1143,13 +1106,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               const alreadyExists = modulesArray.some(
                 (m: any) => m.module_unique_name === defaultModule.module_unique_name
               );
-
               if (!alreadyExists) {
                 // Try to find if there's a backend module for this default
                 const backendModule = modules.find(
                   (m: any) => m.module_unique_name === defaultModule.module_unique_name
                 );
-
                 if (backendModule) {
                   modulesArray.push({
                     title: backendModule.module_name.charAt(0).toUpperCase() +
@@ -1168,21 +1129,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             }
           }
         }
-
         // Ensure no duplicates
         const uniqueModules: any[] = [];
         const seen = new Set();
-
         for (const module of modulesArray) {
           if (!seen.has(module.module_unique_name)) {
             seen.add(module.module_unique_name);
             uniqueModules.push(module);
           }
         }
-
         // Keep only first 4 unique modules
         modulesArray = uniqueModules.slice(0, 4);
-
         await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
         setLastOpenedModules(modulesArray);
       }
@@ -1190,6 +1147,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('Error populating missing modules:', error);
     }
   };
+
   // Save last opened module
   const saveLastOpenedModule = async (module: any) => {
     try {
@@ -1198,14 +1156,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
       // Find the full module data from backend modules to get the correct icon
       let moduleData = module;
-
       // If we have backend modules loaded, try to find the matching module
       if (modules.length > 0) {
         const backendModule = modules.find(
           m => m.module_unique_name === module.module_unique_name ||
             m.module_name.toLowerCase().replace('_', ' ') === module.title.toLowerCase()
         );
-
         if (backendModule) {
           // Use the backend module data including the proper icon
           moduleData = {
@@ -1219,7 +1175,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           const backendModuleByName = modules.find(
             m => m.module_unique_name === module.module_unique_name
           );
-
           if (backendModuleByName) {
             moduleData = {
               title: backendModuleByName.module_name.charAt(0).toUpperCase() +
@@ -1250,7 +1205,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('Error saving last opened module:', error);
     }
   };
-
 
   // Handle back from pages
   const handleBackFromPage = () => {
@@ -1299,37 +1253,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
   };
 
-  // Menu items
-  const drawerMenuItems = [
-    { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
-    { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
-    { id: 'notifications', title: 'Notifications', icon: 'notification', color: '#F59E0B' },
-    { id: 'privacy', title: 'Privacy Policy', icon: 'shield', color: '#1E40AF' },
-    { id: 'messages', title: 'Messages', icon: 'chatbubbles', color: '#10B981' },
-  ];
-
-  const handleMenuItemPress = (item: any) => {
-    setActiveMenuItem(item.title);
-    closeMenu();
-
-    if (item.id === 'profile') {
-      setShowProfile(true);
-    } else if (item.id === 'settings') {
-      setShowSettings(true);
-    } else if (item.id === 'messages') {
-      setShowChat(true);
-    } else if (item.id === 'notifications') {
-      Alert.alert('Notifications', 'Notification settings will be available soon!');
-    } else {
-      Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
-    }
-  };
-
   // Handle nav item press
   const handleNavItemPress = (navItem: string) => {
     setActiveNavItem(navItem);
     if (navItem === 'message') {
-      setShowChat(true);
+      Alert.alert('Support', 'Citadel Hub will be available soon!');
+      // setShowChat(true);
     } else if (navItem === 'hr') {
       setShowHR(true);
     } else if (navItem === 'support') {
@@ -1344,12 +1273,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (modules.length > 0) {
       return modules.map(module => ({
         title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-        iconUrl: module.module_icon, // This should now be the backend icon URL
+        iconUrl: module.module_icon,
         module_unique_name: module.module_unique_name,
         is_generic: module.is_generic
       }));
     }
-
     // Only use default icons as fallback when no backend modules are available
     return defaultLastOpened.map(item => {
       // Try to find if this module exists in backend modules (for initial load)
@@ -1357,7 +1285,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         m.module_unique_name === item.module_unique_name ||
         m.module_name.toLowerCase().replace('_', ' ') === item.name.toLowerCase()
       );
-
       return {
         title: item.name,
         iconUrl: backendModule ? backendModule.module_icon : getIconUrl(item),
@@ -1372,43 +1299,29 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     module.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Render icon helper
-  const renderIcon = (item: IconItem) => {
-    if (item.library === 'fa5') {
-      return <FontAwesome5 name={item.icon as any} size={20} color="white" />;
-    }
-    return <MaterialCommunityIcons name={item.icon as any} size={20} color="white" />;
-  };
+  // Menu items
+  const drawerMenuItems = [
+    { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
+    { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
+    { id: 'notifications', title: 'Notifications', icon: 'notification', color: '#F59E0B' },
+    { id: 'privacy', title: 'Privacy Policy', icon: 'shield', color: '#1E40AF' },
+    { id: 'messages', title: 'Messages', icon: 'chatbubbles', color: '#10B981' },
+  ];
 
-  // Render chart
-  const renderChart = () => {
-    const maxValue = 10;
-    const chartHeight = 100;
-    return (
-      <View style={styles.chartContainer}>
-        {chartData.map((item, index) => {
-          const hoursHeight = (item.hours / maxValue) * chartHeight;
-          const targetHeight = (item.target / maxValue) * chartHeight;
-          return (
-            <View key={index} style={[styles.chartBar, { flex: 1 }]}>
-              <Text style={[styles.chartDay, { color: theme.textSub, fontSize: 12, textAlign: 'center' }]}>
-                {item.day}
-              </Text>
-              <View style={[styles.barWrapper, { height: chartHeight }]}>
-                <View style={[styles.targetBar, {
-                  height: targetHeight,
-                  backgroundColor: 'rgba(255, 94, 122, 0.5)' // Pink for overtime
-                }]} />
-                <View style={[styles.hoursBar, {
-                  height: hoursHeight,
-                  backgroundColor: currentColors.primaryBlue // Blue for hours worked
-                }]} />
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    );
+  const handleMenuItemPress = (item: any) => {
+    setActiveMenuItem(item.title);
+    closeMenu();
+    if (item.id === 'profile') {
+      setShowProfile(true);
+    } else if (item.id === 'settings') {
+      setShowSettings(true);
+    } else if (item.id === 'messages') {
+      setShowChat(true);
+    } else if (item.id === 'notifications') {
+      Alert.alert('Notifications', 'Notification settings will be available soon!');
+    } else {
+      Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
+    }
   };
 
   // Animation values
@@ -1417,6 +1330,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     inputRange: [0, 1],
     outputRange: [0, maxRadius * 2.5],
   });
+
   const switchTranslate = switchToggle.interpolate({
     inputRange: [0, 1],
     outputRange: [4, screenWidth * 0.43 - 54],
@@ -1435,138 +1349,252 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Error state
   if (error || !userData) {
     return (
-      <SafeAreaView style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }]}>
+      <View style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }]}>
         <StatusBar barStyle={isDark ? "light-content" : "light-content"} backgroundColor={currentColors.headerBg} />
         <Text style={[styles.errorText, { color: currentColors.text }]}>Failed to load data</Text>
         <TouchableOpacity style={[styles.retryButton, { backgroundColor: currentColors.info }]}>
           <Text style={[styles.retryButtonText, { color: currentColors.white }]}>Retry</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // Render different pages
   if (showChatRoom && selectedChatRoom) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
-        <ChatRoomScreen
-          chatRoom={selectedChatRoom}
-          onBack={handleBackFromPage}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-        />
-      </SafeAreaView>
+      // <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
+      <ChatRoomScreen
+        chatRoom={selectedChatRoom}
+        onBack={handleBackFromPage}
+        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+      />
+      // // </SafeAreaView>
     );
   }
+
   if (showChat) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
-        <ChatScreen
-          onBack={handleBackFromPage}
-          onOpenChatRoom={setSelectedChatRoom}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-        />
-      </SafeAreaView>
+      // <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgColor }}>
+      <ChatScreen
+        onBack={handleBackFromPage}
+        onOpenChatRoom={setSelectedChatRoom}
+        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+      />
+      // // </SafeAreaView>
     );
   }
+
   if (showAttendance) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
-      </SafeAreaView>
+      ////  <SafeAreaView style={{ flex: 1 }}>
+      <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
+      // // </SafeAreaView>
     );
   }
+
   if (showProfile) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <Profile onBack={handleBackFromPage} userData={userData} />
-      </SafeAreaView>
+      ////  <SafeAreaView style={{ flex: 1 }}>
+      <Profile onBack={handleBackFromPage} userData={userData} />
+      // // </SafeAreaView>
     );
   }
+
   if (showHR) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <HR onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <HR onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showCab) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <Cab onBack={handleBackFromPage} />
-      </SafeAreaView>
+      ////  <SafeAreaView style={{ flex: 1 }}>
+      <Cab onBack={handleBackFromPage} />
+      // // </SafeAreaView>
     );
   }
+
   if (showDriver) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <Driver onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <Driver onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showBDT) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <BDT onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <BDT onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showMedical) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <Medical onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <Medical onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showScoutBoy) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScoutBoy onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <ScoutBoy onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showReminder) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <Reminder onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <Reminder onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showBUP) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <BUP onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <BUP onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showSettings) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <Settings onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <Settings onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showEmployeeManagement) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <EmployeeManagement onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <EmployeeManagement onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
+
   if (showCreateSite) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <CreateSite onBack={handleBackFromPage} />
-      </SafeAreaView>
+      //  <SafeAreaView style={{ flex: 1 }}>
+      <CreateSite onBack={handleBackFromPage} />
+      // </SafeAreaView>
     );
   }
 
-  for (let i = 0; i < lastOpenedModules.length; i++) {
-    console.log(lastOpenedModules[i]);
+  // Module Grid
+  const ModuleGrid = () => (
+    <View style={styles.moduleGrid}>
+      {/* Attendance Module */}
+      <TouchableOpacity
+        style={styles.moduleAttendance}
+        onPress={() => handleModulePress('Attendance', 'attendance')}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={['#00d285', '#00b872']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.moduleGradient}
+        >
+          <Ionicons
+            name="arrow-up"
+            size={18}
+            color="white"
+            style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+          />
+          <View style={styles.moduleIconCircle}>
+            <FontAwesome5 name="book-open" size={22} color="white" />
+          </View>
+          <Text style={[styles.moduleTitle, { fontSize: 22, marginBottom: 15 }]}>Attendance</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+      <View style={styles.moduleColumn}>
+        {/* Cab Module */}
+        <TouchableOpacity
+          style={styles.moduleSmall}
+          onPress={() => handleModulePress('Car', 'cab')}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#ff5e7a', '#ff4168']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.moduleGradient}
+          >
+            <Ionicons
+              name="arrow-up"
+              size={16}
+              color="white"
+              style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+            />
+            <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
+              <FontAwesome5 name="car" size={18} color="white" />
+            </View>
+            <Text style={[styles.moduleTitle, { fontSize: 14 }]}>Car</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        {/* HR Module */}
+        <TouchableOpacity
+          style={styles.moduleSmall}
+          onPress={() => handleModulePress('HR', 'hr')}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#ffb157', '#ff9d3f']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.moduleGradient}
+          >
+            <Ionicons
+              name="arrow-up"
+              size={16}
+              color="white"
+              style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+            />
+            <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
+              <FontAwesome5 name="users" size={18} color="white" />
+            </View>
+            <Text style={[styles.moduleTitle, { fontSize: 14 }]}>HR</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
-  }
+  // View All Modules Button
+  const ViewAllModulesButton = () => (
+    <TouchableOpacity
+      style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
+      onPress={() => setAllModulesVisible(true)}
+      activeOpacity={0.7}
+    >
+      <LinearGradient
+        colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.viewAllButton}
+      >
+        <Text style={styles.viewAllText}>View all modules</Text>
+        <View style={styles.chevronGroup}>
+          <Ionicons name="chevron-forward" size={16} color="white" />
+          <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+          <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
   // Main dashboard render
   return (
-    <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+    // <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+    <View style={styles.safeContainer}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'light-content'}
         backgroundColor={currentColors.headerBg}
@@ -1622,7 +1650,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         >
           {/* Header Banner with dark overlay */}
           <LinearGradient
-            colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']} // Lighter for light mode
+            colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.headerBanner}
@@ -1638,9 +1666,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             }]} />
             {/* Dark overlay for text visibility */}
             <View style={styles.headerOverlay} />
-
             <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 10 : 20 }]}>
-              <View style={[styles.topNav, { marginBottom: 10 }]}>
+              <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
                 <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
                   {[1, 2, 3].map(i => (
                     <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
@@ -1649,369 +1676,54 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 <Text style={styles.logoText}>CITADEL</Text>
                 <View style={styles.headerSpacer} />
               </View>
-              <View style={{ marginTop: 135 }}>
+              <View style={{ marginTop: 75 }}>
                 <Text style={styles.welcomeText}>Welcome!</Text>
                 <Text style={styles.employeeText}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
               </View>
             </View>
           </LinearGradient>
 
-          {/* Last Opened Section - All 4 in 1 row */}
-          {lastOpenedModules.length > 0 && (
-            <View style={[styles.sectionCard, { backgroundColor: theme.cardBg, marginTop: 20 }]}>
-              <Text style={[styles.labelSmall, { color: theme.textSub }]}>QUICK ACTIONS</Text>
-              <View style={styles.iconGridFull}>
-                {lastOpenedModules.slice(0, 4).map((item, index) => {
-                  // Ensure we have a unique key and handle missing items
-                  if (!item) return null;
+          {/* Quick Actions */}
+          <QuickActions
+            lastOpenedModules={lastOpenedModules}
+            modules={modules}
+            theme={theme}
+            handleModulePress={handleModulePress}
+          />
 
-                  return (
-                    <TouchableOpacity
-                      key={`${item.module_unique_name || item.title}-${index}`}
-                      style={styles.iconItemFull}
-                      onPress={() => handleModulePress(item.title, item.module_unique_name)}
-                    >
-                      <View style={[styles.iconBox, { backgroundColor: getModuleColor(item.title) }]}>
-                        <Image
-                          source={{ uri: item.iconUrl || `https://cdn-icons-png.flaticon.com/512/3135/3135715.png` }}
-                          style={styles.iconImage}
-                          resizeMode="contain"
-                          onError={(e) => {
-                            console.log('Error loading icon:', item.iconUrl);
-                          }}
-                        />
-                      </View>
-                      <Text style={[styles.iconLabel, { color: theme.textMain }]} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+          {/* Upcoming Reminder */}
+          <UpcomingReminder
+            reminders={reminders}
+            theme={theme}
+            currentColors={currentColors}
+          />
 
-                {/* If we have less than 4 modules, render placeholder or additional modules */}
-                {lastOpenedModules.length < 4 && (
-                  <>
-                    {Array.from({ length: 4 - lastOpenedModules.length }).map((_, index) => {
-                      // Get a random module from backend that's not already shown
-                      const availableModules = modules.filter(
-                        (backendModule: any) =>
-                          !lastOpenedModules.some(
-                            (m: any) => m.module_unique_name === backendModule.module_unique_name
-                          )
-                      );
-
-                      const randomModule = availableModules.length > 0
-                        ? availableModules[Math.floor(Math.random() * availableModules.length)]
-                        : null;
-
-                      if (randomModule) {
-                        return (
-                          <TouchableOpacity
-                            key={`placeholder-${index}`}
-                            style={styles.iconItemFull}
-                            onPress={() => handleModulePress(
-                              randomModule.module_name.charAt(0).toUpperCase() +
-                              randomModule.module_name.slice(1).replace('_', ' '),
-                              randomModule.module_unique_name
-                            )}
-                          >
-                            <View style={[styles.iconBox, { backgroundColor: getModuleColor(randomModule.module_name) }]}>
-                              <Image
-                                source={{ uri: randomModule.module_icon }}
-                                style={styles.iconImage}
-                                resizeMode="contain"
-                              />
-                            </View>
-                            <Text style={[styles.iconLabel, { color: theme.textMain }]} numberOfLines={1}>
-                              {randomModule.module_name.charAt(0).toUpperCase() +
-                                randomModule.module_name.slice(1).replace('_', ' ')}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      }
-
-                      // If no backend modules available, show a placeholder
-                      return (
-                        <View key={`placeholder-${index}`} style={styles.iconItemFull}>
-                          <View style={[styles.iconBox, { backgroundColor: '#e5e7eb' }]}>
-                            <Ionicons name="apps" size={25} color="#9ca3af" />
-                          </View>
-                          <Text style={[styles.iconLabel, { color: theme.textSub }]}>Module</Text>
-                        </View>
-                      );
-                    })}
-                  </>
-                )}
-              </View>
-            </View>
-          )}
-
-          <View style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}>
-            <View style={styles.reminderContent}>
-              <View style={[styles.reminderBorder, { backgroundColor: currentColors.primaryBlue }]} />
-              <View style={styles.reminderText}>
-                <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 20 }]}>
-                  UPCOMING REMINDERS
-                </Text>
-
-                {reminders && reminders.length > 0 ? (
-                  reminders.map((reminder, index) => (
-                    <View key={reminder.id || index} style={index > 0 ? { marginTop: 10 } : null}>
-                      <Text style={[styles.reminderTitle, { color: theme.textMain }]}>
-                        {reminder.title}
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="time-outline" size={12} />
-                        <Text style={[styles.reminderTime, { color: theme.textSub, marginLeft: 2 }]}>
-                          {new Date(reminder.reminder_date).toLocaleString([], {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </Text>
-                      </View>
-                    </View>
-                  ))
-                ) : (
-                  <>
-                    <Text style={[styles.reminderTitle, { color: theme.textMain, marginBottom: 5 }]}>
-                      No upcoming Reminders
-                    </Text>
-                    <Text style={[styles.reminderTime, { color: theme.textSub }]}>
-                      Kickback and Relax
-                    </Text>
-                  </>
-                )}
-              </View>
-            </View>
-            <View style={styles.calendarIcon}>
-              <Ionicons name="calendar-outline" size={40} color={currentColors.primaryBlue} />
-            </View>
-          </View>
-
-          {/* Module Grid - Improved Attendance sizing */}
-          <View style={styles.moduleGrid}>
-            {/* Attendance Module */}
-            <TouchableOpacity
-              style={styles.moduleAttendance}
-              onPress={() => handleModulePress('Attendance', 'attendance')}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={['#00d285', '#00b872']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.moduleGradient}
-              >
-                <Ionicons
-                  name="arrow-up"
-                  size={18}
-                  color="white"
-                  style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                />
-                <View style={styles.moduleIconCircle}>
-                  <FontAwesome5 name="book-open" size={22} color="white" />
-                </View>
-                <Text style={[styles.moduleTitle, { fontSize: 22, marginBottom: 15 }]}>Attendance</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View style={styles.moduleColumn}>
-              {/* Cab Module */}
-              <TouchableOpacity
-                style={styles.moduleSmall}
-                onPress={() => handleModulePress('Car', 'cab')}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={['#ff5e7a', '#ff4168']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.moduleGradient}
-                >
-                  <Ionicons
-                    name="arrow-up"
-                    size={16}
-                    color="white"
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                  />
-                  <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
-                    <FontAwesome5 name="car" size={18} color="white" />
-                  </View>
-                  <Text style={[styles.moduleTitle, { fontSize: 14 }]}>Car</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {/* HR Module */}
-              <TouchableOpacity
-                style={styles.moduleSmall}
-                onPress={() => handleModulePress('HR', 'hr')}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={['#ffb157', '#ff9d3f']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.moduleGradient}
-                >
-                  <Ionicons
-                    name="arrow-up"
-                    size={16}
-                    color="white"
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                  />
-                  <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
-                    <FontAwesome5 name="users" size={18} color="white" />
-                  </View>
-                  <Text style={[styles.moduleTitle, { fontSize: 14 }]}>HR</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {/* Module Grid */}
+          <ModuleGrid />
 
           {/* View All Modules Button */}
-          <TouchableOpacity
-            style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
-            onPress={() => setAllModulesVisible(true)}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.viewAllButton}
-            >
-              <Text style={styles.viewAllText}>View all modules</Text>
-              <View style={styles.chevronGroup}>
-                <Ionicons name="chevron-forward" size={16} color="white" />
-                <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
-                <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+          <ViewAllModulesButton />
 
-          {/* Stats Section */}
-          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg, marginTop: 15 }]}>
-            <Text style={[styles.labelSmall, { color: theme.textSub, marginBottom: 10 }]}>WORK STATISTICS</Text>
-            <View style={[styles.statsContent, { marginTop: 20 }]}>
-              <View style={styles.chartContainer}>
-                {renderChart()}
-              </View>
-              <View style={[styles.statsNumbers, { marginLeft: 20 }]}>
-                <Text style={[styles.statsValue, { color: theme.textMain }]}>
-                  {userData?.days_present || 0}
-                </Text>
-                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>
-                  DAYS PRESENT
-                </Text>
-                <Text style={[styles.statsValue, { color: theme.textMain, marginTop: 15 }]}>
-                  {userData?.leaves_applied || 0}
-                </Text>
-                <Text style={[styles.statsLabel, { color: theme.textSub, textAlign: 'right' }]}>
-                  LEAVES APPLIED
-                </Text>
-              </View>
-            </View>
-          </View>
+          {/* Work Statistics */}
+          <WorkStatistics
+            hoursWorked={hoursWorked}
+            overtimeHours={overtimeHours}
+            userData={userData}
+            theme={theme}
+            currentColors={currentColors}
+          />
 
           {/* Upcoming Events */}
-          <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING EVENTS</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.eventsScroll}
-              contentContainerStyle={styles.eventsScrollContent}
-            >
-              {upcomingEvents.length > 0 ? (
-                upcomingEvents.map((event, index) => {
-                  const formattedDate = formatEventDate(event.date);
-                  return (
-                    <View key={index} style={styles.eventItem}>
-                      <View style={[styles.eventCard, { backgroundColor: 'transparent' }]}>
-                        <View style={styles.eventAvatarWrapper}>
-                          <View style={[
-                            styles.eventAvatar,
-                            {
-                              backgroundColor: event.type === 'anniversary' ? '#8B5CF6' : currentColors.primaryBlue,
-                              width: 70,
-                              height: 70,
-                            }
-                          ]}>
-                            <Text style={[styles.eventAvatarInitials, { fontSize: 20 }]}>
-                              {getInitials(event.full_name)}
-                            </Text>
-                          </View>
+          <UpcomingEvents
+            upcomingEvents={upcomingEvents}
+            theme={theme}
+            currentColors={currentColors}
+            getInitials={getInitials}
+            formatEventDate={formatEventDate}
+            formatAnniversaryYears={formatAnniversaryYears}
+          />
 
-                          <View style={[
-                            styles.eventDateBadge,
-                            {
-                              top: -5,
-                              right: -5,
-                              backgroundColor: theme.cardBg,
-                              paddingHorizontal: 6,
-                              paddingVertical: 4,
-                              borderRadius: 6,
-                            }
-                          ]}>
-                            <Text style={[styles.eventDateDay, { fontSize: 12 }]}>{formattedDate.day}</Text>
-                            <Text style={[styles.eventDateMonth, { fontSize: 9 }]}>{formattedDate.month}</Text>
-                          </View>
-
-                          {event.type === 'anniversary' && event.anniversaryYears && (
-                            <View style={[
-                              styles.anniversaryBadge,
-                              {
-                                bottom: -5,
-                                left: -5,
-                              }
-                            ]}>
-                              <Text style={[styles.anniversaryText, { fontSize: 9 }]}>
-                                {formatAnniversaryYears(event.anniversaryYears)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <Text style={[styles.eventName, { color: theme.textMain, fontSize: 12, marginTop: 8 }]} numberOfLines={1}>
-                          {event.full_name}
-                        </Text>
-                        <View style={[styles.eventTypeContainer, { marginTop: 4 }]}>
-                          <Ionicons
-                            name={event.type === 'birthday' ? "ice-cream" : "briefcase-outline"}
-                            size={12}
-                            color={theme.textSub}
-                          />
-                          <Text style={[styles.eventType, { color: theme.textSub, fontSize: 10, marginLeft: 4 }]}>
-                            {event.type === 'birthday' ? 'Birthday' : 'Anniversary'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })
-              ) : (
-                <View style={styles.noEventsContainer}>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={50}
-                    color={currentColors.primaryBlue}
-                    style={styles.noEventsIcon}
-                  />
-                  <Text style={[styles.noEventsText, { color: theme.textMain }]}>
-                    No upcoming events
-                  </Text>
-                  <Text style={[styles.noEventsSubtext, { color: theme.textSub }]}>
-                    in the next 3 months
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-
-          {/* Theme Switcher */}
-          {/* <View style={styles.themeSwitcher}>
+          <View style={styles.themeSwitcher}>
             <TouchableOpacity
               style={[styles.lightSwitch, {
                 backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0',
@@ -2061,7 +1773,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 </View>
               </View>
             </TouchableOpacity>
-          </View> */}
+          </View>
 
           {/* Footer */}
           <View style={styles.footer}>
@@ -2071,96 +1783,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         </ScrollView>
       </View>
 
-      {/* Updated Bottom Bar */}
-      <View style={[styles.bottomNavContainer, { backgroundColor: 'transparent' }]}>
-        <LinearGradient
-          colors={['transparent', 'rgba(0, 0, 0, 0.1)']}
-          style={styles.bottomNavGradient}
-        >
-          <View style={[styles.bottomNav, {
-            backgroundColor: theme.navBg,
-            borderTopLeftRadius: 25,
-            borderTopRightRadius: 25,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -5 },
-            shadowOpacity: 0.1,
-            shadowRadius: 20,
-            elevation: 10,
-            overflow: 'visible',
-          }]}>
-            {/* Animated Bulge Background */}
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.downBulgeWrapper,
-                {
-                  transform: [
-                    {
-                      translateX: bulgeAnim.interpolate({
-                        inputRange: [0, 1, 2, 3],
-                        outputRange: [
-                          screenWidth * 0.125,
-                          screenWidth * 0.375,
-                          screenWidth * 0.625,
-                          screenWidth * 0.875,
-                        ],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.downBulge,
-                  {
-                    backgroundColor: theme.bgColor, // 👈 CUT-OUT color
-                  },
-                ]}
-              />
-            </Animated.View>
-
-            {[
-              { icon: 'home', label: 'Home' },
-              { icon: 'chatbubbles', label: 'Message' },
-              { icon: 'people', label: 'HrPedia' },
-              { icon: 'headset', label: 'Support' },
-            ].map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.navItem}
-                onPress={() => handleNavItemPress(item.label.toLowerCase())}
-                activeOpacity={0.7}
-              >
-                {activeNavItem === item.label.toLowerCase() ? (
-                  <LinearGradient
-                    colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                    style={styles.floatingCircle}
-                  >
-                    <Ionicons
-                      name={item.icon as any}
-                      size={22}
-                      color="white"
-                    />
-                  </LinearGradient>
-                ) : (
-                  <>
-                    <Ionicons
-                      name={item.icon as any}
-                      size={20}
-                      color={theme.textSub}
-                    />
-                    <Text style={[styles.navLabel, { color: theme.textSub }]}>
-                      {item.label}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </LinearGradient>
-      </View>
-    </SafeAreaView>
+      {/* Bottom Bar */}
+      <BottomBar
+        activeNavItem={activeNavItem}
+        handleNavItemPress={handleNavItemPress}
+        theme={theme}
+        currentColors={currentColors}
+        bulgeAnim={bulgeAnim}
+        screenWidth={screenWidth}
+      />
+    </View >
+    // </SafeAreaView>
   );
 }
 
@@ -2189,229 +1822,7 @@ const getModuleColor = (moduleName: string): string => {
   }
 };
 
-// Hamburger Menu Component
-const HamburgerMenu = ({
-  isVisible,
-  onClose,
-  userData,
-  menuItems,
-  activeMenuItem,
-  onMenuItemPress,
-  onLogout,
-  isDark,
-  slideAnim,
-  getInitials,
-  currentColors
-}: any) => {
-  if (!isVisible) return null;
-  return (
-    <Modal transparent visible={isVisible} animationType="none" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
-        <TouchableOpacity style={styles.overlayTouchable} activeOpacity={1} onPress={onClose} />
-        <Animated.View style={[
-          styles.menuContainer,
-          {
-            width: 300,
-            transform: [{ translateX: slideAnim }],
-            backgroundColor: currentColors.white,
-          }
-        ]}>
-          <View style={[styles.menuHeader, { backgroundColor: currentColors.headerBg }]}>
-            <View style={styles.menuHeaderContent}>
-              {userData?.profile_picture ? (
-                <Image
-                  source={{ uri: userData.profile_picture }}
-                  style={styles.menuUserAvatar}
-                />
-              ) : (
-                <View style={[styles.menuUserAvatarCircle, { backgroundColor: currentColors.info }]}>
-                  <Text style={styles.menuUserAvatarText}>
-                    {getInitials(userData?.full_name || 'User')}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.menuUserDetails}>
-                <Text style={[styles.menuUserName, { color: '#FFFFFF' }]}>
-                  {userData?.full_name || 'User'}
-                </Text>
-                <Text style={[styles.menuUserRole, { color: currentColors.textLight }]}>
-                  {userData?.designation || userData?.role || 'Employee'}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <ScrollView style={[styles.menuItems, { backgroundColor: currentColors.white }]}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.menuItemsContent}
-          >
-            {menuItems.map((item: any, index: number) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.menuItem,
-                  activeMenuItem === item.title && styles.menuItemActive,
-                  {
-                    backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
-                  }
-                ]}
-                onPress={() => onMenuItemPress(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.menuItemIconContainer}>
-                  <Ionicons
-                    name={item.icon as any}
-                    size={22}
-                    color={activeMenuItem === item.title ? currentColors.info : currentColors.textSecondary}
-                  />
-                </View>
-                <Text style={[
-                  styles.menuItemText,
-                  activeMenuItem === item.title && styles.menuItemTextActive,
-                  { color: activeMenuItem === item.title ? currentColors.info : currentColors.textSecondary }
-                ]}>{item.title}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <View style={[styles.logoutSection, { backgroundColor: currentColors.white }]}>
-            <View style={[styles.logoutDivider, { backgroundColor: currentColors.border }]} />
-            <TouchableOpacity
-              style={[styles.logoutButton, { backgroundColor: '#FEF2F2' }]}
-              onPress={onLogout}
-              activeOpacity={0.7}
-            >
-              <View style={styles.logoutIconContainer}>
-                <Ionicons name="log-out-outline" size={22} color={currentColors.error} />
-              </View>
-              <Text style={[styles.logoutButtonText, { color: currentColors.error }]}>Logout</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </SafeAreaView>
-    </Modal>
-  );
-};
-
-// All Modules Modal Component - Updated for 2 columns square design
-const AllModulesModal = ({
-  isVisible,
-  onClose,
-  modules,
-  searchQuery,
-  onSearchChange,
-  onModulePress,
-  theme,
-  currentColors
-}: any) => {
-  const { width: screenWidth } = useWindowDimensions();
-  const itemWidth = (screenWidth - 60) / 2;
-
-  return (
-    <Modal
-      animationType="slide"
-      transparent={false}
-      visible={isVisible}
-      onRequestClose={onClose}
-      statusBarTranslucent={false}
-    >
-      <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.bgColor }]}>
-        <LinearGradient
-          colors={[currentColors.headerBg, currentColors.headerBg]}
-          style={styles.modalHeaderGradient}
-        >
-          <View style={styles.modalHeader}>
-            <View style={styles.modalHeaderRow}>
-              <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
-                <Ionicons name="arrow-back" size={24} color="white" />
-              </TouchableOpacity>
-              <View style={styles.modalTitleContainer}>
-                <Text style={styles.modalTitle}>All Modules</Text>
-                <Text style={styles.modalSubtitle}>{modules.length} Available</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-          </View>
-
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <View style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
-              <Ionicons name="search" size={20} color="rgba(255, 255, 255, 0.7)" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search modules..."
-                placeholderTextColor="rgba(255, 255, 255, 0.7)"
-                value={searchQuery}
-                onChangeText={onSearchChange}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => onSearchChange('')}>
-                  <Ionicons name="close-circle" size={20} color="rgba(255, 255, 255, 0.7)" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        </LinearGradient>
-
-        <ScrollView
-          style={styles.modalContent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.modalContentContainer,
-            { paddingBottom: Platform.OS === 'ios' ? 100 : 80 }
-          ]}
-        >
-          {modules.length === 0 ? (
-            <View style={styles.noResultsContainer}>
-              <Ionicons name="search-outline" size={60} color={theme.textSub} />
-              <Text style={[styles.noResultsText, { color: theme.textMain }]}>
-                No modules found
-              </Text>
-              <Text style={[styles.noResultsSubtext, { color: theme.textSub }]}>
-                Try searching with different keywords
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.allModulesGrid}>
-              {modules.map((module: any, index: number) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.moduleItemModalSquare,
-                    {
-                      backgroundColor: theme.cardBg,
-                      width: itemWidth,
-                      height: itemWidth,
-                    }
-                  ]}
-                  onPress={() => {
-                    onModulePress(module.title, module.module_unique_name);
-                    onClose();
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.moduleIconContainerModalSimple}>
-                    <Image
-                      source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
-                      style={styles.moduleIconImageModalSimple}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <Text style={[styles.moduleTitleModalSimple, { color: theme.textMain }]} numberOfLines={2}>
-                    {module.title}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-};
-
 const styles = StyleSheet.create({
-
   safeContainer: {
     flex: 1,
     backgroundColor: '#000D24',
@@ -2464,7 +1875,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   headerBanner: {
-    height: 300,
+    height: 250,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: 'hidden',
@@ -2516,106 +1927,14 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     color: 'white',
-    fontSize: 35,
+    fontSize: 30,
     fontWeight: '700',
   },
   employeeText: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 18,
     opacity: 0.8,
     marginTop: 2,
-  },
-  sectionCard: {
-    marginHorizontal: 20,
-    marginBottom: 15,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
-  },
-  labelSmall: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  iconGridFull: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  iconItemFull: {
-    alignItems: 'center',
-    width: '23%',
-  },
-  iconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  iconImage: {
-    width: 25,
-    height: 25,
-    tintColor: 'white',
-  },
-  iconLabel: {
-    fontSize: 10,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  reminderCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    height: 125,
-  },
-  reminderContent: {
-    flexDirection: 'row',
-    flex: 1,
-    height: '75%',
-  },
-  reminderBorder: {
-    width: 4,
-    borderRadius: 2,
-    marginRight: 12,
-  },
-  reminderText: {
-    flex: 1,
-  },
-  reminderTitle: {
-    fontWeight: '600',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  reminderTime: {
-    fontSize: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  calendarIcon: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 70,
-    height: 70,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-  },
-  calendarDate: {
-    fontWeight: 'bold',
-    fontSize: 12,
-    marginTop: -20,
   },
   moduleGrid: {
     marginHorizontal: 20,
@@ -2699,142 +2018,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  statsContent: {
-    flexDirection: 'row',
+  footer: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingBottom: 30,
+    paddingTop: 15,
   },
-  chartContainer: {
-    flexDirection: 'row',
-    height: 90,
-    alignItems: 'flex-end',
-    flex: 1,
-  },
-  chartBar: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  chartDay: {
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  barWrapper: {
-    width: 10,
-    justifyContent: 'flex-end',
-    position: 'relative',
-    borderRadius: 5,
-    overflow: 'hidden',
-    marginHorizontal: 2,
-  },
-  hoursBar: {
-    width: '100%',
-    borderRadius: 5,
-    position: 'absolute',
-    bottom: 0,
-  },
-  targetBar: {
-    width: '100%',
-    borderRadius: 5,
-    position: 'absolute',
-    bottom: 0,
-  },
-  statsNumbers: {
-    alignItems: 'flex-end',
-  },
-  statsValue: {
-    fontSize: 24,
+  footerLogo: {
+    fontSize: 28,
     fontWeight: '700',
+    letterSpacing: 5,
+    color: '#a9a9a9b6',
+    marginBottom: 5,
   },
-  statsLabel: {
+  footerText: {
     fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  eventsScroll: {
-    marginHorizontal: -5,
-  },
-  eventsScrollContent: {
-    paddingHorizontal: 5,
-  },
-  eventItem: {
-    marginHorizontal: 8,
-    width: 100,
-  },
-  eventCard: {
-    alignItems: 'center',
-  },
-  eventAvatarWrapper: {
-    position: 'relative',
-    marginBottom: 0,
-    width: 80,
-    height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  eventAvatar: {
-    borderRadius: 35,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  eventAvatarInitials: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  eventDateBadge: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  eventDateDay: {
-    color: '#FF5E7A',
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-  eventDateMonth: {
-    color: '#666666',
-    fontWeight: '600',
-    lineHeight: 11,
-  },
-  anniversaryBadge: {
-    position: 'absolute',
-    backgroundColor: '#FCD34D',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  anniversaryText: {
-    color: '#78350F',
-    fontWeight: '700',
-  },
-  eventName: {
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  eventTypeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  eventType: {
-    textAlign: 'center',
-    fontWeight: '500',
+    color: '#666',
   },
   themeSwitcher: {
     alignItems: 'center',
@@ -2886,345 +2084,4 @@ const styles = StyleSheet.create({
     height: 44,
     paddingLeft: 20,
   },
-  footer: {
-    alignItems: 'center',
-    paddingBottom: 30,
-    paddingTop: 15,
-  },
-  footerLogo: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: 5,
-    color: '#a9a9a9b6',
-    marginBottom: 5,
-  },
-  footerText: {
-    fontSize: 10,
-    color: '#666',
-  },
-  bottomNavContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  bottomNavGradient: {
-    height: 75,
-    justifyContent: 'flex-end',
-  },
-  bottomNav: {
-    height: 65,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 6,   // 👈 gives breathing space
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    position: 'relative',
-  },
-  floatingCircle: {
-    position: 'absolute',
-    top: -25,    // keep icon slightly above bar
-    width: 65,
-    height: 65,
-    borderRadius: 32.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 10,
-  },
-  navLabel: {
-    fontSize: 10,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  overlay: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  overlayTouchable: {
-    flex: 1,
-  },
-  menuContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  menuHeader: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 24,
-  },
-  menuHeaderContent: {
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuUserAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  menuUserAvatarCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  menuUserAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  menuUserDetails: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  menuUserRole: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  menuUserName: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  menuItems: {
-    flex: 1,
-  },
-  noEventsContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 30,
-    minWidth: width - 40, // Full width minus padding
-  },
-  noEventsIcon: {
-    marginBottom: 15,
-    opacity: 0.6,
-  },
-  noEventsText: {
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  noEventsSubtext: {
-    fontSize: 13,
-    textAlign: 'center',
-    opacity: 0.7,
-  },
-  menuItemsContent: {
-    paddingTop: 20,
-    paddingBottom: 12,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginBottom: 4,
-  },
-  menuItemActive: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#3B82F6',
-  },
-  menuItemIconContainer: {
-    width: 32,
-    marginRight: 16,
-  },
-  menuItemText: {
-    fontWeight: '500',
-    flex: 1,
-    fontSize: 15,
-  },
-  menuItemTextActive: {
-    fontWeight: '600',
-  },
-  logoutSection: {
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-  },
-  logoutDivider: {
-    height: 1,
-    marginHorizontal: 20,
-    marginBottom: 12,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#EF4444',
-  },
-  logoutIconContainer: {
-    width: 32,
-    marginRight: 16,
-  },
-  logoutButtonText: {
-    fontWeight: '600',
-    flex: 1,
-    fontSize: 15,
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeaderGradient: {
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    paddingBottom: 20,
-  },
-  modalHeader: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingHorizontal: 20,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalBackButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  searchContainer: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  searchInput: {
-    flex: 1,
-    color: 'white',
-    fontSize: 16,
-    marginLeft: 10,
-    padding: 0,
-  },
-  modalContent: {
-    flex: 1,
-  },
-  modalContentContainer: {
-    padding: 20,
-  },
-  allModulesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  moduleItemModalSquare: {
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 20,
-    padding: 16,
-  },
-  moduleIconContainerModalSimple: {
-    width: 60,
-    height: 60,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  moduleIconImageModalSimple: {
-    width: 40,
-    height: 40,
-  },
-  moduleTitleModalSimple: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  noResultsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  noResultsText: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  noResultsSubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  downBulgeWrapper: {
-    position: 'absolute',
-    bottom: -34,          // slightly more than half height
-    left: 0,
-    width: 0,
-    height: 0,
-    zIndex: 5,            // 👈 ABOVE nav bg
-    elevation: 5,
-  },
-
-  downBulge: {
-    width: 76,
-    height: 76,
-    borderBottomLeftRadius: 38,
-    borderBottomRightRadius: 38,
-
-    // smoothness tricks
-    transform: [{ scaleX: 1.15 }],
-
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-
-    elevation: 8,
-  },
-
-
 });

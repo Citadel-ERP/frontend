@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius.xl,
     borderBottomLeftRadius: borderRadius.xl,
     borderBottomRightRadius: borderRadius.xl,
-    maxHeight: '80%',
+    maxHeight: '95%',
     marginLeft: 15,
     marginRight: 15,
     shadowColor: '#000',

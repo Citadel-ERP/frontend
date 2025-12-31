@@ -83,3 +83,90 @@ export interface BookingFormData {
     gracePeriod: string;
     bookingFor: AssignedEmployee | null;
 }
+
+export const formatTimeForAPI = (date: Date): string => {
+    return date.toTimeString().slice(0, 5);
+};
+
+export const formatTimeForDisplay = (date: Date): string => {
+    return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+};
+
+export const formatDateForDisplay = (date: Date): string => {
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit'
+    });
+};
+
+export const formatDateTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+};
+
+export const getStatusColor = (status: string): string => {
+    switch (status.toLowerCase()) {
+        case 'available': return '#00d285';
+        case 'booked': return '#017bf9';
+        case 'completed': return '#666';
+        case 'cancelled': return '#ff5e7a';
+        case 'in-progress': return '#ffb157';
+        default: return '#666';
+    }
+};
+
+export const getStatusText = (status: string): string => {
+    switch (status.toLowerCase()) {
+        case 'available': return 'Available';
+        case 'booked': return 'Upcoming';
+        case 'completed': return 'Completed';
+        case 'cancelled': return 'Cancelled';
+        case 'in-progress': return 'Current';
+        default: return status;
+    }
+};
+
+export const DEFAULT_CITIES = [
+    { name: 'Bengaluru', icon: '🏛️' },
+    { name: 'Mumbai', icon: '🌉' },
+    { name: 'Hyderabad', icon: '🕌' },
+    { name: 'Pune', icon: '🏰' },
+    { name: 'Delhi', icon: '🏛️' },
+    { name: 'Noida', icon: '🏙️' },
+    { name: 'Chennai', icon: '🕍' },
+    { name: 'Kolkata', icon: '🌉' },
+    { name: 'Ahmedabad', icon: '🕌' },
+    { name: 'Jaipur', icon: '🏰' },
+    { name: 'Lucknow', icon: '🏛️' },
+    { name: 'Chandigarh', icon: '🏙️' }
+];
+
+// export const DEFAULT_CITIES = [
+//     { name: 'Mumbai', image: require('../assets/cities/mumbai.jpg') },
+//     { name: 'Delhi', image: require('../assets/cities/delhi.jpg') },
+//     { name: 'Bangalore', image: require('../assets/cities/bangalore.jpg') },
+//     { name: 'Hyderabad', image: require('../assets/cities/hyderabad.jpg') },
+//     { name: 'Chennai', image: require('../assets/cities/chennai.jpg') },
+//     { name: 'Kolkata', image: require('../assets/cities/kolkata.jpg') },
+//     { name: 'Pune', image: require('../assets/cities/pune.jpg') },
+//     { name: 'Ahmedabad', image: require('../assets/cities/ahmedabad.jpg') },
+// ];
+
+// export const DEFAULT_CITIES = [
+//     { name: 'Mumbai', image: require('../assets/cities/mumbai.jpg'), icon: 'city' },
+//     { name: 'Delhi', image: require('../assets/cities/delhi.jpg'), icon: 'city' },
+//     { name: 'Bangalore', image: require('../assets/cities/bangalore.jpg'), icon: 'city' },
+//     { name: 'Hyderabad', image: require('../assets/cities/hyderabad.jpg'), icon: 'city' },
+//     { name: 'Chennai', image: require('../assets/cities/chennai.jpg'), icon: 'city' },
+//     { name: 'Kolkata', image: require('../assets/cities/kolkata.jpg'), icon: 'city' },
+//     { name: 'Pune', image: require('../assets/cities/pune.jpg'), icon: 'city' },
+//     { name: 'Ahmedabad', image: require('../assets/cities/ahmedabad.jpg'), icon: 'city' },
+// ];

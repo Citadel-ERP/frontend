@@ -1774,52 +1774,52 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   );
 
   // Bottom Navigation Component
-  const BottomNavigation = () => {
-    const navItems = [
-      { id: 'home', label: 'Home', icon: '🏠' },
-      { id: 'message', label: 'Message', icon: '💬' },
-      { id: 'hr', label: 'HR', icon: '📮' },
-      { id: 'support', label: 'Support', icon: '👤' },
-    ];
-    const [activeNavItem, setActiveNavItem] = useState('home');
+  // const BottomNavigation = () => {
+  //   const navItems = [
+  //     { id: 'home', label: 'Home', icon: '🏠' },
+  //     { id: 'message', label: 'Message', icon: '💬' },
+  //     { id: 'hr', label: 'HR', icon: '📮' },
+  //     { id: 'support', label: 'Support', icon: '👤' },
+  //   ];
+  //   const [activeNavItem, setActiveNavItem] = useState('home');
 
-    return (
-      <View style={styles.bottomNavContainer}>
-        <View style={[styles.navBar, { backgroundColor: isDarkMode ? '#0a111f' : '#ffffff' }]}>
-          {navItems.map((item, index) => {
-            const isActive = activeNavItem === item.id;
-            const itemPosition = 12.5 + (index * 25);
+  //   return (
+  //     <View style={styles.bottomNavContainer}>
+  //       <View style={[styles.navBar, { backgroundColor: isDarkMode ? '#0a111f' : '#ffffff' }]}>
+  //         {navItems.map((item, index) => {
+  //           const isActive = activeNavItem === item.id;
+  //           const itemPosition = 12.5 + (index * 25);
             
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => setActiveNavItem(item.id)}
-              >
-                {isActive && (
-                  <View style={[styles.bulge, { left: `${itemPosition}%` }]} />
-                )}
-                <View style={styles.navItemContent}>
-                  {isActive ? (
-                    <View style={[styles.iconCircle, { backgroundColor: theme.primary }]}>
-                      <Text style={styles.activeNavIcon}>{item.icon}</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.navIcon}>{item.icon}</Text>
-                  )}
-                  <Text style={[styles.navLabel, isActive && styles.activeNavLabel, { 
-                    color: isActive ? theme.primary : (isDarkMode ? '#a0a0a0' : '#666666')
-                  }]}>
-                    {item.label}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
+  //           return (
+  //             <TouchableOpacity
+  //               key={item.id}
+  //               style={[styles.navItem, isActive && styles.navItemActive]}
+  //               onPress={() => setActiveNavItem(item.id)}
+  //             >
+  //               {isActive && (
+  //                 <View style={[styles.bulge, { left: `${itemPosition}%` }]} />
+  //               )}
+  //               <View style={styles.navItemContent}>
+  //                 {isActive ? (
+  //                   <View style={[styles.iconCircle, { backgroundColor: theme.primary }]}>
+  //                     <Text style={styles.activeNavIcon}>{item.icon}</Text>
+  //                   </View>
+  //                 ) : (
+  //                   <Text style={styles.navIcon}>{item.icon}</Text>
+  //                 )}
+  //                 <Text style={[styles.navLabel, isActive && styles.activeNavLabel, { 
+  //                   color: isActive ? theme.primary : (isDarkMode ? '#a0a0a0' : '#666666')
+  //                 }]}>
+  //                   {item.label}
+  //                 </Text>
+  //               </View>
+  //             </TouchableOpacity>
+  //           );
+  //         })}
+  //       </View>
+  //     </View>
+  //   );
+  // };
 
   if (viewMode === 'incentive' && selectedLead) {
     return (
@@ -2630,8 +2630,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         )}
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <BottomNavigation />
+      {/* Bottom Navigation
+      <BottomNavigation /> */}
 
       {/* Filter Modals */}
       <DropdownModal
@@ -2797,11 +2797,11 @@ const styles = StyleSheet.create({
     color: 'white',
     letterSpacing: 0.5,
   },
-  leadHeader: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 10,
-  },
+  // leadHeader: {
+  //   flexDirection: 'row',
+  //   gap: 12,
+  //   marginBottom: 10,
+  // },
   avatar: {
     width: 50,
     height: 50,
@@ -2812,11 +2812,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  leadName: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
+  // leadName: {
+  //   fontSize: 18,
+  //   fontWeight: '600',
+  //   marginBottom: 2,
+  // },
   leadContact: {
     fontSize: 12,
     opacity: 0.8,
@@ -3286,7 +3286,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start', 
     marginBottom: spacing.md 
   },
-  leadInfo: { flex: 1 },
   statusIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',

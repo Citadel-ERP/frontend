@@ -11,6 +11,7 @@ import {
   Alert,
   StatusBar,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
@@ -42,7 +43,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 
   const fetchCities = async () => {
     if (!token) return;
-    
+
     setCitiesLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getCities`, {
@@ -56,7 +57,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
             name: cityArray[0]
           }));
           setCities(formattedCities);
-          
+
           if (formattedCities.length > 0 && !selectedCity) {
             const firstCity = formattedCities[0].name;
             setSelectedCity(firstCity);
@@ -76,13 +77,13 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
+      <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
     </View>
   );
 
   const fetchHolidaysByCity = async (cityName: string) => {
     if (!cityName) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getHolidays?city=${encodeURIComponent(cityName)}`, {
@@ -182,23 +183,23 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
       onRequestClose={() => setShowCityModal(false)}
     >
       <View style={styles.modalOverlay}>
-        <TouchableOpacity 
-          style={styles.modalBackdrop} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
           onPress={() => setShowCityModal(false)}
         />
         <View style={styles.cityModal}>
           <View style={styles.modalDragIndicator} />
-          
+
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Select Your City</Text>
               <Text style={styles.modalSubtitle}>Choose a city to view holidays</Text>
             </View>
           </View>
-          
-          <ScrollView 
-            style={styles.cityList} 
+
+          <ScrollView
+            style={styles.cityList}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.cityListContent}
           >
@@ -245,16 +246,27 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#5b21b6" translucent={false} />
-      
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}><BackIcon /></Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Holiday Calendar</Text>
-          <View style={styles.headerSpacer} />
+      <View style={[styles.header, styles.headerBanner]}>
+        <Image
+          source={require('../../assets/attendance_bg.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={styles.headerOverlay} />
+
+        <View>
+          <View style={styles.headerContent}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <BackIcon />
+            </TouchableOpacity>
+            <Text style={styles.logoText}>CITADEL</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.titleSection}>
+            <Text style={styles.sectionTitle}>Holidays</Text>
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       <View style={styles.filterContainer}>
         <TouchableOpacity
@@ -284,8 +296,8 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollContainer} 
+      <ScrollView
+        style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -301,12 +313,12 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
                 const dateInfo = getMonthDay(holiday.date);
                 const gradientColors = getHolidayGradient(index);
                 const icon = getHolidayIcon(holiday.name);
-                
+
                 return (
                   <View key={holiday.id} style={styles.holidayCard}>
                     <View style={[
-                      styles.holidayCardGradient, 
-                      { 
+                      styles.holidayCardGradient,
+                      {
                         backgroundColor: gradientColors[0],
                         backgroundImage: `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[1]} 100%)`
                       }
@@ -338,8 +350,8 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
                 </View>
                 <Text style={styles.emptyStateTitle}>No Holidays Found</Text>
                 <Text style={styles.emptyStateText}>
-                  {selectedCity 
-                    ? `No holidays scheduled for ${selectedCity}` 
+                  {selectedCity
+                    ? `No holidays scheduled for ${selectedCity}`
                     : 'Select a city to view holidays'
                   }
                 </Text>
@@ -366,8 +378,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     backgroundColor: colors.primary,
   },
   backButton: {
@@ -585,7 +595,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  
+
   // Enhanced Modal styles
   modalOverlay: {
     flex: 1,
@@ -706,18 +716,78 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   backIcon: { 
-    width: 24, 
     height: 24, 
     alignItems: 'center', 
-    justifyContent: 'center' 
+    justifyContent: 'center', 
+    display: 'flex', 
+    flexDirection: 'row', 
+    alignContent: 'center' 
   },
   backArrow: {
-    width: 12, 
-    height: 12, 
-    borderLeftWidth: 2, 
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
     borderTopWidth: 2,
-    borderColor: '#fff', 
+    borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    width: '100%',
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },backText: {
+    color: colors.white,
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 80,
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
 });
 

@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,6 +39,8 @@ import {
 import LeaveModal from './LeaveModal';
 import { MonthDropdown, YearDropdown } from './DropdownComponents';
 import ReasonModal from './ReasonModal';
+import { LinearGradient } from 'expo-linear-gradient';
+
 
 const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -184,20 +187,20 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       const { status } = await Location.getForegroundPermissionsAsync();
       const hasPermission = status === 'granted';
       setLocationPermission(hasPermission);
-      
+
       if (!hasPermission) {
         const userResponse = await new Promise<boolean>((resolve) => {
           Alert.alert(
             'Location Access Required',
             'Location permission is required to mark attendance and checkout. Please enable location access to continue.',
             [
-              { 
-                text: 'Cancel', 
+              {
+                text: 'Cancel',
                 style: 'cancel',
                 onPress: () => resolve(false)
               },
-              { 
-                text: 'Enable Location', 
+              {
+                text: 'Enable Location',
                 onPress: async () => {
                   const permissionGranted = await initializeLocationPermission();
                   resolve(permissionGranted);
@@ -208,7 +211,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         });
         return userResponse;
       }
-      
+
       return hasPermission;
     } catch (error) {
       console.error('Error checking location permission:', error);
@@ -226,7 +229,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (!hasPermission) {
         return null;
       }
-      
+
       const locationPromise = Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
@@ -245,8 +248,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         'Unable to get your location. Please check location permissions and try again.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Check Permissions', 
+          {
+            text: 'Check Permissions',
             onPress: async () => {
               await initializeLocationPermission();
             }
@@ -259,7 +262,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
+      <View style={styles.backArrow} /> <Text style={styles.backText}>Back</Text>
     </View>
   );
 
@@ -971,15 +974,38 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
 
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}><BackIcon /></Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Attendance</Text>
-          <View style={styles.headerSpacer} />
+      {/* <SafeAreaView edges={['top']} style={styles.safeArea}> */}
+      <View style={[styles.header, styles.headerBanner]}>
+        {/* <LinearGradient
+          colors={['#007AFF', '#0056CC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          // style={styles.headerBanner}
+        > */}
+        <Image
+          source={require('../../assets/attendance_bg.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={styles.headerOverlay} />
+
+        {/* <SafeAreaView edges={['top']} style={styles.safeArea}> */}
+        <View>
+          <View style={styles.headerContent}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <BackIcon />
+            </TouchableOpacity>
+            <Text style={styles.logoText}>CITADEL</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.titleSection}>
+            <Text style={styles.sectionTitle}>Attendance</Text>
+          </View>
         </View>
-      </SafeAreaView>
+        {/* </SafeAreaView> */}
+        {/* </LinearGradient> */}
+      </View>
+      {/* </SafeAreaView> */}
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.contentPadding}>
@@ -988,13 +1014,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             <Text style={styles.todaySubtitle}>
               Mark your attendance between{'\n'}10:00 AM - 11:00 AM
             </Text>
-            
+
             {!locationPermission && (
               <View style={styles.permissionWarning}>
                 <Text style={styles.permissionWarningText}>
                   ⚠️ Location permission required to mark attendance
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.enableLocationButton}
                   onPress={initializeLocationPermission}
                   disabled={isCheckingPermission}
@@ -1007,7 +1033,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 </TouchableOpacity>
               </View>
             )}
-            
+
             {todayAttendance ? (
               <View style={styles.markedContainer}>
                 <View style={styles.checkmarkCircle}>
@@ -1023,7 +1049,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 {todayAttendance.check_in_time && !todayAttendance.check_out_time && (
                   <TouchableOpacity
                     style={[
-                      styles.markButton, 
+                      styles.markButton,
                       styles.checkoutButton,
                       !locationPermission && styles.disabledButton
                     ]}
@@ -1179,15 +1205,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
-  safeArea: {
-    backgroundColor: '#1e1b4b',
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 80,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    // paddingHorizontal: 20,
+    // paddingVertical: 16,
     backgroundColor: '#1e1b4b',
   },
   backButton: {
@@ -1464,10 +1499,61 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
   },
-  backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  backIcon: { height: 24, alignItems: 'center', justifyContent: 'center', display: 'flex', flexDirection: 'row', alignContent: 'center' },
   backArrow: {
     width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
     borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  safeArea: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    width: '100%',
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },backText: {
+    color: colors.white,
+    fontSize: 14,
+    marginLeft: 2,
   },
 });
 

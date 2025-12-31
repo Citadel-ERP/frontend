@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar,
   RefreshControl,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -75,7 +76,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: tokenToUse }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setLeaveBalance({
@@ -83,7 +84,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
           sick_leaves: data.sick_leaves || 0,
           earned_leaves: data.earned_leaves || 0
         });
-        
+
         if (data.leaves && Array.isArray(data.leaves)) {
           const formattedLeaveApplications = data.leaves.map((leave: any) => ({
             id: leave.id,
@@ -118,7 +119,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
+      <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
     </View>
   );
 
@@ -127,7 +128,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/applyLeave`, {
@@ -141,9 +142,9 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
           reason: leaveForm.reason
         }),
       });
-      
+
       if (response.ok) {
-        Alert.alert('Success', 'Leave application submitted successfully!');
+        Alert.alert('Success', 'Leave application submitted successfully! Awaiting approval.');
         setIsLeaveModalVisible(false);
         setLeaveForm({ startDate: '', endDate: '', leaveType: 'casual', reason: '' });
         await fetchLeaveBalance();
@@ -229,28 +230,35 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-      
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}><BackIcon/></Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Leave</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-      </SafeAreaView>
 
-      <ScrollView 
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
+
+      <View style={[styles.header, styles.headerBanner]}>
+        <Image
+          source={require('../../assets/attendance_bg.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={styles.headerOverlay} />
+
+        <View>
+          <View style={styles.headerContent}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <BackIcon />
+            </TouchableOpacity>
+            <Text style={styles.logoText}>CITADEL</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.titleSection}>
+            <Text style={styles.sectionTitle}>Leave</Text>
+          </View>
+        </View>
+      </View>
+
+
         <View style={styles.contentPadding}>
           {/* Leave Balance Section */}
           <View style={styles.balanceSection}>
-            <Text style={styles.sectionTitle}>Leave Balance</Text>
+            <Text style={styles.sectionTitleAlt}>Leave Balance</Text>
             <View style={styles.balanceGrid}>
               <View style={[styles.balanceCard, styles.sickLeaveCard]}>
                 <View style={styles.balanceIconContainer}>
@@ -259,7 +267,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
                 <Text style={styles.balanceNumber}>{leaveBalance.sick_leaves}</Text>
                 <Text style={styles.balanceLabel}>Sick Leaves</Text>
               </View>
-              
+
               <View style={[styles.balanceCard, styles.casualLeaveCard]}>
                 <View style={styles.balanceIconContainer}>
                   <Text style={styles.balanceIcon}>☀️</Text>
@@ -267,7 +275,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
                 <Text style={styles.balanceNumber}>{leaveBalance.casual_leaves}</Text>
                 <Text style={styles.balanceLabel}>Casual Leaves</Text>
               </View>
-              
+
               <View style={[styles.balanceCard, styles.earnedLeaveCard]}>
                 <View style={styles.balanceIconContainer}>
                   <Text style={styles.balanceIcon}>⭐</Text>
@@ -279,7 +287,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
           </View>
 
           {/* Apply Leave Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.applyLeaveButton}
             onPress={handleApplyLeave}
           >
@@ -294,7 +302,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
             </View>
           ) : leaveApplications.length > 0 ? (
             <View style={styles.applicationsSection}>
-              <Text style={styles.sectionTitle}>Recent Applications</Text>
+              <Text style={styles.sectionTitleAlt}>Recent Applications</Text>
               {leaveApplications.map((leave) => (
                 <TouchableOpacity
                   key={leave.id}
@@ -320,7 +328,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
                       </Text>
                     </View>
                   </View>
-                  
+
                   {leave.total_number_of_days && (
                     <View style={styles.leaveCardFooter}>
                       <Text style={styles.leaveDuration}>
@@ -341,7 +349,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
             </View>
           )}
         </View>
-      </ScrollView>
+      {/* </ScrollView> */}
 
       <LeaveModal
         visible={isLeaveModalVisible}
@@ -371,8 +379,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     backgroundColor: '#1e1b4b',
   },
   backButton: {
@@ -400,12 +406,6 @@ const styles = StyleSheet.create({
   },
   balanceSection: {
     marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
   },
   balanceGrid: {
     flexDirection: 'row',
@@ -558,10 +558,81 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
-  },backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  }, 
+  backIcon: { 
+    height: 24, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    display: 'flex', 
+    flexDirection: 'row', 
+    alignContent: 'center' 
+  },
   backArrow: {
     width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
     borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+  }, headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    width: '100%',
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  }, backText: {
+    color: colors.white,
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 80,
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  sectionTitleAlt: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
   },
 });
 

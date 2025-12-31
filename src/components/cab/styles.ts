@@ -37,3 +37,6 @@ export const styles = StyleSheet.create({
         color: '#017bf9',
     },
 });
+
+
+

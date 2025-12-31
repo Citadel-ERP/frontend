@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
+  Image
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Theme colors matching your app
 const colors = {
@@ -57,7 +57,7 @@ interface LeaveInfoScreenProps {
 }
 
 const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
-  
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -120,17 +120,17 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
     if (lowerType.includes('earned')) return '⭐';
     return '📋';
   };
-   const BackIcon = () => (
+  const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
+      <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-      
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
+
+      {/* <SafeAreaView edges={['top']} style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
             <Text style={styles.backButtonText}><BackIcon /></Text>
@@ -138,10 +138,32 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
           <Text style={styles.headerTitle}>Leave Details</Text>
           <View style={styles.headerSpacer} />
         </View>
-      </SafeAreaView>
+      </SafeAreaView> */}
 
-      <ScrollView 
-        style={styles.scrollContainer} 
+      <View style={[styles.header, styles.headerBanner]}>
+        <Image
+          source={require('../../assets/attendance_bg.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={styles.headerOverlay} />
+
+        <View>
+          <View style={styles.headerContent}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <BackIcon />
+            </TouchableOpacity>
+            <Text style={styles.logoText}>CITADEL</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.titleSection}>
+            <Text style={styles.sectionTitle}>Leave Details</Text>
+          </View>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -158,12 +180,12 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.leaveTypeHeader}>
             <Text style={styles.leaveTypeIcon}>{getLeaveTypeIcon(leave.leave_type)}</Text>
             <Text style={styles.leaveTypeTitle}>{formatLeaveType(leave.leave_type)} Leave</Text>
           </View>
-          
+
           <View style={styles.dateRangeContainer}>
             <View style={styles.dateItem}>
               <Text style={styles.dateLabel}>From</Text>
@@ -188,7 +210,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
 
         {/* Reason Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Reason for Leave</Text>
+          <Text style={styles.sectionTitleAlt}>Reason for Leave</Text>
           <View style={styles.card}>
             <Text style={styles.reasonText}>{leave.reason}</Text>
           </View>
@@ -196,20 +218,20 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
 
         {/* Leave Information Grid */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Leave Information</Text>
+          <Text style={styles.sectionTitleAlt}>Leave Information</Text>
           <View style={styles.infoGrid}>
             <View style={styles.infoCard}>
               <Text style={styles.infoLabel}>Leave Type</Text>
               <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
             </View>
-            
+
             <View style={styles.infoCard}>
               <Text style={styles.infoLabel}>Duration</Text>
               <Text style={styles.infoValue}>
                 {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} days
               </Text>
             </View>
-            
+
             {leave.is_sandwich !== undefined && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoLabel}>Sandwich Leave</Text>
@@ -224,10 +246,10 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
         {/* Approval/Rejection Details */}
         {(leave.status === 'approved' || leave.status === 'rejected') && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
+            <Text style={styles.sectionTitleAlt}>
               {leave.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
             </Text>
-            
+
             <View style={styles.card}>
               {leave.approved_by && (
                 <View style={styles.detailRow}>
@@ -239,7 +261,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                   </Text>
                 </View>
               )}
-              
+
               {(leave.approved_at || leave.rejected_at) && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>
@@ -250,7 +272,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                   </Text>
                 </View>
               )}
-              
+
               {leave.comment && (
                 <View style={styles.commentContainer}>
                   <Text style={styles.commentLabel}>
@@ -258,7 +280,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                   </Text>
                   <View style={[
                     styles.commentBox,
-                    { 
+                    {
                       borderLeftColor: leave.status === 'approved' ? colors.success : colors.error,
                       backgroundColor: leave.status === 'approved' ? colors.success + '10' : colors.error + '10'
                     }
@@ -274,7 +296,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
         {/* Employee Information */}
         {leave.user && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Employee Details</Text>
+            <Text style={styles.sectionTitleAlt}>Employee Details</Text>
             <View style={styles.card}>
               <View style={styles.employeeHeader}>
                 <View style={styles.avatarCircle}>
@@ -289,7 +311,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                   )}
                 </View>
               </View>
-              
+
               <View style={styles.employeeDetails}>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Employee ID</Text>
@@ -323,8 +345,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     backgroundColor: colors.secondary,
   },
   backButton: {
@@ -443,12 +463,7 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 12,
-  },
+
   card: {
     backgroundColor: colors.white,
     borderRadius: 16,
@@ -575,10 +590,81 @@ const styles = StyleSheet.create({
   },
   employeeDetails: {
     gap: 0,
-  },backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center'
+  },
   backArrow: {
     width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
     borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+  }, headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    width: '100%',
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  }, backText: {
+    color: colors.white,
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 80,
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  sectionTitleAlt: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
   },
 });
 
