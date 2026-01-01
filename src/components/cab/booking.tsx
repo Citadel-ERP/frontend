@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
-    TextInput, ActivityIndicator, Alert, Image, StatusBar
+    TextInput, ActivityIndicator, Alert, Image, StatusBar, SafeAreaView, Platform
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -64,6 +64,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
     };
 
     return (
+        <SafeAreaView style={styles.safeArea}>
         <View style={styles.screenContainer}>
             <StatusBar barStyle="light-content" backgroundColor="#017bf9" />
             <ScrollView
@@ -245,6 +246,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
                 </View>
             </ScrollView>
         </View>
+        </SafeAreaView>
     );
 };
 
@@ -253,8 +255,13 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#4A5568', // Match your gradient start color
+    },
     scrollContainer: {
         flex: 1,
+        backgroundColor: '#f5f5f5',
     },
     scrollContent: {
         flexGrow: 1,
@@ -294,6 +301,7 @@ const styles = StyleSheet.create({
     headerContent: {
         flex: 1,
         paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 10 : 40,
         paddingVertical: 40,
         position: 'relative',
         zIndex: 1,

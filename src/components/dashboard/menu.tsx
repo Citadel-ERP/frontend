@@ -27,6 +27,7 @@ interface MenuItem {
     title: string;
     icon: string;
     color: string;
+    image?: string; // PNG image path
 }
 
 interface HamburgerMenuProps {
@@ -42,6 +43,15 @@ interface HamburgerMenuProps {
     getInitials: (fullName: string) => string;
     currentColors: any;
 }
+
+// Mapping of menu titles to PNG images
+const imageMap: { [key: string]: any } = {
+    'Profile': require('../../assets/profile.png'),
+    'Settings': require('../../assets/settings.png'),
+    'Notifications': require('../../assets/notification.png'),
+    'Privacy Policy': require('../../assets/privacy.png'),
+    'Messages': require('../../assets/message.png'),
+};
 
 const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     isVisible,
@@ -85,15 +95,15 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         width: 300,
                         transform: [{ translateX: slideAnim }],
                         backgroundColor: currentColors.white,
-                        paddingTop: insets.top,
                     }
                 ]}>
-                    <LinearGradient
-                        colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.menuHeader}
-                    >
+                    <View style={[
+                        styles.menuHeader,
+                        { 
+                            backgroundColor: '#007AFF',
+                            paddingTop: insets.top + 24,
+                        }
+                    ]}>
                         <View style={styles.menuHeaderContent}>
                             {userData?.profile_picture ? (
                                 <Image
@@ -116,7 +126,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                                 </Text>
                             </View>
                         </View>
-                    </LinearGradient>
+                    </View>
 
                     <ScrollView 
                         style={[styles.menuItems, { backgroundColor: currentColors.white }]}
@@ -124,31 +134,39 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         contentContainerStyle={styles.menuItemsContent}
                     >
                         {menuItems.map((item: any, index: number) => (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.menuItem,
-                                    activeMenuItem === item.title && styles.menuItemActive,
-                                    {
-                                        backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
-                                    }
-                                ]}
-                                onPress={() => onMenuItemPress(item)}
-                                activeOpacity={0.7}
-                            >
-                                <View style={styles.menuItemIconContainer}>
-                                    <Ionicons
-                                        name={item.icon as any}
-                                        size={22}
-                                        color={activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary}
-                                    />
-                                </View>
-                                <Text style={[
-                                    styles.menuItemText,
-                                    activeMenuItem === item.title && styles.menuItemTextActive,
-                                    { color: activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary }
-                                ]}>{item.title}</Text>
-                            </TouchableOpacity>
+                            <View key={index}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.menuItem,
+                                        activeMenuItem === item.title && styles.menuItemActive,
+                                        {
+                                            backgroundColor: activeMenuItem === item.title ? currentColors.backgroundSecondary : 'transparent',
+                                        }
+                                    ]}
+                                    onPress={() => onMenuItemPress(item)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.menuItemIconContainer}>
+                                        {item.image ? (
+                                            <Image
+                                                source={item.image}
+                                                style={styles.menuItemImage}
+                                            />
+                                        ) : (
+                                            <Image
+                                                source={imageMap[item.title]}
+                                                style={styles.menuItemImage}
+                                            />
+                                        )}
+                                    </View>
+                                    <Text style={[
+                                        styles.menuItemText,
+                                        activeMenuItem === item.title && styles.menuItemTextActive,
+                                        { color: activeMenuItem === item.title ? '#3262f1' : currentColors.textSecondary }
+                                    ]}>{item.title}</Text>
+                                </TouchableOpacity>
+                                <View style={[styles.menuItemDivider, { backgroundColor: currentColors.border }]} />
+                            </View>
                         ))}
                     </ScrollView>
 
@@ -248,7 +266,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 14,
         borderRadius: 10,
-        marginBottom: 4,
+        marginBottom: 0,
     },
     menuItemActive: {
         borderLeftWidth: 4,
@@ -256,7 +274,20 @@ const styles = StyleSheet.create({
     },
     menuItemIconContainer: {
         width: 32,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
         marginRight: 16,
+    },
+    menuItemImage: {
+        width: 24,
+        height: 24,
+        resizeMode: 'contain',
+    },
+    menuItemDivider: {
+        height: 1,
+        marginHorizontal: 20,
+        marginVertical: 0,
     },
     menuItemText: {
         fontWeight: '500',
