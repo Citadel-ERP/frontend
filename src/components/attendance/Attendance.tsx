@@ -1130,7 +1130,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#a855f7' }]} />
-                <Text style={styles.legendText}>Work From Home</Text>
+                <Text style={styles.legendText}>Late Login</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#3b82f6' }]} />
