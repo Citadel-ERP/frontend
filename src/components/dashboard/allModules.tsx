@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,12 +10,13 @@ import {
     Platform,
     Dimensions,
     Modal,
+    Animated,
+    StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 interface Module {
     title: string;
@@ -45,229 +46,476 @@ const AllModulesModal: React.FC<AllModulesModalProps> = ({
     theme,
     currentColors,
 }) => {
+    const [slideAnim] = useState(new Animated.Value(height));
+    const [fadeAnim] = useState(new Animated.Value(0));
     const itemWidth = (width - 60) / 2;
 
+    useEffect(() => {
+        if (isVisible) {
+            Animated.parallel([
+                Animated.spring(slideAnim, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                    tension: 65,
+                    friction: 10,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        } else {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: height,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [isVisible]);
+
+    const handleClose = () => {
+        Animated.parallel([
+            Animated.timing(slideAnim, {
+                toValue: height,
+                duration: 250,
+                useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+        ]).start(() => {
+            onClose();
+        });
+    };
+
     return (
-        <Modal animationType="slide" transparent={false} visible={isVisible} onRequestClose={onClose} statusBarTranslucent={true} >
-            {/* <SafeAreaView style={[styles.modalContainer, { backgroundColor: '#3262f1' }]}> */}
+        <Modal
+            animationType="none"
+            transparent={true}
+            visible={isVisible}
+            onRequestClose={handleClose}
+            statusBarTranslucent={true}
+        >
+            <StatusBar
+                barStyle="light-content"
+                backgroundColor="transparent"
+                translucent={true}
+            />
+            
+            {/* Backdrop */}
+            <Animated.View
+                style={[
+                    styles.backdrop,
+                    {
+                        opacity: fadeAnim,
+                    },
+                ]}
+            >
+                <TouchableOpacity
+                    style={StyleSheet.absoluteFill}
+                    activeOpacity={1}
+                    onPress={handleClose}
+                />
+            </Animated.View>
+
+            {/* Modal Content */}
+            <Animated.View
+                style={[
+                    styles.modalContainer,
+                    { backgroundColor: theme.bgColor },
+                    {
+                        transform: [{ translateY: slideAnim }],
+                    },
+                ]}
+            >
+                {/* Header with Gradient */}
                 <LinearGradient
                     colors={[currentColors.gradientStart, currentColors.gradientEnd]}
                     start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.modalHeaderGradient, styles.linearGradient]}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.headerGradient}
                 >
-                    <View style={styles.modalHeader}>
-                        <View style={styles.modalHeaderRow}>
-                            <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
-                                <Ionicons name="arrow-back" size={24} color="white" />
+                    {/* Decorative sketch elements */}
+                    <View style={styles.sketchCircle1} />
+                    <View style={styles.sketchCircle2} />
+                    <View style={styles.sketchWave} />
+                    
+                    <View style={styles.headerContent}>
+                        {/* Top Bar */}
+                        <View style={styles.topBar}>
+                            <TouchableOpacity
+                                onPress={handleClose}
+                                style={styles.backButton}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="chevron-back" size={24} color="white" />
+                                <Text style={styles.backText}>Back</Text>
                             </TouchableOpacity>
-                            <View style={styles.modalTitleContainer}>
-                                {/* <LinearGradient
-                                    colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={styles.linearGradient}
-                                > */}
-                                <Text style={styles.modalTitle}>All Modules</Text>
-                                <Text style={styles.modalSubtitle}>{modules.length} Available</Text>
-                                {/* </LinearGradient> */}
+                            
+                            <View style={styles.headerTextContainer}>
+                                <Text style={styles.headerTitle}>All Modules</Text>
+                                <Text style={styles.headerSubtitle}>
+                                    {modules.length} {modules.length === 1 ? 'module' : 'modules'} available
+                                </Text>
                             </View>
-                            <View style={{ width: 40 }} />
+                            
+                            <View style={styles.backButtonSpacer} />
                         </View>
-                    </View>
-                    {/* Search Bar */}
-                    <View style={styles.searchContainer}>
-                        <View style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
-                            <Ionicons name="search" size={20} color="rgba(255, 255, 255, 0.7)" />
-                            <TextInput style={styles.searchInput} placeholder="Search modules..." placeholderTextColor="rgba(255, 255, 255, 0.7)" value={searchQuery} onChangeText={onSearchChange} autoCapitalize="none" autoCorrect={false} />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => onSearchChange('')}>
-                                    <Ionicons name="close-circle" size={20} color="rgba(255, 255, 255, 0.7)" />
-                                </TouchableOpacity>
-                            )}
+
+                        {/* Search Bar */}
+                        <View style={styles.searchWrapper}>
+                            <View style={styles.searchBar}>
+                                <Ionicons
+                                    name="search"
+                                    size={20}
+                                    color="rgba(255, 255, 255, 0.7)"
+                                    style={styles.searchIcon}
+                                />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder="Search modules..."
+                                    placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                                    value={searchQuery}
+                                    onChangeText={onSearchChange}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <TouchableOpacity
+                                        onPress={() => onSearchChange('')}
+                                        style={styles.clearButton}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons
+                                            name="close-circle"
+                                            size={20}
+                                            color="rgba(255, 255, 255, 0.7)"
+                                        />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         </View>
                     </View>
                 </LinearGradient>
-                <ScrollView
-                    style={styles.modalContent}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={[
-                        styles.modalContentContainer,
-                        { paddingBottom: Platform.OS === 'ios' ? 100 : 80 }
-                    ]}
-                >
-                    {modules.length === 0 ? (
-                        <View style={styles.noResultsContainer}>
-                            <Ionicons name="search-outline" size={60} color={theme.textSub} />
-                            <Text style={[styles.noResultsText, { color: theme.textMain }]}>
-                                No modules found
-                            </Text>
-                            <Text style={[styles.noResultsSubtext, { color: theme.textSub }]}>
-                                Try searching with different keywords
-                            </Text>
-                        </View>
-                    ) : (
-                        <View style={styles.allModulesGrid}>
-                            {modules.map((module: any, index: number) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={[
-                                        styles.moduleItemModalSquare,
-                                        {
-                                            backgroundColor: theme.cardBg,
-                                            width: itemWidth,
-                                            height: itemWidth,
-                                        }
-                                    ]}
-                                    onPress={() => {
-                                        onModulePress(module.title, module.module_unique_name);
-                                        onClose();
-                                    }}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={styles.moduleIconContainerModalSimple}>
-                                        <Image
-                                            source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
-                                            style={styles.moduleIconImageModalSimple}
-                                            resizeMode="contain"
-                                        />
-                                    </View>
-                                    <Text style={[styles.moduleTitleModalSimple, { color: theme.textMain }]} numberOfLines={2}>
-                                        {module.title}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-                </ScrollView>
-            {/* </SafeAreaView> */}
-        </Modal >
+
+                {/* Content Area */}
+                <View style={[styles.contentWrapper, { backgroundColor: theme.bgColor }]}>
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                        bounces={true}
+                    >
+                        {modules.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <View style={[styles.emptyIconContainer, {
+                                    backgroundColor: theme.cardBg === '#111a2d' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                                }]}>
+                                    <Ionicons
+                                        name="search-outline"
+                                        size={48}
+                                        color={theme.textSub || '#999'}
+                                    />
+                                </View>
+                                <Text style={[styles.emptyTitle, { color: theme.textMain }]}>
+                                    No modules found
+                                </Text>
+                                <Text style={[styles.emptySubtitle, { color: theme.textSub }]}>
+                                    Try different search terms
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={styles.modulesGrid}>
+                                {modules.map((module: Module, index: number) => (
+                                    <ModuleCard
+                                        key={`${module.module_unique_name}-${index}`}
+                                        module={module}
+                                        index={index}
+                                        itemWidth={itemWidth}
+                                        theme={theme}
+                                        currentColors={currentColors}
+                                        onPress={() => {
+                                            onModulePress(module.title, module.module_unique_name);
+                                            handleClose();
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </ScrollView>
+                </View>
+            </Animated.View>
+        </Modal>
+    );
+};
+
+// Module Card Component
+const ModuleCard: React.FC<{
+    module: Module;
+    index: number;
+    itemWidth: number;
+    theme: any;
+    currentColors: any;
+    onPress: () => void;
+}> = ({ module, index, itemWidth, theme, currentColors, onPress }) => {
+    const [scaleAnim] = useState(new Animated.Value(0));
+
+    useEffect(() => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            delay: index * 30,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 8,
+        }).start();
+    }, []);
+
+    return (
+        <Animated.View
+            style={{
+                transform: [{ scale: scaleAnim }],
+                opacity: scaleAnim,
+            }}
+        >
+            <TouchableOpacity
+                style={[
+                    styles.moduleCard,
+                    {
+                        width: itemWidth,
+                        backgroundColor: theme.cardBg,
+                        borderColor: theme.cardBg === '#111a2d' ? 'rgba(255, 255, 255, 0.08)' : '#f0f0f0',
+                    },
+                ]}
+                onPress={onPress}
+                activeOpacity={0.7}
+            >
+                <View style={styles.moduleCardInner}>
+                    <View style={[styles.iconContainer, {
+                        backgroundColor: theme.cardBg === '#111a2d' 
+                            ? 'rgba(255, 255, 255, 0.05)' 
+                            : '#f8f9fa',
+                    }]}>
+                        <Image
+                            source={{
+                                uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+                            }}
+                            style={styles.moduleIcon}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <Text
+                        style={[styles.moduleTitle, { color: theme.textMain }]}
+                        numberOfLines={2}
+                    >
+                        {module.title}
+                    </Text>
+                </View>
+            </TouchableOpacity>
+        </Animated.View>
     );
 };
 
 const styles = StyleSheet.create({
+    backdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    },
     modalContainer: {
-        flex: 1,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
     },
-    modalHeaderGradient: {
-        // borderBottomLeftRadius: 30,
-        // borderBottomRightRadius: 30,
-        overflow: 'hidden',
+    headerGradient: {
+        paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight! + 20,
         paddingBottom: 20,
+        position: 'relative',
+        overflow: 'hidden',
     },
-    modalHeader: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 60,
+    sketchCircle1: {
+        position: 'absolute',
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        top: -80,
+        right: -60,
+    },
+    sketchCircle2: {
+        position: 'absolute',
+        width: 150,
+        height: 150,
+        borderRadius: 75,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        bottom: -40,
+        left: -50,
+    },
+    sketchWave: {
+        position: 'absolute',
+        width: 300,
+        height: 100,
+        borderTopWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderTopLeftRadius: 100,
+        borderTopRightRadius: 100,
+        bottom: 30,
+        right: -100,
+        transform: [{ rotate: '15deg' }],
+    },
+    headerContent: {
         paddingHorizontal: 20,
     },
-    modalHeaderRow: {
+    topBar: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        marginBottom: 20,
     },
-    modalBackButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
+    backButton: {
+        flexDirection: 'row',
         alignItems: 'center',
+        paddingVertical: 8,
+        paddingRight: 8,
+        minWidth: 70,
     },
-    modalTitleContainer: {
+    backButtonSpacer: {
+        minWidth: 70,
+    },
+    backText: {
+        color: 'white',
+        fontSize: 17,
+        fontWeight: '600',
+        marginLeft: 2,
+    },
+    headerTextContainer: {
         flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    modalTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
+    headerTitle: {
+        fontSize: 22,
+        fontWeight: '700',
         color: 'white',
+        marginBottom: 4,
     },
-    modalSubtitle: {
+    headerSubtitle: {
         fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.8)',
+        color: 'rgba(255, 255, 255, 0.85)',
         fontWeight: '500',
-        marginTop: 4,
     },
-    searchContainer: {
-        paddingHorizontal: 20,
-        marginTop: 10,
+    searchWrapper: {
+        marginTop: 4,
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+    },
+    searchIcon: {
+        marginRight: 10,
     },
     searchInput: {
         flex: 1,
         color: 'white',
         fontSize: 16,
-        marginLeft: 10,
+        fontWeight: '500',
         padding: 0,
     },
-    modalContent: {
+    clearButton: {
+        padding: 4,
+    },
+    contentWrapper: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
     },
-    modalContentContainer: {
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
         padding: 20,
+        paddingBottom: Platform.OS === 'ios' ? 100 : 80,
     },
-    allModulesGrid: {
+    modulesGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
     },
-    moduleItemModalSquare: {
+    moduleCard: {
         borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        overflow: 'hidden',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
         shadowRadius: 8,
-        elevation: 4,
-        marginBottom: 20,
-        padding: 16,
+        elevation: 2,
     },
-    moduleIconContainerModalSimple: {
-        width: 60,
-        height: 60,
-        borderRadius: 15,
+    moduleCardInner: {
+        padding: 20,
+        alignItems: 'center',
+        minHeight: 150,
+        justifyContent: 'center',
+    },
+    iconContainer: {
+        width: 72,
+        height: 72,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 12,
     },
-    moduleIconImageModalSimple: {
+    moduleIcon: {
         width: 40,
         height: 40,
     },
-    moduleTitleModalSimple: {
-        fontSize: 14,
+    moduleTitle: {
+        fontSize: 15,
         fontWeight: '600',
         textAlign: 'center',
-        lineHeight: 18,
+        lineHeight: 20,
+        letterSpacing: 0.2,
     },
-    noResultsContainer: {
+    emptyState: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 80,
+        paddingVertical: 100,
     },
-    noResultsText: {
+    emptyIconContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    emptyTitle: {
         fontSize: 20,
-        fontWeight: '600',
-        marginTop: 20,
+        fontWeight: '700',
         marginBottom: 8,
     },
-    noResultsSubtext: {
+    emptySubtitle: {
         fontSize: 14,
         textAlign: 'center',
     },
-    linearGradient: {
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        // shadowRadius: 8098,
-        elevation: 6,
-    }
 });
 
 export default AllModulesModal;
