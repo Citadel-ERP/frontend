@@ -1,4 +1,3 @@
-// HolidayScreen.tsx - Enhanced Modern Holiday Calendar Component
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,8 +11,8 @@ import {
   StatusBar,
   Dimensions,
   Image,
+  RefreshControl
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { Holiday } from './types';
 import { BACKEND_URL } from '../../config/config';
@@ -36,6 +35,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(false);
   const [citiesLoading, setCitiesLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchCities();
@@ -107,8 +107,16 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
       setHolidays([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    if (selectedCity) {
+      fetchHolidaysByCity(selectedCity);
+    }
+  }, [selectedCity]);
 
   const handleCitySelect = (cityName: string) => {
     setSelectedCity(cityName);
@@ -161,19 +169,6 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
     if (nameLower.includes('navratri')) return '💃';
     return '✨';
   };
-
-  // const getCityIcon = (cityName: string) => {
-  //   const cityLower = cityName.toLowerCase();
-  //   if (cityLower.includes('mumbai')) return '🏙️';
-  //   if (cityLower.includes('delhi')) return '🏛️';
-  //   if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return '🌳';
-  //   if (cityLower.includes('chennai')) return '🏖️';
-  //   if (cityLower.includes('kolkata')) return '🎭';
-  //   if (cityLower.includes('hyderabad')) return '💎';
-  //   if (cityLower.includes('pune')) return '🎓';
-  //   if (cityLower.includes('ahmedabad')) return '🕌';
-  //   return '📍';
-  // };
 
   const getCityIcon = (cityName: string) => {
     const cityLower = cityName.toLowerCase();
@@ -266,15 +261,28 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#5b21b6" translucent={false} />
-      <View style={[styles.header, styles.headerBanner]}>
-        <Image
-          source={require('../../assets/attendance_bg.jpg')}
-          style={styles.headerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerOverlay} />
+      
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#fff"
+            colors={['#fff']}
+          />
+        }
+      >
+        {/* Header inside ScrollView */}
+        <View style={[styles.header, styles.headerBanner]}>
+          <Image
+            source={require('../../assets/attendance_bg.jpg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          <View style={styles.headerOverlay} />
 
-        <View>
           <View style={styles.headerContent}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
@@ -282,139 +290,108 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
+          
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Holidays</Text>
           </View>
         </View>
-      </View>
 
-      {/* <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={styles.cityFilterButton}
-          onPress={() => setShowCityModal(true)}
-          disabled={citiesLoading}
-          activeOpacity={0.8}
-        >
-          {citiesLoading ? (
-            <ActivityIndicator color="#5b21b6" size="small" />
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={styles.cityFilterButton}
+            onPress={() => setShowCityModal(true)}
+            disabled={citiesLoading}
+            activeOpacity={0.8}
+          >
+            {citiesLoading ? (
+              <ActivityIndicator color="#5b21b6" size="small" />
+            ) : (
+              <>
+                <View style={styles.filterLeftSection}>
+                  <View style={styles.filterIconContainer}>
+                    {selectedCity ? (
+                      <Image
+                        source={getCityIcon(selectedCity)}
+                        style={styles.filterIconImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Text style={styles.filterIcon}>📍</Text>
+                    )}
+                  </View>
+                  <View style={styles.filterTextContainer}>
+                    <Text style={styles.filterLabel}>Location</Text>
+                    <Text style={styles.filterValue}>
+                      {selectedCity || 'Select City'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.dropdownArrow}>›</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.holidaysContent}>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color="#5b21b6" size="large" />
+              <Text style={styles.loadingText}>Loading holidays...</Text>
+            </View>
           ) : (
             <>
-              <View style={styles.filterLeftSection}>
-                <View style={styles.filterIconContainer}>
-                  <Text style={styles.filterIcon}>📍</Text>
-                </View>
-                <View style={styles.filterTextContainer}>
-                  <Text style={styles.filterLabel}>Location</Text>
-                  <Text style={styles.filterValue}>
-                    {selectedCity || 'Select City'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.dropdownArrow}>›</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View> */}
+              {holidays.length > 0 ? (
+                holidays.map((holiday, index) => {
+                  const dateInfo = getMonthDay(holiday.date);
+                  const gradientColors = getHolidayGradient(index);
+                  const icon = getHolidayIcon(holiday.name);
 
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={styles.cityFilterButton}
-          onPress={() => setShowCityModal(true)}
-          disabled={citiesLoading}
-          activeOpacity={0.8}
-        >
-          {citiesLoading ? (
-            <ActivityIndicator color="#5b21b6" size="small" />
-          ) : (
-            <>
-              <View style={styles.filterLeftSection}>
-                <View style={styles.filterIconContainer}>
-                  {selectedCity ? (
-                    <Image
-                      source={getCityIcon(selectedCity)}
-                      style={styles.filterIconImage}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <Text style={styles.filterIcon}>📍</Text>
-                  )}
-                </View>
-                <View style={styles.filterTextContainer}>
-                  <Text style={styles.filterLabel}>Location</Text>
-                  <Text style={styles.filterValue}>
-                    {selectedCity || 'Select City'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.dropdownArrow}>›</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator color="#5b21b6" size="large" />
-            <Text style={styles.loadingText}>Loading holidays...</Text>
-          </View>
-        ) : (
-          <>
-            {holidays.length > 0 ? (
-              holidays.map((holiday, index) => {
-                const dateInfo = getMonthDay(holiday.date);
-                const gradientColors = getHolidayGradient(index);
-                const icon = getHolidayIcon(holiday.name);
-
-                return (
-                  <View key={holiday.id} style={styles.holidayCard}>
-                    <View style={[
-                      styles.holidayCardGradient,
-                      {
-                        backgroundColor: gradientColors[0],
-                        backgroundImage: `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[1]} 100%)`
-                      }
-                    ]}>
-                      <View style={styles.holidayCardOverlay} />
-                      <View style={styles.holidayContent}>
-                        <View style={styles.holidayLeft}>
-                          <View style={styles.holidayIconContainer}>
-                            <Text style={styles.holidayIcon}>{icon}</Text>
+                  return (
+                    <View key={holiday.id} style={styles.holidayCard}>
+                      <View style={[
+                        styles.holidayCardGradient,
+                        {
+                          backgroundColor: gradientColors[0],
+                          backgroundImage: `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[1]} 100%)`
+                        }
+                      ]}>
+                        <View style={styles.holidayCardOverlay} />
+                        <View style={styles.holidayContent}>
+                          <View style={styles.holidayLeft}>
+                            <View style={styles.holidayIconContainer}>
+                              <Text style={styles.holidayIcon}>{icon}</Text>
+                            </View>
+                            <View style={styles.holidayTextContainer}>
+                              <Text style={styles.holidayName}>{holiday.name}</Text>
+                              <Text style={styles.holidayDate}>{formatDate(holiday.date)}</Text>
+                            </View>
                           </View>
-                          <View style={styles.holidayTextContainer}>
-                            <Text style={styles.holidayName}>{holiday.name}</Text>
-                            <Text style={styles.holidayDate}>{formatDate(holiday.date)}</Text>
+                          <View style={styles.dateBadge}>
+                            <Text style={styles.dateBadgeMonth}>{dateInfo.month}</Text>
+                            <Text style={styles.dateBadgeDay}>{dateInfo.day}</Text>
                           </View>
-                        </View>
-                        <View style={styles.dateBadge}>
-                          <Text style={styles.dateBadgeMonth}>{dateInfo.month}</Text>
-                          <Text style={styles.dateBadgeDay}>{dateInfo.day}</Text>
                         </View>
                       </View>
                     </View>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyStateIconContainer}>
+                    <Text style={styles.emptyStateIcon}>📅</Text>
                   </View>
-                );
-              })
-            ) : (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyStateIconContainer}>
-                  <Text style={styles.emptyStateIcon}>📅</Text>
+                  <Text style={styles.emptyStateTitle}>No Holidays Found</Text>
+                  <Text style={styles.emptyStateText}>
+                    {selectedCity
+                      ? `No holidays scheduled for ${selectedCity}`
+                      : 'Select a city to view holidays'
+                    }
+                  </Text>
                 </View>
-                <Text style={styles.emptyStateTitle}>No Holidays Found</Text>
-                <Text style={styles.emptyStateText}>
-                  {selectedCity
-                    ? `No holidays scheduled for ${selectedCity}`
-                    : 'Select a city to view holidays'
-                  }
-                </Text>
-              </View>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
 
       {renderCityModal()}
@@ -427,8 +404,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fafafa',
   },
-  safeArea: {
-    backgroundColor: colors.primary,
+  scrollContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -438,20 +415,72 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+    zIndex: 10,
   },
-  backButtonText: {
-    fontSize: 28,
-    color: '#fff',
-    fontWeight: '300',
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    width: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.3,
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   headerSpacer: {
     width: 44,
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 1,
   },
   filterContainer: {
     backgroundColor: '#fff',
@@ -513,10 +542,7 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontWeight: '300',
   },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
+  holidaysContent: {
     padding: 20,
     paddingBottom: 32,
   },
@@ -651,8 +677,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-
-  // Enhanced Modal styles
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -787,63 +811,10 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    width: '100%',
-  },
-  logoText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textAlign: 'center',
-  }, backText: {
-    color: colors.white,
+  backText: {
+    color: '#fff',
     fontSize: 14,
     marginLeft: 2,
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginTop: 80,
-  },
-  headerBanner: {
-    height: 250,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  headerImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    opacity: 1,
-  },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   cityIconImage: {
     width: 40,

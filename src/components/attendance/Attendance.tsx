@@ -12,7 +12,8 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
-  Image
+  Image,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,8 +40,6 @@ import {
 import LeaveModal from './LeaveModal';
 import { MonthDropdown, YearDropdown } from './DropdownComponents';
 import ReasonModal from './ReasonModal';
-import { LinearGradient } from 'expo-linear-gradient';
-
 
 const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -83,6 +82,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [showHolidayScreen, setShowHolidayScreen] = useState(false);
   const [showLeaveScreen, setShowLeaveScreen] = useState(false);
   const [isCheckingPermission, setIsCheckingPermission] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -262,7 +262,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} /> <Text style={styles.backText}>Back</Text>
+      <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
     </View>
   );
 
@@ -280,8 +280,16 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       console.error('Error fetching initial data:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    if (token) {
+      fetchInitialData(token);
+    }
+  }, [token]);
 
   const resetReasonModal = () => {
     setShowReasonModal(false);
@@ -973,24 +981,28 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-
-      {/* <SafeAreaView edges={['top']} style={styles.safeArea}> */}
-      <View style={[styles.header, styles.headerBanner]}>
-        {/* <LinearGradient
-          colors={['#007AFF', '#0056CC']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          // style={styles.headerBanner}
-        > */}
-        <Image
-          source={require('../../assets/attendance_bg.jpg')}
-          style={styles.headerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerOverlay} />
-
-        {/* <SafeAreaView edges={['top']} style={styles.safeArea}> */}
-        <View>
+      
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#fff"
+            colors={['#fff']}
+          />
+        }
+      >
+        {/* Header Section - Now inside ScrollView */}
+        <View style={[styles.header, styles.headerBanner]}>
+          <Image
+            source={require('../../assets/attendance_bg.jpg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          <View style={styles.headerOverlay} />
+          
           <View style={styles.headerContent}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
@@ -998,17 +1010,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
+          
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Attendance</Text>
           </View>
         </View>
-        {/* </SafeAreaView> */}
-        {/* </LinearGradient> */}
-      </View>
-      {/* </SafeAreaView> */}
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.contentPadding}>
+          {/* Today's Attendance Card */}
           <View style={styles.todayCard}>
             <Text style={styles.todayTitle}>Today's Attendance</Text>
             <Text style={styles.todaySubtitle}>
@@ -1086,6 +1095,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             )}
           </View>
 
+          {/* Calendar Section */}
           <View style={styles.calendarCard}>
             <View style={styles.calendarHeader}>
               <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
@@ -1132,34 +1142,35 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               </View>
             </View>
           </View>
+
+          {/* Bottom Actions - Now inside ScrollView at the end */}
+          <View style={styles.bottomActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.applyLeaveButton]}
+              onPress={handleApplyLeave}
+            >
+              <Text style={styles.actionButtonText}>Apply Leave</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.holidaysButton]}
+              onPress={handleOpenHolidays}
+            >
+              <Text style={styles.actionButtonText}>Holidays</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.reportButton]}
+              onPress={downloadAttendanceReport}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Report</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
-
-      <View style={styles.bottomActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.applyLeaveButton]}
-          onPress={handleApplyLeave}
-        >
-          <Text style={styles.actionButtonText}>Apply Leave</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.holidaysButton]}
-          onPress={handleOpenHolidays}
-        >
-          <Text style={styles.actionButtonText}>Holidays</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.reportButton]}
-          onPress={downloadAttendanceReport}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.actionButtonText}>Report</Text>
-          )}
-        </TouchableOpacity>
-      </View>
 
       <LeaveModal
         visible={isLeaveModalVisible}
@@ -1205,48 +1216,87 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginTop: 80,
+  scrollContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    // paddingHorizontal: 20,
-    // paddingVertical: 16,
     backgroundColor: '#1e1b4b',
   },
   backButton: {
     padding: 8,
+    zIndex: 10,
   },
-  backButtonText: {
-    fontSize: 28,
-    color: '#fff',
-    fontWeight: '300',
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    width: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   headerSpacer: {
     width: 44,
   },
-  scrollContainer: {
-    flex: 1,
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 1,
   },
   contentPadding: {
     padding: 16,
-    paddingBottom: 180,
+    paddingBottom: 100,
   },
   todayCard: {
     backgroundColor: '#fff',
@@ -1458,10 +1508,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   bottomActions: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -1475,6 +1521,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
+    marginTop: 16,
+    marginBottom: 20,
+    borderRadius: 16,
   },
   actionButton: {
     flex: 1,
@@ -1499,59 +1548,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
   },
-  backIcon: { height: 24, alignItems: 'center', justifyContent: 'center', display: 'flex', flexDirection: 'row', alignContent: 'center' },
+  backIcon: { 
+    height: 24, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    display: 'flex', 
+    flexDirection: 'row', 
+    alignContent: 'center' 
+  },
   backArrow: {
-    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+    width: 12, 
+    height: 12, 
+    borderLeftWidth: 2, 
+    borderTopWidth: 2,
+    borderColor: '#fff', 
+    transform: [{ rotate: '-45deg' }],
   },
-  headerBanner: {
-    height: 250,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  headerImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    opacity: 1,
-  },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  safeArea: {
-    flex: 1,
-    position: 'relative',
-    zIndex: 1,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    width: '100%',
-  },
-  logoText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textAlign: 'center',
-  },backText: {
-    color: colors.white,
+  backText: {
+    color: '#fff',
     fontSize: 14,
     marginLeft: 2,
   },

@@ -1,4 +1,3 @@
-// LeaveScreen.tsx - Modern Leave Management Component
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,10 +8,9 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
-  RefreshControl,
-  Image
+  Image,
+  RefreshControl
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { LeaveBalance, LeaveApplication, LeaveForm } from './types';
@@ -230,17 +228,28 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
+      
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#fff"
+            colors={['#fff']}
+          />
+        }
+      >
+        {/* Header inside ScrollView */}
+        <View style={[styles.header, styles.headerBanner]}>
+          <Image
+            source={require('../../assets/attendance_bg.jpg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          <View style={styles.headerOverlay} />
 
-
-      <View style={[styles.header, styles.headerBanner]}>
-        <Image
-          source={require('../../assets/attendance_bg.jpg')}
-          style={styles.headerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerOverlay} />
-
-        <View>
           <View style={styles.headerContent}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
@@ -248,12 +257,11 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
+          
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Leave</Text>
           </View>
         </View>
-      </View>
-
 
         <View style={styles.contentPadding}>
           {/* Leave Balance Section */}
@@ -349,7 +357,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
             </View>
           )}
         </View>
-      {/* </ScrollView> */}
+      </ScrollView>
 
       <LeaveModal
         visible={isLeaveModalVisible}
@@ -372,8 +380,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
-  safeArea: {
-    backgroundColor: '#1e1b4b',
+  scrollContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -383,22 +391,72 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+    zIndex: 10,
   },
-  backButtonText: {
-    fontSize: 28,
-    color: '#fff',
-    fontWeight: '300',
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    width: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   headerSpacer: {
     width: 44,
   },
-  scrollContainer: {
-    flex: 1,
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 1,
   },
   contentPadding: {
     padding: 16,
@@ -570,63 +628,11 @@ const styles = StyleSheet.create({
   backArrow: {
     width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
     borderColor: colors.white, transform: [{ rotate: '-45deg' }],
-  }, headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    width: '100%',
   },
-  logoText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textAlign: 'center',
-  }, backText: {
+  backText: {
     color: colors.white,
     fontSize: 14,
     marginLeft: 2,
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginTop: 80,
-  },
-  headerBanner: {
-    height: 250,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  headerImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    opacity: 1,
-  },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   sectionTitleAlt: {
     fontSize: 18,

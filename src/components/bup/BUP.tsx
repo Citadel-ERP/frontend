@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   StatusBar,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,11 +40,25 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const [filterValue, setFilterValue] = useState('');
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   
   // State for detail view
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false); // ADDED THIS LINE
   
+  // Calculate totalLeads from statusCounts
+  const totalLeads = useMemo(() => {
+    if (!statusCounts || Object.keys(statusCounts).length === 0) {
+      return 0;
+    }
+    return Object.values(statusCounts).reduce(
+      (sum, count) => sum + (Number(count) || 0), 
+      0
+    );
+  }, [statusCounts]);
+
+  const theme: ThemeColors = isDarkMode ? darkTheme : lightTheme;
+
   // Filtered leads
   const filteredLeads = leads.filter(lead => {
     let matchesFilter = true;
@@ -59,7 +74,38 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     return matchesFilter;
   });
 
-  const theme: ThemeColors = isDarkMode ? darkTheme : lightTheme;
+  // Handle Android hardware back button
+  useEffect(() => {
+    const handleBackPress = () => {
+      if (viewMode === 'list') {
+        handleBackToCitySelection();
+        return true;
+      } else if (viewMode === 'detail') {
+        if (isEditMode) {
+          setIsEditMode(false);
+        } else {
+          handleBackToList();
+        }
+        return true;
+      } else if (viewMode === 'create') {
+        handleBackToList();
+        return true;
+      } else if (viewMode === 'city-selection') {
+        if (onBack) {
+          onBack();
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleBackPress
+    );
+
+    return () => backHandler.remove();
+  }, [viewMode, isEditMode, onBack]);
 
   useEffect(() => {
     const checkDarkMode = async () => {
@@ -89,8 +135,34 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     if (token && selectedCity && viewMode === 'list') {
       fetchLeads(1);
       fetchPhases();
+      fetchStatusCounts();
     }
   }, [token, selectedCity, viewMode]);
+
+  // Fetch status counts
+  const fetchStatusCounts = async (): Promise<void> => {
+    try {
+      if (!token || !selectedCity) return;
+      const response = await fetch(`${BACKEND_URL}/manager/getLeadStatusCounts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          token,
+          city: selectedCity 
+        })
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setStatusCounts(data.status_counts || {});
+    } catch (error) {
+      console.error('Error fetching status counts:', error);
+      setStatusCounts({});
+    }
+  };
 
   const toggleDarkMode = async () => {
     const newDarkMode = !isDarkMode;
@@ -275,6 +347,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       searchLeads(searchQuery);
     } else {
       fetchLeads(1);
+      fetchStatusCounts();
     }
   }, [isSearchMode, searchQuery]);
 
@@ -289,14 +362,15 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setIsEditMode(false);
   };
 
-  const handleBackToList = () => {
+  const handleBackToList = useCallback(() => {
     setViewMode('list');
     setSelectedLead(null);
     setIsEditMode(false);
     fetchLeads(1);
-  };
+    fetchStatusCounts();
+  }, []);
 
-  const handleBackToCitySelection = () => {
+  const handleBackToCitySelection = useCallback(() => {
     setViewMode('city-selection');
     setSelectedCity('');
     setLeads([]);
@@ -304,7 +378,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setFilterBy('');
     setFilterValue('');
     setIsSearchMode(false);
-  };
+    setStatusCounts({});
+  }, []);
 
   const handleEditPress = () => {
     setIsEditMode(true);
@@ -376,6 +451,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     const success = await updateLead(updatedLead, editingEmails, editingPhones);
     if (success) {
       setIsEditMode(false);
+      fetchStatusCounts();
     }
   };
 
@@ -402,6 +478,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             onBack={handleBackToList}
             onCreate={() => {
               fetchLeads(1);
+              fetchStatusCounts();
               setViewMode('list');
             }}
             selectedCity={selectedCity}
@@ -451,6 +528,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
               selectedCity={selectedCity}
               onCreateLead={handleCreateLead}
               onBack={handleBackToCitySelection}
+              totalLeads={totalLeads}
+              statusCounts={statusCounts}
             />
             <LeadsList
               leads={filteredLeads}
@@ -474,42 +553,54 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const getHeaderActions = () => {
     if (viewMode === 'city-selection') {
-      return { showBackButton: true, onBackPress: onBack };
+      return { 
+        showBackButton: true, 
+        onBack: onBack,
+        showThemeToggle: true 
+      };
     }
     if (viewMode === 'list') {
       return { 
         showBackButton: true, 
-        onBackPress: handleBackToCitySelection,
+        onBack: handleBackToCitySelection,
         showAddButton: true,
         onAddPress: handleCreateLead,
-        addButtonText: '+ Lead'
+        addButtonText: '+ Lead',
+        showThemeToggle: true,
       };
     }
     if (viewMode === 'detail') {
       if (isEditMode) {
         return { 
           showBackButton: true, 
-          onBackPress: () => setIsEditMode(false),
+          onBack: () => setIsEditMode(false),
           showSaveButton: true,
-          onSavePress: () => {} // Save is handled in EditLead component
+          onSavePress: () => {}, // Save is handled in EditLead component
+          showThemeToggle: true,
         };
       }
       return { 
         showBackButton: true, 
-        onBackPress: handleBackToList,
+        onBack: handleBackToList,
         showEditButton: true,
-        onEditPress: handleEditPress
+        onEdit: handleEditPress,
+        showThemeToggle: true,
       };
     }
     if (viewMode === 'create') {
       return { 
         showBackButton: true, 
-        onBackPress: handleBackToList,
+        onBack: handleBackToList,
         showSaveButton: true,
-        onSavePress: () => {} // Save is handled in CreateLead component
+        onSavePress: () => {}, // Save is handled in CreateLead component
+        showThemeToggle: true,
       };
     }
-    return { showBackButton: true, onBackPress: onBack };
+    return { 
+      showBackButton: true, 
+      onBack: onBack,
+      showThemeToggle: true,
+    };
   };
 
   const headerActions = getHeaderActions();
@@ -521,14 +612,18 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-      <Header
-        title={getHeaderTitle()}
-        {...headerActions}
-        onThemeToggle={toggleDarkMode}
-        isDarkMode={isDarkMode}
-        theme={theme}
-        loading={loading}
-      />
+      
+      {viewMode !== 'city-selection' && (
+        <Header
+          title={getHeaderTitle()}
+          {...headerActions}
+          onThemeToggle={toggleDarkMode}
+          isDarkMode={isDarkMode}
+          theme={theme}
+          loading={loading}
+        />
+      )}
+      
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         {renderContent()}
       </View>

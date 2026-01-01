@@ -15,6 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -193,7 +194,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       
       setLoadingDefaultComments(true);
 
-      const response = await fetch(`${BACKEND_URL}/manager/getDefaultComments?at_phase=${encodeURIComponent(phase)}&at_subphase=${encodeURIComponent(subphase)}`, {
+      const response = await fetch(`${BACKEND_URL}/employee/getDefaultComments?at_phase=${encodeURIComponent(phase)}&at_subphase=${encodeURIComponent(subphase)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -510,6 +511,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         />
       }
     >
+
       {/* Lead Header Card */}
       <LinearGradient
         colors={[theme.primary + '20', theme.cardBg]}
@@ -914,6 +916,20 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 const styles = StyleSheet.create({
   detailScrollView: {
     flex: 1,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   detailCard: {
     marginHorizontal: 20,

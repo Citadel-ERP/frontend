@@ -1,4 +1,3 @@
-// LeaveInfoScreen.tsx - Detailed Leave Information Component
 import React from 'react';
 import {
   View,
@@ -120,6 +119,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
     if (lowerType.includes('earned')) return '⭐';
     return '📋';
   };
+  
   const BackIcon = () => (
     <View style={styles.backIcon}>
       <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
@@ -129,26 +129,20 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
+      
+      <ScrollView
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header inside ScrollView */}
+        <View style={[styles.header, styles.headerBanner]}>
+          <Image
+            source={require('../../assets/attendance_bg.jpg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          <View style={styles.headerOverlay} />
 
-      {/* <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}><BackIcon /></Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Leave Details</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-      </SafeAreaView> */}
-
-      <View style={[styles.header, styles.headerBanner]}>
-        <Image
-          source={require('../../assets/attendance_bg.jpg')}
-          style={styles.headerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerOverlay} />
-
-        <View>
           <View style={styles.headerContent}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
@@ -156,178 +150,175 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
+          
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Leave Details</Text>
           </View>
         </View>
-      </View>
 
-      <ScrollView
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Status Card */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusBadgeContainer}>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusBadgeColor(leave.status) }
-            ]}>
-              <Text style={styles.statusIcon}>{getStatusIcon(leave.status)}</Text>
-              <Text style={styles.statusText}>
-                {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.leaveTypeHeader}>
-            <Text style={styles.leaveTypeIcon}>{getLeaveTypeIcon(leave.leave_type)}</Text>
-            <Text style={styles.leaveTypeTitle}>{formatLeaveType(leave.leave_type)} Leave</Text>
-          </View>
-
-          <View style={styles.dateRangeContainer}>
-            <View style={styles.dateItem}>
-              <Text style={styles.dateLabel}>From</Text>
-              <Text style={styles.dateValue}>{formatDate(leave.start_date)}</Text>
-            </View>
-            <View style={styles.dateDivider}>
-              <Text style={styles.dateDividerText}>→</Text>
-            </View>
-            <View style={styles.dateItem}>
-              <Text style={styles.dateLabel}>To</Text>
-              <Text style={styles.dateValue}>{formatDate(leave.end_date)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>
-              📅 {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} {' '}
-              {(leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)) === 1 ? 'day' : 'days'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Reason Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitleAlt}>Reason for Leave</Text>
-          <View style={styles.card}>
-            <Text style={styles.reasonText}>{leave.reason}</Text>
-          </View>
-        </View>
-
-        {/* Leave Information Grid */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitleAlt}>Leave Information</Text>
-          <View style={styles.infoGrid}>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Leave Type</Text>
-              <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
-            </View>
-
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Duration</Text>
-              <Text style={styles.infoValue}>
-                {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} days
-              </Text>
-            </View>
-
-            {leave.is_sandwich !== undefined && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoLabel}>Sandwich Leave</Text>
-                <Text style={[styles.infoValue, { color: leave.is_sandwich ? colors.error : colors.success }]}>
-                  {leave.is_sandwich ? 'Yes' : 'No'}
+        <View style={styles.contentPadding}>
+          {/* Status Card */}
+          <View style={styles.statusCard}>
+            <View style={styles.statusBadgeContainer}>
+              <View style={[
+                styles.statusBadge,
+                { backgroundColor: getStatusBadgeColor(leave.status) }
+              ]}>
+                <Text style={styles.statusIcon}>{getStatusIcon(leave.status)}</Text>
+                <Text style={styles.statusText}>
+                  {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
                 </Text>
               </View>
-            )}
+            </View>
+
+            <View style={styles.leaveTypeHeader}>
+              <Text style={styles.leaveTypeIcon}>{getLeaveTypeIcon(leave.leave_type)}</Text>
+              <Text style={styles.leaveTypeTitle}>{formatLeaveType(leave.leave_type)} Leave</Text>
+            </View>
+
+            <View style={styles.dateRangeContainer}>
+              <View style={styles.dateItem}>
+                <Text style={styles.dateLabel}>From</Text>
+                <Text style={styles.dateValue}>{formatDate(leave.start_date)}</Text>
+              </View>
+              <View style={styles.dateDivider}>
+                <Text style={styles.dateDividerText}>→</Text>
+              </View>
+              <View style={styles.dateItem}>
+                <Text style={styles.dateLabel}>To</Text>
+                <Text style={styles.dateValue}>{formatDate(leave.end_date)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.durationBadge}>
+              <Text style={styles.durationText}>
+                📅 {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} {' '}
+                {(leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)) === 1 ? 'day' : 'days'}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* Approval/Rejection Details */}
-        {(leave.status === 'approved' || leave.status === 'rejected') && (
+          {/* Reason Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitleAlt}>
-              {leave.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
-            </Text>
-
+            <Text style={styles.sectionTitleAlt}>Reason for Leave</Text>
             <View style={styles.card}>
-              {leave.approved_by && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>
-                    {leave.status === 'approved' ? 'Approved by' : 'Rejected by'}
-                  </Text>
-                  <Text style={styles.detailValue}>
-                    {leave.approved_by?.first_name || `User ID: ${leave.approved_by}`}
+              <Text style={styles.reasonText}>{leave.reason}</Text>
+            </View>
+          </View>
+
+          {/* Leave Information Grid */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitleAlt}>Leave Information</Text>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoCard}>
+                <Text style={styles.infoLabel}>Leave Type</Text>
+                <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
+              </View>
+
+              <View style={styles.infoCard}>
+                <Text style={styles.infoLabel}>Duration</Text>
+                <Text style={styles.infoValue}>
+                  {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} days
+                </Text>
+              </View>
+
+              {leave.is_sandwich !== undefined && (
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoLabel}>Sandwich Leave</Text>
+                  <Text style={[styles.infoValue, { color: leave.is_sandwich ? colors.error : colors.success }]}>
+                    {leave.is_sandwich ? 'Yes' : 'No'}
                   </Text>
                 </View>
               )}
+            </View>
+          </View>
 
-              {(leave.approved_at || leave.rejected_at) && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>
-                    {leave.status === 'approved' ? 'Approved on' : 'Rejected on'}
-                  </Text>
-                  <Text style={styles.detailValue}>
-                    {formatDateTime(leave.approved_at || leave.rejected_at || '')}
-                  </Text>
-                </View>
-              )}
+          {/* Approval/Rejection Details */}
+          {(leave.status === 'approved' || leave.status === 'rejected') && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitleAlt}>
+                {leave.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
+              </Text>
 
-              {leave.comment && (
-                <View style={styles.commentContainer}>
-                  <Text style={styles.commentLabel}>
-                    {leave.status === 'approved' ? 'Comment' : 'Rejection Reason'}
-                  </Text>
-                  <View style={[
-                    styles.commentBox,
-                    {
-                      borderLeftColor: leave.status === 'approved' ? colors.success : colors.error,
-                      backgroundColor: leave.status === 'approved' ? colors.success + '10' : colors.error + '10'
-                    }
-                  ]}>
-                    <Text style={styles.commentText}>{leave.comment}</Text>
+              <View style={styles.card}>
+                {leave.approved_by && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>
+                      {leave.status === 'approved' ? 'Approved by' : 'Rejected by'}
+                    </Text>
+                    <Text style={styles.detailValue}>
+                      {leave.approved_by?.first_name || `User ID: ${leave.approved_by}`}
+                    </Text>
+                  </View>
+                )}
+
+                {(leave.approved_at || leave.rejected_at) && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>
+                      {leave.status === 'approved' ? 'Approved on' : 'Rejected on'}
+                    </Text>
+                    <Text style={styles.detailValue}>
+                      {formatDateTime(leave.approved_at || leave.rejected_at || '')}
+                    </Text>
+                  </View>
+                )}
+
+                {leave.comment && (
+                  <View style={styles.commentContainer}>
+                    <Text style={styles.commentLabel}>
+                      {leave.status === 'approved' ? 'Comment' : 'Rejection Reason'}
+                    </Text>
+                    <View style={[
+                      styles.commentBox,
+                      {
+                        borderLeftColor: leave.status === 'approved' ? colors.success : colors.error,
+                        backgroundColor: leave.status === 'approved' ? colors.success + '10' : colors.error + '10'
+                      }
+                    ]}>
+                      <Text style={styles.commentText}>{leave.comment}</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Employee Information */}
+          {leave.user && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitleAlt}>Employee Details</Text>
+              <View style={styles.card}>
+                <View style={styles.employeeHeader}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarText}>
+                      {leave.user.full_name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.employeeInfo}>
+                    <Text style={styles.employeeName}>{leave.user.full_name}</Text>
+                    {leave.user.designation && (
+                      <Text style={styles.employeeDesignation}>{leave.user.designation}</Text>
+                    )}
                   </View>
                 </View>
-              )}
-            </View>
-          </View>
-        )}
 
-        {/* Employee Information */}
-        {leave.user && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitleAlt}>Employee Details</Text>
-            <View style={styles.card}>
-              <View style={styles.employeeHeader}>
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarText}>
-                    {leave.user.full_name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.employeeInfo}>
-                  <Text style={styles.employeeName}>{leave.user.full_name}</Text>
-                  {leave.user.designation && (
-                    <Text style={styles.employeeDesignation}>{leave.user.designation}</Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.employeeDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Employee ID</Text>
-                  <Text style={styles.detailValue}>{leave.user.employee_id}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Email</Text>
-                  <Text style={styles.detailValue}>{leave.user.email}</Text>
+                <View style={styles.employeeDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Employee ID</Text>
+                    <Text style={styles.detailValue}>{leave.user.employee_id}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Email</Text>
+                    <Text style={styles.detailValue}>{leave.user.email}</Text>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Bottom Padding */}
-        <View style={{ height: 32 }} />
+          {/* Bottom Padding */}
+          <View style={{ height: 32 }} />
+        </View>
       </ScrollView>
     </View>
   );
@@ -338,8 +329,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  safeArea: {
-    backgroundColor: colors.secondary,
+  scrollContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -349,25 +340,76 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+    zIndex: 10,
   },
-  backButtonText: {
-    fontSize: 28,
-    color: colors.white,
-    fontWeight: '300',
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    width: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.white,
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   headerSpacer: {
     width: 44,
   },
-  scrollContainer: {
-    flex: 1,
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
-  scrollContent: {
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 1,
+  },
+  contentPadding: {
     padding: 16,
+    paddingBottom: 32,
   },
   statusCard: {
     backgroundColor: colors.white,
@@ -463,7 +505,6 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 16,
   },
-
   card: {
     backgroundColor: colors.white,
     borderRadius: 16,
@@ -602,63 +643,11 @@ const styles = StyleSheet.create({
   backArrow: {
     width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
     borderColor: colors.white, transform: [{ rotate: '-45deg' }],
-  }, headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    width: '100%',
   },
-  logoText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textAlign: 'center',
-  }, backText: {
+  backText: {
     color: colors.white,
     fontSize: 14,
     marginLeft: 2,
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginTop: 80,
-  },
-  headerBanner: {
-    height: 250,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  headerImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    opacity: 1,
-  },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   sectionTitleAlt: {
     fontSize: 18,

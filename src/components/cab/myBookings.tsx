@@ -36,6 +36,7 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
+                {/* Header inside ScrollView */}
                 <View style={[styles.header, styles.headerBanner]}>
                     <LinearGradient
                         colors={['#4A5568', '#2D3748']}
@@ -65,6 +66,7 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                     </LinearGradient>
                 </View>
 
+                {/* Bookings Content */}
                 <View style={styles.cabsListContent}>
                     {loading && bookings.length === 0 ? (
                         <View style={styles.loadingContainer}>

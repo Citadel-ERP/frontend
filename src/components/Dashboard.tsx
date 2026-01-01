@@ -20,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
+import * as NotificationsExpo from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +41,7 @@ import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './EmployeeManagement';
+import Notifications from './Notifications';
 
 // Import components
 import HamburgerMenu from './dashboard/menu';
@@ -206,7 +207,7 @@ const darkColors = {
 };
 
 // Configure notification handler
-Notifications.setNotificationHandler({
+NotificationsExpo.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
@@ -223,9 +224,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // State
   const [token, setToken] = useState<string | null>(null);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
-  const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
-  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
-  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
+  const [notification, setNotification] = useState<NotificationsExpo.Notification | undefined>(undefined);
+  const notificationListener = useRef<NotificationsExpo.Subscription | undefined>(undefined);
+  const responseListener = useRef<NotificationsExpo.Subscription | undefined>(undefined);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [modules, setModules] = useState<any[]>([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
@@ -255,6 +256,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showChatRoom, setShowChatRoom] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
 
   // Menu state
@@ -330,21 +332,21 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       await debugLog('[Push Token] Device check passed');
 
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
+        await NotificationsExpo.setNotificationChannelAsync('default', {
           name: 'default',
-          importance: Notifications.AndroidImportance.MAX,
+          importance: NotificationsExpo.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#2D3748',
         });
         await debugLog('[Push Token] Notification channel created');
       }
 
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      const { status: existingStatus } = await NotificationsExpo.getPermissionsAsync();
       await debugLog('[Push Token] Existing permission status', existingStatus);
       let finalStatus = existingStatus;
 
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
+        const { status } = await NotificationsExpo.requestPermissionsAsync();
         finalStatus = status;
         await debugLog('[Push Token] New permission status', status);
       }
@@ -369,7 +371,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
 
       await debugLog('[Push Token] Getting token for project', projectId);
-      const tokenData = await Notifications.getExpoPushTokenAsync({
+      const tokenData = await NotificationsExpo.getExpoPushTokenAsync({
         projectId
       });
       token = tokenData.data;
@@ -522,7 +524,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           await sendTokenToBackend(pushToken, token);
         }
 
-        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+        notificationListener.current = NotificationsExpo.addNotificationReceivedListener(notification => {
           debugLog('📱 Notification received in foreground', notification);
           setNotification(notification);
           const data = notification.request.content.data;
@@ -532,7 +534,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           }
         });
 
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(response => {
           debugLog('👆 Notification tapped', response);
           const data = response.notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
@@ -542,7 +544,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           }
         });
 
-        const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+        const lastNotificationResponse = await NotificationsExpo.getLastNotificationResponseAsync();
         if (lastNotificationResponse) {
           debugLog('📬 App opened from notification', lastNotificationResponse);
           const data = lastNotificationResponse.notification.request.content.data;
@@ -1217,8 +1219,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowMedical(false);
     setShowScoutBoy(false);
     setShowCreateSite(false);
-    setShowReminder(false); // Add this line to reset reminder page
+    setShowReminder(false);
     setShowBUP(false);
+    setShowNotifications(false);
     setShowSettings(false);
     setShowEmployeeManagement(false);
     setShowChat(false);
@@ -1316,9 +1319,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (item.id === 'settings') {
       setShowSettings(true);
     } else if (item.id === 'messages') {
-      setShowChat(true);
+      Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
+      // setShowChat(true);
     } else if (item.id === 'notifications') {
-      Alert.alert('Notifications', 'Notification settings will be available soon!');
+      setShowNotifications(true);  
     } else {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     }
@@ -1377,6 +1381,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         onOpenChatRoom={setSelectedChatRoom}
         currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
       />
+    );
+  }
+
+  if (showNotifications) {
+    return (
+      <Notifications onBack={handleBackFromPage} isDark={isDark} />
     );
   }
 

@@ -53,7 +53,7 @@ const Header: React.FC<HeaderProps> = ({
       >
         {/* Background Image */}
         <Image
-          source={require('../../assets/cars.jpeg')}
+          source={require('../../assets/bdt.jpg')}
           style={styles.headerImage}
           resizeMode="cover"
         />

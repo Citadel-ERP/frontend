@@ -22,6 +22,8 @@ interface SearchAndFilterProps {
   selectedCity: string;
   onCreateLead: () => void;
   onBack: () => void;
+  totalLeads: number;
+  statusCounts: Record<string, number>;
 }
 
 const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
@@ -33,6 +35,9 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   fetchSubphases,
   selectedCity,
   onCreateLead,
+  onBack,
+  totalLeads = 0,
+  statusCounts = {},
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('');
@@ -40,6 +45,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   const [selectedPhase, setSelectedPhase] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<'filter' | 'status' | 'filter-phase' | 'filter-subphase' | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -56,6 +62,17 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     { value: 'status', label: 'Filter by Status' },
     { value: 'phase', label: 'Filter by Phase' },
     { value: 'subphase', label: 'Filter by Subphase' }
+  ];
+
+  const tabs = [
+    { id: 'all', label: `All leads (${totalLeads || 0})` },
+    { id: 'active', label: `Active (${statusCounts.active || 0})` },
+    { id: 'hold', label: `Hold (${statusCounts.hold || 0})` },
+    { id: 'mandate', label: `Mandate (${statusCounts.mandate || 0})` },
+    { id: 'closed', label: `Closed (${statusCounts.closed || 0})` },
+    { id: 'no_requirement', label: `No Requirement (${statusCounts.no_requirement || 0})` },
+    { id: 'transaction_complete', label: `Transaction Complete (${statusCounts.transaction_complete || 0})` },
+    { id: 'non_responsive', label: `Non Responsive (${statusCounts.non_responsive || 0})` }
   ];
 
   const handleSearchSubmit = () => {
@@ -120,6 +137,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     setFilterBy('');
     setFilterValue('');
     setSelectedPhase('');
+    setActiveTab('all');
     onFilter('', '');
   };
 
@@ -129,22 +147,27 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     onSearch('');
   };
 
+  const handleTabPress = (tabId: string) => {
+    setActiveTab(tabId);
+    
+    if (tabId === 'all') {
+      clearFilters();
+    } else {
+      setFilterBy('status');
+      setFilterValue(tabId);
+      onFilter('status', tabId);
+    }
+  };
+
   return (
     <>
-      {/* City Header */}
-      <View style={[styles.cityHeader, { backgroundColor: theme.info + '10' }]}>
-        <Text style={[styles.cityText, { color: theme.info }]}>
-          📍 {selectedCity}
-        </Text>
-      </View>
-
       {/* Search Section */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
           <Ionicons name="search" size={20} color="#017bf9" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search leads..."
+            placeholder="Search Leads"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearchSubmit}
@@ -160,8 +183,34 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         </View>
       </View>
 
+      {/* Status Tabs */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={[styles.tabsContainer, { backgroundColor: theme.cardBg }]}
+      >
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[
+              styles.tab, 
+              activeTab === tab.id && [styles.activeTab, { backgroundColor: theme.primary }]
+            ]}
+            onPress={() => handleTabPress(tab.id)}
+          >
+            <Text style={[
+              styles.tabText, 
+              { color: theme.textSecondary },
+              activeTab === tab.id && [styles.activeTabText, { color: theme.white }]
+            ]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       {/* Active Filter Indicator */}
-      {filterBy && filterValue && (
+      {filterBy && filterValue && activeTab !== filterValue && (
         <View style={[styles.activeFilterContainer, { backgroundColor: theme.info + '20' }]}>
           <Text style={[styles.activeFilterText, { color: theme.info }]}>
             {getFilterLabel(filterBy, filterValue)}
@@ -200,6 +249,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         options={STATUS_CHOICES}
         onSelect={(value) => {
           setFilterValue(value);
+          setActiveTab(value);
           onFilter('status', value);
           setActiveDropdown(null);
         }}
@@ -233,15 +283,6 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 };
 
 const styles = StyleSheet.create({
-  cityHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  cityText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
   searchContainer: {
     padding: 20,
     backgroundColor: '#f5f5f5',
@@ -275,6 +316,28 @@ const styles = StyleSheet.create({
   },
   gearIcon: {
     fontSize: 20,
+  },
+  tabsContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    maxHeight: 55,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginRight: 10,
+    backgroundColor: 'transparent',
+  },
+  activeTab: {
+    maxHeight: 30, 
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: 'white',
   },
   activeFilterContainer: {
     flexDirection: 'row',

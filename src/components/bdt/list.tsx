@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   ActivityIndicator,
   RefreshControl,
   Dimensions,
@@ -38,11 +37,40 @@ const LeadsList: React.FC<LeadsListProps> = ({
   theme,
   isDarkMode,
 }) => {
+  const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+
   const beautifyName = (name: string): string => {
     return name
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
+  };
+
+  const getInitials = (name: string): string => {
+    if (!name || name.trim().length === 0) return '?';
+    
+    const nameParts = name.trim().split(/\s+/);
+    
+    if (nameParts.length === 1) {
+      // Single name: take first character
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      // Multiple names: take first character of first two names
+      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
+    }
+  };
+
+  const getAvatarColor = (name: string): string => {
+    if (!name) return avatarColors[0];
+    
+    // Simple hash function to get consistent color for the same name
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    const index = Math.abs(hash) % avatarColors.length;
+    return avatarColors[index];
   };
 
   const getLeadCardBackgroundColor = (status: string): string => {
@@ -158,6 +186,8 @@ const LeadsList: React.FC<LeadsListProps> = ({
       {leads.map((lead) => {
         const cardBackgroundColor = getLeadCardBackgroundColor(lead.status);
         const statusBadgeColor = getStatusBadgeColor(lead.status);
+        const avatarColor = getAvatarColor(lead.name);
+        const initials = getInitials(lead.name);
         
         return (
           <View 
@@ -176,10 +206,10 @@ const LeadsList: React.FC<LeadsListProps> = ({
             
             <TouchableOpacity onPress={() => onLeadPress(lead)}>
               <View style={styles.leadHeader}>
-                <Image
-                  source={{ uri: `https://i.pravatar.cc/150?u=${lead.name}` }}
-                  style={styles.avatar}
-                />
+                {/* Avatar with initials */}
+                <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
                 <View style={styles.leadInfo}>
                   <Text style={[styles.leadName, { color: theme.text }]}>{lead.name}</Text>
                   <Text style={[styles.leadContact, { color: theme.textSecondary }]}>
@@ -199,7 +229,6 @@ const LeadsList: React.FC<LeadsListProps> = ({
                 <View style={[styles.tag, { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.7)' }]}>
                   <Text style={[styles.tagText, { color: theme.text }]}>{beautifyName(lead.subphase)}</Text>
                 </View>
-                
               </View>
 
               <View style={styles.cardFooter}>
@@ -271,7 +300,16 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   leadInfo: {
     flex: 1,
@@ -365,6 +403,27 @@ const styles = StyleSheet.create({
   loadMoreText: {
     marginLeft: 10,
     fontSize: 14,
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
 });
 

@@ -27,106 +27,110 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
 }) => {
     return (
         <View style={styles.screenContainer}>
-            <View style={[styles.header, styles.headerBanner]}>
-                <LinearGradient
-                    colors={['#4A5568', '#2D3748']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.headerBanner}
-                >
-                    <Image
-                        source={require('../../assets/cars.jpeg')}
-                        style={styles.headerImage}
-                        resizeMode="cover"
-                    />
-                    <View style={styles.headerOverlay} />
-                    
-                    <View style={styles.headerContent}>
-                        <View style={styles.headerTopRow}>
-                            <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                                    <BackIcon />
-                                </TouchableOpacity>
-                            <Text style={styles.logoText}>CITADEL</Text>
-                            <View style={{ width: 40 }} />
-                        </View>
-                    </View>
-                    <View style={styles.titleSection}>
-                            <Text style={styles.headerTitle}>Available Cars</Text>
-                        </View>
-                </LinearGradient>
-            </View>
-
             <ScrollView 
-                style={styles.cabsList} 
+                style={styles.scrollContainer}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {vehicles.map((vehicle) => (
-                    <TouchableOpacity
-                        key={vehicle.id}
-                        style={styles.cabCard}
-                        onPress={() => vehicle.status === 'Available' && onSelectVehicle(vehicle)}
-                        disabled={vehicle.status !== 'Available'}
+                {/* Header inside ScrollView */}
+                <View style={[styles.header, styles.headerBanner]}>
+                    <LinearGradient
+                        colors={['#4A5568', '#2D3748']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.headerBanner}
                     >
                         <Image
-                            source={{ uri: `https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80` }}
-                            style={styles.cabImage}
-                            defaultSource={require('../../assets/car-placeholder.jpeg')}
+                            source={require('../../assets/cars.jpeg')}
+                            style={styles.headerImage}
+                            resizeMode="cover"
                         />
-
-                        <View style={styles.cabInfo}>
-                            <View style={styles.cabDetails}>
-                                <Text style={styles.cabName}>{vehicle.make} {vehicle.model}</Text>
-                                <Text style={styles.cabMeta}>
-                                    {vehicle.license_plate} • {vehicle.vehicle_type} • {vehicle.color}
-                                </Text>
-                                <Text style={styles.cabMeta}>
-                                    {vehicle.fuel_type} • {vehicle.year} • {vehicle.seating_capacity} Seater
-                                </Text>
-
-                                <View style={styles.cabSpecs}>
-                                    <View style={styles.specItem}>
-                                        <Text style={styles.specText}>{vehicle.fuel_type}</Text>
-                                    </View>
-                                    <View style={styles.specItem}>
-                                        <Text style={styles.specText}>{vehicle.year}</Text>
-                                    </View>
-                                    <View style={styles.specItem}>
-                                        <Text style={styles.specText}>{vehicle.seating_capacity} Seater</Text>
-                                    </View>
-                                </View>
-
-                                <View style={styles.driverInfo}>
-                                    <View style={styles.driverAvatar}>
-                                        <Text style={styles.driverAvatarText}>
-                                            {vehicle.assigned_to.full_name.split(' ').map(n => n[0]).join('')}
-                                        </Text>
-                                    </View>
-                                    <View style={styles.driverDetails}>
-                                        <Text style={styles.driverName}>{vehicle.assigned_to.full_name}</Text>
-                                        <Text style={styles.driverId}>Employee ID: {vehicle.assigned_to.employee_id}</Text>
-                                    </View>
-                                </View>
-
-                                <Text style={styles.locationText}>
-                                    <Text style={{ fontWeight: '600' }}>Current Location:</Text> {vehicle.current_location.city}, {vehicle.current_location.state}
-                                </Text>
-                            </View>
-
-                            <View style={styles.cabActions}>
-                                <TouchableOpacity
-                                    style={[styles.selectBtn, vehicle.status !== 'available' && styles.disabledBtn]}
-                                    disabled={vehicle.status !== 'available'}
-                                    onPress={() => onSelectVehicle(vehicle)}
-                                >
-                                    <Text style={styles.selectBtnText}>
-                                        {vehicle.status === 'available' ? 'Select' : 'Unavailable'}
-                                    </Text>
+                        <View style={styles.headerOverlay} />
+                        
+                        <View style={styles.headerContent}>
+                            <View style={styles.headerTopRow}>
+                                <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                                    <BackIcon />
                                 </TouchableOpacity>
+                                <Text style={styles.logoText}>CITADEL</Text>
+                                <View style={{ width: 40 }} />
                             </View>
                         </View>
-                    </TouchableOpacity>
-                ))}
+                        <View style={styles.titleSection}>
+                            <Text style={styles.headerTitle}>Available Cars</Text>
+                        </View>
+                    </LinearGradient>
+                </View>
+
+                {/* Cab List Content */}
+                <View style={styles.cabsListContent}>
+                    {vehicles.map((vehicle) => (
+                        <TouchableOpacity
+                            key={vehicle.id}
+                            style={styles.cabCard}
+                            onPress={() => vehicle.status === 'Available' && onSelectVehicle(vehicle)}
+                            disabled={vehicle.status !== 'Available'}
+                        >
+                            <Image
+                                source={{ uri: `https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80` }}
+                                style={styles.cabImage}
+                                defaultSource={require('../../assets/car-placeholder.jpeg')}
+                            />
+
+                            <View style={styles.cabInfo}>
+                                <View style={styles.cabDetails}>
+                                    <Text style={styles.cabName}>{vehicle.make} {vehicle.model}</Text>
+                                    <Text style={styles.cabMeta}>
+                                        {vehicle.license_plate} • {vehicle.vehicle_type} • {vehicle.color}
+                                    </Text>
+                                    <Text style={styles.cabMeta}>
+                                        {vehicle.fuel_type} • {vehicle.year} • {vehicle.seating_capacity} Seater
+                                    </Text>
+
+                                    <View style={styles.cabSpecs}>
+                                        <View style={styles.specItem}>
+                                            <Text style={styles.specText}>{vehicle.fuel_type}</Text>
+                                        </View>
+                                        <View style={styles.specItem}>
+                                            <Text style={styles.specText}>{vehicle.year}</Text>
+                                        </View>
+                                        <View style={styles.specItem}>
+                                            <Text style={styles.specText}>{vehicle.seating_capacity} Seater</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.driverInfo}>
+                                        <View style={styles.driverAvatar}>
+                                            <Text style={styles.driverAvatarText}>
+                                                {vehicle.assigned_to.full_name.split(' ').map(n => n[0]).join('')}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.driverDetails}>
+                                            <Text style={styles.driverName}>{vehicle.assigned_to.full_name}</Text>
+                                            <Text style={styles.driverId}>Employee ID: {vehicle.assigned_to.employee_id}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.locationText}>
+                                        <Text style={{ fontWeight: '600' }}>Current Location:</Text> {vehicle.current_location.city}, {vehicle.current_location.state}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.cabActions}>
+                                    <TouchableOpacity
+                                        style={[styles.selectBtn, vehicle.status !== 'available' && styles.disabledBtn]}
+                                        disabled={vehicle.status !== 'available'}
+                                        onPress={() => onSelectVehicle(vehicle)}
+                                    >
+                                        <Text style={styles.selectBtnText}>
+                                            {vehicle.status === 'available' ? 'Select' : 'Unavailable'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </View>
             </ScrollView>
         </View>
     );
@@ -136,6 +140,12 @@ const styles = StyleSheet.create({
     screenContainer: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
     header: {
         height: 180,
@@ -193,10 +203,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#fff',
     },
-    cabsList: {
-        flex: 1,
-    },
-    scrollContent: {
+    cabsListContent: {
         padding: 20,
         paddingBottom: 100,
     },

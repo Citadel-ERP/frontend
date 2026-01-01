@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
   StatusBar,
   Alert,
   BackHandler,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -47,6 +49,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
 
   const theme: ThemeColors = isDarkMode ? darkTheme : lightTheme;
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Handle Android back button
   useEffect(() => {
@@ -277,11 +280,19 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setSelectedLead({ ...lead });
     setViewMode('detail');
     setIsEditMode(false);
+    // Scroll to top when entering detail view
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: 0, animated: true });
+    }
   };
 
   const handleIncentivePress = () => {
     if (selectedLead) {
       setViewMode('incentive');
+      // Scroll to top when entering incentive view
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: 0, animated: true });
+      }
     }
   };
 
@@ -291,6 +302,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       // From incentive -> go back to lead details
       setViewMode('detail');
       setIsEditMode(false);
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: 0, animated: true });
+      }
     } else if (viewMode === 'detail' && isEditMode) {
       // From edit mode -> go back to lead details (view mode)
       setIsEditMode(false);
@@ -299,6 +313,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       setViewMode('list');
       setSelectedLead(null);
       fetchLeads(1); // Refresh leads when going back to list
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: 0, animated: true });
+      }
     } else if (viewMode === 'list') {
       // From list -> exit the BDT component
       onBack();
@@ -311,6 +328,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setIsEditMode(false);
     setPendingLeadUpdate(null);
     fetchLeads(1);
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: 0, animated: true });
+    }
   };
 
   const handleEditPress = () => {
@@ -479,28 +499,47 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar
-        barStyle="light-content"
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent
       />
-      <Header
-        title={getHeaderTitle()}
-        onBack={handleBackPress}
-        onThemeToggle={toggleDarkMode}
-        isDarkMode={isDarkMode}
-        theme={theme}
-        showThemeToggle={viewMode === 'list'}
-        showEditButton={viewMode === 'detail' && !isEditMode}
-        onEdit={handleEditPress}
-        showSaveButton={viewMode === 'detail' && isEditMode}
-        onSave={() => {/* Save is handled in EditLead component */}}
-        loading={loading}
-      />
-      <View style={{ flex: 1, paddingBottom: insets.bottom }}>
-        {renderContent()}
-      </View>
+      
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          viewMode === 'list' ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.primary}
+            />
+          ) : undefined
+        }
+      >
+        <Header
+          title={getHeaderTitle()}
+          onBack={handleBackPress}
+          onThemeToggle={toggleDarkMode}
+          isDarkMode={isDarkMode}
+          theme={theme}
+          showThemeToggle={viewMode === 'list'}
+          showEditButton={viewMode === 'detail' && !isEditMode}
+          onEdit={handleEditPress}
+          showSaveButton={viewMode === 'detail' && isEditMode}
+          onSave={() => {/* Save is handled in EditLead component */}}
+          loading={loading}
+        />
+        
+        <View style={[styles.contentContainer, { paddingBottom: insets.bottom }]}>
+          {renderContent()}
+        </View>
+      </ScrollView>
+      
       {selectedLead && (
         <CreateInvoice
           visible={showInvoiceForm}
@@ -520,7 +559,15 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 0
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  contentContainer: {
+    flex: 1,
   },
 });
 

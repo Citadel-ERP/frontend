@@ -257,6 +257,9 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     // Use conditional SafeAreaView for city screen
     const Container = currentScreen === 'city' ? View : SafeAreaView;
 
+    // Check if bottom navigation should be shown
+    const showBottomNav = currentScreen === 'booking' || currentScreen === 'myBookings';
+
     return (
         <Container style={styles.appContainer}>
             {currentScreen !== 'city' && <StatusBar barStyle="light-content" backgroundColor="#017bf9" />}
@@ -304,17 +307,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 <MyBookingsScreen
                     bookings={myBookings}
                     loading={loading}
-                    onBack={() => setCurrentScreen('city')}  // Changed from onBackToBooking
+                    onBack={() => setCurrentScreen('city')}
                     onCancelBooking={(booking) => {
                         setSelectedBooking(booking);
                         setIsCancelModalVisible(true);
                     }}
-                    onRefresh={fetchMyBookings}  // Added refresh functionality
+                    onRefresh={fetchMyBookings}
                 />
             )}
 
-            {/* Bottom Navigation */}
-            {currentScreen !== 'city' && (
+            {/* Bottom Navigation - Show on booking and myBookings screens */}
+            {showBottomNav && (
                 <View style={styles.bottomNav}>
                     <TouchableOpacity
                         style={[styles.navItem, currentScreen === 'booking' && styles.activeNavItem]}
@@ -323,14 +326,22 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                             setBookingStep(1);
                         }}
                     >
-                        <MaterialCommunityIcons name="car" size={24} color={currentScreen === 'booking' ? '#017bf9' : '#666'} />
+                        <MaterialCommunityIcons 
+                            name="car" 
+                            size={24} 
+                            color={currentScreen === 'booking' ? '#017bf9' : '#666'} 
+                        />
                         <Text style={[styles.navLabel, currentScreen === 'booking' && styles.activeNavLabel]}>Book</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.navItem, currentScreen === 'myBookings' && styles.activeNavItem]}
                         onPress={() => setCurrentScreen('myBookings')}
                     >
-                        <MaterialCommunityIcons name="format-list-bulleted" size={24} color={currentScreen === 'myBookings' ? '#017bf9' : '#666'} />
+                        <MaterialCommunityIcons 
+                            name="format-list-bulleted" 
+                            size={24} 
+                            color={currentScreen === 'myBookings' ? '#017bf9' : '#666'} 
+                        />
                         <Text style={[styles.navLabel, currentScreen === 'myBookings' && styles.activeNavLabel]}>My Bookings</Text>
                     </TouchableOpacity>
                 </View>
