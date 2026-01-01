@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
-  Dimensions, KeyboardAvoidingView, FlatList,
+  Dimensions, KeyboardAvoidingView, FlatList, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
@@ -75,15 +77,15 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <View style={styles.dropdownContainer}>
             <View style={styles.searchContainer}>
-              <Text style={styles.searchIcon}>🔍</Text>
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={onSearchChange}
                 placeholder={`Search ${activeTab === 'requests' ? 'requests' : 'grievances'}...`}
                 placeholderTextColor={colors.textSecondary}
-                autoFocus={false}
+                autoFocus={true}
               />
+              <Text style={styles.searchIcon}>🔍</Text>
             </View>
             <FlatList
               data={filteredNatures}
@@ -95,16 +97,22 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
                   style={styles.dropdownItem}
                   onPress={() => onSelectNature(item)}
                 >
-                  <Text style={styles.dropdownItemText}>{item.name}</Text>
-                  {item.description && (
-                    <Text style={styles.dropdownItemDescription} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                  )}
+                  <View style={styles.dropdownItemContent}>
+                    <Text style={styles.dropdownItemText}>{item.name}</Text>
+                    {item.description && (
+                      <Text style={styles.dropdownItemDescription} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.dropdownItemArrow}>
+                    <Text style={styles.arrowIcon}>→</Text>
+                  </View>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={() => (
                 <View style={styles.emptyDropdown}>
+                  <Text style={styles.emptyDropdownIcon}>🔍</Text>
                   <Text style={styles.emptyDropdownText}>
                     No {activeTab} found matching "{searchQuery}"
                   </Text>
@@ -141,17 +149,36 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          New {activeTab === 'requests' ? 'Request' : 'Grievance'}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/* Add Dashboard-style Header */}
+      <LinearGradient
+        colors={['#4A5568', '#2D3748']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerBanner}
+      >
+        <Image
+          source={require('../assets/background.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={[styles.headerOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
+        <View style={styles.headerContent}>
+          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <View style={styles.backButtonContent}>
+                <Ionicons name="arrow-back" size={24} color="white" />
+                <Text style={styles.backButtonText}>Back</Text>
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+            </Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </View>
+      </LinearGradient>
 
       <View style={styles.contentContainerBorder}>
         <KeyboardAvoidingView
@@ -164,32 +191,49 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.formCard}>
-              <Text style={styles.formDescription}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formHeaderTitle}>
+                Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
+              </Text>
+              <Text style={styles.formHeaderDescription}>
                 Please provide the details for your {activeTab === 'requests' ? 'request' : 'grievance'}. 
                 All fields marked with * are required.
               </Text>
+            </View>
 
+            <View style={styles.formCard}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>
-                  Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
-                </Text>
-                <TouchableOpacity
-                  style={styles.selectButton}
-                  onPress={onOpenDropdown}
-                >
-                  <Text style={[
-                    styles.selectButtonText,
-                    !newItemForm.natureName && styles.selectPlaceholder
-                  ]}>
-                    {newItemForm.natureName || `Select ${activeTab === 'requests' ? 'request' : 'grievance'} type`}
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.inputLabel}>
+                    Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
                   </Text>
-                  <Text style={styles.selectArrow}>▼</Text>
+                  <Text style={styles.requiredIndicator}>Required</Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.selectButton,
+                    !newItemForm.natureName && styles.selectButtonPlaceholder
+                  ]}
+                  onPress={onOpenDropdown}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.selectButtonContent}>
+                    <Text style={[
+                      styles.selectButtonText,
+                      !newItemForm.natureName && styles.selectPlaceholder
+                    ]}>
+                      {newItemForm.natureName || `Select ${activeTab === 'requests' ? 'request' : 'grievance'} type`}
+                    </Text>
+                    <Text style={styles.selectArrow}>▼</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Description *</Text>
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.inputLabel}>Description *</Text>
+                  <Text style={styles.requiredIndicator}>Required</Text>
+                </View>
                 <TextInput
                   style={styles.textArea}
                   value={newItemForm.description}
@@ -200,6 +244,9 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
                   numberOfLines={6}
                   textAlignVertical="top"
                 />
+                <Text style={styles.characterCount}>
+                  {newItemForm.description.length}/500 characters
+                </Text>
               </View>
             </View>
           </ScrollView>
@@ -212,6 +259,7 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
               ]}
               onPress={onSubmit}
               disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color={colors.white} size="small" />
@@ -263,34 +311,53 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
     });
   };
 
-  const getStatusColor = (status: string): string => {
+  const getStatusConfig = (status: string): { color: string, icon: string, label: string } => {
     switch (status) {
-      case 'resolved': return '#28A745';
-      case 'rejected': return '#DC3545';
-      case 'in_progress': return '#3B82F6';
-      case 'pending': return '#FFC107';
-      default: return colors.textSecondary;
+      case 'resolved': return { color: '#28A745', icon: '✓', label: 'Resolved' };
+      case 'rejected': return { color: '#DC3545', icon: '✗', label: 'Rejected' };
+      case 'in_progress': return { color: '#3B82F6', icon: '⏳', label: 'In Progress' };
+      case 'pending': return { color: '#FFC107', icon: '⏱', label: 'Pending' };
+      default: return { color: colors.textSecondary, icon: '•', label: status };
     }
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/* Add Dashboard-style Header */}
+      <LinearGradient
+        colors={['#4A5568', '#2D3748']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerBanner}
+      >
+        <Image
+          source={require('../assets/background.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={[styles.headerOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
+        <View style={styles.headerContent}>
+          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <View style={styles.backButtonContent}>
+                <Ionicons name="arrow-back" size={24} color="white" />
+                <Text style={styles.backButtonText}>Back</Text>
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
+            </Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </View>
+      </LinearGradient>
 
       <View style={styles.contentContainerBorder}>
         {loadingDetails ? (
           <View style={styles.centerContent}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color="#007AFF" />
             <Text style={styles.loadingText}>Loading details...</Text>
           </View>
         ) : item ? (
@@ -300,79 +367,99 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
             contentContainerStyle={styles.detailScrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.detailCard}>
-              <View style={styles.detailHeader}>
-                <View style={styles.detailInfo}>
-                  <Text style={styles.detailNature}>{item.nature}</Text>
-                  <Text style={styles.detailDate}>
-                    Created {formatDate(item.created_at)}
-                  </Text>
-                </View>
-                <View style={[
-                  styles.detailStatusBadge,
-                  { backgroundColor: getStatusColor(item.status) }
-                ]}>
-                  <Text style={styles.detailStatusText}>
-                    {item.status.replace('_', ' ')}
-                  </Text>
+            <View style={styles.detailHeaderCard}>
+              <View style={styles.detailHeaderContent}>
+                <Text style={styles.detailNature}>{item.nature}</Text>
+                <View style={styles.detailMetaRow}>
+                  <View style={styles.detailMetaItem}>
+                    <Text style={styles.detailMetaIcon}>📅</Text>
+                    <Text style={styles.detailMetaText}>Created {formatDate(item.created_at)}</Text>
+                  </View>
+                  <View style={styles.detailMetaItem}>
+                    <Text style={styles.detailMetaIcon}>🔄</Text>
+                    <Text style={styles.detailMetaText}>Updated {formatDate(item.updated_at)}</Text>
+                  </View>
                 </View>
               </View>
-
-              <View style={styles.descriptionSection}>
-                <Text style={styles.sectionLabel}>Description</Text>
-                <Text style={styles.descriptionText}>
-                  {item.description || item.issue}
+              <View style={[
+                styles.detailStatusBadge,
+                { backgroundColor: getStatusConfig(item.status).color }
+              ]}>
+                <Text style={styles.detailStatusIcon}>{getStatusConfig(item.status).icon}</Text>
+                <Text style={styles.detailStatusText}>
+                  {getStatusConfig(item.status).label}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.commentsCard}>
-              <Text style={styles.commentsHeader}>Discussion</Text>
-              
+            <View style={styles.detailCard}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Description</Text>
+                <View style={styles.sectionDivider} />
+              </View>
+              <Text style={styles.descriptionText}>
+                {item.description || item.issue}
+              </Text>
+            </View>
+
+            <View style={styles.commentsSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Discussion</Text>
+                <View style={styles.commentCountBadge}>
+                  <Text style={styles.commentCountText}>{item.comments?.length || 0}</Text>
+                </View>
+              </View>
+
               {item.comments && item.comments.length > 0 ? (
-                item.comments.map((comment) => (
-                  <View key={comment.id} style={[
-                    styles.commentBubble,
-                    comment.is_hr_comment && styles.hrCommentBubble
-                  ]}>
-                    <View style={styles.commentTop}>
-                      <View style={styles.commentAuthorRow}>
-                        <View style={[
-                          styles.commentAvatar,
-                          comment.is_hr_comment && styles.hrCommentAvatar
-                        ]}>
-                          <Text style={styles.commentAvatarText}>
-                            {comment.created_by_name.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View>
-                          <Text style={[
-                            styles.commentAuthor,
-                            comment.is_hr_comment && styles.hrCommentAuthor
+                <View style={styles.commentsList}>
+                  {item.comments.map((comment) => (
+                    <View key={comment.id} style={[
+                      styles.commentCard,
+                      comment.is_hr_comment && styles.hrCommentCard
+                    ]}>
+                      <View style={styles.commentHeader}>
+                        <View style={styles.commentAuthorInfo}>
+                          <View style={[
+                            styles.commentAvatar,
+                            comment.is_hr_comment && styles.hrCommentAvatar
                           ]}>
-                            {comment.created_by_name}
-                          </Text>
-                          {comment.is_hr_comment && (
-                            <Text style={styles.hrBadge}>HR Team</Text>
-                          )}
+                            <Text style={styles.commentAvatarText}>
+                              {comment.created_by_name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View>
+                            <View style={styles.commentAuthorRow}>
+                              <Text style={[
+                                styles.commentAuthor,
+                                comment.is_hr_comment && styles.hrCommentAuthor
+                              ]}>
+                                {comment.created_by_name}
+                              </Text>
+                              {comment.is_hr_comment && (
+                                <View style={styles.hrBadge}>
+                                  <Text style={styles.hrBadgeText}>HR Team</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.commentTime}>
+                              {formatDateTime(comment.created_at)}
+                            </Text>
+                          </View>
                         </View>
                       </View>
-                      <Text style={styles.commentTime}>
-                        {formatDateTime(comment.created_at)}
-                      </Text>
+                      <Text style={styles.commentContent}>{comment.comment}</Text>
                     </View>
-                    <Text style={styles.commentContent}>{comment.comment}</Text>
-                  </View>
-                ))
+                  ))}
+                </View>
               ) : (
                 <View style={styles.noCommentsContainer}>
                   <Text style={styles.noCommentsIcon}>💬</Text>
-                  <Text style={styles.noComments}>No comments yet</Text>
+                  <Text style={styles.noCommentsTitle}>No comments yet</Text>
                   <Text style={styles.noCommentsSubtext}>Be the first to add a comment</Text>
                 </View>
               )}
 
-              <View style={styles.addCommentBox}>
+              <View style={styles.addCommentCard}>
                 <Text style={styles.addCommentLabel}>Add Your Comment</Text>
                 <TextInput
                   style={styles.commentTextArea}
@@ -384,20 +471,26 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
-                <TouchableOpacity
-                  style={[
-                    styles.commentButton,
-                    (!newComment.trim()) && styles.commentButtonDisabled
-                  ]}
-                  onPress={onAddComment}
-                  disabled={loading || !newComment.trim()}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.commentButtonText}>Post Comment</Text>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.commentActionRow}>
+                  <Text style={styles.commentCharacterCount}>
+                    {newComment.length}/300 characters
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.commentButton,
+                      (!newComment.trim()) && styles.commentButtonDisabled
+                    ]}
+                    onPress={onAddComment}
+                    disabled={loading || !newComment.trim()}
+                    activeOpacity={0.8}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={colors.white} size="small" />
+                    ) : (
+                      <Text style={styles.commentButtonText}>Post Comment</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
             <View style={{ height: 24 }} />
@@ -747,23 +840,13 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const getStatusColor = (status: string): string => {
+  const getStatusConfig = (status: string): { color: string, icon: string, label: string } => {
     switch (status) {
-      case 'resolved': return '#28A745';
-      case 'rejected': return '#DC3545';
-      case 'in_progress': return '#3B82F6';
-      case 'pending': return '#FFC107';
-      default: return colors.textSecondary;
-    }
-  };
-
-  const getStatusIcon = (status: string): string => {
-    switch (status) {
-      case 'resolved': return '✓';
-      case 'rejected': return '✗';
-      case 'in_progress': return '⏳';
-      case 'pending': return '⏱';
-      default: return '•';
+      case 'resolved': return { color: '#28A745', icon: '✓', label: 'Resolved' };
+      case 'rejected': return { color: '#DC3545', icon: '✗', label: 'Rejected' };
+      case 'in_progress': return { color: '#3B82F6', icon: '⏳', label: 'In Progress' };
+      case 'pending': return { color: '#FFC107', icon: '⏱', label: 'Pending' };
+      default: return { color: colors.textSecondary, icon: '•', label: status };
     }
   };
 
@@ -812,19 +895,39 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>HR Portal</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
+      
+      {/* Dashboard-style Header */}
+      <LinearGradient
+        colors={['#4A5568', '#2D3748']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerBanner}
+      >
+        <Image
+          source={require('../assets/background.jpg')}
+          style={styles.headerImage}
+          resizeMode="cover"
+        />
+        <View style={[styles.headerOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
+        <View style={styles.headerContent}>
+          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <View style={styles.backButtonContent}>
+                <Ionicons name="arrow-back" size={24} color="white" />
+                <Text style={styles.backButtonText}>Back</Text>
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>HR Portal</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </View>
+      </LinearGradient>
 
       <View style={styles.tabBar}>
         {[
-          { key: 'requests' as const, label: 'Requests', icon: '📝' },
-          { key: 'grievances' as const, label: 'Grievances', icon: '⚖️' }
+          { key: 'requests' as const, label: 'Requests', icon: '📝', count: requests.length },
+          { key: 'grievances' as const, label: 'Grievances', icon: '⚖️', count: grievances.length }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -832,13 +935,20 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
           >
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[
-              styles.tabButtonText,
-              activeTab === tab.key && styles.tabButtonTextActive
-            ]}>
-              {tab.label}
-            </Text>
+            <View style={styles.tabButtonContent}>
+              <Text style={styles.tabIcon}>{tab.icon}</Text>
+              <Text style={[
+                styles.tabButtonText,
+                activeTab === tab.key && styles.tabButtonTextActive
+              ]}>
+                {tab.label}
+              </Text>
+              {tab.count > 0 && (
+                <View style={styles.tabBadge}>
+                  <Text style={styles.tabBadgeText}>{tab.count}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -847,26 +957,36 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         <ScrollView
           style={styles.listScrollView}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContentContainer}
         >
-          <View style={styles.createButtonWrapper}>
+          <View style={styles.createButtonCard}>
             <TouchableOpacity
               style={styles.createButton}
               onPress={handleNewItemPress}
               activeOpacity={0.8}
             >
-              <Text style={styles.createButtonText}>
-                + Create New {activeTab === 'requests' ? 'Request' : 'Grievance'}
-              </Text>
+              <View style={styles.createButtonIcon}>
+                <Text style={styles.createButtonPlus}>+</Text>
+              </View>
+              <View style={styles.createButtonContent}>
+                <Text style={styles.createButtonTitle}>
+                  Create New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+                </Text>
+                <Text style={styles.createButtonDescription}>
+                  Submit a new {activeTab === 'requests' ? 'request' : 'grievance'} to HR team
+                </Text>
+              </View>
+              <Text style={styles.createButtonArrow}>→</Text>
             </TouchableOpacity>
           </View>
 
           {loading ? (
             <View style={styles.emptyListContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <ActivityIndicator size="large" color="#007AFF" />
               <Text style={styles.emptyListSubtitle}>Loading {activeTab}...</Text>
             </View>
           ) : (
-            <View style={styles.listContainer}>
+            <View style={styles.listSection}>
               <View style={styles.listHeader}>
                 <Text style={styles.listTitle}>
                   Your {activeTab === 'requests' ? 'Requests' : 'Grievances'}
@@ -877,50 +997,57 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
               </View>
 
               {currentItems.length > 0 ? (
-                currentItems.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.itemCard}
-                    onPress={() => handleItemPress(item)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.itemCardContent}>
-                      <View style={styles.itemCardHeader}>
-                        <Text style={styles.itemCardTitle} numberOfLines={1}>
-                          {item.nature}
-                        </Text>
-                        <View style={[
-                          styles.itemStatusBadge,
-                          { backgroundColor: getStatusColor(item.status) }
-                        ]}>
-                          <Text style={styles.itemStatusText}>
-                            {getStatusIcon(item.status)} {item.status.replace('_', ' ')}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <Text style={styles.itemCardDescription} numberOfLines={2}>
-                        {item.description || item.issue}
-                      </Text>
-
-                      <View style={styles.itemCardFooter}>
-                        <View style={styles.itemMetaRow}>
-                          <View style={styles.itemMetaItem}>
-                            <Text style={styles.itemMetaIcon}>📅</Text>
-                            <Text style={styles.itemMetaText}>{formatDate(item.created_at)}</Text>
-                          </View>
-                          <View style={styles.itemMetaItem}>
-                            <Text style={styles.itemMetaIcon}>💬</Text>
-                            <Text style={styles.itemMetaText}>
-                              {item.comments?.length || 0}
+                <View style={styles.itemsList}>
+                  {currentItems.map((item) => {
+                    const statusConfig = getStatusConfig(item.status);
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={styles.itemCard}
+                        onPress={() => handleItemPress(item)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.itemCardContent}>
+                          <View style={styles.itemCardHeader}>
+                            <View style={styles.itemCardTitleRow}>
+                              <Text style={styles.itemCardTitle} numberOfLines={1}>
+                                {item.nature}
+                              </Text>
+                              <View style={[
+                                styles.itemStatusBadge,
+                                { backgroundColor: statusConfig.color }
+                              ]}>
+                                <Text style={styles.itemStatusIcon}>{statusConfig.icon}</Text>
+                                <Text style={styles.itemStatusText}>{statusConfig.label}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.itemCardDescription} numberOfLines={2}>
+                              {item.description || item.issue}
                             </Text>
                           </View>
+
+                          <View style={styles.itemCardFooter}>
+                            <View style={styles.itemMetaRow}>
+                              <View style={styles.itemMetaItem}>
+                                <Text style={styles.itemMetaIcon}>📅</Text>
+                                <Text style={styles.itemMetaText}>{formatDate(item.created_at)}</Text>
+                              </View>
+                              <View style={styles.itemMetaItem}>
+                                <Text style={styles.itemMetaIcon}>💬</Text>
+                                <Text style={styles.itemMetaText}>
+                                  {item.comments?.length || 0} comments
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.itemActionArrow}>
+                              <Text style={styles.itemArrow}>→</Text>
+                            </View>
+                          </View>
                         </View>
-                        <Text style={styles.itemArrow}>→</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               ) : (
                 <View style={styles.emptyListContainer}>
                   <Text style={styles.emptyListIcon}>
@@ -934,6 +1061,15 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
                       ? 'Your requests will appear here once submitted'
                       : 'Your grievances will appear here once submitted'}
                   </Text>
+                  <TouchableOpacity
+                    style={styles.emptyListButton}
+                    onPress={handleNewItemPress}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.emptyListButtonText}>
+                      Create Your First {activeTab === 'requests' ? 'Request' : 'Grievance'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -948,18 +1084,138 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primary,
+
+  },
+  // Dashboard-style header
+  headerBanner: {
+    height: 200,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  headerContent: {
+    padding: 20,
+    position: 'relative',
+    zIndex: 1,
+  },
+  topNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  backgroundSketch: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.12,
+  },
+  sketchCircle1: {
+    position: 'absolute',
+    top: '15%',
+    left: '75%',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    opacity: 0.4,
+  },
+  sketchCircle2: {
+    position: 'absolute',
+    top: '65%',
+    left: '10%',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    opacity: 0.3,
+  },
+  sketchCircle3: {
+    position: 'absolute',
+    top: '25%',
+    left: '15%',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    opacity: 0.25,
+  },
+  sketchLine1: {
+    position: 'absolute',
+    top: '35%',
+    left: '20%',
+    right: '20%',
+    height: 1.5,
+    backgroundColor: '#FFFFFF',
+    transform: [{ rotate: '25deg' }],
+    opacity: 0.3,
+  },
+  sketchLine2: {
+    position: 'absolute',
+    top: '55%',
+    left: '5%',
+    right: '5%',
+    height: 1,
+    backgroundColor: '#FFFFFF',
+    transform: [{ rotate: '-15deg' }],
+    opacity: 0.2,
+  },
+  sketchLine3: {
+    position: 'absolute',
+    top: '75%',
+    left: '25%',
+    right: '25%',
+    height: 1,
+    backgroundColor: '#FFFFFF',
+    transform: [{ rotate: '10deg' }],
+    opacity: 0.25,
+  },
+  sketchDotGrid: {
+    position: 'absolute',
+    top: '45%',
+    left: '60%',
+    width: 40,
+    height: 40,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    opacity: 0.2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+   
   },
   backButton: {
     padding: spacing.xs,
+  },
+  backButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  backButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
   backIcon: {
     width: 24,
@@ -988,27 +1244,29 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.white,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs,
-    borderTopLeftRadius: 28,   
-    borderTopRightRadius: 28
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    ...shadows.sm,
   },
   tabButton: {
     flex: 1,
     paddingVertical: spacing.md,
     alignItems: 'center',
-    borderRadius: 28,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
+    borderRadius: borderRadius.lg,
   },
   tabButtonActive: {
     backgroundColor: colors.backgroundSecondary,
-    ...shadows.sm,
+  },
+  tabButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
   },
   tabIcon: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
   },
   tabButtonText: {
     fontSize: fontSize.md,
@@ -1016,44 +1274,83 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabButtonTextActive: {
-    color: colors.primary,
+    color: '#007AFF',
     fontWeight: '700',
+  },
+  tabBadge: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  tabBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.white,
   },
   contentContainer: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
-    
-    paddingTop: spacing.lg,
   },
   contentContainerBorder: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
-    
-    paddingTop: spacing.lg,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
   },
   listScrollView: {
     flex: 1,
   },
-  createButtonWrapper: {
+  listContentContainer: {
+    paddingVertical: spacing.lg,
+  },
+  createButtonCard: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   createButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.white,
+    padding: spacing.lg,
     borderRadius: borderRadius.lg,
+    flexDirection: 'row',
     alignItems: 'center',
     ...shadows.md,
   },
-  createButtonText: {
+  createButtonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  createButtonPlus: {
+    fontSize: fontSize.xl,
     color: colors.white,
-    fontSize: fontSize.md,
     fontWeight: '700',
   },
-  listContainer: {
+  createButtonContent: {
+    flex: 1,
+  },
+  createButtonTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  createButtonDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  createButtonArrow: {
+    fontSize: fontSize.lg,
+    color: '#007AFF',
+    fontWeight: '700',
+  },
+  listSection: {
     paddingHorizontal: spacing.lg,
   },
   listHeader: {
@@ -1068,27 +1365,32 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   countBadge: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#007AFF',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
   },
   countText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
+    fontSize: fontSize.sm,
+    fontWeight: '700',
     color: colors.white,
   },
+  itemsList: {
+    gap: spacing.md,
+  },
   itemCard: {
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.lg,
     backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.md,
   },
   itemCardContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
   },
   itemCardHeader: {
+    marginBottom: spacing.md,
+  },
+  itemCardTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -1102,20 +1404,27 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   itemStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+  itemStatusIcon: {
+    fontSize: fontSize.xs,
+    color: colors.white,
   },
   itemStatusText: {
     fontSize: fontSize.xs,
     fontWeight: '700',
     color: colors.white,
+    textTransform: 'capitalize',
   },
   itemCardDescription: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
-    marginBottom: spacing.sm,
   },
   itemCardFooter: {
     flexDirection: 'row',
@@ -1127,7 +1436,7 @@ const styles = StyleSheet.create({
   },
   itemMetaRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   itemMetaItem: {
     flexDirection: 'row',
@@ -1142,14 +1451,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
+  itemActionArrow: {
+    paddingLeft: spacing.sm,
+  },
   itemArrow: {
-    fontSize: fontSize.md,
-    color: colors.primary,
+    fontSize: fontSize.lg,
+    color: '#007AFF',
     fontWeight: '700',
   },
   emptyListContainer: {
     alignItems: 'center',
     paddingVertical: spacing.xxl * 2,
+    paddingHorizontal: spacing.xl,
   },
   emptyListIcon: {
     fontSize: 60,
@@ -1160,11 +1473,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   emptyListSubtitle: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
     textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  emptyListButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+  },
+  emptyListButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: '700',
   },
   centerContent: {
     flex: 1,
@@ -1187,41 +1513,64 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
+  },
+  formHeader: {
     paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  formHeaderTitle: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  formHeaderDescription: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    lineHeight: 22,
   },
   formCard: {
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     padding: spacing.lg,
+    marginHorizontal: spacing.lg,
     ...shadows.md,
-  },
-  formDescription: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: spacing.lg,
   },
+  inputLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   inputLabel: {
     fontSize: fontSize.sm,
     color: colors.text,
-    marginBottom: spacing.sm,
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  requiredIndicator: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
   selectButton: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
     backgroundColor: colors.white,
+    ...shadows.sm,
+  },
+  selectButtonPlaceholder: {
+    borderColor: colors.textLight,
+  },
+  selectButtonContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    ...shadows.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   selectButtonText: {
     fontSize: fontSize.md,
@@ -1248,18 +1597,20 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     ...shadows.sm,
   },
+  characterCount: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    marginTop: spacing.xs,
+  },
   submitFooter: {
-    // backgroundColor: colors.white,
     paddingHorizontal: spacing.lg,
-    // paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    // borderTopWidth: 1,
-    // // borderTopColor: colors.border,
-    // ...shadows.lg,
+    backgroundColor: colors.backgroundSecondary,
   },
   submitButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
+    backgroundColor: '#007AFF',
+    paddingVertical: spacing.lg,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     ...shadows.md,
@@ -1273,43 +1624,60 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   detailScrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingVertical: spacing.lg,
   },
-  detailCard: {
+  detailHeaderCard: {
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     padding: spacing.lg,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    ...shadows.md,
-  },
-  detailHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    ...shadows.md,
   },
-  detailInfo: {
+  detailHeaderContent: {
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: spacing.md,
   },
   detailNature: {
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.xl,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  detailDate: {
+  detailMetaRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
+  detailMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  detailMetaIcon: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
   },
+  detailMetaText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
   detailStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
+    gap: spacing.xs,
     minWidth: 100,
-    alignItems: 'center',
+  },
+  detailStatusIcon: {
+    fontSize: fontSize.sm,
+    color: colors.white,
+    fontWeight: '700',
   },
   detailStatusText: {
     fontSize: fontSize.sm,
@@ -1317,74 +1685,96 @@ const styles = StyleSheet.create({
     color: colors.white,
     textTransform: 'capitalize',
   },
-  descriptionSection: {
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  detailCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
   },
-  sectionLabel: {
-    fontSize: fontSize.sm,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.sm,
+  },
+  sectionDivider: {
+    height: 2,
+    flex: 1,
+    backgroundColor: colors.border,
+    marginLeft: spacing.md,
   },
   descriptionText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    lineHeight: 22,
+    lineHeight: 24,
   },
-  commentsCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    ...shadows.md,
+  commentsSection: {
+    marginHorizontal: spacing.lg,
   },
-  commentsHeader: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  commentBubble: {
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  hrCommentBubble: {
-    backgroundColor: colors.primaryLight + '20',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
-  commentTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-  },
-  commentAuthorRow: {
-    flexDirection: 'row',
+  commentCountBadge: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    minWidth: 30,
     alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
+  },
+  commentCountText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  commentsList: {
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  commentCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  hrCommentCard: {
+    backgroundColor: '#007AFF10',
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  commentHeader: {
+    marginBottom: spacing.md,
+  },
+  commentAuthorInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
   },
   commentAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   hrCommentAvatar: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#007AFF',
   },
   commentAvatarText: {
     fontSize: fontSize.md,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: colors.white,
+  },
+  commentAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
   commentAuthor: {
     fontSize: fontSize.sm,
@@ -1392,12 +1782,18 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   hrCommentAuthor: {
-    color: colors.primary,
+    color: '#007AFF',
   },
   hrBadge: {
+    backgroundColor: '#007AFF20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+  },
+  hrBadgeText: {
     fontSize: fontSize.xs,
     fontWeight: '700',
-    color: colors.primary,
+    color: '#007AFF',
     textTransform: 'uppercase',
   },
   commentTime: {
@@ -1405,39 +1801,44 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   commentContent: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.text,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   noCommentsContainer: {
-    paddingVertical: spacing.xxl,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
     alignItems: 'center',
+    marginBottom: spacing.lg,
+    ...shadows.sm,
   },
   noCommentsIcon: {
     fontSize: 40,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  noComments: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    fontWeight: '600',
+  noCommentsTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
     marginBottom: spacing.xs,
   },
   noCommentsSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.textLight,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
-  addCommentBox: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  addCommentCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...shadows.md,
   },
   addCommentLabel: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   commentTextArea: {
     borderWidth: 1,
@@ -1445,19 +1846,29 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     backgroundColor: colors.white,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.text,
-    minHeight: 90,
-    marginBottom: spacing.sm,
+    minHeight: 100,
     textAlignVertical: 'top',
+    marginBottom: spacing.md,
     ...shadows.sm,
   },
+  commentActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  commentCharacterCount: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
   commentButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
+    minWidth: 120,
     alignItems: 'center',
-    ...shadows.md,
   },
   commentButtonDisabled: {
     backgroundColor: colors.textLight,
@@ -1475,7 +1886,7 @@ const styles = StyleSheet.create({
   },
   dropdownContainer: {
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     maxHeight: screenHeight * 0.6,
     ...shadows.lg,
   },
@@ -1487,28 +1898,35 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  searchIcon: {
-    fontSize: fontSize.lg,
-    marginRight: spacing.sm,
-  },
   searchInput: {
     flex: 1,
     fontSize: fontSize.md,
     color: colors.text,
     paddingVertical: spacing.sm,
   },
+  searchIcon: {
+    fontSize: fontSize.lg,
+    marginLeft: spacing.sm,
+    color: colors.textSecondary,
+  },
   dropdownList: {
     maxHeight: screenHeight * 0.4,
   },
   dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  dropdownItemContent: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
   dropdownItemText: {
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.xs,
   },
@@ -1517,9 +1935,21 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 18,
   },
+  dropdownItemArrow: {
+    paddingLeft: spacing.sm,
+  },
+  arrowIcon: {
+    fontSize: fontSize.md,
+    color: '#007AFF',
+  },
   emptyDropdown: {
     padding: spacing.xxl,
     alignItems: 'center',
+  },
+  emptyDropdownIcon: {
+    fontSize: 40,
+    marginBottom: spacing.md,
+    color: colors.textSecondary,
   },
   emptyDropdownText: {
     fontSize: fontSize.md,
