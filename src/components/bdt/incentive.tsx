@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../../styles/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../../config/config';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const TOKEN_KEY = 'token_2';
 
@@ -14,6 +15,7 @@ interface IncentiveProps {
   onBack: () => void;
   leadId: number;
   leadName: string;
+  hideHeader?: boolean;
 }
 
 interface BDTUser {
@@ -76,7 +78,7 @@ const INTERCITY_CITIES = [
   'Other',
 ];
 
-const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
+const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHeader }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -88,7 +90,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
 
   // Form states
   const [grossIncome, setGrossIncome] = useState('');
-  
+
   // Expense selection states
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
   const [expenseValues, setExpenseValues] = useState<{ [key: string]: string }>({
@@ -170,7 +172,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
         body: JSON.stringify({ token, lead_id: leadId })
       });
       const contentType = response.headers.get('content-type');
-      
+
       if (!contentType || !contentType.includes('application/json')) {
         console.error('Expected JSON but received:', contentType);
         setIsEditMode(true);
@@ -180,7 +182,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
         const data = await response.json();
         setIncentiveData(data.incentive);
         setGrossIncome(formatNumberWithCommas(data.incentive.gross_income_recieved.toString()));
-        
+
         // Set expense values and selected expenses based on what's available
         const newSelectedExpenses = new Set<string>();
         const newExpenseValues: { [key: string]: string } = {
@@ -366,7 +368,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
     const referral = expenseValues.referral ? parseFloat(parseFormattedNumber(expenseValues.referral)) : 0;
     const bdExpenses = expenseValues.bd_expenses ? parseFloat(parseFormattedNumber(expenseValues.bd_expenses)) : 0;
     const goodwillAmt = expenseValues.goodwill ? parseFloat(parseFormattedNumber(expenseValues.goodwill)) : 0;
-    
+
     const totalExpenses = referral + bdExpenses + goodwillAmt;
     const netCompanyEarning = gross - totalExpenses;
     const isIntercity = intercityDeals === 'Yes';
@@ -457,131 +459,121 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
 
   if (loading && !incentiveData) {
     return (
-      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Incentive Checklist</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <View style={styles.container}>
+        {!hideHeader && (
+          <>
+            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                <BackIcon />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Incentive Checklist</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </>
+        )}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading incentive data...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (isEditMode) {
     const calculated = calculateIncentive();
+
     if (showCalculation) {
       return (
-        <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-          <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => setShowCalculation(false)}>
-              <BackIcon />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Review & Submit</Text>
-            <View style={styles.headerSpacer} />
-          </View>
+        <View style={styles.container}>
+          {!hideHeader && (
+            <>
+              <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+              <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={() => setShowCalculation(false)}>
+                  <BackIcon />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Review & Submit</Text>
+                <View style={styles.headerSpacer} />
+              </View>
+            </>
+          )}
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
             <View style={styles.card}>
-              <Text style={styles.reviewTitle}>Review Incentive Details</Text>
-              <Text style={styles.leadNameLarge}>{leadName}</Text>
+              <Text style={styles.reviewTitle}>Review Details</Text>
+              <Text style={styles.leadName}>Lead: {leadName}</Text>
             </View>
+
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Transaction Summary</Text>
-              
+              <Text style={styles.cardTitle}>Summary</Text>
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Gross Income</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(calculated.gross)}</Text>
+                  <Text style={styles.summaryValue}>₹{calculated.gross.toLocaleString('en-IN')}</Text>
                 </View>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Deal Type</Text>
-                  <View style={intercityDeals === 'Yes' ? styles.intercityBadgeYes : styles.intercityBadgeNo}>
-                    <Text style={intercityDeals === 'Yes' ? styles.intercityTextYes : styles.intercityTextNo}>
-                      {intercityDeals === 'Yes' ? 'Intercity' : 'Local'}
-                    </Text>
-                  </View>
+                  <Text style={styles.summaryLabel}>Net Earning</Text>
+                  <Text style={styles.summaryValue}>₹{calculated.netCompanyEarning.toLocaleString('en-IN')}</Text>
                 </View>
               </View>
-
-              {selectedExpenses.has('referral') && (
-                <View style={styles.expenseSummaryRow}>
-                  <Text style={styles.summaryLabel}>Referral Amount</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(calculated.referral)}</Text>
-                </View>
-              )}
-              {selectedExpenses.has('bd_expenses') && (
-                <View style={styles.expenseSummaryRow}>
-                  <Text style={styles.summaryLabel}>BD Expenses</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(calculated.bdExpenses)}</Text>
-                </View>
-              )}
-              {selectedExpenses.has('goodwill') && (
-                <View style={styles.expenseSummaryRow}>
-                  <Text style={styles.summaryLabel}>Goodwill Amount</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(calculated.goodwillAmt)}</Text>
-                </View>
-              )}
             </View>
+
+            {selectedExpenses.size > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Expenses</Text>
+                {calculated.referral > 0 && (
+                  <View style={styles.expenseSummaryRow}>
+                    <Text style={styles.infoLabel}>Referral</Text>
+                    <Text style={styles.infoValue}>₹{calculated.referral.toLocaleString('en-IN')}</Text>
+                  </View>
+                )}
+                {calculated.bdExpenses > 0 && (
+                  <View style={styles.expenseSummaryRow}>
+                    <Text style={styles.infoLabel}>BD Expenses</Text>
+                    <Text style={styles.infoValue}>₹{calculated.bdExpenses.toLocaleString('en-IN')}</Text>
+                  </View>
+                )}
+                {calculated.goodwillAmt > 0 && (
+                  <View style={styles.expenseSummaryRow}>
+                    <Text style={styles.infoLabel}>Goodwill</Text>
+                    <Text style={styles.infoValue}>₹{calculated.goodwillAmt.toLocaleString('en-IN')}</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Earnings Breakdown</Text>
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Brokerage Amount (Gross)</Text>
-                <Text style={styles.calculationValue}>{formatCurrency(calculated.gross)}</Text>
+              <Text style={styles.cardTitle}>Deal Information</Text>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Deal Type:</Text>
+                <View style={intercityDeals === 'Yes' ? styles.intercityBadgeYes : styles.intercityBadgeNo}>
+                  <Text style={intercityDeals === 'Yes' ? styles.intercityTextYes : styles.intercityTextNo}>
+                    {intercityDeals === 'Yes' ? 'Intercity' : 'Local'}
+                  </Text>
+                </View>
               </View>
-
-              {selectedExpenses.has('referral') && (
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>Less: Referral Fee</Text>
-                  <Text style={[styles.calculationValue, styles.negativeValue]}>
-                    - {formatCurrency(calculated.referral)}
-                  </Text>
+              {intercityDeals === 'Yes' && selectedCity && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>City:</Text>
+                  <Text style={styles.infoValue}>{selectedCity === 'Other' ? customCity : selectedCity}</Text>
                 </View>
               )}
-
-              {selectedExpenses.has('bd_expenses') && (
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>Less: BD Expenses</Text>
-                  <Text style={[styles.calculationValue, styles.negativeValue]}>
-                    - {formatCurrency(calculated.bdExpenses)}
-                  </Text>
-                </View>
-              )}
-
-              {selectedExpenses.has('goodwill') && (
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>Less: Goodwill</Text>
-                  <Text style={[styles.calculationValue, styles.negativeValue]}>
-                    - {formatCurrency(calculated.goodwillAmt)}
-                  </Text>
-                </View>
-              )}
-
-              <View style={[styles.calculationRow, styles.highlightRow]}>
-                <Text style={styles.calculationLabelBold}>Net Company Earnings</Text>
-                <Text style={styles.calculationValueBold}>{formatCurrency(calculated.netCompanyEarning)}</Text>
-              </View>
-
               {intercityDeals === 'Yes' && (
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>Intercity Share (50%)</Text>
-                  <Text style={styles.calculationValue}>{formatCurrency(calculated.intercityAmount)}</Text>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Intercity Amount (50%):</Text>
+                  <Text style={styles.infoValue}>₹{calculated.intercityAmount.toLocaleString('en-IN')}</Text>
                 </View>
               )}
-
-              <View style={[styles.calculationRow, styles.finalRow]}>
-                <Text style={styles.finalLabel}>Your earning will be told by BUP</Text>
-              </View>
             </View>
 
-            <TouchableOpacity
+            <View style={styles.infoCard}>
+              <Text style={styles.infoCardTitle}>📋 Important Note</Text>
+              <Text style={styles.infoCardText}>
+                Your final earnings will be calculated by BUP team after reviewing all details.
+              </Text>
+            </View>
+
+            {/* <TouchableOpacity
               style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={createIncentive}
               disabled={loading}
@@ -591,72 +583,91 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
               ) : (
                 <Text style={styles.submitButtonText}>Submit Incentive</Text>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity> */}
+            <LinearGradient
+              colors={['#007AFF', '#0056CC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[
+                styles.submitButton,
+                loading && styles.submitButtonDisabled
+              ]}
+            >
+              <TouchableOpacity
+                onPress={createIncentive}
+                disabled={loading}
+                style={styles.submitButtonTouchable}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit Incentive</Text>
+                )}
+              </TouchableOpacity>
+            </LinearGradient>
             <View style={{ height: 100 }} />
           </ScrollView>
-        </SafeAreaView>
+        </View>
       );
     }
 
     return (
-      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Checklist for Incentive</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <View style={styles.container}>
+        {!hideHeader && (
+          <>
+            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                <BackIcon />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Checklist for Incentive</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </>
+        )}
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Incentive Details</Text>
-            <Text style={styles.leadName}>Lead: {leadName}</Text>
+            <Text style={styles.sectionTitle}>Create Incentive</Text>
+            <Text style={styles.leadNameLarge}>Lead: {leadName}</Text>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Income Information</Text>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Gross Income *</Text>
+              <Text style={styles.label}>Gross Income Received *</Text>
               <TextInput
                 style={styles.input}
                 value={grossIncome}
                 onChangeText={handleGrossIncomeChange}
-                placeholder="₹ 0"
-                keyboardType="decimal-pad"
-                placeholderTextColor={colors.textSecondary}
+                placeholder="Enter amount (e.g., 1,00,000)"
+                keyboardType="numeric"
               />
             </View>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Expenses (Optional)</Text>
-            <Text style={styles.expenseInfoText}>Select expenses and enter amounts if applicable</Text>
-            
-            {EXPENSE_OPTIONS.map((expense) => (
-              <View key={expense.key} style={styles.expenseItem}>
+            <Text style={styles.label}>Select Expenses (Optional)</Text>
+            <Text style={styles.expenseInfoText}>
+              Check the expenses that apply and enter their amounts
+            </Text>
+            {EXPENSE_OPTIONS.map((option) => (
+              <View key={option.key} style={styles.expenseItem}>
                 <TouchableOpacity
                   style={styles.checkboxContainer}
-                  onPress={() => toggleExpense(expense.key)}
+                  onPress={() => toggleExpense(option.key)}
                 >
-                  <View style={[
-                    styles.checkbox,
-                    selectedExpenses.has(expense.key) && styles.checkboxChecked
-                  ]}>
-                    {selectedExpenses.has(expense.key) && (
-                      <Text style={styles.checkmark}>✓</Text>
-                    )}
+                  <View style={[styles.checkbox, selectedExpenses.has(option.key) && styles.checkboxChecked]}>
+                    {selectedExpenses.has(option.key) && <Text style={styles.checkmark}>✓</Text>}
                   </View>
-                  <Text style={styles.expenseLabel}>{expense.label}</Text>
+                  <Text style={styles.expenseLabel}>{option.label}</Text>
                 </TouchableOpacity>
-                {selectedExpenses.has(expense.key) && (
+                {selectedExpenses.has(option.key) && (
                   <TextInput
                     style={styles.expenseInput}
-                    value={expenseValues[expense.key]}
-                    onChangeText={(text) => handleExpenseChange(expense.key, text)}
-                    placeholder="₹ 0"
-                    keyboardType="decimal-pad"
-                    placeholderTextColor={colors.textSecondary}
+                    value={expenseValues[option.key]}
+                    onChangeText={(text) => handleExpenseChange(option.key, text)}
+                    placeholder="Enter amount"
+                    keyboardType="numeric"
                   />
                 )}
               </View>
@@ -664,60 +675,48 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Deal Type *</Text>
+            <Text style={styles.label}>Intercity Deal? *</Text>
             <TouchableOpacity
               style={styles.dropdown}
               onPress={() => setShowIntercityDropdown(!showIntercityDropdown)}
             >
-              <Text style={styles.dropdownText}>
-                {intercityDeals === 'Yes' ? 'Intercity Deal' : 'Local Deal'}
-              </Text>
-              <Text style={styles.dropdownArrow}>▼</Text>
+              <Text style={styles.dropdownText}>{intercityDeals}</Text>
+              <Text style={styles.dropdownArrow}>{showIntercityDropdown ? '▲' : '▼'}</Text>
             </TouchableOpacity>
-            
             {showIntercityDropdown && (
               <View style={styles.dropdownMenu}>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setIntercityDeals('Yes');
-                    setShowIntercityDropdown(false);
-                  }}
-                >
-                  <Text style={[styles.dropdownItemText, intercityDeals === 'Yes' && styles.selectedText]}>
-                    Intercity Deal
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setIntercityDeals('No');
-                    setShowIntercityDropdown(false);
-                    setSelectedCity('');
-                    setCustomCity('');
-                  }}
-                >
-                  <Text style={[styles.dropdownItemText, intercityDeals === 'No' && styles.selectedText]}>
-                    Local Deal
-                  </Text>
-                </TouchableOpacity>
+                {['Yes', 'No'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setIntercityDeals(option);
+                      setShowIntercityDropdown(false);
+                      if (option === 'No') {
+                        setSelectedCity('');
+                        setCustomCity('');
+                      }
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, intercityDeals === option && styles.selectedText]}>
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
 
           {intercityDeals === 'Yes' && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Select City *</Text>
+              <Text style={styles.label}>Select City *</Text>
               <TouchableOpacity
                 style={styles.dropdown}
                 onPress={() => setShowCityDropdown(!showCityDropdown)}
               >
-                <Text style={styles.dropdownText}>
-                  {selectedCity || 'Select a city'}
-                </Text>
-                <Text style={styles.dropdownArrow}>▼</Text>
+                <Text style={styles.dropdownText}>{selectedCity || 'Select a city'}</Text>
+                <Text style={styles.dropdownArrow}>{showCityDropdown ? '▲' : '▼'}</Text>
               </TouchableOpacity>
-              
               {showCityDropdown && (
                 <View style={styles.dropdownMenu}>
                   {INTERCITY_CITIES.map((city) => (
@@ -739,67 +738,73 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
                   ))}
                 </View>
               )}
-
               {selectedCity === 'Other' && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Enter City Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={customCity}
-                    onChangeText={setCustomCity}
-                    placeholder="City name"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
+                <TextInput
+                  style={[styles.input, { marginTop: spacing.md }]}
+                  value={customCity}
+                  onChangeText={setCustomCity}
+                  placeholder="Enter city name"
+                />
               )}
             </View>
           )}
 
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>ℹ️ Note</Text>
-            <Text style={styles.infoCardText}>Your earning will be told by BUP</Text>
-          </View>
-
-          <TouchableOpacity
+          <LinearGradient
+            colors={['#007AFF', '#0056CC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={styles.continueButton}
-            onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue to Review</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleContinue}
+              style={styles.gradientTouchable}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.continueButtonText}>Continue to Review</Text>
+            </TouchableOpacity>
+          </LinearGradient>
           <View style={{ height: 100 }} />
         </ScrollView>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!incentiveData) {
     return (
-      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Incentive Checklist</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <View style={styles.container}>
+        {!hideHeader && (
+          <>
+            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                <BackIcon />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Incentive Checklist</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </>
+        )}
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No incentive data found</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Incentive Checklist</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <View style={styles.container}>
+      {!hideHeader && (
+        <>
+          <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <BackIcon />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Incentive Checklist</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </>
+      )}
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <View style={styles.statusHeader}>
@@ -971,7 +976,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName }) => {
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -1069,7 +1074,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: colors.white,
-    fontSize: fontSize.sm,
+    fontSize: 12,
     fontWeight: '600',
   },
   inputGroup: {
@@ -1323,14 +1328,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   continueButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,
     ...shadows.md,
+  },
+  gradientTouchable: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 16,
   },
   continueButtonText: {
     color: colors.white,
@@ -1338,7 +1347,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitButton: {
-    backgroundColor: colors.primary,
+    // Remove backgroundColor property
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
@@ -1346,15 +1355,23 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,
     ...shadows.md,
+    // Ensure gradient takes full height
+    minHeight: 50, // Adjust as needed
   },
-  submitButtonDisabled: {
-    backgroundColor: colors.textSecondary,
-    opacity: 0.6,
+  submitButtonTouchable: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Make touchable area match button size
+    paddingVertical: spacing.md,
   },
   submitButtonText: {
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
+  },
+  submitButtonDisabled: {
+    opacity: 0.7, // Adjust opacity for disabled state
   },
   acceptButton: {
     backgroundColor: colors.success,

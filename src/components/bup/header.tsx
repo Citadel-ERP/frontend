@@ -5,15 +5,18 @@ import { ThemeColors } from './types';
 
 interface HeaderProps {
   title: string;
-  onBack: () => void;
+  onBack?: () => void;
   onThemeToggle?: () => void;
   isDarkMode: boolean;
   theme: ThemeColors;
-  showThemeToggle?: boolean;
+  showBackButton?: boolean;
   showEditButton?: boolean;
   showSaveButton?: boolean;
+  showAddButton?: boolean;
   onEdit?: () => void;
   onSave?: () => void;
+  onAddPress?: () => void;
+  addButtonText?: string;
   loading?: boolean;
 }
 
@@ -30,11 +33,14 @@ const Header: React.FC<HeaderProps> = ({
   onThemeToggle,
   isDarkMode,
   theme,
-  showThemeToggle = false,
+  showBackButton = false,
   showEditButton = false,
   showSaveButton = false,
+  showAddButton = false,
   onEdit,
   onSave,
+  onAddPress,
+  addButtonText = '+ Add',
   loading = false,
 }) => {
   return (
@@ -67,9 +73,11 @@ const Header: React.FC<HeaderProps> = ({
         }]}>
           {/* Top row with back button and logo */}
           <View style={styles.headerTopRow}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack}>
-              <BackIcon />
-            </TouchableOpacity>
+            {showBackButton && onBack && (
+              <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                <BackIcon />
+              </TouchableOpacity>
+            )}
             
             <Text style={styles.logoText}>CITADEL</Text>
             
@@ -79,10 +87,10 @@ const Header: React.FC<HeaderProps> = ({
                   style={styles.editButton} 
                   onPress={onEdit}
                 >
-                  <Text style={[styles.editButtonText]}>Edit</Text>
+                  <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
               )}
-              {/* {showSaveButton && onSave && (
+              {showSaveButton && onSave && (
                 <TouchableOpacity 
                   style={[styles.saveButton, loading && styles.buttonDisabled]} 
                   onPress={onSave}
@@ -94,14 +102,15 @@ const Header: React.FC<HeaderProps> = ({
                     <Text style={styles.saveButtonText}>Save</Text>
                   )}
                 </TouchableOpacity>
-              )} */}
-              {/* {showThemeToggle && onThemeToggle && (
-                <TouchableOpacity onPress={onThemeToggle} style={styles.themeToggleButton}>
-                  <Text style={styles.themeIcon}>
-                    {isDarkMode ? '☀️' : '🌙'}
-                  </Text>
+              )}
+              {showAddButton && onAddPress && (
+                <TouchableOpacity 
+                  style={styles.addButton} 
+                  onPress={onAddPress}
+                >
+                  <Text style={styles.addButtonText}>{addButtonText}</Text>
                 </TouchableOpacity>
-              )} */}
+              )}
             </View>
           </View>
         </View>
@@ -232,14 +241,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
+  addButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  themeToggleButton: {
-    padding: 8,
-  },
-  themeIcon: {
-    fontSize: 20,
   },
 });
 

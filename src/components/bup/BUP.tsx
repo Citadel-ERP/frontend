@@ -4,37 +4,31 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
-  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../../config/config';
-import { BDTProps, Lead, ViewMode, ThemeColors, Pagination, FilterOption } from './types';
+import { BUPProps, Lead, ViewMode, ThemeColors, Pagination, FilterOption } from './types';
 import { lightTheme, darkTheme } from './theme';
 import Header from './header';
-import SearchAndFilter from './searchAndFilter';
+import Cities from './cities';
 import LeadsList from './list';
+import SearchAndFilter from './searchAndFilter';
 import LeadDetails from './leadDetails';
-import EditLead from './editLead';
-import Incentive from './incentive';
-import CreateInvoice from './createInvoice';
+import EditLead from './editDetails';
+import CreateLead from './createLead';
 
 const TOKEN_KEY = 'token_2';
 
-const BDT: React.FC<BDTProps> = ({ onBack }) => {
+const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>('city-selection');
+  const [selectedCity, setSelectedCity] = useState<string>('');
   const [token, setToken] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [pendingLeadUpdate, setPendingLeadUpdate] = useState<any>(null);
-  const [totalLeads, setTotalLeads] = useState<number>(0);
-  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
-
+  
   // State for list view
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,18 +39,27 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [filterValue, setFilterValue] = useState('');
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  
+  // State for detail view
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  
+  // Filtered leads
+  const filteredLeads = leads.filter(lead => {
+    let matchesFilter = true;
+    if (filterBy && filterValue) {
+      if (filterBy === 'status') {
+        matchesFilter = lead.status === filterValue;
+      } else if (filterBy === 'phase') {
+        matchesFilter = lead.phase === filterValue;
+      } else if (filterBy === 'subphase') {
+        matchesFilter = lead.subphase === filterValue;
+      }
+    }
+    return matchesFilter;
+  });
 
   const theme: ThemeColors = isDarkMode ? darkTheme : lightTheme;
-
-  // Handle Android back button
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleBackPress();
-      return true; // Prevent default behavior
-    });
-
-    return () => backHandler.remove();
-  }, [viewMode, isEditMode]);
 
   useEffect(() => {
     const checkDarkMode = async () => {
@@ -83,12 +86,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (token) {
+    if (token && selectedCity && viewMode === 'list') {
       fetchLeads(1);
       fetchPhases();
-      fetchStatusCounts();
     }
-  }, [token]);
+  }, [token, selectedCity, viewMode]);
 
   const toggleDarkMode = async () => {
     const newDarkMode = !isDarkMode;
@@ -96,62 +98,55 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     await AsyncStorage.setItem('dark_mode', newDarkMode.toString());
   };
 
-  const fetchStatusCounts = async (): Promise<void> => {
-    try {
-      if (!token) return;
-      const response = await fetch(`${BACKEND_URL}/employee/getLeadStatusCounts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token })
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setStatusCounts(data.status_counts || {});
-    } catch (error) {
-      console.error('Error fetching status counts:', error);
-      setStatusCounts({});
-    }
-  };
-
   const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
     try {
-      if (!token) return;
+      if (!token || !selectedCity) return;
       if (!append) {
         setLoading(true);
       } else {
         setLoadingMore(true);
       }
-      const response = await fetch(`${BACKEND_URL}/employee/getLeads`, {
+
+      const requestBody: any = {
+        token: token,
+        city: selectedCity,
+        page: page
+      };
+
+      if (filterBy && filterValue) {
+        requestBody.filters = {
+          [filterBy]: filterValue
+        };
+      }
+
+      const response = await fetch(`${BACKEND_URL}/manager/getLeads`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          token: token,
-          page: page
-        })
+        body: JSON.stringify(requestBody)
       });
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
       const data = await response.json();
+      
       const transformedLeads = data.leads.map((lead: any) => ({
         ...lead,
         createdAt: lead.created_at,
         collaborators: [],
         comments: []
       }));
+
       if (append) {
         setLeads(prevLeads => [...prevLeads, ...transformedLeads]);
       } else {
         setLeads(transformedLeads);
       }
+      
       setPagination(data.pagination || null);
-      setTotalLeads(data.total_leads || 0);
       setIsSearchMode(false);
     } catch (error) {
       console.error('Error fetching leads:', error);
@@ -165,15 +160,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   const fetchPhases = async (): Promise<void> => {
     try {
-      const response = await fetch(`${BACKEND_URL}/employee/getAllPhases`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllPhases`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
         }
       });
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
       const data = await response.json();
       const beautifyName = (name: string): string => {
         return name
@@ -190,15 +187,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   const fetchSubphases = async (phase: string): Promise<void> => {
     try {
-      const response = await fetch(`${BACKEND_URL}/employee/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         }
       });
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
       const data = await response.json();
       const beautifyName = (name: string): string => {
         return name
@@ -219,25 +218,31 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       fetchLeads(1);
       return;
     }
+
     try {
       setLoading(true);
       setIsSearchMode(true);
-      const response = await fetch(`${BACKEND_URL}/employee/searchLeads?query=${encodeURIComponent(query)}`, {
+
+      const response = await fetch(`${BACKEND_URL}/manager/searchLead?query=${encodeURIComponent(query)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         }
       });
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
       const data = await response.json();
+      
       const transformedLeads = data.leads.map((lead: any) => ({
         ...lead,
         createdAt: lead.created_at,
         collaborators: [],
         comments: []
       }));
+
       setLeads(transformedLeads);
       setPagination(null);
     } catch (error) {
@@ -273,91 +278,94 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   }, [isSearchMode, searchQuery]);
 
+  const handleCitySelection = (city: string) => {
+    setSelectedCity(city);
+    setViewMode('list');
+  };
+
   const handleLeadPress = (lead: Lead) => {
     setSelectedLead({ ...lead });
     setViewMode('detail');
     setIsEditMode(false);
   };
 
-  const handleIncentivePress = () => {
-    if (selectedLead) {
-      setViewMode('incentive');
-    }
-  };
-
-  // Updated back press handler with proper navigation flow
-  const handleBackPress = () => {
-    if (viewMode === 'incentive') {
-      // From incentive -> go back to lead details
-      setViewMode('detail');
-      setIsEditMode(false);
-    } else if (viewMode === 'detail' && isEditMode) {
-      // From edit mode -> go back to lead details (view mode)
-      setIsEditMode(false);
-    } else if (viewMode === 'detail' && !isEditMode) {
-      // From lead details -> go back to list
-      setViewMode('list');
-      setSelectedLead(null);
-      fetchLeads(1); // Refresh leads when going back to list
-    } else if (viewMode === 'list') {
-      // From list -> exit the BDT component
-      onBack();
-    }
-  };
-
   const handleBackToList = () => {
     setViewMode('list');
     setSelectedLead(null);
     setIsEditMode(false);
-    setPendingLeadUpdate(null);
     fetchLeads(1);
+  };
+
+  const handleBackToCitySelection = () => {
+    setViewMode('city-selection');
+    setSelectedCity('');
+    setLeads([]);
+    setSearchQuery('');
+    setFilterBy('');
+    setFilterValue('');
+    setIsSearchMode(false);
   };
 
   const handleEditPress = () => {
     setIsEditMode(true);
   };
 
+  const handleCreateLead = () => {
+    setViewMode('create');
+  };
+
   const updateLead = async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
       setLoading(true);
+      
       const updatePayload: any = {
         token: token,
         lead_id: selectedLead.id
       };
+      
       if (emails.length > 0) updatePayload.emails = emails;
       if (phones.length > 0) updatePayload.phone_numbers = phones;
+      if (leadData.name !== undefined) updatePayload.name = leadData.name;
+      if (leadData.company !== undefined) updatePayload.company = leadData.company;
       if (leadData.status !== undefined) updatePayload.status = leadData.status;
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
-      const response = await fetch(`${BACKEND_URL}/employee/updateLead`, {
+      if (leadData.city !== undefined) updatePayload.city = leadData.city;
+      
+      const response = await fetch(`${BACKEND_URL}/manager/updateLead`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(updatePayload)
       });
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
       const updatedLead = {
         ...data.lead,
         createdAt: data.lead.created_at,
-        collaborators: selectedLead.collaborators || [],
-        comments: selectedLead.comments || []
+        collaborators: [],
+        comments: []
       };
+      
       setSelectedLead(updatedLead);
-      setLeads(prevLeads =>
-        prevLeads.map(lead =>
+      setLeads(prevLeads => 
+        prevLeads.map(lead => 
           lead.id === selectedLead.id ? updatedLead : lead
         )
       );
+      
       Alert.alert('Success', 'Lead updated successfully!');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating lead:', error);
-      Alert.alert('Error', 'Failed to update lead. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to update lead. Please try again.');
       return false;
     } finally {
       setLoading(false);
@@ -365,118 +373,146 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   };
 
   const handleSaveLead = async (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => {
-    if (updatedLead.phase === 'post_property_finalization' && updatedLead.subphase === 'raise_invoice') {
-      setPendingLeadUpdate({
-        leadData: updatedLead,
-        editingEmails: editingEmails,
-        editingPhones: editingPhones
-      });
-      setShowInvoiceForm(true);
-    } else {
-      const success = await updateLead(updatedLead, editingEmails, editingPhones);
-      if (success) {
-        setIsEditMode(false);
-      }
+    const success = await updateLead(updatedLead, editingEmails, editingPhones);
+    if (success) {
+      setIsEditMode(false);
     }
-  };
-
-  const handleInvoiceCreated = async () => {
-    if (pendingLeadUpdate && selectedLead) {
-      const success = await updateLead(pendingLeadUpdate.leadData, pendingLeadUpdate.editingEmails, pendingLeadUpdate.editingPhones);
-      if (success) {
-        setIsEditMode(false);
-        setPendingLeadUpdate(null);
-        setShowInvoiceForm(false);
-      }
-    }
-  };
-
-  const handleInvoiceCancel = () => {
-    setPendingLeadUpdate(null);
-    setShowInvoiceForm(false);
   };
 
   const getHeaderTitle = () => {
-    if (viewMode === 'incentive') return 'Incentive Checklist';
+    if (viewMode === 'city-selection') return 'Select City';
+    if (viewMode === 'create') return 'Create New Lead';
     if (viewMode === 'detail') return 'Lead Details';
-    return 'BDT';
+    return `${selectedCity} - BUP`;
   };
 
   const renderContent = () => {
-    if (viewMode === 'incentive' && selectedLead) {
-      return (
-        <Incentive
-          onBack={handleBackPress}
-          leadId={selectedLead.id}
-          leadName={selectedLead.name}
-          hideHeader={true}
-        />
-      );
-    }
-    if (viewMode === 'detail' && selectedLead) {
-      if (isEditMode) {
+    switch (viewMode) {
+      case 'city-selection':
         return (
-          <EditLead
-            lead={selectedLead}
-            onBack={handleBackPress}
-            onSave={handleSaveLead}
+          <Cities
+            onCitySelect={handleCitySelection}
+            onBack={onBack}
+            theme={theme}
+          />
+        );
+      case 'create':
+        return (
+          <CreateLead
+            onBack={handleBackToList}
+            onCreate={() => {
+              fetchLeads(1);
+              setViewMode('list');
+            }}
+            selectedCity={selectedCity}
             token={token}
             theme={theme}
             fetchSubphases={fetchSubphases}
           />
         );
-      }
-      return (
-        <LeadDetails
-          lead={selectedLead}
-          onBack={handleBackPress}
-          onEdit={handleEditPress}
-          onIncentivePress={handleIncentivePress}
-          token={token}
-          theme={theme}
-        />
-      );
+      case 'detail':
+        if (!selectedLead) return null;
+        
+        if (isEditMode) {
+          return (
+            <EditLead
+              lead={selectedLead}
+              onBack={() => setIsEditMode(false)}
+              onSave={handleSaveLead}
+              token={token}
+              theme={theme}
+              fetchSubphases={fetchSubphases}
+              selectedCity={selectedCity}
+            />
+          );
+        }
+        
+        return (
+          <LeadDetails
+            lead={selectedLead}
+            onBack={handleBackToList}
+            onEdit={handleEditPress}
+            token={token}
+            theme={theme}
+          />
+        );
+      case 'list':
+      default:
+        return (
+          <>
+            <SearchAndFilter
+              token={token}
+              onSearch={handleSearch}
+              onFilter={handleFilter}
+              theme={theme}
+              allPhases={allPhases}
+              allSubphases={allSubphases}
+              fetchSubphases={fetchSubphases}
+              selectedCity={selectedCity}
+              onCreateLead={handleCreateLead}
+              onBack={handleBackToCitySelection}
+            />
+            <LeadsList
+              leads={filteredLeads}
+              onLeadPress={handleLeadPress}
+              loading={loading}
+              loadingMore={loadingMore}
+              refreshing={refreshing}
+              onLoadMore={handleLoadMore}
+              onRefresh={handleRefresh}
+              pagination={pagination}
+              isSearchMode={isSearchMode}
+              searchQuery={searchQuery}
+              token={token}
+              theme={theme}
+              isDarkMode={isDarkMode}
+            />
+          </>
+        );
     }
-    return (
-      <>
-        <SearchAndFilter
-          token={token}
-          onSearch={handleSearch}
-          onFilter={handleFilter}
-          theme={theme}
-          allPhases={allPhases}
-          allSubphases={allSubphases}
-          fetchSubphases={fetchSubphases}
-          totalLeads={totalLeads}
-          statusCounts={statusCounts}
-        />
-        <LeadsList
-          leads={leads.filter(lead => {
-            let matchesFilter = true;
-            if (filterBy && filterValue) {
-              if (filterBy === 'status') {
-                matchesFilter = lead.status === filterValue;
-              } else if (filterBy === 'phase') {
-                matchesFilter = lead.phase === filterValue;
-              } else if (filterBy === 'subphase') {
-                matchesFilter = lead.subphase === filterValue;
-              }
-            }
-            return matchesFilter;
-          })}
-          onLeadPress={handleLeadPress}
-          loading={loading}
-          loadingMore={loadingMore}
-          refreshing={refreshing}
-          onLoadMore={handleLoadMore}
-          onRefresh={handleRefresh}
-          token={token}
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
-      </>
-    );
   };
+
+  const getHeaderActions = () => {
+    if (viewMode === 'city-selection') {
+      return { showBackButton: true, onBackPress: onBack };
+    }
+    if (viewMode === 'list') {
+      return { 
+        showBackButton: true, 
+        onBackPress: handleBackToCitySelection,
+        showAddButton: true,
+        onAddPress: handleCreateLead,
+        addButtonText: '+ Lead'
+      };
+    }
+    if (viewMode === 'detail') {
+      if (isEditMode) {
+        return { 
+          showBackButton: true, 
+          onBackPress: () => setIsEditMode(false),
+          showSaveButton: true,
+          onSavePress: () => {} // Save is handled in EditLead component
+        };
+      }
+      return { 
+        showBackButton: true, 
+        onBackPress: handleBackToList,
+        showEditButton: true,
+        onEditPress: handleEditPress
+      };
+    }
+    if (viewMode === 'create') {
+      return { 
+        showBackButton: true, 
+        onBackPress: handleBackToList,
+        showSaveButton: true,
+        onSavePress: () => {} // Save is handled in CreateLead component
+      };
+    }
+    return { showBackButton: true, onBackPress: onBack };
+  };
+
+  const headerActions = getHeaderActions();
 
   return (
     <View style={[styles.container, { backgroundColor: 'transparent' }]}>
@@ -487,32 +523,15 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       />
       <Header
         title={getHeaderTitle()}
-        onBack={handleBackPress}
+        {...headerActions}
         onThemeToggle={toggleDarkMode}
         isDarkMode={isDarkMode}
         theme={theme}
-        showThemeToggle={viewMode === 'list'}
-        showEditButton={viewMode === 'detail' && !isEditMode}
-        onEdit={handleEditPress}
-        showSaveButton={viewMode === 'detail' && isEditMode}
-        onSave={() => {/* Save is handled in EditLead component */}}
         loading={loading}
       />
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         {renderContent()}
       </View>
-      {selectedLead && (
-        <CreateInvoice
-          visible={showInvoiceForm}
-          onClose={() => setShowInvoiceForm(false)}
-          leadId={selectedLead.id}
-          leadName={selectedLead.name}
-          onInvoiceCreated={handleInvoiceCreated}
-          onCancel={handleInvoiceCancel}
-          theme={theme}
-          token={token}
-        />
-      )}
     </View>
   );
 };
@@ -524,4 +543,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default BDT;
+export default BUP;
