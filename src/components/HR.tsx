@@ -33,9 +33,15 @@ const OTHER_OPTION: RequestNature = {
   description: 'Any other option not listed above'
 };
 
+// Add this helper function
+const getStatusBarHeight = () => {
+  return Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+};
+
 const BackIcon = () => (
   <View style={styles.backIcon}>
     <View style={styles.backArrow} />
+    <Text style={styles.backText}>Back</Text>
   </View>
 );
 
@@ -146,30 +152,47 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
   onOpenDropdown
 }) => {
   const insets = useSafeAreaInsets();
+  const statusBarHeight = getStatusBarHeight();
+  const headerHeight = 200 + (Platform.OS === 'android' ? statusBarHeight : 0);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
+    <View style={[styles.container, { paddingTop: 0 }]}>
+      {/* StatusBar configuration for Android */}
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="transparent"
+        translucent={true}
+      />
 
       {/* Add Dashboard-style Header */}
       <LinearGradient
         colors={['#4A5568', '#2D3748']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.headerBanner}
+        style={[styles.headerBanner, { 
+          height: headerHeight,
+          paddingTop: Platform.OS === 'android' ? statusBarHeight : 0 
+        }]}
       >
         <Image
-          source={require('../assets/background.jpg')}
-          style={styles.headerImage}
+          source={require('../assets/hr_bg.jpg')}
+          style={[styles.headerImage, { 
+            height: headerHeight,
+          }]}
           resizeMode="cover"
         />
-        <View style={[styles.headerOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
-        <View style={styles.headerContent}>
-          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+        <View style={[styles.headerOverlay, { 
+          height: headerHeight,
+          backgroundColor: 'rgba(0, 0, 0, 0.3)' 
+        }]} />
+        <View style={[styles.headerContent, { 
+          paddingTop: Platform.OS === 'ios' ? insets.top : 20,
+          height: headerHeight,
+        }]}>
+          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
               <View style={styles.backButtonContent}>
-                <Ionicons name="arrow-back" size={24} color="white" />
-                <Text style={styles.backButtonText}>Back</Text>
+                <BackIcon />
               </View>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>
@@ -180,7 +203,9 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
         </View>
       </LinearGradient>
 
-      <View style={styles.contentContainerBorder}>
+      <View style={[styles.contentContainerBorder, { 
+        marginTop: Platform.OS === 'android' ? 0 : -30 
+      }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -298,6 +323,8 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   loadingDetails
 }) => {
   const insets = useSafeAreaInsets();
+  const statusBarHeight = getStatusBarHeight();
+  const headerHeight = 200 + (Platform.OS === 'android' ? statusBarHeight : 0);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -322,24 +349,40 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
+    <View style={[styles.container, { paddingTop: 0 }]}>
+      {/* StatusBar configuration for Android */}
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="transparent"
+        translucent={true}
+      />
 
       {/* Add Dashboard-style Header */}
       <LinearGradient
         colors={['#4A5568', '#2D3748']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.headerBanner}
+        style={[styles.headerBanner, { 
+          height: headerHeight,
+          paddingTop: Platform.OS === 'android' ? statusBarHeight : 0 
+        }]}
       >
         <Image
-          source={require('../assets/background.jpg')}
-          style={styles.headerImage}
+          source={require('../assets/hr_bg.jpg')}
+          style={[styles.headerImage, { 
+            height: headerHeight,
+          }]}
           resizeMode="cover"
         />
-        <View style={[styles.headerOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
-        <View style={styles.headerContent}>
-          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+        <View style={[styles.headerOverlay, { 
+          height: headerHeight,
+          backgroundColor: 'rgba(0, 0, 0, 0.3)' 
+        }]} />
+        <View style={[styles.headerContent, { 
+          paddingTop: Platform.OS === 'ios' ? insets.top : 20,
+          height: headerHeight,
+        }]}>
+          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
               <View style={styles.backButtonContent}>
                 <Ionicons name="arrow-back" size={24} color="white" />
@@ -354,7 +397,9 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
         </View>
       </LinearGradient>
 
-      <View style={styles.contentContainerBorder}>
+      <View style={[styles.contentContainerBorder, { 
+        marginTop: Platform.OS === 'android' ? 0 : -30 
+      }]}>
         {loadingDetails ? (
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color="#007AFF" />
@@ -503,6 +548,9 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
 
 const HR: React.FC<HRProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
+  const statusBarHeight = getStatusBarHeight();
+  const headerHeight = 200 + (Platform.OS === 'android' ? statusBarHeight : 0);
+  
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('requests');
   const [loading, setLoading] = useState(false);
@@ -894,37 +942,58 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
+    <View style={[styles.container, { paddingTop: 0 }]}>
+      {/* StatusBar configuration for Android */}
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="transparent"
+        translucent={true}
+      />
       
       {/* Dashboard-style Header */}
       <LinearGradient
         colors={['#4A5568', '#2D3748']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.headerBanner}
+        style={[styles.headerBanner, { 
+          height: headerHeight,
+          paddingTop: Platform.OS === 'android' ? statusBarHeight : 0 
+        }]}
       >
         <Image
-          source={require('../assets/background.jpg')}
-          style={styles.headerImage}
+          source={require('../assets/hr_bg.jpg')}
+          style={[styles.headerImage, { 
+            height: headerHeight,
+          }]}
           resizeMode="cover"
         />
-        <View style={[styles.headerOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
-        <View style={styles.headerContent}>
-          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+        <View style={[styles.headerOverlay, { 
+          height: headerHeight,
+          backgroundColor: 'rgba(0, 0, 0, 0.3)' 
+        }]} />
+        <View style={[styles.headerContent, { 
+          paddingTop: Platform.OS === 'ios' ? insets.top : 20,
+          height: headerHeight,
+        }]}>
+          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
               <View style={styles.backButtonContent}>
-                <Ionicons name="arrow-back" size={24} color="white" />
-                <Text style={styles.backButtonText}>Back</Text>
+                <BackIcon />
               </View>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>HR Portal</Text>
+            <Text style={styles.logoText}>CITADEL</Text>
+            {/* <Text style={styles.headerTitle}>HR Portal</Text> */}
             <View style={styles.headerSpacer} />
           </View>
         </View>
+        <View style={styles.titleSection}>
+          <Text style={styles.sectionTitle}>HR Portal</Text>
+        </View>
       </LinearGradient>
 
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { 
+        marginTop: Platform.OS === 'android' ? 0 : -30 
+      }]}>
         {[
           { key: 'requests' as const, label: 'Requests', icon: '📝', count: requests.length },
           { key: 'grievances' as const, label: 'Grievances', icon: '⚖️', count: grievances.length }
@@ -1084,11 +1153,9 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-
   },
   // Dashboard-style header
   headerBanner: {
-    height: 200,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: 'hidden',
@@ -1097,16 +1164,20 @@ const styles = StyleSheet.create({
   headerImage: {
     position: 'absolute',
     width: '100%',
-    height: '100%',
-    opacity: 1,
+    top: 0,
+    left: 0,
+    right: 0,
   },
   headerOverlay: {
     position: 'absolute',
     width: '100%',
-    height: '100%',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   headerContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     position: 'relative',
     zIndex: 1,
   },
@@ -1216,20 +1287,6 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
-  },
-  backIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: colors.white,
-    transform: [{ rotate: '-45deg' }],
   },
   headerTitle: {
     fontSize: fontSize.xl,
@@ -1699,11 +1756,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-  },
   sectionDivider: {
     height: 2,
     flex: 1,
@@ -1858,6 +1910,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
   commentCharacterCount: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
@@ -1955,6 +2014,38 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 25,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
 
