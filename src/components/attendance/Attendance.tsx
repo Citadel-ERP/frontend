@@ -1192,11 +1192,11 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       <ReasonModal
         visible={showReasonModal}
         type={reasonModalType}
-        title={reasonModalType === 'checkin' ? 'Remote Attendance' : 'Early Checkout'}
+        title={reasonModalType === 'checkin' ? 'Remote Attendance' : 'Remote Checkout'}
         subtitle={
           reasonModalType === 'checkin'
             ? "You're not at the office location. Please select a reason for remote attendance:"
-            : "You're not at the office location. Please select a reason for early checkout:"
+            : "You're not at the office location. Please select a reason for remote checkout:"
         }
         selectedReason={selectedReason}
         onReasonSelect={setSelectedReason}
