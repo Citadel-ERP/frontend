@@ -95,15 +95,29 @@ function App(): React.JSX.Element {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
   }, []);
+
+  // Single unified useEffect for initializing all background services
   useEffect(() => {
     const initializeBackgroundServices = async () => {
       if (userData.isAuthenticated) {
         try {
           console.log('🚀 User authenticated, initializing all background services...');
 
-          // Initialize background attendance service
-          const attendanceResults = await BackgroundAttendanceService.initializeAll();
-          console.log('📊 Background attendance services:', attendanceResults);
+          // Initialize all attendance services (polling + geofencing)
+          const results = await BackgroundAttendanceService.initializeAll();
+          console.log('📊 Background attendance services:', results);
+
+          if (results.backgroundFetch) {
+            console.log('✅ Background fetch: Ready');
+          } else {
+            console.log('⚠️ Background fetch: Failed');
+          }
+
+          if (results.geofencing) {
+            console.log('✅ Geofencing: Active');
+          } else {
+            console.log('ℹ️ Geofencing: Not configured (office location needed)');
+          }
 
           // Initialize random location tracking
           const locationInitialized = await BackgroundLocationService.initialize();
@@ -121,39 +135,6 @@ function App(): React.JSX.Element {
     };
 
     initializeBackgroundServices();
-  }, [userData.isAuthenticated]);
-
-  // Initialize background service when user becomes authenticated
-  useEffect(() => {
-    const initializeBackgroundService = async () => {
-      if (userData.isAuthenticated) {
-        try {
-          console.log('🚀 User authenticated, initializing background services...');
-
-          // Initialize all background methods (fetch + geofencing)
-          const results = await BackgroundAttendanceService.initializeAll();
-
-          console.log('📊 Background services initialized:', results);
-
-          if (results.backgroundFetch) {
-            console.log('✅ Background fetch: Ready');
-          } else {
-            console.log('⚠️ Background fetch: Failed');
-          }
-
-          if (results.geofencing) {
-            console.log('✅ Geofencing: Active');
-          } else {
-            console.log('ℹ️ Geofencing: Not configured (office location needed)');
-          }
-
-        } catch (error) {
-          console.error('❌ Failed to initialize background services:', error);
-        }
-      }
-    };
-
-    initializeBackgroundService();
   }, [userData.isAuthenticated]);
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
