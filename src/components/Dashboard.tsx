@@ -298,10 +298,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Default modules for new users
   const defaultLastOpened: IconItem[] = [
-    { name: 'HR', color: '#00d285', icon: 'user-tie', library: 'fa5', module_unique_name: 'hr' },
-    { name: 'Car', color: '#ff5e7a', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
+    // { name: 'HR', color: '#00d285', icon: 'user-tie', library: 'fa5', module_unique_name: 'hr' },
+    // { name: 'Car', color: '#ff5e7a', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
     { name: 'Attendance', color: '#ffb157', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
-    { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
+    // { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
   ];
 
   // Debug logging function
@@ -1067,23 +1067,32 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
     } else if (key.includes('hr')) {
-      setShowHR(true);
+      // setShowHR(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('cab')) {
-      setShowCab(true);
+      // setShowCab(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('driver')) {
-      setShowDriver(true);
+      // setShowDriver(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
-      setShowBDT(true);
+      // setShowBDT(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
-      setShowMedical(true);
+      // setShowMedical(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('scout')) {
-      setShowScoutBoy(true);
+      // setShowScoutBoy(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('reminder')) {
-      setShowReminder(true); // This opens the Reminder page
+      // setShowReminder(true); 
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bup') || key.includes('business update')) {
-      setShowBUP(true);
+      // setShowBUP(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('employee_management')) {
-      setShowEmployeeManagement(true);
+      // setShowEmployeeManagement(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else {
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
@@ -1696,7 +1705,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             reminders={reminders}
             theme={theme}
             currentColors={currentColors}
-            onPress={() => setShowReminder(true)} // This makes the reminder card clickable
+            onPress={() => handleModulePress('Reminder')} // This makes the reminder card clickable
           />
 
           {/* Module Grid */}
@@ -1724,7 +1733,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             formatAnniversaryYears={formatAnniversaryYears}
           />
 
-          <View style={styles.themeSwitcher}>
+          {/* <View style={styles.themeSwitcher}>
             <TouchableOpacity
               style={[styles.lightSwitch, {
                 backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0',
@@ -1774,7 +1783,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 </View>
               </View>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Footer */}
           <View style={styles.footer}>
