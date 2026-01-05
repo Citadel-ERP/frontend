@@ -53,7 +53,10 @@ import UpcomingEvents from './dashboard/upcomingEvents';
 import BottomBar from './dashboard/bottomBar';
 
 import { BackgroundAttendanceService } from '../services/backgroundAttendance';
-import { BackgroundLocationService } from '../services/backgroundLocationTracking';
+import { GeofencingService } from '../services/geofencing';
+import { AttendanceUtils } from '../services/attendanceUtils';
+// Do not remove this line
+// import { BackgroundLocationService } from '../services/backgroundLocationTracking';
 import { BACKEND_URL } from '../config/config';
 
 const { width, height } = Dimensions.get('window');
@@ -530,7 +533,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           const data = notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
             debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
-            autoMarkAttendance();
+            // Use the shared utility function
+            AttendanceUtils.executeAttendanceFlow('manual', true);
           }
         });
 
@@ -538,7 +542,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           debugLog('👆 Notification tapped', response);
           const data = response.notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
-            autoMarkAttendance();
+            AttendanceUtils.executeAttendanceFlow('manual', true);
           } else if (data?.page) {
             handleNotificationNavigation(data.page as string);
           }
@@ -550,7 +554,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           const data = lastNotificationResponse.notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
             setTimeout(() => {
-              autoMarkAttendance();
+              AttendanceUtils.executeAttendanceFlow('manual', true);
             }, 1000);
           } else if (data?.page) {
             setTimeout(() => {
@@ -861,40 +865,54 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Initialize background services
   useEffect(() => {
     if (!token || !userData) return;
+
     const initializeBackgroundServices = async () => {
       try {
-        console.log('🚀 Initializing background services...');
-        await requestLocationPermissions();
-        const isExpoGo = Constants.appOwnership === 'expo';
-        if (!isExpoGo) {
-          try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-              await BackgroundAttendanceService.initializeAll();
-              if (userData?.office) {
-                const officeLocation = userData.office;
-                if (officeLocation.latitude && officeLocation.longitude) {
-                  await BackgroundAttendanceService.setOfficeLocation(
-                    officeLocation.latitude,
-                    officeLocation.longitude,
-                    50
-                  );
-                }
-              }
-              await BackgroundLocationService.initialize();
-            } else {
-              console.log('⚠️ Location permission not granted');
-            }
-          } catch (error) {
-            console.warn('⚠️ Background services not available in this environment:', error);
-          }
-        } else {
-          console.log('⚠️ Running in Expo Go - background services limited');
+        console.log('🚀 Initializing hybrid attendance system...');
+
+        // Request permissions
+        const permissions = await AttendanceUtils.requestLocationPermissions();
+
+        if (!permissions.foreground) {
+          console.log('❌ Location permissions not granted - attendance features disabled');
+          return;
         }
+
+        const isExpoGo = Constants.appOwnership === 'expo';
+        if (isExpoGo) {
+          console.log('⚠️ Running in Expo Go - background services limited');
+          return;
+        }
+
+        // Initialize polling service
+        const pollingInitialized = await BackgroundAttendanceService.initialize();
+        console.log(pollingInitialized
+          ? '✅ Polling service: Active'
+          : '❌ Polling service: Failed'
+        );
+
+        // Initialize geofencing service (only if background permission granted)
+        if (permissions.background) {
+          const geofencingInitialized = await GeofencingService.initialize();
+          console.log(geofencingInitialized
+            ? '✅ Geofencing service: Active'
+            : '⚠️ Geofencing service: Inactive'
+          );
+        } else {
+          console.log('⚠️ Background permission not granted - geofencing disabled');
+          console.log('   Polling will still work within working hours');
+        }
+
+        console.log('✅ Hybrid attendance system initialized');
+        console.log('   📊 Active mechanisms:');
+        console.log(`      - Polling: ${pollingInitialized ? 'Yes' : 'No'} (15-min intervals, 8-11 AM, Mon-Fri)`);
+        console.log(`      - Geofencing: ${permissions.background ? 'Yes' : 'No'} (50m radius, office entry)`);
+
       } catch (error) {
-        console.warn('⚠️ Failed to initialize background services:', error);
+        console.warn('⚠️ Failed to initialize attendance services:', error);
       }
     };
+
     initializeBackgroundServices();
   }, [token, userData]);
 
@@ -1237,8 +1255,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          await BackgroundAttendanceService.stopAll();
-          await BackgroundLocationService.stop();
+          // Stop both attendance services
+          await BackgroundAttendanceService.stop();
+          await GeofencingService.stop();
+          console.log('✅ All attendance services stopped');
+
           onLogout();
         }
       },
@@ -1322,7 +1343,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
       // setShowChat(true);
     } else if (item.id === 'notifications') {
-      setShowNotifications(true);  
+      setShowNotifications(true);
     } else {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     }

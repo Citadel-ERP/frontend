@@ -26,7 +26,8 @@
         "UIBackgroundModes": [
           "location",
           "fetch",
-          "remote-notification"
+          "remote-notification",
+          "processing"
         ],
 
         "NSLocationWhenInUseUsageDescription":
@@ -42,7 +43,10 @@
           "Camera access is required for Face ID authentication.",
 
         "NSFaceIDUsageDescription":
-          "Face ID is used to securely authenticate you."
+          "Face ID is used to securely authenticate you.",
+        "NSLocationTemporaryUsageDescriptionDictionary": {
+          "AttendanceTracking": "Your location is needed to verify you are at the office for attendance."
+        }
       }
     },
 
@@ -64,7 +68,11 @@
         "VIBRATE",
         "WAKE_LOCK",
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "USE_FINGERPRINT",
+        "RECEIVE_BOOT_COMPLETED",
+        "SYSTEM_ALERT_WINDOW",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+
       ]
     },
 
