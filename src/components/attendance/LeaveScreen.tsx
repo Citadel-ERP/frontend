@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Image,
+  Platform,
   RefreshControl
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -250,7 +251,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
           />
           <View style={styles.headerOverlay} />
 
-          <View style={styles.headerContent}>
+          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 :0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
             </TouchableOpacity>
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 30,
-    width: '100%',
+    width: '96%',
     position: 'absolute',
     top: 0,
     left: 0,
