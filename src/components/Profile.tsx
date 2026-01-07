@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,15 @@ import {
   ActivityIndicator,
   Modal,
   Dimensions,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { launchImageLibrary, launchCamera, ImagePickerResponse } from 'react-native-image-picker';
 import { BACKEND_URL } from '../config/config';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -33,6 +36,7 @@ interface UserData {
   employee_id?: string;
   home_address?: { address?: string };
   current_location?: { address?: string };
+  date_of_birth?: string;
 }
 
 interface Asset {
@@ -59,6 +63,7 @@ interface FormData {
   phoneNumber: string;
   homeAddress: string;
   currentLocation: string;
+  dateOfBirth: string;
 }
 
 interface ModalContent {
@@ -93,6 +98,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   const [modalContent, setModalContent] = useState<ModalContent>({});
   const [downloading, setDownloading] = useState(false);
   
+  // Date picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isDateSet, setIsDateSet] = useState(false);
+  
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
@@ -100,6 +110,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     phoneNumber: '',
     homeAddress: '',
     currentLocation: '',
+    dateOfBirth: '',
   });
   
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -142,6 +153,20 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   };
 
   const populateFormData = (user: UserData) => {
+    const dob = user.date_of_birth || '';
+    if (dob) {
+      const dateParts = dob.split('-');
+      if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]) - 1; // Months are 0-indexed
+        const day = parseInt(dateParts[2]);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          setSelectedDate(new Date(year, month, day));
+          setIsDateSet(true);
+        }
+      }
+    }
+    
     setFormData({
       firstName: user.first_name || '',
       lastName: user.last_name || '',
@@ -149,6 +174,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       phoneNumber: user.phone_number || '',
       homeAddress: user.home_address?.address || '',
       currentLocation: user.current_location?.address || '',
+      dateOfBirth: dob,
     });
   };
 
@@ -216,7 +242,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       const response = await fetch(`${BACKEND_URL}/core/updateProfile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, ...formData }),
+        body: JSON.stringify({ 
+          token, 
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          homeAddress: formData.homeAddress,
+          currentLocation: formData.currentLocation,
+          dateOfBirth: formData.dateOfBirth,
+        }),
       });
       
       const result = await response.json();
@@ -227,8 +260,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           ...prev,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          bio: formData.bio,
-          phone_number: formData.phoneNumber,
+          home_address: { address: formData.homeAddress },
+          current_location: { address: formData.currentLocation },
+          date_of_birth: formData.dateOfBirth,
         } : prev);
       } else {
         throw new Error(result.message || 'Update failed');
@@ -239,6 +273,45 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       setSaving(false);
     }
   };
+
+  const handleDateChange = (event: any, date?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    if (date) {
+      setSelectedDate(date);
+      setIsDateSet(true);
+      
+      // Format date as YYYY-MM-DD
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day}`;
+      
+      setFormData(prev => ({ ...prev, dateOfBirth: formattedDate }));
+    }
+  };
+
+  const showDatePickerModal = () => {
+    Keyboard.dismiss(); // Dismiss keyboard before showing date picker
+    setShowDatePicker(true);
+  };
+
+  const formatDisplayDate = (dateString: string) => {
+    if (!dateString) return 'Select Date';
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Select Date';
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  // Rest of your existing functions remain the same (handleImageUpload, handleImageResponse, handleDownloadIDCard, etc.)
 
   const handleImageUpload = () => {
     Alert.alert('Update Picture', 'Choose option', [
@@ -254,14 +327,16 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       formDataImage.append('token', token);
       formDataImage.append('profile_picture', {
         uri: response.assets[0].uri,
-        type: response.assets[0].type,
+        type: response.assets[0].type || 'image/jpeg',
         name: response.assets[0].fileName || 'profile.jpg',
       } as any);
 
       try {
         const res = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
           method: 'POST',
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
           body: formDataImage,
         });
         
@@ -269,8 +344,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         if (res.ok) {
           setUserData(prev => prev ? { ...prev, profile_picture: result.profile_picture_url } : prev);
           Alert.alert('Success', 'Profile picture updated!');
+        } else {
+          throw new Error(result.message || 'Upload failed');
         }
       } catch (error) {
+        console.error('Image upload error:', error);
         Alert.alert('Error', 'Failed to upload image');
       }
     }
@@ -343,7 +421,13 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           <Ionicons name="arrow-back" size={24} color={colors.background} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity onPress={() => setIsEditing(!isEditing)} style={styles.editButton}>
+        <TouchableOpacity 
+          onPress={() => {
+            Keyboard.dismiss();
+            setIsEditing(!isEditing);
+          }} 
+          style={styles.editButton}
+        >
           <Ionicons name={isEditing ? "close" : "create-outline"} size={24} color={colors.background} />
         </TouchableOpacity>
       </View>
@@ -385,77 +469,141 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           {userData?.bio || 'Hey there! I am using WhatsApp.'}
         </Text>
       )}
-      
-      {/*<TouchableOpacity style={[styles.shareButton, { backgroundColor: colors.borderLight }]}>
-        <Ionicons name="arrow-redo" size={20} color={colors.text} />
-        <Text style={[styles.shareButtonText, { color: colors.text }]}>Share profile</Text>
-      </TouchableOpacity>*/}
     </View>
   );
 
-  const EditProfileSection = () => (
-    <View style={[styles.editSection, { backgroundColor: colors.background }]}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Profile</Text>
-      
-      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>First name</Text>
-        <TextInput
-          style={[styles.input, { color: colors.text }]}
-          value={formData.firstName}
-          onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
-          placeholder="Enter first name"
-          placeholderTextColor={colors.textTertiary}
-        />
-      </View>
-      
-      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Last name</Text>
-        <TextInput
-          style={[styles.input, { color: colors.text }]}
-          value={formData.lastName}
-          onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
-          placeholder="Enter last name"
-          placeholderTextColor={colors.textTertiary}
-        />
-      </View>
-      
-      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Phone number</Text>
-        <TextInput
-          style={[styles.input, { color: colors.text }]}
-          value={formData.phoneNumber}
-          onChangeText={(text) => setFormData(prev => ({ ...prev, phoneNumber: text }))}
-          placeholder="Enter phone number"
-          placeholderTextColor={colors.textTertiary}
-          keyboardType="phone-pad"
-        />
-      </View>
-      
-      <View style={styles.saveButtonContainer}>
-        <TouchableOpacity 
-          style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]} 
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.background} />
-          ) : (
-            <Text style={[styles.saveButtonText, { color: colors.background }]}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
+  const EditProfileSection = () => {
+    return (
+      <View style={[styles.editSection, { backgroundColor: colors.background }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Profile</Text>
         
-        <TouchableOpacity 
-          style={[styles.cancelButton, { borderColor: colors.border }]} 
-          onPress={() => {
-            setIsEditing(false);
-            if (userData) populateFormData(userData);
-          }}
-        >
-          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
-        </TouchableOpacity>
+        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>First name</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            value={formData.firstName}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
+            placeholder="Enter first name"
+            placeholderTextColor={colors.textTertiary}
+          />
+        </View>
+        
+        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Last name</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            value={formData.lastName}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
+            placeholder="Enter last name"
+            placeholderTextColor={colors.textTertiary}
+          />
+        </View>
+        
+        {/* Phone number field - Read Only */}
+        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Phone number</Text>
+          <TextInput
+            style={[styles.input, { color: colors.textTertiary }]}
+            value={formData.phoneNumber}
+            editable={false}
+            placeholder="Phone number (not editable)"
+            placeholderTextColor={colors.textTertiary}
+          />
+          <Text style={[styles.readOnlyNote, { color: colors.textTertiary }]}>
+            Contact admin to change phone number
+          </Text>
+        </View>
+        
+        {/* Home Address field */}
+        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Home Address</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            value={formData.homeAddress}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, homeAddress: text }))}
+            placeholder="Enter home address"
+            placeholderTextColor={colors.textTertiary}
+            multiline
+          />
+        </View>
+        
+        {/* Current Address field */}
+        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Current Address</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            value={formData.currentLocation}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, currentLocation: text }))}
+            placeholder="Enter current address"
+            placeholderTextColor={colors.textTertiary}
+            multiline
+          />
+        </View>
+        
+        {/* Date of Birth field with dropdown */}
+        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
+          
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={showDatePickerModal}
+          >
+            <Text style={[
+              styles.datePickerText, 
+              { color: formData.dateOfBirth ? colors.text : colors.textTertiary }
+            ]}>
+              {formatDisplayDate(formData.dateOfBirth)}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color={colors.icon} />
+          </TouchableOpacity>
+          
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+              textColor={colors.text}
+            />
+          )}
+          
+          {formData.dateOfBirth && (
+            <Text style={[styles.dateFormatNote, { color: colors.textTertiary }]}>
+              Selected: {formData.dateOfBirth}
+            </Text>
+          )}
+        </View>
+        
+        <View style={styles.saveButtonContainer}>
+          <TouchableOpacity 
+            style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]} 
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <Text style={[styles.saveButtonText, { color: colors.background }]}>Save Changes</Text>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.cancelButton, { borderColor: colors.border }]} 
+            onPress={() => {
+              Keyboard.dismiss();
+              setIsEditing(false);
+              if (userData) populateFormData(userData);
+            }}
+          >
+            <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
+
+  // Rest of your component remains the same (MenuSection, FeaturesSection, renderModalContent, etc.)
 
   const MenuSection = () => (
     <View style={[styles.menuSection, { backgroundColor: colors.background }]}>
@@ -464,7 +612,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         subtitle={userData?.phone_number || 'Not provided'}
         icon="call-outline"
         onPress={() => {
-          setModalContent({ title: 'Phone', type: 'personal', content: userData });
+          setModalContent({ title: 'Phone', type: 'personal', content: userData?.phone_number || 'Not provided' });
           setModalVisible(true);
         }}
         isFirst={true}
@@ -475,7 +623,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         subtitle={userData?.email || 'Not provided'}
         icon="mail-outline"
         onPress={() => {
-          setModalContent({ title: 'Email', type: 'personal', content: userData });
+          setModalContent({ title: 'Email', type: 'personal', content: userData?.email || 'Not provided' });
           setModalVisible(true);
         }}
       />
@@ -485,7 +633,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         subtitle={userData?.designation || userData?.role || 'Not provided'}
         icon="briefcase-outline"
         onPress={() => {
-          setModalContent({ title: 'Designation', type: 'personal', content: userData });
+          setModalContent({ title: 'Designation', type: 'personal', content: userData?.designation || userData?.role || 'Not provided' });
           setModalVisible(true);
         }}
       />
@@ -495,7 +643,37 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         subtitle={userData?.employee_id || 'Not provided'}
         icon="card-outline"
         onPress={() => {
-          setModalContent({ title: 'Employee ID', type: 'personal', content: userData });
+          setModalContent({ title: 'Employee ID', type: 'personal', content: userData?.employee_id || 'Not provided' });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Date of Birth"
+        subtitle={userData?.date_of_birth || 'Not provided'}
+        icon="calendar-outline"
+        onPress={() => {
+          setModalContent({ title: 'Date of Birth', type: 'personal', content: userData?.date_of_birth || 'Not provided' });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Home Address"
+        subtitle={userData?.home_address?.address || 'Not provided'}
+        icon="home-outline"
+        onPress={() => {
+          setModalContent({ title: 'Home Address', type: 'personal', content: userData?.home_address?.address || 'Not provided' });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Current Address"
+        subtitle={userData?.current_location?.address || 'Not provided'}
+        icon="location-outline"
+        onPress={() => {
+          setModalContent({ title: 'Current Address', type: 'personal', content: userData?.current_location?.address || 'Not provided' });
           setModalVisible(true);
         }}
       />
@@ -590,6 +768,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 <Text style={[styles.idEmail, { color: colors.textTertiary }]}>
                   {userData?.email || ''}
                 </Text>
+                {userData?.date_of_birth && (
+                  <Text style={[styles.idDob, { color: colors.textTertiary }]}>
+                    DOB: {userData.date_of_birth}
+                  </Text>
+                )}
               </View>
             </View>
             
@@ -647,6 +830,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         <ProfileSection />
         
@@ -659,11 +843,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           </>
         )}
         
-        {/* Spacer for bottom */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Modal */}
       <Modal
         visible={modalVisible}
         transparent
@@ -706,7 +888,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   
-  // Header Styles
   header: {
     paddingBottom: 20,
   },
@@ -735,7 +916,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   
-  // Scroll View
   scrollView: {
     flex: 1,
   },
@@ -743,7 +923,6 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   
-  // Profile Section
   profileSection: {
     alignItems: 'center',
     paddingVertical: 32,
@@ -803,20 +982,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1,
   },
-  shareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
-  },
-  shareButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
   
-  // Edit Section
   editSection: {
     paddingHorizontal: 16,
     paddingVertical: 20,
@@ -839,6 +1005,15 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 16,
     paddingVertical: 4,
+  },
+  readOnlyNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  dateFormatNote: {
+    fontSize: 12,
+    marginTop: 4,
   },
   saveButtonContainer: {
     marginTop: 8,
@@ -864,7 +1039,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // Menu Section
+  // Date picker styles
+  datePickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  datePickerText: {
+    fontSize: 16,
+  },
+  
   menuSection: {
     borderRadius: 0,
     overflow: 'hidden',
@@ -900,7 +1085,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -936,7 +1120,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   
-  // ID Card Modal
   modalIDCard: {
     padding: 20,
     borderRadius: 16,
@@ -997,6 +1180,10 @@ const styles = StyleSheet.create({
   idEmail: {
     fontSize: 13,
   },
+  idDob: {
+    fontSize: 13,
+    marginTop: 2,
+  },
   downloadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1010,7 +1197,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // Spacer
   bottomSpacer: {
     height: 20,
   },
