@@ -13,44 +13,45 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { BACKEND_URL } from '../config/config';
 
 const { width } = Dimensions.get('window');
 
-// Theme Colors
-const lightColors = {
-  primary: '#FFFFFF',
-  backgroundSecondary: '#F8F9FA',
-  text: '#1A1A1A',
-  textSecondary: '#666666',
-  textLight: '#999999',
-  border: '#E5E7EB',
-  info: '#3B82F6',
-  error: '#EF4444',
-  success: '#10B981',
-  warning: '#F59E0B',
-  headerBg: '#007AFF', // Changed to #007AFF
-  gradientStart: '#007AFF',
-  gradientEnd: '#0056CC',
-};
-
-const darkColors = {
-  primary: '#000D24',
-  backgroundSecondary: '#0C1D33',
-  text: '#FFFFFF',
-  textSecondary: '#CCCCCC',
-  textLight: '#999999',
-  border: '#404040',
-  info: '#3B82F6',
-  error: '#EF4444',
-  success: '#10B981',
-  warning: '#F59E0B',
-  headerBg: '#007AFF', // Changed to #007AFF
-  gradientStart: '#007AFF',
-  gradientEnd: '#0056CC',
+// WhatsApp Colors
+const whatsappColors = {
+  dark: {
+    background: '#111B21',
+    card: '#202C33',
+    text: '#E9EDEF',
+    textSecondary: '#8696A0',
+    textLight: '#667781',
+    border: '#2A3942',
+    primary: '#008069',
+    accent: '#00A884',
+    header: '#202C33',
+    icon: '#AEBAC1',
+    danger: '#F15C6D',
+    warning: '#F59E0B',
+    unread: '#53BDEB',
+  },
+  light: {
+    background: '#FFFFFF',
+    card: '#F0F2F5',
+    text: '#111B21',
+    textSecondary: '#667781',
+    textLight: '#8696A0',
+    border: '#E1E8ED',
+    primary: '#008069',
+    accent: '#00A884',
+    header: '#008069',
+    icon: '#8696A0',
+    danger: '#F15C6D',
+    warning: '#F59E0B',
+    unread: '#008069',
+  }
 };
 
 interface Notification {
@@ -71,24 +72,10 @@ interface NotificationsProps {
   isDark?: boolean;
 }
 
-// BackIcon component from city.tsx
-const BackIcon = () => (
-  <View style={styles.backIcon}>
-    <View style={styles.backArrow} />
-    <Text style={styles.backText}>Back</Text>
-  </View>
-);
-
 const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false }) => {
-  const currentColors = isDark ? darkColors : lightColors;
-  const theme = {
-    bgColor: isDark ? '#050b18' : '#f8f9fa',
-    cardBg: isDark ? '#111a2d' : '#ffffff',
-    textMain: isDark ? '#ffffff' : '#333333',
-    textSub: isDark ? '#a0a0a0' : '#666666',
-    accentBlue: isDark ? '#3262f1' : '#007bff',
-  };
-
+  const insets = useSafeAreaInsets();
+  const currentColors = isDark ? whatsappColors.dark : whatsappColors.light;
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -111,7 +98,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
         body: JSON.stringify({ token }),
       });
 
-      // Update local state
       setNotifications(prev =>
         prev.map(notif => ({ ...notif, isRead: true }))
       );
@@ -137,13 +123,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
           formatNotification(notif)
         );
         
-        // Sort notifications: unread first, then by time (newest first)
         formattedNotifications.sort((a: Notification, b: Notification) => {
-          // First sort by read status (unread first)
           if (a.isRead !== b.isRead) {
             return a.isRead ? 1 : -1;
           }
-          // Then sort by time (newest first based on created_at)
           if (a.created_at && b.created_at) {
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           }
@@ -183,7 +166,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
       timeText = `${diffDays}d ago`;
       category = 'week';
     } else {
-      timeText = `${Math.floor(diffDays / 7)}w ago`;
+      timeText = createdAt.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
       category = 'earlier';
     }
 
@@ -219,18 +205,18 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
 
   const getNotificationColor = (type: string) => {
     const colorMap: { [key: string]: string } = {
-      attendance: '#00d285',
-      hr: '#ff5e7a',
-      cab: '#ffb157',
-      leave: '#1da1f2',
-      reminder: '#1da1f2',
-      success: currentColors.success,
-      warning: currentColors.warning,
-      error: currentColors.error,
-      info: currentColors.info,
-      system: '#6b7cff',
+      attendance: '#00A884',
+      hr: '#FF7B54',
+      cab: '#FF9F45',
+      leave: '#4D96FF',
+      reminder: '#4D96FF',
+      success: '#00A884',
+      warning: '#FFD93D',
+      error: '#FF6B6B',
+      info: '#6BCFFF',
+      system: '#9D79D6',
     };
-    return colorMap[type] || currentColors.info;
+    return colorMap[type] || currentColors.accent;
   };
 
   const handleMarkAsRead = async (id: string) => {
@@ -288,62 +274,60 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
     setModalVisible(true);
   };
 
-  const groupedNotifications = {
-    today: notifications.filter(n => n.category === 'today'),
-    week: notifications.filter(n => n.category === 'week'),
-    earlier: notifications.filter(n => n.category === 'earlier'),
-  };
-
-  const NotificationCard = ({ notification }: { notification: Notification }) => {
-    const [isDeleting, setIsDeleting] = useState(false);
-
-    const handleDeletePress = () => {
-      Alert.alert(
-        'Delete Notification',
-        'Are you sure you want to delete this notification?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              setIsDeleting(true);
-              setTimeout(() => handleDelete(notification.id), 200);
-            },
-          },
-        ]
-      );
-    };
-
-    return (
-      <Animated.View
-        style={[
-          styles.notificationCard,
-          {
-            backgroundColor: theme.cardBg,
-            borderLeftColor: getNotificationColor(notification.type),
-            opacity: isDeleting ? 0 : 1,
-            transform: [{ scale: isDeleting ? 0.9 : 1 }],
-          }
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.notificationContent}
-          onPress={() => handleNotificationPress(notification)}
+  const renderHeader = () => (
+    <View style={[styles.header, { 
+      backgroundColor: currentColors.header,
+      paddingTop: Platform.OS === 'ios' ? insets.top : 10,
+    }]}>
+      <View style={styles.headerContent}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={onBack}
           activeOpacity={0.7}
         >
-          <View
-            style={[
-              styles.iconContainer,
-              {
-                backgroundColor: `${getNotificationColor(notification.type)}20`,
-              }
-            ]}
-          >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <TouchableOpacity 
+          style={styles.markAllButton}
+          onPress={markAllNotificationsAsRead}
+          disabled={notifications.every(n => n.isRead)}
+        >
+          <Ionicons 
+            name="checkmark-done" 
+            size={22} 
+            color={notifications.every(n => n.isRead) ? 'rgba(255,255,255,0.5)' : '#FFFFFF'} 
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const NotificationCard = ({ notification }: { notification: Notification }) => {
+    const notificationColor = getNotificationColor(notification.type);
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.notificationCard,
+          { 
+            backgroundColor: currentColors.card,
+            borderLeftColor: notificationColor,
+          }
+        ]}
+        onPress={() => handleNotificationPress(notification)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.notificationContent}>
+          <View style={[
+            styles.iconContainer,
+            { backgroundColor: `${notificationColor}15` }
+          ]}>
             <Ionicons
               name={notification.icon as any}
-              size={24}
-              color={getNotificationColor(notification.type)}
+              size={22}
+              color={notificationColor}
             />
           </View>
 
@@ -352,168 +336,172 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
               <Text
                 style={[
                   styles.notificationTitle,
-                  {
-                    color: theme.textMain,
-                    fontWeight: notification.isRead ? '500' : '700',
+                  { 
+                    color: currentColors.text,
+                    fontWeight: notification.isRead ? '400' : '500',
                   }
                 ]}
                 numberOfLines={1}
               >
                 {notification.title}
               </Text>
-              {!notification.isRead && (
-                <View
-                  style={[
-                    styles.unreadDot,
-                    { backgroundColor: '#00d285' } // Changed to #00d285
-                  ]}
-                />
-              )}
+              <Text style={[styles.notificationTime, { color: currentColors.textSecondary }]}>
+                {notification.time}
+              </Text>
             </View>
+            
             <Text
               style={[
                 styles.notificationMessage,
-                { color: theme.textSub }
+                { 
+                  color: notification.isRead ? currentColors.textSecondary : currentColors.text,
+                }
               ]}
               numberOfLines={2}
             >
               {notification.message}
             </Text>
-            <View style={styles.timeContainer}>
-              <Ionicons
-                name="time-outline"
-                size={12}
-                color={theme.textSub}
-              />
-              <Text
-                style={[
-                  styles.notificationTime,
-                  { color: theme.textSub }
-                ]}
-              >
-                {notification.time}
-              </Text>
-            </View>
+            
+            {!notification.isRead && (
+              <View style={styles.unreadIndicator}>
+                <View style={[styles.unreadDot, { backgroundColor: currentColors.unread }]} />
+                <Text style={[styles.unreadText, { color: currentColors.unread }]}>
+                  New
+                </Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
-            onPress={handleDeletePress}
+            onPress={() => {
+              Alert.alert(
+                'Delete Notification',
+                'Are you sure you want to delete this notification?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => handleDelete(notification.id),
+                  },
+                ]
+              );
+            }}
             style={styles.deleteButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="close-circle" size={20} color={theme.textSub} />
+            <Ionicons name="close" size={18} color={currentColors.textSecondary} />
           </TouchableOpacity>
-        </TouchableOpacity>
-      </Animated.View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
   const SectionHeader = ({ title, count }: { title: string; count: number }) => (
     count > 0 ? (
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.textMain }]}>
+        <Text style={[styles.sectionTitle, { color: currentColors.textSecondary }]}>
           {title}
         </Text>
-        <View style={[styles.countBadge, { backgroundColor: theme.accentBlue }]}>
-          <Text style={styles.countText}>{count}</Text>
+        <View style={[styles.countBadge, { backgroundColor: currentColors.textSecondary + '20' }]}>
+          <Text style={[styles.countText, { color: currentColors.textSecondary }]}>{count}</Text>
         </View>
       </View>
     ) : null
   );
 
+  const groupedNotifications = {
+    today: notifications.filter(n => n.category === 'today'),
+    week: notifications.filter(n => n.category === 'week'),
+    earlier: notifications.filter(n => n.category === 'earlier'),
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.bgColor }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'light-content'}
-        backgroundColor={currentColors.headerBg}
+    <View style={[styles.container, { backgroundColor: currentColors.background }]}>
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor={currentColors.header} 
       />
-
+      
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: '#007AFF' }]}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.backButton}
-          >
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          {/* Removed the mark all as read button */}
-          <View style={styles.placeholderButton} />
-        </View>
-      </View>
-
-      {/* Notifications List */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.accentBlue}
-            colors={[theme.accentBlue]}
-          />
-        }
-      >
-        {loading ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyMessage, { color: theme.textSub }]}>
-              Loading notifications...
-            </Text>
-          </View>
-        ) : notifications.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View
-              style={[
-                styles.emptyIconContainer,
-                { backgroundColor: `${theme.accentBlue}20` }
-              ]}
-            >
-              <Ionicons
-                name="notifications-off-outline"
-                size={64}
-                color={theme.textSub}
-              />
+      {renderHeader()}
+      
+      {/* Main Content */}
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={currentColors.accent}
+              colors={[currentColors.accent]}
+            />
+          }
+        >
+          {loading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={[styles.emptyMessage, { color: currentColors.textSecondary }]}>
+                Loading notifications...
+              </Text>
             </View>
-            <Text style={[styles.emptyTitle, { color: theme.textMain }]}>
-              No Notifications
-            </Text>
-            <Text style={[styles.emptyMessage, { color: theme.textSub }]}>
-              You don't have any notifications yet.
-            </Text>
-          </View>
-        ) : (
-          <>
-            {groupedNotifications.today.length > 0 && (
-              <>
-                <SectionHeader title="Today" count={groupedNotifications.today.length} />
-                {groupedNotifications.today.map(notification => (
-                  <NotificationCard key={notification.id} notification={notification} />
-                ))}
-              </>
-            )}
+          ) : notifications.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View
+                style={[
+                  styles.emptyIconContainer,
+                  { backgroundColor: currentColors.card }
+                ]}
+              >
+                <Ionicons
+                  name="notifications-off-outline"
+                  size={48}
+                  color={currentColors.textSecondary}
+                />
+              </View>
+              <Text style={[styles.emptyTitle, { color: currentColors.text }]}>
+                No notifications
+              </Text>
+              <Text style={[styles.emptyMessage, { color: currentColors.textSecondary }]}>
+                When you get notifications, they'll appear here
+              </Text>
+            </View>
+          ) : (
+            <>
+              {groupedNotifications.today.length > 0 && (
+                <>
+                  <SectionHeader title="Today" count={groupedNotifications.today.length} />
+                  {groupedNotifications.today.map(notification => (
+                    <NotificationCard key={notification.id} notification={notification} />
+                  ))}
+                </>
+              )}
 
-            {groupedNotifications.week.length > 0 && (
-              <>
-                <SectionHeader title="This Week" count={groupedNotifications.week.length} />
-                {groupedNotifications.week.map(notification => (
-                  <NotificationCard key={notification.id} notification={notification} />
-                ))}
-              </>
-            )}
+              {groupedNotifications.week.length > 0 && (
+                <>
+                  <SectionHeader title="This Week" count={groupedNotifications.week.length} />
+                  {groupedNotifications.week.map(notification => (
+                    <NotificationCard key={notification.id} notification={notification} />
+                  ))}
+                </>
+              )}
 
-            {groupedNotifications.earlier.length > 0 && (
-              <>
-                <SectionHeader title="Earlier" count={groupedNotifications.earlier.length} />
-                {groupedNotifications.earlier.map(notification => (
-                  <NotificationCard key={notification.id} notification={notification} />
-                ))}
-              </>
-            )}
-          </>
-        )}
-      </ScrollView>
+              {groupedNotifications.earlier.length > 0 && (
+                <>
+                  <SectionHeader title="Earlier" count={groupedNotifications.earlier.length} />
+                  {groupedNotifications.earlier.map(notification => (
+                    <NotificationCard key={notification.id} notification={notification} />
+                  ))}
+                </>
+              )}
+            </>
+          )}
+          
+          <View style={styles.bottomSpacing} />
+        </ScrollView>
+      </SafeAreaView>
 
       {/* Notification Detail Modal */}
       <Modal
@@ -525,67 +513,78 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
         <View style={styles.modalOverlay}>
           <View style={[
             styles.modalContainer,
-            { backgroundColor: theme.cardBg }
+            { backgroundColor: currentColors.background }
           ]}>
+            {/* Modal Header */}
+            <View style={[styles.modalHeader, { backgroundColor: currentColors.card }]}>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color={currentColors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.modalHeaderTitle, { color: currentColors.text }]}>
+                Notification
+              </Text>
+              <View style={styles.modalHeaderSpacer} />
+            </View>
+
             {selectedNotification && (
-              <>
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalIconContainer}>
-                    <View
-                      style={[
-                        styles.modalIconBackground,
-                        { backgroundColor: `${getNotificationColor(selectedNotification.type)}20` }
-                      ]}
-                    >
-                      <Ionicons
-                        name={selectedNotification.icon as any}
-                        size={28}
-                        color={getNotificationColor(selectedNotification.type)}
-                      />
+              <ScrollView style={styles.modalContent}>
+                <View style={styles.modalIconRow}>
+                  <View
+                    style={[
+                      styles.modalIconContainer,
+                      { backgroundColor: `${getNotificationColor(selectedNotification.type)}15` }
+                    ]}
+                  >
+                    <Ionicons
+                      name={selectedNotification.icon as any}
+                      size={28}
+                      color={getNotificationColor(selectedNotification.type)}
+                    />
+                  </View>
+                  <View style={styles.modalTitleContainer}>
+                    <Text style={[styles.modalTitle, { color: currentColors.text }]}>
+                      {selectedNotification.title}
+                    </Text>
+                    <View style={styles.modalTimeRow}>
+                      <Ionicons name="time-outline" size={14} color={currentColors.textSecondary} />
+                      <Text style={[styles.modalTime, { color: currentColors.textSecondary }]}>
+                        {selectedNotification.time}
+                      </Text>
                     </View>
                   </View>
-                  <TouchableOpacity
-                    style={styles.modalCloseButton}
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Ionicons name="close" size={24} color={theme.textMain} />
-                  </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.modalContent}>
-                  <Text style={[
-                    styles.modalTitle,
-                    { color: theme.textMain }
-                  ]}>
-                    {selectedNotification.title}
-                  </Text>
-                  
-                  <Text style={[
-                    styles.modalTime,
-                    { color: theme.textSub }
-                  ]}>
-                    <Ionicons name="time-outline" size={14} color={theme.textSub} />
-                    {' '}{selectedNotification.time}
-                  </Text>
-
-                  <Text style={[
-                    styles.modalMessage,
-                    { color: theme.textMain }
-                  ]}>
+                <View style={[styles.modalMessageContainer, { backgroundColor: currentColors.card }]}>
+                  <Text style={[styles.modalMessage, { color: currentColors.text }]}>
                     {selectedNotification.message}
                   </Text>
-                </ScrollView>
+                </View>
 
-                <TouchableOpacity
-                  style={[
-                    styles.modalButton,
-                    { backgroundColor: '#007AFF' }
-                  ]}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Close</Text>
-                </TouchableOpacity>
-              </>
+                <View style={styles.modalActions}>
+                  {selectedNotification.page && (
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, { backgroundColor: currentColors.primary }]}
+                      onPress={() => {
+                        setModalVisible(false);
+                        // Navigate to the page if needed
+                      }}
+                    >
+                      <Text style={styles.modalActionButtonText}>Open</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.modalActionButton, { backgroundColor: currentColors.card }]}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text style={[styles.modalActionButtonText, { color: currentColors.text }]}>
+                      Close
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -598,85 +597,95 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  safeArea: {
+    flex: 1,
+  },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 50 : 50,
-    paddingBottom: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    zIndex: 1000,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 20,
   },
   backButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginLeft: 8,
   },
   headerTitle: {
-    color: 'white',
+    flex: 1,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginLeft: -40,
   },
-  placeholderButton: {
+  markAllButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 15,
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   countBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   countText: {
-    color: 'white',
     fontSize: 12,
     fontWeight: '600',
   },
   notificationCard: {
-    marginBottom: 12,
-    borderRadius: 12,
+    borderRadius: 10,
+    marginBottom: 8,
     borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    overflow: 'hidden',
   },
   notificationContent: {
     flexDirection: 'row',
-    padding: 16,
     alignItems: 'flex-start',
+    padding: 16,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   notificationTextContainer: {
@@ -685,78 +694,67 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   notificationTitle: {
-    fontSize: 15,
+    fontSize: 16,
     flex: 1,
+    marginRight: 8,
+  },
+  notificationTime: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  unreadIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginLeft: 8,
+    marginRight: 6,
   },
-  notificationMessage: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  notificationTime: {
+  unreadText: {
     fontSize: 12,
-    marginLeft: 4,
+    fontWeight: '500',
   },
   deleteButton: {
     padding: 4,
   },
   emptyContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 100,
+    paddingVertical: 60,
   },
   emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
     marginBottom: 8,
   },
   emptyMessage: {
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
     paddingHorizontal: 40,
   },
-  // BackIcon styles from city.tsx
-  backIcon: {
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#fff',
-    transform: [{ rotate: '-45deg' }],
-  },
-  backText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 2,
+  bottomSpacing: {
+    height: 20,
   },
   // Modal styles
   modalOverlay: {
@@ -767,62 +765,84 @@ const styles = StyleSheet.create({
   modalContainer: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalHeaderSpacer: {
+    width: 40,
+  },
+  modalContent: {
+    padding: 16,
+  },
+  modalIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   modalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  modalTitleContainer: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  modalTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  modalIconBackground: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCloseButton: {
-    padding: 5,
-  },
-  modalContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
   modalTime: {
     fontSize: 14,
+    marginLeft: 6,
+  },
+  modalMessageContainer: {
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 20,
   },
   modalMessage: {
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 20,
   },
-  modalButton: {
-    marginHorizontal: 20,
-    paddingVertical: 15,
-    borderRadius: 12,
+  modalActions: {
+    gap: 12,
+  },
+  modalActionButton: {
+    borderRadius: 8,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center',
   },
-  modalButtonText: {
-    color: 'white',
+  modalActionButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 
