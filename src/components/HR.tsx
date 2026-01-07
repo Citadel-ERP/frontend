@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
-  Dimensions, KeyboardAvoidingView, FlatList, Image,
+  Dimensions, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
-import { BACKEND_URL } from '../config/config';
 import { Ionicons } from '@expo/vector-icons';
+import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const TOKEN_KEY = 'token_2';
@@ -33,17 +31,27 @@ const OTHER_OPTION: RequestNature = {
   description: 'Any other option not listed above'
 };
 
-// Add this helper function
+// WhatsApp colors
+const WHATSAPP_COLORS = {
+  primary: '#128C7E',
+  primaryDark: '#075E54',
+  primaryLight: '#25D366',
+  background: '#E5DDD5',
+  chatBackground: '#ECE5DD',
+  white: '#FFFFFF',
+  lightGray: '#F0F0F0',
+  gray: '#757575',
+  darkGray: '#4A4A4A',
+  blue: '#34B7F1',
+  orange: '#FF9800',
+  red: '#F44336',
+  green: '#25D366',
+  yellow: '#FFC107'
+};
+
 const getStatusBarHeight = () => {
   return Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
 };
-
-const BackIcon = () => (
-  <View style={styles.backIcon}>
-    <View style={styles.backArrow} />
-    <Text style={styles.backText}>Back</Text>
-  </View>
-);
 
 interface DropdownModalProps {
   visible: boolean;
@@ -72,62 +80,71 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.dropdownOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.dropdownContainer}>
-            <View style={styles.searchContainer}>
-              <TextInput
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={onSearchChange}
-                placeholder={`Search ${activeTab === 'requests' ? 'requests' : 'grievances'}...`}
-                placeholderTextColor={colors.textSecondary}
-                autoFocus={true}
-              />
-              <Text style={styles.searchIcon}>🔍</Text>
-            </View>
-            <FlatList
-              data={filteredNatures}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              style={styles.dropdownList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => onSelectNature(item)}
-                >
-                  <View style={styles.dropdownItemContent}>
-                    <Text style={styles.dropdownItemText}>{item.name}</Text>
-                    {item.description && (
-                      <Text style={styles.dropdownItemDescription} numberOfLines={2}>
-                        {item.description}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.dropdownItemArrow}>
-                    <Text style={styles.arrowIcon}>→</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={() => (
-                <View style={styles.emptyDropdown}>
-                  <Text style={styles.emptyDropdownIcon}>🔍</Text>
-                  <Text style={styles.emptyDropdownText}>
-                    No {activeTab} found matching "{searchQuery}"
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
+            <Ionicons name="arrow-back" size={24} color={WHATSAPP_COLORS.white} />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>
+            Select {activeTab === 'requests' ? 'Request' : 'Grievance'} Type
+          </Text>
+          <View style={styles.modalSpacer} />
+        </View>
+        
+        <View style={styles.searchContainerModal}>
+          <Ionicons name="search" size={20} color={WHATSAPP_COLORS.gray} style={styles.searchIconModal} />
+          <TextInput
+            style={styles.searchInputModal}
+            value={searchQuery}
+            onChangeText={onSearchChange}
+            placeholder={`Search ${activeTab === 'requests' ? 'requests' : 'grievances'}...`}
+            placeholderTextColor={WHATSAPP_COLORS.gray}
+            autoFocus={true}
+          />
+        </View>
+        
+        <FlatList
+          data={filteredNatures}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          style={styles.dropdownList}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => onSelectNature(item)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.dropdownItemIcon}>
+                <Ionicons 
+                  name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
+                  size={24} 
+                  color={WHATSAPP_COLORS.primary} 
+                />
+              </View>
+              <View style={styles.dropdownItemContent}>
+                <Text style={styles.dropdownItemText}>{item.name}</Text>
+                {item.description && (
+                  <Text style={styles.dropdownItemDescription} numberOfLines={2}>
+                    {item.description}
                   </Text>
-                </View>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
+                )}
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.gray} />
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyDropdown}>
+              <Ionicons name="search-outline" size={60} color={WHATSAPP_COLORS.gray} />
+              <Text style={styles.emptyDropdownText}>
+                No {activeTab} found matching "{searchQuery}"
+              </Text>
+            </View>
+          )}
+        />
+      </View>
     </Modal>
   );
 };
@@ -152,150 +169,112 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
   onOpenDropdown
 }) => {
   const insets = useSafeAreaInsets();
-  const statusBarHeight = getStatusBarHeight();
-  const headerHeight = 200 + (Platform.OS === 'android' ? statusBarHeight : 0);
 
   return (
-    <View style={[styles.container, { paddingTop: 0 }]}>
-      {/* StatusBar configuration for Android */}
+    <View style={styles.container}>
       <StatusBar 
         barStyle="light-content" 
-        backgroundColor="transparent"
-        translucent={true}
+        backgroundColor={WHATSAPP_COLORS.primaryDark}
       />
 
-      {/* Add Dashboard-style Header */}
-      <LinearGradient
-        colors={['#4A5568', '#2D3748']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.headerBanner, { 
-          height: headerHeight,
-          paddingTop: Platform.OS === 'android' ? statusBarHeight : 0 
-        }]}
-      >
-        <Image
-          source={require('../assets/hr_bg.jpg')}
-          style={[styles.headerImage, { 
-            height: headerHeight,
-          }]}
-          resizeMode="cover"
-        />
-        <View style={[styles.headerOverlay, { 
-          height: headerHeight,
-          backgroundColor: 'rgba(0, 0, 0, 0.3)' 
-        }]} />
-        <View style={[styles.headerContent, { 
-          paddingTop: Platform.OS === 'ios' ? insets.top : 20,
-          height: headerHeight,
-        }]}>
-          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 0 }]}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <View style={styles.backButtonContent}>
-                <BackIcon />
-              </View>
-            </TouchableOpacity>
+      {/* WhatsApp-style Header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={WHATSAPP_COLORS.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>
               New {activeTab === 'requests' ? 'Request' : 'Grievance'}
             </Text>
-            <View style={styles.headerSpacer} />
+            <Text style={styles.headerSubtitle}>
+              Submit to HR Department
+            </Text>
           </View>
+          <View style={styles.headerRight} />
         </View>
-      </LinearGradient>
+      </View>
 
-      <View style={[styles.contentContainerBorder, { 
-        marginTop: Platform.OS === 'android' ? 0 : -30 
-      }]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+      <View style={styles.content}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <ScrollView
-            style={styles.scrollView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.formHeader}>
-              <Text style={styles.formHeaderTitle}>
-                Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
+          <View style={styles.formCard}>
+            {/* Nature Selection */}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>
+                Type of {activeTab === 'requests' ? 'Request' : 'Grievance'}
               </Text>
-              <Text style={styles.formHeaderDescription}>
-                Please provide the details for your {activeTab === 'requests' ? 'request' : 'grievance'}. 
-                All fields marked with * are required.
-              </Text>
+              <TouchableOpacity
+                style={styles.selectField}
+                onPress={onOpenDropdown}
+                activeOpacity={0.7}
+              >
+                <View style={styles.selectFieldLeft}>
+                  <Ionicons 
+                    name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
+                    size={20} 
+                    color={WHATSAPP_COLORS.primary} 
+                    style={styles.fieldIcon}
+                  />
+                  <Text style={[
+                    styles.selectFieldText,
+                    !newItemForm.natureName && styles.placeholderText
+                  ]}>
+                    {newItemForm.natureName || 'Select type...'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color={WHATSAPP_COLORS.gray} />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.formCard}>
-              <View style={styles.inputGroup}>
-                <View style={styles.inputLabelRow}>
-                  <Text style={styles.inputLabel}>
-                    Nature of {activeTab === 'requests' ? 'Request' : 'Grievance'} *
-                  </Text>
-                  <Text style={styles.requiredIndicator}>Required</Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.selectButton,
-                    !newItemForm.natureName && styles.selectButtonPlaceholder
-                  ]}
-                  onPress={onOpenDropdown}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.selectButtonContent}>
-                    <Text style={[
-                      styles.selectButtonText,
-                      !newItemForm.natureName && styles.selectPlaceholder
-                    ]}>
-                      {newItemForm.natureName || `Select ${activeTab === 'requests' ? 'request' : 'grievance'} type`}
-                    </Text>
-                    <Text style={styles.selectArrow}>▼</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <View style={styles.inputLabelRow}>
-                  <Text style={styles.inputLabel}>Description *</Text>
-                  <Text style={styles.requiredIndicator}>Required</Text>
-                </View>
+            {/* Description */}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Description</Text>
+              <View style={styles.textAreaContainer}>
                 <TextInput
                   style={styles.textArea}
                   value={newItemForm.description}
                   onChangeText={(text) => onFormChange({ ...newItemForm, description: text })}
-                  placeholder={`Please provide detailed description of your ${activeTab.slice(0, -1)}`}
-                  placeholderTextColor={colors.textSecondary}
+                  placeholder={`Describe your ${activeTab.slice(0, -1)} in detail...`}
+                  placeholderTextColor={WHATSAPP_COLORS.gray}
                   multiline
-                  numberOfLines={6}
+                  numberOfLines={8}
                   textAlignVertical="top"
                 />
-                <Text style={styles.characterCount}>
-                  {newItemForm.description.length}/500 characters
-                </Text>
+                <View style={styles.characterCounter}>
+                  <Text style={styles.characterCount}>
+                    {newItemForm.description.length}/500
+                  </Text>
+                </View>
               </View>
             </View>
-          </ScrollView>
+          </View>
 
-          <View style={styles.submitFooter}>
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                (!newItemForm.nature || !newItemForm.description.trim()) && styles.submitButtonDisabled
-              ]}
-              onPress={onSubmit}
-              disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              (!newItemForm.nature || !newItemForm.description.trim()) && styles.submitButtonDisabled
+            ]}
+            onPress={onSubmit}
+            disabled={loading || !newItemForm.nature || !newItemForm.description.trim()}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+            ) : (
+              <View style={styles.submitButtonContent}>
+                <Ionicons name="paper-plane-outline" size={20} color={WHATSAPP_COLORS.white} />
                 <Text style={styles.submitButtonText}>
                   Submit {activeTab === 'requests' ? 'Request' : 'Grievance'}
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+              </View>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     </View>
   );
@@ -323,223 +302,217 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   loadingDetails
 }) => {
   const insets = useSafeAreaInsets();
-  const statusBarHeight = getStatusBarHeight();
-  const headerHeight = 200 + (Platform.OS === 'android' ? statusBarHeight : 0);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  const formatDateTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
-  const getStatusConfig = (status: string): { color: string, icon: string, label: string } => {
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const getStatusConfig = (status: string): { color: string, label: string } => {
     switch (status) {
-      case 'resolved': return { color: '#28A745', icon: '✓', label: 'Resolved' };
-      case 'rejected': return { color: '#DC3545', icon: '✗', label: 'Rejected' };
-      case 'in_progress': return { color: '#3B82F6', icon: '⏳', label: 'In Progress' };
-      case 'pending': return { color: '#FFC107', icon: '⏱', label: 'Pending' };
-      default: return { color: colors.textSecondary, icon: '•', label: status };
+      case 'resolved': return { color: WHATSAPP_COLORS.green, label: 'Resolved' };
+      case 'rejected': return { color: WHATSAPP_COLORS.red, label: 'Rejected' };
+      case 'in_progress': return { color: WHATSAPP_COLORS.blue, label: 'In Progress' };
+      case 'pending': return { color: WHATSAPP_COLORS.yellow, label: 'Pending' };
+      default: return { color: WHATSAPP_COLORS.gray, label: status };
     }
   };
 
+  // FIXED: Proper comment count logic
+  const totalComments = item?.comments?.length || 0;
+
   return (
-    <View style={[styles.container, { paddingTop: 0 }]}>
-      {/* StatusBar configuration for Android */}
+    <View style={styles.container}>
       <StatusBar 
         barStyle="light-content" 
-        backgroundColor="transparent"
-        translucent={true}
+        backgroundColor={WHATSAPP_COLORS.primaryDark}
       />
 
-      {/* Add Dashboard-style Header */}
-      <LinearGradient
-        colors={['#4A5568', '#2D3748']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.headerBanner, { 
-          height: headerHeight,
-          paddingTop: Platform.OS === 'android' ? statusBarHeight : 0 
-        }]}
-      >
-        <Image
-          source={require('../assets/hr_bg.jpg')}
-          style={[styles.headerImage, { 
-            height: headerHeight,
-          }]}
-          resizeMode="cover"
-        />
-        <View style={[styles.headerOverlay, { 
-          height: headerHeight,
-          backgroundColor: 'rgba(0, 0, 0, 0.3)' 
-        }]} />
-        <View style={[styles.headerContent, { 
-          paddingTop: Platform.OS === 'ios' ? insets.top : 20,
-          height: headerHeight,
-        }]}>
-          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 0 }]}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <View style={styles.backButtonContent}>
-                <Ionicons name="arrow-back" size={24} color="white" />
-                <Text style={styles.backButtonText}>Back</Text>
-              </View>
-            </TouchableOpacity>
+      {/* WhatsApp-style Header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={WHATSAPP_COLORS.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>
               {activeTab === 'requests' ? 'Request' : 'Grievance'} Details
             </Text>
-            <View style={styles.headerSpacer} />
+            <Text style={styles.headerSubtitle}>
+              {item?.nature || 'Loading...'}
+            </Text>
           </View>
+          <View style={styles.headerRight} />
         </View>
-      </LinearGradient>
+      </View>
 
-      <View style={[styles.contentContainerBorder, { 
-        marginTop: Platform.OS === 'android' ? 0 : -30 
-      }]}>
+      <View style={styles.content}>
         {loadingDetails ? (
           <View style={styles.centerContent}>
-            <ActivityIndicator size="large" color="#007AFF" />
+            <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
             <Text style={styles.loadingText}>Loading details...</Text>
           </View>
         ) : item ? (
-          <ScrollView
-            style={styles.scrollView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.detailScrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.detailHeaderCard}>
-              <View style={styles.detailHeaderContent}>
-                <Text style={styles.detailNature}>{item.nature}</Text>
-                <View style={styles.detailMetaRow}>
-                  <View style={styles.detailMetaItem}>
-                    <Text style={styles.detailMetaIcon}>📅</Text>
-                    <Text style={styles.detailMetaText}>Created {formatDate(item.created_at)}</Text>
-                  </View>
-                  <View style={styles.detailMetaItem}>
-                    <Text style={styles.detailMetaIcon}>🔄</Text>
-                    <Text style={styles.detailMetaText}>Updated {formatDate(item.updated_at)}</Text>
+          <View style={styles.chatContainer}>
+            {/* Request Info - WhatsApp-style Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.infoHeader}>
+                <View style={styles.infoTitleRow}>
+                  <Text style={styles.infoTitle}>{item.nature}</Text>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: getStatusConfig(item.status).color }
+                  ]}>
+                    <Text style={styles.statusText}>{getStatusConfig(item.status).label}</Text>
                   </View>
                 </View>
+                <Text style={styles.infoDate}>
+                  Submitted on {formatDate(item.created_at)}
+                </Text>
               </View>
-              <View style={[
-                styles.detailStatusBadge,
-                { backgroundColor: getStatusConfig(item.status).color }
-              ]}>
-                <Text style={styles.detailStatusIcon}>{getStatusConfig(item.status).icon}</Text>
-                <Text style={styles.detailStatusText}>
-                  {getStatusConfig(item.status).label}
+              <View style={styles.infoBody}>
+                <Text style={styles.infoDescription}>
+                  {item.description || item.issue}
+                </Text>
+              </View>
+              <View style={styles.infoFooter}>
+                <Text style={styles.infoFooterText}>
+                  Last updated: {formatDate(item.updated_at)}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.detailCard}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Description</Text>
-                <View style={styles.sectionDivider} />
-              </View>
-              <Text style={styles.descriptionText}>
-                {item.description || item.issue}
-              </Text>
+            {/* Comments/Conversation Header */}
+            <View style={styles.commentsHeader}>
+              <View style={styles.commentsHeaderLine} />
+              <Text style={styles.commentsTitle}>Discussion</Text>
+              <View style={styles.commentsHeaderLine} />
             </View>
 
-            <View style={styles.commentsSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Discussion</Text>
-                <View style={styles.commentCountBadge}>
-                  <Text style={styles.commentCountText}>{item.comments?.length || 0}</Text>
-                </View>
+            {/* Comments Count Badge */}
+            {totalComments > 0 && (
+              <View style={styles.commentCountBadge}>
+                <Text style={styles.commentCountBadgeText}>
+                  {totalComments} {totalComments === 1 ? 'comment' : 'comments'}
+                </Text>
               </View>
+            )}
 
+            {/* Comments List with WhatsApp-style chat */}
+            <ScrollView 
+              style={styles.commentsList}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.commentsListContent}
+            >
               {item.comments && item.comments.length > 0 ? (
-                <View style={styles.commentsList}>
-                  {item.comments.map((comment) => (
-                    <View key={comment.id} style={[
-                      styles.commentCard,
-                      comment.is_hr_comment && styles.hrCommentCard
-                    ]}>
-                      <View style={styles.commentHeader}>
-                        <View style={styles.commentAuthorInfo}>
-                          <View style={[
-                            styles.commentAvatar,
-                            comment.is_hr_comment && styles.hrCommentAvatar
+                item.comments.map((comment) => {
+                  // FIXED: WhatsApp-style alignment logic
+                  // Determine if message is from current user or other user
+                  // Assuming is_hr_comment = true means HR user (other user)
+                  // and is_hr_comment = false means current user (employee)
+                  const isCurrentUser = !comment.is_hr_comment;
+                  
+                  return (
+                    <View 
+                      key={comment.id} 
+                      style={[
+                        styles.messageContainer,
+                        // Current user's messages on RIGHT side
+                        isCurrentUser ? styles.userMessageContainer : styles.hrMessageContainer
+                      ]}
+                    >
+                      <View style={[
+                        styles.messageBubbleWrapper,
+                        isCurrentUser ? styles.userMessageWrapper : styles.hrMessageWrapper
+                      ]}>
+                        {/* WhatsApp-style message bubble */}
+                        <View style={[
+                          styles.messageBubble,
+                          // Different colors for user vs HR messages
+                          isCurrentUser ? styles.userMessageBubble : styles.hrMessageBubble
+                        ]}>
+                          <Text style={[
+                            styles.messageText,
+                            // Different text colors
+                            isCurrentUser ? styles.userMessageText : styles.hrMessageText
                           ]}>
-                            <Text style={styles.commentAvatarText}>
-                              {comment.created_by_name.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                          <View>
-                            <View style={styles.commentAuthorRow}>
-                              <Text style={[
-                                styles.commentAuthor,
-                                comment.is_hr_comment && styles.hrCommentAuthor
-                              ]}>
-                                {comment.created_by_name}
-                              </Text>
-                              {comment.is_hr_comment && (
-                                <View style={styles.hrBadge}>
-                                  <Text style={styles.hrBadgeText}>HR Team</Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text style={styles.commentTime}>
-                              {formatDateTime(comment.created_at)}
+                            {comment.comment}
+                          </Text>
+                          <View style={styles.messageTimeContainer}>
+                            <Text style={[
+                              styles.messageTime,
+                              // Different time text colors
+                              isCurrentUser ? styles.userMessageTime : styles.hrMessageTime
+                            ]}>
+                              {formatTime(comment.created_at)}
                             </Text>
                           </View>
                         </View>
+                        {/* Sender name for HR messages (other users) */}
+                        {!isCurrentUser && (
+                          <Text style={styles.messageSender}>
+                            {comment.created_by_name} • HR Team
+                          </Text>
+                        )}
                       </View>
-                      <Text style={styles.commentContent}>{comment.comment}</Text>
                     </View>
-                  ))}
-                </View>
+                  );
+                })
               ) : (
-                <View style={styles.noCommentsContainer}>
-                  <Text style={styles.noCommentsIcon}>💬</Text>
+                <View style={styles.noComments}>
+                  <Ionicons name="chatbubble-outline" size={60} color={WHATSAPP_COLORS.gray} />
                   <Text style={styles.noCommentsTitle}>No comments yet</Text>
-                  <Text style={styles.noCommentsSubtext}>Be the first to add a comment</Text>
+                  <Text style={styles.noCommentsText}>
+                    Start the conversation by adding a comment
+                  </Text>
                 </View>
               )}
+            </ScrollView>
 
-              <View style={styles.addCommentCard}>
-                <Text style={styles.addCommentLabel}>Add Your Comment</Text>
+            {/* Comment Input - WhatsApp-style */}
+            <View style={styles.commentInputContainer}>
+              <View style={styles.commentInputWrapper}>
                 <TextInput
-                  style={styles.commentTextArea}
+                  style={styles.commentInput}
                   value={newComment}
                   onChangeText={onCommentChange}
-                  placeholder="Type your comment here..."
-                  placeholderTextColor={colors.textSecondary}
+                  placeholder="Type a message..."
+                  placeholderTextColor={WHATSAPP_COLORS.gray}
                   multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
+                  maxLength={300}
                 />
-                <View style={styles.commentActionRow}>
-                  <Text style={styles.commentCharacterCount}>
-                    {newComment.length}/300 characters
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.commentButton,
-                      (!newComment.trim()) && styles.commentButtonDisabled
-                    ]}
-                    onPress={onAddComment}
-                    disabled={loading || !newComment.trim()}
-                    activeOpacity={0.8}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color={colors.white} size="small" />
-                    ) : (
-                      <Text style={styles.commentButtonText}>Post Comment</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    !newComment.trim() && styles.sendButtonDisabled
+                  ]}
+                  onPress={onAddComment}
+                  disabled={loading || !newComment.trim()}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+                  ) : (
+                    <Ionicons name="send" size={20} color={WHATSAPP_COLORS.white} />
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={{ height: 24 }} />
-          </ScrollView>
+          </View>
         ) : null}
       </View>
     </View>
@@ -548,8 +521,6 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
 
 const HR: React.FC<HRProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  const statusBarHeight = getStatusBarHeight();
-  const headerHeight = 200 + (Platform.OS === 'android' ? statusBarHeight : 0);
   
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('requests');
@@ -665,15 +636,19 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
           const data = await response.json();
           const grievancesData = data.grievances || [];
           
-          const transformedGrievances = grievancesData.map((grievance: any) => ({
-            id: grievance.id.toString(),
-            nature: grievance.nature,
-            description: grievance.issue,
-            issue: grievance.issue,
-            status: grievance.status,
-            created_at: grievance.created_at,
-            updated_at: grievance.updated_at,
-            comments: []
+          // FIXED: Fetch comments count for each grievance
+          const transformedGrievances = await Promise.all(grievancesData.map(async (grievance: any) => {
+            const commentsCount = await fetchCommentsCount(grievance.id, 'grievance');
+            return {
+              id: grievance.id.toString(),
+              nature: grievance.nature,
+              description: grievance.issue,
+              issue: grievance.issue,
+              status: grievance.status,
+              created_at: grievance.created_at,
+              updated_at: grievance.updated_at,
+              comments: new Array(commentsCount).fill({}) // Create array with correct length
+            };
           }));
           
           setGrievances(transformedGrievances);
@@ -690,8 +665,24 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
         if (response.ok) {
           const data = await response.json();
-          const items = data.requests || [];
-          setRequests(items);
+          const itemsData = data.requests || [];
+          
+          // FIXED: Fetch comments count for each request
+          const transformedRequests = await Promise.all(itemsData.map(async (item: any) => {
+            const commentsCount = await fetchCommentsCount(item.id, 'request');
+            return {
+              id: item.id.toString(),
+              nature: item.nature,
+              description: item.description,
+              issue: item.issue,
+              status: item.status,
+              created_at: item.created_at,
+              updated_at: item.updated_at,
+              comments: new Array(commentsCount).fill({}) // Create array with correct length
+            };
+          }));
+          
+          setRequests(transformedRequests);
         } else {
           setRequests([]);
         }
@@ -700,6 +691,37 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       console.error(`Error fetching ${activeTab}:`, error);
       if (activeTab === 'requests') setRequests([]);
       else setGrievances([]);
+    }
+  };
+
+  // NEW FUNCTION: Fetch comments count for an item
+  const fetchCommentsCount = async (itemId: string, type: 'request' | 'grievance'): Promise<number> => {
+    if (!token) return 0;
+    
+    try {
+      const endpoint = type === 'request' ? 'getRequest' : 'getGrievance';
+      const idField = type === 'request' ? 'request_id' : 'grievance_id';
+      
+      const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          [idField]: parseInt(itemId)
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const itemData = type === 'request' ? data.request : data.grievance;
+        
+        // Return the actual comment count from backend
+        return itemData.comments?.length || 0;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error fetching comments count:', error);
+      return 0;
     }
   };
 
@@ -724,6 +746,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         const data = await response.json();
         const itemData = activeTab === 'requests' ? data.request : data.grievance;
         
+        // FIXED: Properly count comments from backend response
         const transformedComments = itemData.comments?.map((commentWrapper: any) => {
           const comment = commentWrapper.comment;
           return {
@@ -732,6 +755,9 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             created_by: comment.user.employee_id,
             created_by_name: comment.user.full_name,
             created_at: comment.created_at,
+            // FIXED: Determine if comment is from HR or user
+            // Assuming user's own comments are when created_by matches current user
+            // For demo, we'll assume HR comments have role === 'hr'
             is_hr_comment: comment.user.role === 'hr'
           };
         }) || [];
@@ -775,7 +801,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     setSelectedItem(null);
     setNewComment('');
     if (token) {
-      fetchItems();
+      fetchItems(); // Refresh the list to update comment counts
     }
   };
 
@@ -885,16 +911,19 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    });
   };
 
-  const getStatusConfig = (status: string): { color: string, icon: string, label: string } => {
+  const getStatusConfig = (status: string): { color: string, label: string } => {
     switch (status) {
-      case 'resolved': return { color: '#28A745', icon: '✓', label: 'Resolved' };
-      case 'rejected': return { color: '#DC3545', icon: '✗', label: 'Rejected' };
-      case 'in_progress': return { color: '#3B82F6', icon: '⏳', label: 'In Progress' };
-      case 'pending': return { color: '#FFC107', icon: '⏱', label: 'Pending' };
-      default: return { color: colors.textSecondary, icon: '•', label: status };
+      case 'resolved': return { color: WHATSAPP_COLORS.green, label: 'Resolved' };
+      case 'rejected': return { color: WHATSAPP_COLORS.red, label: 'Rejected' };
+      case 'in_progress': return { color: WHATSAPP_COLORS.blue, label: 'In Progress' };
+      case 'pending': return { color: WHATSAPP_COLORS.yellow, label: 'Pending' };
+      default: return { color: WHATSAPP_COLORS.gray, label: status };
     }
   };
 
@@ -942,208 +971,180 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: 0 }]}>
-      {/* StatusBar configuration for Android */}
+    <View style={styles.container}>
       <StatusBar 
         barStyle="light-content" 
-        backgroundColor="transparent"
-        translucent={true}
+        backgroundColor={WHATSAPP_COLORS.primaryDark}
       />
-      
-      {/* Dashboard-style Header */}
-      <LinearGradient
-        colors={['#4A5568', '#2D3748']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.headerBanner, { 
-          height: headerHeight,
-          paddingTop: Platform.OS === 'android' ? statusBarHeight : 0 
-        }]}
-      >
-        <Image
-          source={require('../assets/hr_bg.jpg')}
-          style={[styles.headerImage, { 
-            height: headerHeight,
-          }]}
-          resizeMode="cover"
-        />
-        <View style={[styles.headerOverlay, { 
-          height: headerHeight,
-          backgroundColor: 'rgba(0, 0, 0, 0.3)' 
-        }]} />
-        <View style={[styles.headerContent, { 
-          paddingTop: Platform.OS === 'ios' ? insets.top : 20,
-          height: headerHeight,
-        }]}>
-          <View style={[styles.topNav, { marginTop: Platform.OS === 'ios' ? 10 : 0 }]}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <View style={styles.backButtonContent}>
-                <BackIcon />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.logoText}>CITADEL</Text>
-            {/* <Text style={styles.headerTitle}>HR Portal</Text> */}
-            <View style={styles.headerSpacer} />
-          </View>
-        </View>
-        <View style={styles.titleSection}>
-          <Text style={styles.sectionTitle}>HR Portal</Text>
-        </View>
-      </LinearGradient>
 
-      <View style={[styles.tabBar, { 
-        marginTop: Platform.OS === 'android' ? 0 : -30 
-      }]}>
+      {/* WhatsApp-style Header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={WHATSAPP_COLORS.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>HR Portal</Text>
+            <Text style={styles.headerSubtitle}>
+              {activeTab === 'requests' ? `${requests.length} requests` : `${grievances.length} grievances`}
+            </Text>
+          </View>
+          {/* REMOVED: The "+" icon from top-right corner as requested */}
+          <View style={styles.headerRight} />
+        </View>
+      </View>
+
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
         {[
-          { key: 'requests' as const, label: 'Requests', icon: '📝', count: requests.length },
-          { key: 'grievances' as const, label: 'Grievances', icon: '⚖️', count: grievances.length }
+          { key: 'requests' as const, label: 'Requests', icon: 'document-text' },
+          { key: 'grievances' as const, label: 'Grievances', icon: 'alert-circle' }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
-            style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}
+            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
           >
-            <View style={styles.tabButtonContent}>
-              <Text style={styles.tabIcon}>{tab.icon}</Text>
-              <Text style={[
-                styles.tabButtonText,
-                activeTab === tab.key && styles.tabButtonTextActive
-              ]}>
-                {tab.label}
-              </Text>
-              {tab.count > 0 && (
-                <View style={styles.tabBadge}>
-                  <Text style={styles.tabBadgeText}>{tab.count}</Text>
-                </View>
-              )}
-            </View>
+            <Ionicons 
+              name={tab.icon as any} 
+              size={20} 
+              color={activeTab === tab.key ? WHATSAPP_COLORS.white : 'rgba(255, 255, 255, 0.7)'} 
+            />
+            <Text style={[
+              styles.tabText,
+              activeTab === tab.key && styles.activeTabText
+            ]}>
+              {tab.label}
+            </Text>
+            {tab.key === 'requests' && requests.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{requests.length}</Text>
+              </View>
+            )}
+            {tab.key === 'grievances' && grievances.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{grievances.length}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         ))}
       </View>
 
-      <View style={styles.contentContainer}>
-        <ScrollView
-          style={styles.listScrollView}
+      {/* Content */}
+      <View style={styles.content}>
+        <ScrollView 
+          style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContentContainer}
         >
-          <View style={styles.createButtonCard}>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={handleNewItemPress}
-              activeOpacity={0.8}
-            >
-              <View style={styles.createButtonIcon}>
-                <Text style={styles.createButtonPlus}>+</Text>
-              </View>
-              <View style={styles.createButtonContent}>
-                <Text style={styles.createButtonTitle}>
-                  Create New {activeTab === 'requests' ? 'Request' : 'Grievance'}
-                </Text>
-                <Text style={styles.createButtonDescription}>
-                  Submit a new {activeTab === 'requests' ? 'request' : 'grievance'} to HR team
-                </Text>
-              </View>
-              <Text style={styles.createButtonArrow}>→</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
-            <View style={styles.emptyListContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.emptyListSubtitle}>Loading {activeTab}...</Text>
+          {/* Create New Button */}
+          <TouchableOpacity
+            style={styles.createNewCard}
+            onPress={handleNewItemPress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.createNewIcon}>
+              <Ionicons name="add-circle" size={28} color={WHATSAPP_COLORS.primary} />
             </View>
-          ) : (
-            <View style={styles.listSection}>
-              <View style={styles.listHeader}>
-                <Text style={styles.listTitle}>
-                  Your {activeTab === 'requests' ? 'Requests' : 'Grievances'}
-                </Text>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{currentItems.length}</Text>
-                </View>
+            <View style={styles.createNewContent}>
+              <Text style={styles.createNewTitle}>
+                Create New {activeTab === 'requests' ? 'Request' : 'Grievance'}
+              </Text>
+              <Text style={styles.createNewSubtitle}>
+                Submit a new {activeTab.slice(0, -1)} to HR team
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.gray} />
+          </TouchableOpacity>
+
+          {/* Items List */}
+          <View style={styles.listSection}>
+            <Text style={styles.listTitle}>
+              Your {activeTab === 'requests' ? 'Requests' : 'Grievances'}
+            </Text>
+            
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.loadingText}>Loading {activeTab}...</Text>
               </View>
-
-              {currentItems.length > 0 ? (
-                <View style={styles.itemsList}>
-                  {currentItems.map((item) => {
-                    const statusConfig = getStatusConfig(item.status);
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={styles.itemCard}
-                        onPress={() => handleItemPress(item)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.itemCardContent}>
-                          <View style={styles.itemCardHeader}>
-                            <View style={styles.itemCardTitleRow}>
-                              <Text style={styles.itemCardTitle} numberOfLines={1}>
-                                {item.nature}
-                              </Text>
-                              <View style={[
-                                styles.itemStatusBadge,
-                                { backgroundColor: statusConfig.color }
-                              ]}>
-                                <Text style={styles.itemStatusIcon}>{statusConfig.icon}</Text>
-                                <Text style={styles.itemStatusText}>{statusConfig.label}</Text>
-                              </View>
-                            </View>
-                            <Text style={styles.itemCardDescription} numberOfLines={2}>
-                              {item.description || item.issue}
-                            </Text>
-                          </View>
-
-                          <View style={styles.itemCardFooter}>
-                            <View style={styles.itemMetaRow}>
-                              <View style={styles.itemMetaItem}>
-                                <Text style={styles.itemMetaIcon}>📅</Text>
-                                <Text style={styles.itemMetaText}>{formatDate(item.created_at)}</Text>
-                              </View>
-                              <View style={styles.itemMetaItem}>
-                                <Text style={styles.itemMetaIcon}>💬</Text>
-                                <Text style={styles.itemMetaText}>
-                                  {item.comments?.length || 0} comments
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.itemActionArrow}>
-                              <Text style={styles.itemArrow}>→</Text>
-                            </View>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View style={styles.emptyListContainer}>
-                  <Text style={styles.emptyListIcon}>
-                    {activeTab === 'requests' ? '📋' : '🤝'}
-                  </Text>
-                  <Text style={styles.emptyListTitle}>
-                    No {activeTab} yet
-                  </Text>
-                  <Text style={styles.emptyListSubtitle}>
-                    {activeTab === 'requests' 
-                      ? 'Your requests will appear here once submitted'
-                      : 'Your grievances will appear here once submitted'}
-                  </Text>
+            ) : currentItems.length > 0 ? (
+              currentItems.map((item) => {
+                const statusConfig = getStatusConfig(item.status);
+                // FIXED: Using accurate comment count from fetched data
+                const commentCount = item.comments?.length || 0;
+                
+                return (
                   <TouchableOpacity
-                    style={styles.emptyListButton}
-                    onPress={handleNewItemPress}
+                    key={item.id}
+                    style={styles.itemCard}
+                    onPress={() => handleItemPress(item)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.emptyListButtonText}>
-                      Create Your First {activeTab === 'requests' ? 'Request' : 'Grievance'}
-                    </Text>
+                    <View style={styles.itemIcon}>
+                      <Ionicons 
+                        name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
+                        size={24} 
+                        color={WHATSAPP_COLORS.primary} 
+                      />
+                    </View>
+                    <View style={styles.itemContent}>
+                      <View style={styles.itemHeader}>
+                        <Text style={styles.itemTitle} numberOfLines={1}>
+                          {item.nature}
+                        </Text>
+                        <View style={[
+                          styles.itemStatus,
+                          { backgroundColor: statusConfig.color }
+                        ]}>
+                          <Text style={styles.itemStatusText}>{statusConfig.label}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.itemDescription} numberOfLines={2}>
+                        {item.description || item.issue}
+                      </Text>
+                      <View style={styles.itemFooter}>
+                        <View style={styles.itemMeta}>
+                          <Ionicons name="time-outline" size={14} color={WHATSAPP_COLORS.gray} />
+                          <Text style={styles.itemMetaText}>{formatDate(item.created_at)}</Text>
+                          <Ionicons name="chatbubble-outline" size={14} color={WHATSAPP_COLORS.gray} style={styles.metaIcon} />
+                          {/* FIXED: Shows accurate comment count */}
+                          <Text style={styles.itemMetaText}>{commentCount} {commentCount === 1 ? 'comment' : 'comments'}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.gray} />
+                      </View>
+                    </View>
                   </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-          <View style={{ height: 24 }} />
+                );
+              })
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons 
+                  name={activeTab === 'requests' ? 'document-text-outline' : 'alert-circle-outline'} 
+                  size={60} 
+                  color={WHATSAPP_COLORS.gray} 
+                />
+                <Text style={styles.emptyTitle}>
+                  No {activeTab} yet
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {activeTab === 'requests' 
+                    ? 'Submit your first request to HR team'
+                    : 'Submit your first grievance to HR team'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={handleNewItemPress}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add" size={20} color={WHATSAPP_COLORS.white} />
+                  <Text style={styles.emptyButtonText}>
+                    Create {activeTab === 'requests' ? 'Request' : 'Grievance'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </ScrollView>
       </View>
     </View>
@@ -1153,899 +1154,651 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  // Dashboard-style header
-  headerBanner: {
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  headerImage: {
-    position: 'absolute',
-    width: '100%',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  headerOverlay: {
-    position: 'absolute',
-    width: '100%',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  headerContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    position: 'relative',
-    zIndex: 1,
-  },
-  topNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backgroundSketch: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0.12,
-  },
-  sketchCircle1: {
-    position: 'absolute',
-    top: '15%',
-    left: '75%',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    opacity: 0.4,
-  },
-  sketchCircle2: {
-    position: 'absolute',
-    top: '65%',
-    left: '10%',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-    opacity: 0.3,
-  },
-  sketchCircle3: {
-    position: 'absolute',
-    top: '25%',
-    left: '15%',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-    opacity: 0.25,
-  },
-  sketchLine1: {
-    position: 'absolute',
-    top: '35%',
-    left: '20%',
-    right: '20%',
-    height: 1.5,
-    backgroundColor: '#FFFFFF',
-    transform: [{ rotate: '25deg' }],
-    opacity: 0.3,
-  },
-  sketchLine2: {
-    position: 'absolute',
-    top: '55%',
-    left: '5%',
-    right: '5%',
-    height: 1,
-    backgroundColor: '#FFFFFF',
-    transform: [{ rotate: '-15deg' }],
-    opacity: 0.2,
-  },
-  sketchLine3: {
-    position: 'absolute',
-    top: '75%',
-    left: '25%',
-    right: '25%',
-    height: 1,
-    backgroundColor: '#FFFFFF',
-    transform: [{ rotate: '10deg' }],
-    opacity: 0.25,
-  },
-  sketchDotGrid: {
-    position: 'absolute',
-    top: '45%',
-    left: '60%',
-    width: 40,
-    height: 40,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    opacity: 0.2,
+    backgroundColor: WHATSAPP_COLORS.white,
   },
   header: {
+    backgroundColor: WHATSAPP_COLORS.primaryDark,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-   
   },
   backButton: {
-    padding: spacing.xs,
+    padding: 8,
   },
-  backButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  backButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
+  headerTitleContainer: {
+    flex: 1,
+    marginLeft: 12,
   },
   headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.white,
-    flex: 1,
-    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
   },
-  headerSpacer: {
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  headerRight: {
     width: 40,
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    ...shadows.sm,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 16,
   },
-  tabButton: {
+  tab: {
     flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderRadius: borderRadius.lg,
-  },
-  tabButtonActive: {
-    backgroundColor: colors.backgroundSecondary,
-  },
-  tabButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    paddingVertical: 12,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
-  tabIcon: {
-    fontSize: fontSize.md,
+  activeTab: {
+    borderBottomColor: WHATSAPP_COLORS.white,
   },
-  tabButtonText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
+  tabText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginLeft: 8,
   },
-  tabButtonTextActive: {
-    color: '#007AFF',
-    fontWeight: '700',
+  activeTabText: {
+    color: WHATSAPP_COLORS.white,
   },
   tabBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
-    minWidth: 24,
-    alignItems: 'center',
-  },
-  tabBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  contentContainerBorder: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-  },
-  listScrollView: {
-    flex: 1,
-  },
-  listContentContainer: {
-    paddingVertical: spacing.lg,
-  },
-  createButtonCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  createButton: {
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...shadows.md,
-  },
-  createButtonIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: '#007AFF',
+    backgroundColor: WHATSAPP_COLORS.white,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginLeft: 8,
   },
-  createButtonPlus: {
-    fontSize: fontSize.xl,
-    color: colors.white,
+  tabBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
+    color: WHATSAPP_COLORS.primary,
   },
-  createButtonContent: {
+  content: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.lightGray,
+  },
+  scrollView: {
     flex: 1,
   },
-  createButtonTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
+  createNewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.white,
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  createButtonDescription: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+  createNewIcon: {
+    marginRight: 12,
   },
-  createButtonArrow: {
-    fontSize: fontSize.lg,
-    color: '#007AFF',
-    fontWeight: '700',
+  createNewContent: {
+    flex: 1,
+  },
+  createNewTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
+    marginBottom: 4,
+  },
+  createNewSubtitle: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
   },
   listSection: {
-    paddingHorizontal: spacing.lg,
-  },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    paddingHorizontal: 16,
   },
   listTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
+    marginBottom: 12,
   },
-  countBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
   },
-  countText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  itemsList: {
-    gap: spacing.md,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: WHATSAPP_COLORS.gray,
   },
   itemCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.md,
+    flexDirection: 'row',
+    backgroundColor: WHATSAPP_COLORS.white,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  itemCardContent: {
-    padding: spacing.lg,
+  itemIcon: {
+    marginRight: 12,
   },
-  itemCardHeader: {
-    marginBottom: spacing.md,
+  itemContent: {
+    flex: 1,
   },
-  itemCardTitleRow: {
+  itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: 8,
   },
-  itemCardTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
+  itemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: 8,
   },
-  itemStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    gap: spacing.xs,
-  },
-  itemStatusIcon: {
-    fontSize: fontSize.xs,
-    color: colors.white,
+  itemStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   itemStatusText: {
-    fontSize: fontSize.xs,
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.white,
-    textTransform: 'capitalize',
+    color: WHATSAPP_COLORS.white,
+    textTransform: 'uppercase',
   },
-  itemCardDescription: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+  itemDescription: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.gray,
+    marginBottom: 12,
     lineHeight: 20,
   },
-  itemCardFooter: {
+  itemFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
-  itemMetaRow: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-  },
-  itemMetaItem: {
+  itemMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-  },
-  itemMetaIcon: {
-    fontSize: fontSize.sm,
   },
   itemMetaText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
+    marginLeft: 4,
+    marginRight: 12,
+  },
+  metaIcon: {
+    marginLeft: 12,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  emptyButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
+    marginLeft: 8,
+  },
+  // New Item Page Styles
+  formCard: {
+    backgroundColor: WHATSAPP_COLORS.white,
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  formSection: {
+    marginBottom: 24,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
+    marginBottom: 8,
+  },
+  selectField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: WHATSAPP_COLORS.lightGray,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.lightGray,
+  },
+  selectFieldLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  fieldIcon: {
+    marginRight: 12,
+  },
+  selectFieldText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.darkGray,
+  },
+  placeholderText: {
+    color: WHATSAPP_COLORS.gray,
+  },
+  textAreaContainer: {
+    backgroundColor: WHATSAPP_COLORS.lightGray,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.lightGray,
+  },
+  textArea: {
+    minHeight: 120,
+    fontSize: 16,
+    color: WHATSAPP_COLORS.darkGray,
+    padding: 16,
+    textAlignVertical: 'top',
+  },
+  characterCounter: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'flex-end',
+  },
+  characterCount: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
+  },
+  submitButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    marginHorizontal: 16,
+    marginBottom: 24,
+    paddingVertical: 16,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  submitButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
+    marginLeft: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: WHATSAPP_COLORS.gray,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+  },
+  // Detail Page Styles
+  chatContainer: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.chatBackground,
+  },
+  infoCard: {
+    backgroundColor: WHATSAPP_COLORS.white,
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  infoHeader: {
+    marginBottom: 12,
+  },
+  infoTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
+    flex: 1,
+    marginRight: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.white,
+    textTransform: 'uppercase',
+  },
+  infoDate: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
+  },
+  infoBody: {
+    marginBottom: 12,
+  },
+  infoDescription: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.darkGray,
+    lineHeight: 22,
+  },
+  infoFooter: {
+    borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.lightGray,
+    paddingTop: 12,
+  },
+  infoFooterText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
+    textAlign: 'right',
+  },
+  commentsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginVertical: 16,
+  },
+  commentsHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: WHATSAPP_COLORS.lightGray,
+  },
+  commentsTitle: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.gray,
+    marginHorizontal: 12,
+    fontWeight: '500',
+  },
+  commentCountBadge: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  commentCountBadgeText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.white,
     fontWeight: '600',
   },
-  itemActionArrow: {
-    paddingLeft: spacing.sm,
+  commentsList: {
+    flex: 1,
+    paddingHorizontal: 12,
   },
-  itemArrow: {
-    fontSize: fontSize.lg,
-    color: '#007AFF',
-    fontWeight: '700',
+  commentsListContent: {
+    paddingVertical: 8,
   },
-  emptyListContainer: {
+  messageContainer: {
+    marginBottom: 16,
+  },
+  // WhatsApp-style alignment: Current user messages on RIGHT
+  userMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  // WhatsApp-style alignment: Other users messages on LEFT
+  hrMessageContainer: {
+    alignItems: 'flex-start',
+  },
+  messageBubbleWrapper: {
+    maxWidth: '80%',
+  },
+  userMessageWrapper: {
+    alignItems: 'flex-end',
+  },
+  hrMessageWrapper: {
+    alignItems: 'flex-start',
+  },
+  messageBubble: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginBottom: 4,
+  },
+  // User messages - green bubble on right (current user)
+  userMessageBubble: {
+    backgroundColor: WHATSAPP_COLORS.primaryLight,
+    borderBottomRightRadius: 4,
+  },
+  // HR messages - white bubble on left (other users)
+  hrMessageBubble: {
+    backgroundColor: WHATSAPP_COLORS.white,
+    borderBottomLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  messageText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  // User message text - dark color
+  userMessageText: {
+    color: WHATSAPP_COLORS.darkGray,
+  },
+  // HR message text - dark color
+  hrMessageText: {
+    color: WHATSAPP_COLORS.darkGray,
+  },
+  messageTimeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingVertical: spacing.xxl * 2,
-    paddingHorizontal: spacing.xl,
+    marginTop: 2,
   },
-  emptyListIcon: {
-    fontSize: 60,
-    marginBottom: spacing.md,
+  messageTime: {
+    fontSize: 11,
   },
-  emptyListTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+  // User message time - slightly transparent
+  userMessageTime: {
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  // HR message time - gray
+  hrMessageTime: {
+    color: WHATSAPP_COLORS.gray,
+  },
+  messageStatusIcon: {
+    marginLeft: 4,
+  },
+  messageSender: {
+    fontSize: 11,
+    color: WHATSAPP_COLORS.gray,
+    marginLeft: 8,
+    marginTop: 2,
+  },
+  noComments: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  noCommentsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.darkGray,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noCommentsText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.gray,
     textAlign: 'center',
   },
-  emptyListSubtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
+  commentInputContainer: {
+    backgroundColor: WHATSAPP_COLORS.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.lightGray,
   },
-  emptyListButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+  commentInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.lightGray,
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  emptyListButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
+  commentInput: {
+    flex: 1,
+    fontSize: 14,
+    color: WHATSAPP_COLORS.darkGray,
+    minHeight: 36,
+    maxHeight: 120,
+    paddingHorizontal: 4,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  commentActionButton: {
+    padding: 4,
+  },
+  sendButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  sendButtonDisabled: {
+    backgroundColor: WHATSAPP_COLORS.gray,
   },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.xxl * 2,
   },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  scrollView: {
+  // Modal Styles
+  modalContainer: {
     flex: 1,
+    backgroundColor: WHATSAPP_COLORS.white,
   },
-  keyboardView: {
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.primaryDark,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingTop: 60,
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  modalTitle: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  formHeader: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  formHeaderTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  formHeaderDescription: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    lineHeight: 22,
-  },
-  formCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginHorizontal: spacing.lg,
-    ...shadows.md,
-  },
-  inputGroup: {
-    marginBottom: spacing.lg,
-  },
-  inputLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  inputLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  requiredIndicator: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  selectButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.white,
-    ...shadows.sm,
-  },
-  selectButtonPlaceholder: {
-    borderColor: colors.textLight,
-  },
-  selectButtonContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  selectButtonText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    flex: 1,
-  },
-  selectPlaceholder: {
-    color: colors.textSecondary,
-  },
-  selectArrow: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginLeft: spacing.sm,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    backgroundColor: colors.white,
-    fontSize: fontSize.md,
-    color: colors.text,
-    minHeight: 150,
-    textAlignVertical: 'top',
-    ...shadows.sm,
-  },
-  characterCount: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textAlign: 'right',
-    marginTop: spacing.xs,
-  },
-  submitFooter: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    ...shadows.md,
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.textLight,
-  },
-  submitButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  detailScrollContent: {
-    paddingVertical: spacing.lg,
-  },
-  detailHeaderCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    ...shadows.md,
-  },
-  detailHeaderContent: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  detailNature: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  detailMetaRow: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-  },
-  detailMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  detailMetaIcon: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  detailMetaText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  detailStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    gap: spacing.xs,
-    minWidth: 100,
-  },
-  detailStatusIcon: {
-    fontSize: fontSize.sm,
-    color: colors.white,
-    fontWeight: '700',
-  },
-  detailStatusText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.white,
-    textTransform: 'capitalize',
-  },
-  detailCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionDivider: {
-    height: 2,
-    flex: 1,
-    backgroundColor: colors.border,
-    marginLeft: spacing.md,
-  },
-  descriptionText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    lineHeight: 24,
-  },
-  commentsSection: {
-    marginHorizontal: spacing.lg,
-  },
-  commentCountBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
-    minWidth: 30,
-    alignItems: 'center',
-  },
-  commentCountText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  commentsList: {
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  commentCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.sm,
-  },
-  hrCommentCard: {
-    backgroundColor: '#007AFF10',
-    borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
-  },
-  commentHeader: {
-    marginBottom: spacing.md,
-  },
-  commentAuthorInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  commentAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hrCommentAvatar: {
-    backgroundColor: '#007AFF',
-  },
-  commentAvatarText: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  commentAuthorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  commentAuthor: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  hrCommentAuthor: {
-    color: '#007AFF',
-  },
-  hrBadge: {
-    backgroundColor: '#007AFF20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
-  },
-  hrBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: '#007AFF',
-    textTransform: 'uppercase',
-  },
-  commentTime: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  commentContent: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    lineHeight: 22,
-  },
-  noCommentsContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-  },
-  noCommentsIcon: {
-    fontSize: 40,
-    marginBottom: spacing.md,
-  },
-  noCommentsTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  noCommentsSubtext: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  addCommentCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.md,
-  },
-  addCommentLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  commentTextArea: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    backgroundColor: colors.white,
-    fontSize: fontSize.md,
-    color: colors.text,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  commentActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logoText: {
-    color: 'white',
     fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
     textAlign: 'center',
   },
-  commentCharacterCount: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
+  modalSpacer: {
+    width: 40,
   },
-  commentButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  commentButtonDisabled: {
-    backgroundColor: colors.textLight,
-  },
-  commentButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  dropdownContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    maxHeight: screenHeight * 0.6,
-    ...shadows.lg,
-  },
-  searchContainer: {
+  searchContainerModal: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: WHATSAPP_COLORS.lightGray,
+    margin: 16,
+    paddingHorizontal: 16,
+    borderRadius: 24,
   },
-  searchInput: {
+  searchIconModal: {
+    marginRight: 8,
+  },
+  searchInputModal: {
     flex: 1,
-    fontSize: fontSize.md,
-    color: colors.text,
-    paddingVertical: spacing.sm,
-  },
-  searchIcon: {
-    fontSize: fontSize.lg,
-    marginLeft: spacing.sm,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: WHATSAPP_COLORS.darkGray,
+    paddingVertical: 12,
   },
   dropdownList: {
-    maxHeight: screenHeight * 0.4,
+    flex: 1,
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: WHATSAPP_COLORS.lightGray,
+  },
+  dropdownItemIcon: {
+    marginRight: 12,
   },
   dropdownItemContent: {
     flex: 1,
-    marginRight: spacing.md,
   },
   dropdownItemText: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 16,
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.darkGray,
+    marginBottom: 4,
   },
   dropdownItemDescription: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  dropdownItemArrow: {
-    paddingLeft: spacing.sm,
-  },
-  arrowIcon: {
-    fontSize: fontSize.md,
-    color: '#007AFF',
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
   },
   emptyDropdown: {
-    padding: spacing.xxl,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  emptyDropdownIcon: {
-    fontSize: 40,
-    marginBottom: spacing.md,
-    color: colors.textSecondary,
+    paddingVertical: 40,
   },
   emptyDropdownText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  backIcon: {
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    display: 'flex',
-    flexDirection: 'row',
-    alignContent: 'center',
-  },
-  backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#fff',
-    transform: [{ rotate: '-45deg' }],
-  },
-  backText: {
-    color: '#fff',
     fontSize: 14,
-    marginLeft: 2,
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 25,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
+    color: WHATSAPP_COLORS.gray,
+    textAlign: 'center',
+    marginTop: 12,
   },
 });
 
