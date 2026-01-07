@@ -20,17 +20,46 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL, BACKEND_URL_WEBSOCKET } from '../../config/config';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
-const colors = {
-  primary: '#2D3748',
-  background: '#FFFFFF',
-  backgroundSecondary: '#F7FAFC',
-  text: '#2D3748',
-  textSecondary: '#718096',
-  textLight: '#A0AEC0',
-  white: '#FFFFFF',
-  border: '#E2E8F0',
-  info: '#3182CE',
+// WhatsApp Colors
+const whatsappColors = {
+  dark: {
+    background: '#0C1317',
+    card: '#202C33',
+    text: '#E9EDEF',
+    textSecondary: '#8696A0',
+    textLight: '#667781',
+    border: '#2A3942',
+    primary: '#008069', // WhatsApp green
+    accent: '#00A884',
+    header: '#202C33',
+    icon: '#AEBAC1',
+    danger: '#F15C6D',
+    warning: '#F59E0B',
+    unread: '#53BDEB',
+    myMessageBg: '#005C4B', // Dark green for my messages
+    theirMessageBg: '#202C33', // Dark grey for others' messages
+    inputBg: '#2A3942', // Dark input background
+  },
+  light: {
+    background: '#FFFFFF',
+    card: '#F0F2F5',
+    text: '#111B21',
+    textSecondary: '#667781',
+    textLight: '#8696A0',
+    border: '#E1E8ED',
+    primary: '#008069', // WhatsApp green
+    accent: '#00A884',
+    header: '#008069', // WhatsApp green header
+    icon: '#8696A0',
+    danger: '#F15C6D',
+    warning: '#F59E0B',
+    unread: '#008069',
+    myMessageBg: '#D9FDD3', // Light green for my messages
+    theirMessageBg: '#FFFFFF', // White for others' messages
+    inputBg: '#F0F2F5', // Light input background
+  }
 };
 
 const spacing = {
@@ -38,29 +67,23 @@ const spacing = {
   sm: 8,
   md: 16,
   lg: 24,
+  xl: 32,
 };
 
 const borderRadius = {
   sm: 4,
+  md: 8,
   lg: 12,
-  xl: 16,
+  xl: 20,
+  full: 999,
 };
 
 const fontSize = {
   xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-};
-
-const shadows = {
-  sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
+  sm: 13,
+  md: 14,
+  lg: 16,
+  xl: 18,
 };
 
 interface ChatRoom {
@@ -105,13 +128,18 @@ interface ChatRoomScreenProps {
   chatRoom: ChatRoom;
   onBack: () => void;
   currentUserId?: number;
+  isDark?: boolean;
 }
 
 const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({ 
   chatRoom, 
   onBack, 
-  currentUserId = 1 
+  currentUserId = 1,
+  isDark = false
 }) => {
+  const insets = useSafeAreaInsets();
+  const currentColors = isDark ? whatsappColors.dark : whatsappColors.light;
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -121,6 +149,7 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
   const [token, setToken] = useState<string>('');
   const [page, setPage] = useState(1);
+  const [isRecording, setIsRecording] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -153,15 +182,12 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
   const connectWebSocket = () => {
     try {
-      // Remove protocol and construct proper WebSocket URL
       const wsBaseUrl = BACKEND_URL_WEBSOCKET.replace('http://', '').replace('https://', '');
       const wsUrl = `ws://${wsBaseUrl}/ws/chat/`;
       
-      console.log('Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
-        console.log('WebSocket connected');
         ws.send(JSON.stringify({
           action: 'join_room',
           room_id: chatRoom.id,
@@ -247,7 +273,6 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       const data = await response.json();
       
       if (response.ok) {
-        // Extract only the necessary message fields
         const cleanMessages = (data.messages || []).map((msg: any) => ({
           id: msg.id,
           content: msg.content || '',
@@ -316,7 +341,6 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       const data = await response.json();
 
       if (response.ok && data.data) {
-        // Clean the message data
         const cleanMessage: Message = {
           id: data.data.id,
           content: data.data.content || '',
@@ -336,7 +360,6 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           msg.id === tempMessage.id ? cleanMessage : msg
         ));
 
-        // Send via WebSocket if connected
         if (websocket && websocket.readyState === WebSocket.OPEN) {
           websocket.send(JSON.stringify({
             action: 'send_message',
@@ -507,11 +530,14 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         isMyMessage ? styles.myMessage : styles.theirMessage
       ]}>
         {!isMyMessage && chatRoom.room_type === 'group' && (
-          <Text style={styles.senderName}>{senderName}</Text>
+          <Text style={[styles.senderName, { color: currentColors.textSecondary }]}>{senderName}</Text>
         )}
+        
         <View style={[
           styles.messageBubble,
-          isMyMessage ? { backgroundColor: colors.primary } : { backgroundColor: colors.white }
+          isMyMessage ? 
+            { backgroundColor: currentColors.myMessageBg } : 
+            { backgroundColor: currentColors.theirMessageBg }
         ]}>
           {item.message_type === 'image' && item.content && (
             <Image 
@@ -520,41 +546,52 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
               resizeMode="cover"
             />
           )}
+          
           {item.message_type === 'file' && (
             <TouchableOpacity style={styles.fileContainer}>
-              <Ionicons name="document-attach" size={24} color={isMyMessage ? colors.white : colors.primary} />
-              <Text style={[styles.fileText, { color: isMyMessage ? colors.white : colors.primary }]}>
-                Attached File
+              <Ionicons 
+                name="document-attach" 
+                size={20} 
+                color={isMyMessage ? '#FFFFFF' : currentColors.primary} 
+              />
+              <Text style={[
+                styles.fileText, 
+                { 
+                  color: isMyMessage ? '#FFFFFF' : currentColors.primary,
+                  marginLeft: spacing.sm 
+                }
+              ]}>
+                Document
               </Text>
             </TouchableOpacity>
           )}
-          {item.message_type === 'contact' && (
-            <View style={styles.contactContainer}>
-              <Ionicons name="person" size={20} color={colors.info} />
-              <Text style={styles.contactText}>Contact Shared</Text>
-            </View>
-          )}
+          
           {(item.message_type === 'text' || !item.message_type) && item.content && (
             <Text style={[
               styles.messageText,
-              isMyMessage ? { color: colors.white } : { color: colors.text }
+              { color: isMyMessage ? '#FFFFFF' : currentColors.text }
             ]}>
               {item.content}
             </Text>
           )}
+          
           <View style={styles.messageFooter}>
-            {messageTime ? (
-              <Text style={[
-                styles.messageTime,
-                isMyMessage ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.textLight }
-              ]}>
-                {messageTime}
-              </Text>
-            ) : null}
+            <Text style={[
+              styles.messageTime,
+              { 
+                color: isMyMessage ? 'rgba(255,255,255,0.6)' : currentColors.textSecondary,
+                fontSize: fontSize.xs 
+              }
+            ]}>
+              {messageTime}
+            </Text>
             {item.is_edited && (
               <Text style={[
                 styles.editedLabel,
-                isMyMessage ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.textLight }
+                { 
+                  color: isMyMessage ? 'rgba(255,255,255,0.6)' : currentColors.textSecondary,
+                  fontSize: fontSize.xs 
+                }
               ]}>
                 • edited
               </Text>
@@ -564,119 +601,185 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       </View>
     );
   };
-  console.log(chatRoom)
-  return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
+
+  const renderHeader = () => (
+    <View style={[
+      styles.header,
+      { 
+        backgroundColor: currentColors.header,
+        paddingTop: Platform.OS === 'ios' ? insets.top : 10,
+      }
+    ]}>
+      <View style={styles.headerContent}>
         <TouchableOpacity 
-          style={styles.backButton}
+          style={styles.backButton} 
           onPress={onBack}
+          activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.white} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
         
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {chatRoom.name || getOtherUserName(chatRoom)}
-        </Text>
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {chatRoom.name || getOtherUserName(chatRoom)}
+          </Text>
+          {isTyping ? (
+            <Text style={styles.headerSubtitle}>
+              {typingUser ? `${typingUser} is typing...` : 'typing...'}
+            </Text>
+          ) : (
+            <Text style={styles.headerSubtitle}>
+              {messages.length > 0 ? 'online' : ''}
+            </Text>
+          )}
+        </View>
         
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerActionButton}>
-            <Ionicons name="call" size={20} color={colors.white} />
+            <Ionicons name="videocam" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerActionButton}>
-            <Ionicons name="videocam" size={20} color={colors.white} />
+            <Ionicons name="call" size={20} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerActionButton}>
-            <Ionicons name="information-circle" size={20} color={colors.white} />
+            <Ionicons name="ellipsis-vertical" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
+    </View>
+  );
 
+  return (
+    <View style={[styles.container, { backgroundColor: currentColors.background }]}>
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor={currentColors.header} 
+      />
+      
+      {/* Header */}
+      {renderHeader()}
+      
       {/* Messages */}
-      <View style={styles.messagesContainer}>
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         {loading && messages.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={currentColors.primary} />
           </View>
         ) : (
-          <>
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              renderItem={renderMessage}
-              keyExtractor={item => item.id.toString()}
-              inverted
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.messagesList}
-              onEndReached={() => {
-                if (!loading) {
-                  setPage(prev => prev + 1);
-                  loadMessages(page + 1);
-                }
-              }}
-              onEndReachedThreshold={0.5}
-            />
-            
-            {/* Typing Indicator */}
-            {isTyping && typingUser && (
-              <View style={styles.typingContainer}>
-                <Text style={styles.typingText}>
-                  {typingUser} is typing...
-                </Text>
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={item => item.id.toString()}
+            inverted
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.messagesList}
+            style={styles.messagesContainer}
+            onEndReached={() => {
+              if (!loading) {
+                setPage(prev => prev + 1);
+                loadMessages(page + 1);
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() => (
+              <View style={styles.listFooter}>
+                {isTyping && (
+                  <View style={[styles.typingBubble, { backgroundColor: currentColors.theirMessageBg }]}>
+                    <View style={styles.typingDots}>
+                      <View style={[styles.typingDot, { backgroundColor: currentColors.textSecondary }]} />
+                      <View style={[styles.typingDot, { backgroundColor: currentColors.textSecondary }]} />
+                      <View style={[styles.typingDot, { backgroundColor: currentColors.textSecondary }]} />
+                    </View>
+                  </View>
+                )}
               </View>
             )}
-          </>
+          />
         )}
-      </View>
+      </SafeAreaView>
 
       {/* Message Input */}
-      <View style={styles.inputContainer}>
-        <TouchableOpacity
-          style={styles.attachmentButton}
-          onPress={() => setShowAttachments(true)}
-        >
-          <Ionicons name="add" size={24} color={colors.text} />
-        </TouchableOpacity>
-        
-        <TextInput
-          style={styles.input}
-          placeholder="Type a message..."
-          placeholderTextColor={colors.textLight}
-          value={newMessage}
-          onChangeText={(text) => {
-            setNewMessage(text);
-            if (text.length > 0) {
-              startTyping();
-            } else {
-              stopTyping();
-            }
-          }}
-          multiline
-          maxLength={1000}
-        />
-        
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            !newMessage.trim() && styles.sendButtonDisabled
-          ]}
-          onPress={sendMessage}
-          disabled={!newMessage.trim()}
-        >
-          <Ionicons 
-            name="send" 
-            size={20} 
-            color={newMessage.trim() ? colors.white : colors.textLight} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={[
+          styles.inputContainer,
+          { backgroundColor: currentColors.background }
+        ]}
+      >
+        <View style={[
+          styles.inputWrapper,
+          { backgroundColor: currentColors.inputBg }
+        ]}>
+          <TouchableOpacity
+            style={styles.inputIconButton}
+            onPress={() => setShowAttachments(true)}
+          >
+            <Ionicons 
+              name="add" 
+              size={24} 
+              color={currentColors.textSecondary} 
+            />
+          </TouchableOpacity>
+          
+          <TextInput
+            style={[
+              styles.input,
+              { 
+                color: currentColors.text,
+                backgroundColor: currentColors.inputBg 
+              }
+            ]}
+            placeholder="Message"
+            placeholderTextColor={currentColors.textSecondary}
+            value={newMessage}
+            onChangeText={(text) => {
+              setNewMessage(text);
+              if (text.length > 0) {
+                startTyping();
+              } else {
+                stopTyping();
+              }
+            }}
+            multiline
+            maxLength={1000}
           />
-        </TouchableOpacity>
-      </View>
+          
+          {newMessage.trim() ? (
+            <TouchableOpacity
+              style={styles.sendButton}
+              onPress={sendMessage}
+            >
+              <Ionicons 
+                name="send" 
+                size={20} 
+                color={currentColors.primary} 
+              />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.recordButton}
+              onPress={() => setIsRecording(!isRecording)}
+              onLongPress={() => {
+                // Start recording
+                setIsRecording(true);
+              }}
+              onPressOut={() => {
+                // Stop recording
+                setIsRecording(false);
+              }}
+            >
+              <Ionicons 
+                name="mic" 
+                size={20} 
+                color={currentColors.textSecondary} 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </KeyboardAvoidingView>
 
       {/* Attachments Modal */}
       <Modal
@@ -690,8 +793,11 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           activeOpacity={1}
           onPress={() => setShowAttachments(false)}
         >
-          <View style={styles.attachmentModal}>
-            <View style={styles.attachmentHandle} />
+          <View style={[
+            styles.attachmentModal,
+            { backgroundColor: currentColors.background }
+          ]}>
+            <View style={[styles.attachmentHandle, { backgroundColor: currentColors.textSecondary }]} />
             
             <TouchableOpacity 
               style={styles.attachmentOption}
@@ -700,10 +806,12 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 setTimeout(() => pickImage(), 300);
               }}
             >
-              <View style={[styles.attachmentIconContainer, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="image" size={24} color="#0284C7" />
+              <View style={[styles.attachmentIconContainer, { backgroundColor: currentColors.card }]}>
+                <Ionicons name="image" size={24} color={currentColors.primary} />
               </View>
-              <Text style={styles.attachmentText}>Photo & Video</Text>
+              <Text style={[styles.attachmentText, { color: currentColors.text }]}>
+                Photos & Videos
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -713,10 +821,12 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 setTimeout(() => pickDocument(), 300);
               }}
             >
-              <View style={[styles.attachmentIconContainer, { backgroundColor: '#DBEAFE' }]}>
-                <Ionicons name="document" size={24} color="#2563EB" />
+              <View style={[styles.attachmentIconContainer, { backgroundColor: currentColors.card }]}>
+                <Ionicons name="document" size={24} color={currentColors.primary} />
               </View>
-              <Text style={styles.attachmentText}>Document</Text>
+              <Text style={[styles.attachmentText, { color: currentColors.text }]}>
+                Document
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -726,61 +836,98 @@ const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 Alert.alert('Coming Soon', 'Contact sharing will be available soon!');
               }}
             >
-              <View style={[styles.attachmentIconContainer, { backgroundColor: '#DCFCE7' }]}>
-                <Ionicons name="person" size={24} color="#16A34A" />
+              <View style={[styles.attachmentIconContainer, { backgroundColor: currentColors.card }]}>
+                <Ionicons name="person" size={24} color={currentColors.primary} />
               </View>
-              <Text style={styles.attachmentText}>Contact</Text>
+              <Text style={[styles.attachmentText, { color: currentColors.text }]}>
+                Contact
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.attachmentOption}
+              onPress={() => {
+                setShowAttachments(false);
+                Alert.alert('Coming Soon', 'Camera will be available soon!');
+              }}
+            >
+              <View style={[styles.attachmentIconContainer, { backgroundColor: currentColors.card }]}>
+                <Ionicons name="camera" size={24} color={currentColors.primary} />
+              </View>
+              <Text style={[styles.attachmentText, { color: currentColors.text }]}>
+                Camera
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { 
-    flex: 1, 
-    backgroundColor: colors.background 
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+    zIndex: 1000,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
+    justifyContent: 'space-between',
   },
-  backButton: { 
-    padding: spacing.sm, 
-    borderRadius: borderRadius.sm 
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginLeft: spacing.xs,
+  },
+  headerInfo: {
+    flex: 1,
+    marginLeft: spacing.sm,
   },
   headerTitle: {
-    fontSize: fontSize.lg, 
-    fontWeight: '600', 
-    color: colors.white, 
-    flex: 1, 
-    marginLeft: spacing.md,
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: fontSize.xs,
+    color: 'rgba(255,255,255,0.8)',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   headerActionButton: {
     padding: spacing.sm,
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
+  },
+  messagesList: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  messagesList: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
   },
   messageContainer: {
     marginVertical: spacing.xs,
@@ -794,14 +941,15 @@ const styles = StyleSheet.create({
   },
   senderName: {
     fontSize: fontSize.xs,
-    color: colors.textSecondary,
     marginBottom: spacing.xs,
     marginLeft: spacing.sm,
   },
   messageBubble: {
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    ...shadows.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    borderRadius: borderRadius.xl,
+    borderTopLeftRadius: borderRadius.md,
+    borderBottomRightRadius: borderRadius.md,
   },
   messageText: {
     fontSize: fontSize.md,
@@ -810,95 +958,79 @@ const styles = StyleSheet.create({
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     marginTop: spacing.xs,
   },
   messageTime: {
-    fontSize: fontSize.xs,
+    opacity: 0.8,
   },
   editedLabel: {
-    fontSize: fontSize.xs,
     marginLeft: spacing.xs,
-    fontStyle: 'italic',
   },
   messageImage: {
-    width: 200,
-    height: 200,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing.xs,
+    width: 240,
+    height: 160,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
   },
   fileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   fileText: {
     fontSize: fontSize.md,
     fontWeight: '500',
-    marginLeft: spacing.sm,
   },
-  contactContainer: {
+  listFooter: {
+    marginTop: spacing.sm,
+  },
+  typingBubble: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    borderRadius: borderRadius.xl,
+    borderTopLeftRadius: borderRadius.md,
+    borderBottomRightRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  typingDots: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.info + '20',
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
   },
-  contactText: {
-    color: colors.info,
-    fontWeight: '500',
-    marginLeft: spacing.sm,
-  },
-  typingContainer: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  typingText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 1,
+    opacity: 0.6,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: spacing.md,
-    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.sm,
+  },
+  inputIconButton: {
+    padding: spacing.sm,
   },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     fontSize: fontSize.md,
-    color: colors.text,
-    backgroundColor: colors.white,
-    marginRight: spacing.sm,
-    maxHeight: 100,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.xl,
   },
   sendButton: {
-    backgroundColor: colors.primary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.sm,
+    padding: spacing.sm,
   },
-  sendButtonDisabled: {
-    backgroundColor: colors.backgroundSecondary,
-  },
-  attachmentButton: {
-    backgroundColor: colors.backgroundSecondary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-    ...shadows.sm,
+  recordButton: {
+    padding: spacing.sm,
   },
   modalOverlay: {
     flex: 1,
@@ -906,26 +1038,23 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   attachmentModal: {
-    backgroundColor: colors.white,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     padding: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   attachmentHandle: {
     width: 40,
     height: 4,
-    backgroundColor: colors.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: spacing.lg,
+    opacity: 0.3,
   },
   attachmentOption: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   attachmentIconContainer: {
     width: 48,
@@ -936,9 +1065,8 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   attachmentText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
+    fontSize: fontSize.lg,
+    fontWeight: '400',
   },
 });
 

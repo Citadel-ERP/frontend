@@ -13,21 +13,57 @@ import {
     ActivityIndicator,
     StyleSheet,
     StatusBar,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL, BACKEND_URL_WEBSOCKET } from '../../config/config';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
-const colors = {
-    primary: '#2D3748',
-    background: '#FFFFFF',
-    backgroundSecondary: '#F7FAFC',
-    text: '#2D3748',
-    textSecondary: '#718096',
-    textLight: '#A0AEC0',
-    white: '#FFFFFF',
-    border: '#E2E8F0',
-    error: '#E53E3E',
+// WhatsApp Colors
+const whatsappColors = {
+    dark: {
+        background: '#0C1317',
+        card: '#202C33',
+        text: '#E9EDEF',
+        textSecondary: '#8696A0',
+        textLight: '#667781',
+        border: '#2A3942',
+        primary: '#008069', // WhatsApp green
+        accent: '#00A884',
+        header: '#202C33',
+        icon: '#AEBAC1',
+        danger: '#F15C6D',
+        warning: '#F59E0B',
+        unread: '#53BDEB',
+        myMessageBg: '#005C4B',
+        theirMessageBg: '#202C33',
+        inputBg: '#2A3942',
+        chatItemBg: '#111B21',
+        modalBg: '#111B21',
+        searchBg: '#202C33',
+    },
+    light: {
+        background: '#FFFFFF',
+        card: '#F0F2F5',
+        text: '#111B21',
+        textSecondary: '#667781',
+        textLight: '#8696A0',
+        border: '#E1E8ED',
+        primary: '#008069', // WhatsApp green
+        accent: '#00A884',
+        header: '#008069', // WhatsApp green header
+        icon: '#8696A0',
+        danger: '#F15C6D',
+        warning: '#F59E0B',
+        unread: '#008069',
+        myMessageBg: '#D9FDD3',
+        theirMessageBg: '#FFFFFF',
+        inputBg: '#F0F2F5',
+        chatItemBg: '#FFFFFF',
+        modalBg: '#FFFFFF',
+        searchBg: '#F0F2F5',
+    }
 };
 
 const spacing = {
@@ -42,39 +78,17 @@ const borderRadius = {
     sm: 4,
     md: 8,
     lg: 12,
-    xl: 16,
+    xl: 20,
+    full: 999,
 };
 
 const fontSize = {
     xs: 12,
-    sm: 14,
-    md: 16,
-    lg: 18,
-    xl: 20,
-};
-
-const shadows = {
-    sm: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    md: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    lg: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
-    },
+    sm: 13,
+    md: 14,
+    lg: 16,
+    xl: 17,
+    xxl: 20,
 };
 
 interface Message {
@@ -101,7 +115,7 @@ interface ChatRoom {
   id: number;
   name?: string;
   room_type: 'direct' | 'group';
-  last_message?: string | Message; // Updated to accept both
+  last_message?: string | Message;
   last_message_at?: string;
   unread_count?: number;
   profile_picture?: string;
@@ -125,9 +139,18 @@ interface ChatScreenProps {
     onBack: () => void;
     onOpenChatRoom: (chatRoom: ChatRoom) => void;
     currentUserId?: number;
+    isDark?: boolean;
 }
 
-const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, currentUserId = 1 }) => {
+const ChatScreen: React.FC<ChatScreenProps> = ({ 
+    onBack, 
+    onOpenChatRoom, 
+    currentUserId = 1,
+    isDark = false 
+}) => {
+    const insets = useSafeAreaInsets();
+    const currentColors = isDark ? whatsappColors.dark : whatsappColors.light;
+    
     const [chats, setChats] = useState<ChatRoom[]>([]);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -137,6 +160,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, current
     const [groupName, setGroupName] = useState('');
     const [loading, setLoading] = useState(false);
     const [token, setToken] = useState<string>('');
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         const getToken = async () => {
@@ -177,32 +201,41 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, current
             Alert.alert('Error', 'Failed to load chats');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadChatRooms();
+    };
+
     const getMessagePreview = (message: any): string => {
-        if (!message) return 'No messages yet';
+        if (!message) return '';
 
         if (typeof message === 'string') {
             return message;
         }
 
-        // Handle message object
         if (typeof message === 'object') {
-            // Check for different message types
             if (message.message_type === 'text' && message.content) {
-                return message.content;
+                return message.content.length > 30 
+                    ? message.content.substring(0, 30) + '...' 
+                    : message.content;
             } else if (message.message_type === 'image') {
-                return '📷 Image';
+                return '📷 Photo';
             } else if (message.message_type === 'file' && message.file) {
                 return `📎 ${message.file.name || 'File'}`;
             } else if (message.message_type === 'contact' && message.contact_data) {
                 return '👤 Contact';
             } else if (message.content) {
-                return message.content;
+                return message.content.length > 30 
+                    ? message.content.substring(0, 30) + '...' 
+                    : message.content;
             }
         }
 
-        return 'No messages yet';
+        return '';
     };
 
     const searchUsers = async (query: string) => {
@@ -325,56 +358,91 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, current
         const initials = getInitials(displayName);
         const timeString = formatTime(item.last_message_at);
         const messagePreview = getMessagePreview(item.last_message);
+        const isUnread = item.unread_count && item.unread_count > 0;
 
         return (
             <TouchableOpacity
-                style={styles.chatItem}
+                style={[styles.chatItem, { 
+                    backgroundColor: currentColors.chatItemBg,
+                    borderBottomColor: currentColors.border 
+                }]}
                 onPress={() => onOpenChatRoom(item)}
                 activeOpacity={0.7}
             >
-                <View style={styles.chatAvatar}>
+                <View style={[
+                    styles.chatAvatar,
+                    { backgroundColor: currentColors.primary }
+                ]}>
                     {item.profile_picture ? (
-                        <Image source={{ uri: item.profile_picture }} style={styles.chatAvatarImage} />
+                        <Image 
+                            source={{ uri: item.profile_picture }} 
+                            style={styles.chatAvatarImage} 
+                        />
                     ) : (
                         <Text style={styles.chatAvatarText}>{initials}</Text>
                     )}
                 </View>
 
                 <View style={styles.chatInfo}>
-                    <Text style={styles.chatName} numberOfLines={1}>
-                        {displayName}
-                    </Text>
-                    <Text style={styles.lastMessage} numberOfLines={1}>
-                        {messagePreview}
-                    </Text>
+                    <View style={styles.chatInfoTop}>
+                        <Text style={[styles.chatName, { color: currentColors.text }]} numberOfLines={1}>
+                            {displayName}
+                        </Text>
+                        {timeString ? (
+                            <Text style={[styles.chatTime, { color: currentColors.textSecondary }]}>
+                                {timeString}
+                            </Text>
+                        ) : null}
+                    </View>
+                    
+                    <View style={styles.chatInfoBottom}>
+                        {messagePreview ? (
+                            <Text style={[
+                                styles.lastMessage, 
+                                { 
+                                    color: isUnread ? currentColors.text : currentColors.textSecondary,
+                                    fontWeight: isUnread ? '500' : '400'
+                                }
+                            ]} numberOfLines={1}>
+                                {messagePreview}
+                            </Text>
+                        ) : (
+                            <Text style={[styles.lastMessage, { color: currentColors.textSecondary }]}>
+                                Start a conversation
+                            </Text>
+                        )}
+                        
+                        {isUnread && (
+                            <View style={[styles.unreadBadge, { backgroundColor: currentColors.primary }]}>
+                                <Text style={styles.unreadCount}>
+                                    {item.unread_count && item.unread_count > 99 ? '99+' : item.unread_count?.toString()}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
-                <View style={styles.chatMeta}>
-                    {timeString ? (
-                        <Text style={styles.chatTime}>
-                            {timeString}
-                        </Text>
-                    ) : null}
-                    {item.unread_count && item.unread_count > 0 ? (
-                        <View style={styles.unreadBadge}>
-                            <Text style={styles.unreadCount}>
-                                {item.unread_count > 99 ? '99+' : item.unread_count.toString()}
-                            </Text>
-                        </View>
-                    ) : null}
-                </View>
+                <TouchableOpacity style={styles.chatMenuButton}>
+                    <Ionicons name="ellipsis-vertical" size={16} color={currentColors.textSecondary} />
+                </TouchableOpacity>
             </TouchableOpacity>
         );
     };
 
-    const renderUserSearchItem = (user: User) => {
+    const renderUserSearchItem = ({ item: user }: { item: User }) => {
         const isSelected = selectedUsers.some(u => u.id === user.id);
         const fullName = user.full_name || `${user.first_name} ${user.last_name}`;
 
         return (
             <TouchableOpacity
-                key={user.id}
-                style={[styles.userItem, isSelected && styles.userItemSelected]}
+                style={[
+                    styles.userItem, 
+                    { 
+                        backgroundColor: currentColors.card,
+                        borderBottomColor: currentColors.border 
+                    },
+                    isSelected && { backgroundColor: currentColors.primary + '20' }
+                ]}
                 onPress={() => {
                     if (!isGroupChat) {
                         setSelectedUsers([user]);
@@ -390,57 +458,155 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, current
                 }}
             >
                 <View style={styles.userItemContent}>
-                    <View style={styles.userAvatar}>
+                    <View style={[styles.userAvatar, { backgroundColor: currentColors.primary }]}>
                         <Text style={styles.userAvatarText}>
                             {getInitials(fullName)}
                         </Text>
                     </View>
                     <View style={styles.userDetails}>
-                        <Text style={styles.userName}>
+                        <Text style={[styles.userName, { color: currentColors.text }]}>
                             {fullName}
                         </Text>
-                        <Text style={styles.userEmail}>{user.email}</Text>
+                        <Text style={[styles.userEmail, { color: currentColors.textSecondary }]}>
+                            {user.email}
+                        </Text>
                     </View>
                     {isSelected && (
-                        <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                        <Ionicons name="checkmark-circle" size={24} color={currentColors.primary} />
                     )}
                 </View>
             </TouchableOpacity>
         );
     };
 
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
+    const renderHeader = () => (
+        <View style={[
+            styles.header,
+            { 
+                backgroundColor: currentColors.header,
+                paddingTop: Platform.OS === 'ios' ? insets.top : 10,
+            }
+        ]}>
+            <View style={styles.headerContent}>
+                <TouchableOpacity 
+                    style={styles.backButton} 
                     onPress={onBack}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={24} color={colors.white} />
+                    <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                    <Text style={styles.backText}>Back</Text>
                 </TouchableOpacity>
-
-                <Text style={styles.headerTitle}>Messages</Text>
-
-                <View style={styles.headerSpacer} />
+                
+                <Text style={styles.headerTitle}>Chats</Text>
+                
+                <TouchableOpacity style={styles.headerMenuButton}>
+                    <Ionicons name="ellipsis-vertical" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
             </View>
+        </View>
+    );
 
+    const renderModalHeader = () => (
+        <View style={[
+            styles.modalHeaderContainer,
+            { backgroundColor: currentColors.header }
+        ]}>
+            <TouchableOpacity 
+                style={styles.modalBackButton}
+                onPress={() => {
+                    setShowNewChatModal(false);
+                    resetNewChatModal();
+                }}
+            >
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                <Text style={styles.modalBackText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <Text style={styles.modalTitle}>
+                {isGroupChat ? 'New group' : 'New chat'}
+            </Text>
+            
+            <TouchableOpacity 
+                style={[
+                    styles.modalActionButton,
+                    (selectedUsers.length === 0 || loading) && styles.modalActionButtonDisabled
+                ]}
+                onPress={createNewChat}
+                disabled={selectedUsers.length === 0 || loading}
+            >
+                {loading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                    <Ionicons 
+                        name="arrow-forward" 
+                        size={24} 
+                        color={selectedUsers.length === 0 ? 'rgba(255,255,255,0.5)' : '#FFFFFF'} 
+                    />
+                )}
+            </TouchableOpacity>
+        </View>
+    );
+
+    const renderSelectedUsers = () => {
+        if (selectedUsers.length === 0) return null;
+
+        return (
+            <View style={styles.selectedUsersContainer}>
+                <FlatList
+                    data={selectedUsers}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    renderItem={({ item: user }) => {
+                        const fullName = user.full_name || `${user.first_name} ${user.last_name}`;
+                        const firstName = fullName.split(' ')[0];
+                        return (
+                            <View style={[styles.selectedUserChip, { backgroundColor: currentColors.primary }]}>
+                                <Text style={styles.selectedUserName}>{firstName}</Text>
+                                <TouchableOpacity
+                                    onPress={() => setSelectedUsers(prev => prev.filter(u => u.id !== user.id))}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons name="close-circle" size={16} color="#FFFFFF" />
+                                </TouchableOpacity>
+                            </View>
+                        );
+                    }}
+                    keyExtractor={item => item.id.toString()}
+                />
+            </View>
+        );
+    };
+
+    return (
+        <View style={[styles.container, { backgroundColor: currentColors.background }]}>
+            <StatusBar 
+                barStyle="light-content" 
+                backgroundColor={currentColors.header} 
+            />
+            
+            {/* Header */}
+            {renderHeader()}
+            
             {/* Chat List */}
-            <View style={styles.chatListContainer}>
+            <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
                 {loading && chats.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={styles.loadingText}>Loading chats...</Text>
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={currentColors.primary} />
                     </View>
                 ) : chats.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <Ionicons name="chatbubbles-outline" size={64} color={colors.textLight} />
-                        <Text style={styles.emptyStateText}>No chats yet</Text>
-                        <Text style={styles.emptyStateSubtext}>
-                            Start a conversation by tapping the + button
+                        <View style={[styles.emptyIconContainer, { backgroundColor: currentColors.card }]}>
+                            <Ionicons 
+                                name="chatbubbles-outline" 
+                                size={48} 
+                                color={currentColors.textSecondary} 
+                            />
+                        </View>
+                        <Text style={[styles.emptyStateText, { color: currentColors.text }]}>
+                            No chats yet
+                        </Text>
+                        <Text style={[styles.emptyStateSubtext, { color: currentColors.textSecondary }]}>
+                            Tap the button below to start a conversation
                         </Text>
                     </View>
                 ) : (
@@ -450,153 +616,160 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, current
                         keyExtractor={item => item.id.toString()}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={styles.chatList}
+                        style={styles.chatListContainer}
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
                     />
                 )}
-            </View>
+            </SafeAreaView>
 
             {/* Floating Action Button */}
             <TouchableOpacity
-                style={styles.fab}
+                style={[styles.fab, { backgroundColor: currentColors.primary }]}
                 onPress={() => setShowNewChatModal(true)}
                 activeOpacity={0.8}
             >
-                <Ionicons name="add" size={28} color={colors.white} />
+                <Ionicons name="chatbubble" size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
             {/* New Chat Modal */}
             <Modal
                 visible={showNewChatModal}
                 animationType="slide"
-                transparent={true}
+                transparent={false}
                 onRequestClose={() => setShowNewChatModal(false)}
+                statusBarTranslucent={false}
             >
-                <View style={styles.modalOverlay}>
+                <View style={[styles.modalContainer, { backgroundColor: currentColors.modalBg }]}>
+                    {/* Modal Header */}
+                    {renderModalHeader()}
+                    
+                    {/* Content */}
                     <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {isGroupChat ? 'Create Group Chat' : 'New Chat'}
-                            </Text>
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setShowNewChatModal(false);
-                                    resetNewChatModal();
-                                }}
-                            >
-                                <Ionicons name="close" size={24} color={colors.text} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            {isGroupChat && (
+                        {isGroupChat && (
+                            <View style={styles.groupNameSection}>
+                                <Text style={[styles.groupNameLabel, { color: currentColors.textSecondary }]}>
+                                    Group name
+                                </Text>
                                 <TextInput
-                                    style={styles.input}
-                                    placeholder="Group Name"
-                                    placeholderTextColor={colors.textLight}
+                                    style={[
+                                        styles.groupNameInput,
+                                        { 
+                                            color: currentColors.text,
+                                            backgroundColor: currentColors.card,
+                                            borderColor: currentColors.border 
+                                        }
+                                    ]}
+                                    placeholder="Enter group name"
+                                    placeholderTextColor={currentColors.textSecondary}
                                     value={groupName}
                                     onChangeText={setGroupName}
+                                    autoFocus={isGroupChat}
                                 />
-                            )}
+                            </View>
+                        )}
 
-                            <View style={styles.userSearchContainer}>
-                                <View style={styles.searchInputContainer}>
-                                    <Ionicons name="search" size={20} color={colors.textLight} />
-                                    <TextInput
-                                        style={styles.searchInput}
-                                        placeholder="Search users..."
-                                        placeholderTextColor={colors.textLight}
-                                        value={searchQuery}
-                                        onChangeText={(text) => {
-                                            setSearchQuery(text);
-                                            searchUsers(text);
-                                        }}
+                        {renderSelectedUsers()}
+
+                        {/* Search Section */}
+                        <View style={[
+                            styles.searchContainer,
+                            { backgroundColor: currentColors.searchBg }
+                        ]}>
+                            <Ionicons 
+                                name="search" 
+                                size={20} 
+                                color={currentColors.textSecondary} 
+                                style={styles.searchIcon}
+                            />
+                            <TextInput
+                                style={[styles.searchInput, { color: currentColors.text }]}
+                                placeholder="Search name or number"
+                                placeholderTextColor={currentColors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={(text) => {
+                                    setSearchQuery(text);
+                                    searchUsers(text);
+                                }}
+                                autoFocus={!isGroupChat}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                    <Ionicons 
+                                        name="close-circle" 
+                                        size={20} 
+                                        color={currentColors.textSecondary} 
+                                    />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Search Results or Contacts List */}
+                        <View style={styles.searchResultsContainer}>
+                            {searchResults.length > 0 ? (
+                                <FlatList
+                                    data={searchResults}
+                                    renderItem={renderUserSearchItem}
+                                    keyExtractor={item => item.id.toString()}
+                                    showsVerticalScrollIndicator={false}
+                                    contentContainerStyle={styles.searchResultsList}
+                                />
+                            ) : searchQuery.length >= 2 ? (
+                                <View style={styles.noResultsContainer}>
+                                    <Ionicons 
+                                        name="people-outline" 
+                                        size={48} 
+                                        color={currentColors.textSecondary} 
+                                    />
+                                    <Text style={[styles.noResultsText, { color: currentColors.text }]}>
+                                        No contacts found
+                                    </Text>
+                                    <Text style={[styles.noResultsSubtext, { color: currentColors.textSecondary }]}>
+                                        Try a different search
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={styles.contactsHeader}>
+                                    <Text style={[styles.contactsTitle, { color: currentColors.textSecondary }]}>
+                                        CONTACTS ON WHATSAPP
+                                    </Text>
+                                    <Text style={[styles.contactsCount, { color: currentColors.textSecondary }]}>
+                                        0 contacts
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Group Chat Toggle */}
+                        <TouchableOpacity
+                            style={[
+                                styles.groupChatToggle,
+                                { backgroundColor: currentColors.card }
+                            ]}
+                            onPress={() => setIsGroupChat(!isGroupChat)}
+                        >
+                            <View style={styles.groupChatToggleContent}>
+                                <View style={[
+                                    styles.groupChatToggleIcon,
+                                    { backgroundColor: currentColors.primary }
+                                ]}>
+                                    <Ionicons
+                                        name={isGroupChat ? "people" : "people"}
+                                        size={20}
+                                        color="#FFFFFF"
                                     />
                                 </View>
-
-                                {searchResults.length > 0 && (
-                                    <View style={styles.searchResults}>
-                                        <ScrollView style={{ maxHeight: 300 }}>
-                                            {searchResults.map(user => renderUserSearchItem(user))}
-                                        </ScrollView>
-                                    </View>
-                                )}
-                            </View>
-
-                            {selectedUsers.length > 0 && (
-                                <View style={styles.selectedUsersContainer}>
-                                    <Text style={styles.selectedUsersLabel}>Selected:</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                        {selectedUsers.map(user => {
-                                            const fullName = user.full_name || `${user.first_name} ${user.last_name}`;
-                                            return (
-                                                <View key={user.id} style={styles.selectedUserChip}>
-                                                    <Text style={styles.selectedUserName}>
-                                                        {fullName}
-                                                    </Text>
-                                                    <TouchableOpacity
-                                                        onPress={() => setSelectedUsers(prev => prev.filter(u => u.id !== user.id))}
-                                                    >
-                                                        <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            );
-                                        })}
-                                    </ScrollView>
+                                <View style={styles.groupChatToggleText}>
+                                    <Text style={[styles.groupChatToggleTitle, { color: currentColors.text }]}>
+                                        {isGroupChat ? 'New group' : 'New group'}
+                                    </Text>
+                                    <Text style={[styles.groupChatToggleSubtitle, { color: currentColors.textSecondary }]}>
+                                        {isGroupChat ? 'Create a group with multiple people' : 'Create a group with multiple people'}
+                                    </Text>
                                 </View>
-                            )}
-
-                            <TouchableOpacity
-                                style={[styles.button, styles.secondaryButton]}
-                                onPress={() => setIsGroupChat(!isGroupChat)}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons
-                                    name={isGroupChat ? "person" : "people"}
-                                    size={20}
-                                    color={colors.text}
-                                    style={{ marginRight: spacing.sm }}
-                                />
-                                <Text style={[styles.buttonText, styles.secondaryButtonText]}>
-                                    {isGroupChat ? 'Switch to Direct Chat' : 'Create Group Chat'}
-                                </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.button,
-                                    (selectedUsers.length === 0 || loading || (isGroupChat && !groupName.trim())) && styles.buttonDisabled
-                                ]}
-                                onPress={createNewChat}
-                                disabled={selectedUsers.length === 0 || loading || (isGroupChat && !groupName.trim())}
-                                activeOpacity={0.7}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator color={colors.white} />
-                                ) : (
-                                    <>
-                                        <Ionicons
-                                            name="send"
-                                            size={20}
-                                            color={colors.white}
-                                            style={{ marginRight: spacing.sm }}
-                                        />
-                                        <Text style={styles.buttonText}>
-                                            {isGroupChat ? 'Create Group' : 'Start Chat'}
-                                        </Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.button, styles.secondaryButton]}
-                                onPress={() => {
-                                    setShowNewChatModal(false);
-                                    resetNewChatModal();
-                                }}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[styles.buttonText, styles.secondaryButtonText]}>Cancel</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={currentColors.textSecondary} />
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -607,86 +780,111 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ onBack, onOpenChatRoom, current
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background
+    },
+    safeArea: {
+        flex: 1,
     },
     header: {
+        paddingHorizontal: spacing.sm,
+        paddingBottom: spacing.sm,
+        zIndex: 1000,
+    },
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.primary,
+        justifyContent: 'space-between',
     },
     backButton: {
-        padding: spacing.sm,
-        borderRadius: borderRadius.sm
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: spacing.sm,
+        borderRadius: borderRadius.full,
+    },
+    backText: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#FFFFFF',
+        marginLeft: spacing.xs,
     },
     headerTitle: {
-        fontSize: fontSize.xl,
-        fontWeight: '600',
-        color: colors.white,
         flex: 1,
+        fontSize: fontSize.xxl,
+        fontWeight: '600',
+        color: '#FFFFFF',
         textAlign: 'center',
+        marginLeft: -40,
     },
-    headerSpacer: {
-        width: 40
+    headerMenuButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     chatListContainer: {
         flex: 1,
-        backgroundColor: colors.backgroundSecondary,
     },
     chatList: {
         paddingBottom: spacing.lg,
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     chatItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.white,
         padding: spacing.md,
         borderBottomWidth: 1,
-        borderBottomColor: colors.border,
     },
     chatAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: colors.primary,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: spacing.md,
     },
     chatAvatarImage: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
     },
     chatAvatarText: {
-        color: colors.white,
+        color: '#FFFFFF',
         fontSize: fontSize.lg,
-        fontWeight: 'bold',
+        fontWeight: '500',
     },
     chatInfo: {
         flex: 1,
     },
-    chatName: {
-        fontSize: fontSize.md,
-        fontWeight: '600',
-        color: colors.text,
+    chatInfoTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: spacing.xs,
     },
-    lastMessage: {
-        fontSize: fontSize.sm,
-        color: colors.textSecondary,
-    },
-    chatMeta: {
-        alignItems: 'flex-end',
+    chatName: {
+        fontSize: fontSize.xl,
+        fontWeight: '500',
+        flex: 1,
+        marginRight: spacing.sm,
     },
     chatTime: {
         fontSize: fontSize.xs,
-        color: colors.textLight,
-        marginBottom: spacing.xs,
+    },
+    chatInfoBottom: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    lastMessage: {
+        fontSize: fontSize.md,
+        flex: 1,
+        marginRight: spacing.sm,
     },
     unreadBadge: {
-        backgroundColor: colors.primary,
         minWidth: 20,
         height: 20,
         borderRadius: 10,
@@ -695,9 +893,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.xs,
     },
     unreadCount: {
-        color: colors.white,
+        color: '#FFFFFF',
         fontSize: fontSize.xs,
-        fontWeight: 'bold',
+        fontWeight: '600',
+    },
+    chatMenuButton: {
+        padding: spacing.sm,
+        marginLeft: spacing.sm,
     },
     fab: {
         position: 'absolute',
@@ -706,160 +908,206 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        ...shadows.lg,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
     },
-    modalOverlay: {
+    // Modal Styles
+    modalContainer: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'flex-end',
     },
-    modalContent: {
-        backgroundColor: colors.white,
-        borderTopLeftRadius: borderRadius.xl,
-        borderTopRightRadius: borderRadius.xl,
-        padding: spacing.lg,
-        maxHeight: '90%',
-    },
-    modalHeader: {
+    modalHeaderContainer: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.lg,
-    },
-    modalTitle: {
-        fontSize: fontSize.lg,
-        fontWeight: '600',
-        color: colors.text,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: borderRadius.lg,
+        paddingTop: Platform.OS === 'ios' ? 50 : 20,
+        paddingBottom: spacing.md,
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.md,
-        fontSize: fontSize.md,
-        color: colors.text,
-        backgroundColor: colors.white,
-        marginBottom: spacing.md,
     },
-    userSearchContainer: {
-        marginBottom: spacing.md,
-    },
-    searchInputContainer: {
+    modalBackButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: borderRadius.lg,
-        paddingHorizontal: spacing.md,
-        backgroundColor: colors.white,
     },
-    searchInput: {
-        flex: 1,
-        paddingVertical: spacing.md,
-        fontSize: fontSize.md,
-        color: colors.text,
+    modalBackText: {
+        fontSize: fontSize.lg,
+        fontWeight: '500',
+        color: '#FFFFFF',
         marginLeft: spacing.sm,
     },
-    searchResults: {
-        marginTop: spacing.sm,
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.white,
-        ...shadows.md,
+    modalTitle: {
+        fontSize: fontSize.xl,
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
-    userItem: {
-        padding: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    userItemSelected: {
-        backgroundColor: colors.backgroundSecondary,
-    },
-    userItemContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    userAvatar: {
+    modalActionButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: spacing.md,
     },
-    userAvatarText: {
-        color: colors.white,
-        fontSize: fontSize.sm,
-        fontWeight: 'bold',
+    modalActionButtonDisabled: {
+        opacity: 0.5,
     },
-    userDetails: {
+    modalContent: {
         flex: 1,
     },
-    userName: {
-        fontSize: fontSize.md,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: 2,
+    groupNameSection: {
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.lg,
     },
-    userEmail: {
+    groupNameLabel: {
         fontSize: fontSize.sm,
-        color: colors.textSecondary,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        marginBottom: spacing.sm,
+    },
+    groupNameInput: {
+        borderWidth: 1,
+        borderRadius: borderRadius.lg,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
+        fontSize: fontSize.lg,
     },
     selectedUsersContainer: {
-        marginBottom: spacing.md,
-    },
-    selectedUsersLabel: {
-        fontSize: fontSize.sm,
-        fontWeight: '600',
-        color: colors.textSecondary,
-        marginBottom: spacing.sm,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
     },
     selectedUserChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius.lg,
+        borderRadius: borderRadius.full,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
         marginRight: spacing.sm,
     },
     selectedUserName: {
-        color: colors.white,
+        color: '#FFFFFF',
         fontSize: fontSize.sm,
+        fontWeight: '500',
         marginRight: spacing.sm,
     },
-    button: {
-        backgroundColor: colors.primary,
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.lg,
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginHorizontal: spacing.lg,
+        marginBottom: spacing.md,
         borderRadius: borderRadius.lg,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+    },
+    searchIcon: {
+        marginRight: spacing.sm,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: fontSize.md,
+        paddingVertical: spacing.sm,
+    },
+    searchResultsContainer: {
+        flex: 1,
+    },
+    searchResultsList: {
+        paddingBottom: spacing.lg,
+    },
+    noResultsContainer: {
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        marginVertical: spacing.sm,
-        flexDirection: 'row',
-        ...shadows.md,
+        padding: spacing.xl,
     },
-    buttonDisabled: {
-        opacity: 0.5,
-    },
-    buttonText: {
-        color: colors.white,
-        fontSize: fontSize.md,
+    noResultsText: {
+        fontSize: fontSize.xl,
         fontWeight: '600',
+        marginTop: spacing.md,
+        marginBottom: spacing.sm,
     },
-    secondaryButton: {
-        backgroundColor: colors.backgroundSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
+    noResultsSubtext: {
+        fontSize: fontSize.md,
     },
-    secondaryButtonText: {
-        color: colors.text,
+    contactsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.sm,
+    },
+    contactsTitle: {
+        fontSize: fontSize.sm,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+    },
+    contactsCount: {
+        fontSize: fontSize.sm,
+    },
+    groupChatToggle: {
+        marginHorizontal: spacing.lg,
+        marginBottom: spacing.lg,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+    },
+    groupChatToggleContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    groupChatToggleIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md,
+    },
+    groupChatToggleText: {
+        flex: 1,
+    },
+    groupChatToggleTitle: {
+        fontSize: fontSize.lg,
+        fontWeight: '500',
+        marginBottom: spacing.xs,
+    },
+    groupChatToggleSubtitle: {
+        fontSize: fontSize.sm,
+    },
+    userItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        borderBottomWidth: 1,
+    },
+    userItemContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    userAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md,
+    },
+    userAvatarText: {
+        color: '#FFFFFF',
+        fontSize: fontSize.lg,
+        fontWeight: '500',
+    },
+    userDetails: {
+        flex: 1,
+    },
+    userName: {
+        fontSize: fontSize.lg,
+        fontWeight: '500',
+        marginBottom: spacing.xs,
+    },
+    userEmail: {
+        fontSize: fontSize.sm,
     },
     emptyState: {
         flex: 1,
@@ -867,23 +1115,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: spacing.xl,
     },
+    emptyIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.lg,
+    },
     emptyStateText: {
-        fontSize: fontSize.lg,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        marginTop: spacing.md,
-        marginBottom: spacing.sm,
+        fontSize: fontSize.xl,
         fontWeight: '600',
+        textAlign: 'center',
+        marginBottom: spacing.sm,
     },
     emptyStateSubtext: {
-        fontSize: fontSize.sm,
-        color: colors.textLight,
-        textAlign: 'center',
-    },
-    loadingText: {
         fontSize: fontSize.md,
-        color: colors.textSecondary,
-        marginTop: spacing.md,
+        textAlign: 'center',
     },
 });
 
