@@ -1,14 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
   StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
-  Dimensions, KeyboardAvoidingView, FlatList,
+  Dimensions, KeyboardAvoidingView, FlatList, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
 
@@ -220,42 +221,47 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Log Maintenance</Text>
               <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={24} color="#075E54" />
               </TouchableOpacity>
+              <Text style={styles.modalTitle}>Log Maintenance</Text>
+              <View style={{ width: 40 }} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Cost (₹) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={form.cost}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, cost: text }))}
-                  placeholder="Enter maintenance cost"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons name="currency-inr" size={20} color="#075E54" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={form.cost}
+                    onChangeText={(text) => setForm(prev => ({ ...prev, cost: text }))}
+                    placeholder="Enter maintenance cost"
+                    placeholderTextColor="#888"
+                    keyboardType="numeric"
+                  />
+                </View>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Description *</Text>
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={form.description}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, description: text }))}
-                  placeholder="Describe the maintenance work"
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
+                <View style={styles.inputContainer}>
+                  <MaterialIcons name="description" size={20} color="#075E54" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.descriptionInput}
+                    value={form.description}
+                    onChangeText={(text) => setForm(prev => ({ ...prev, description: text }))}
+                    placeholder="Describe the maintenance work"
+                    placeholderTextColor="#888"
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                </View>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Start Date *</Text>
                 <TouchableOpacity style={styles.dateButton} onPress={() => setShowStartDatePicker(true)}>
+                  <MaterialIcons name="date-range" size={20} color="#075E54" style={styles.buttonIcon} />
                   <Text style={[styles.dateButtonText, !form.start_date && styles.dateButtonPlaceholder]}>
                     {form.start_date || 'Select start date'}
                   </Text>
@@ -266,8 +272,8 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>End Date *</Text>
                 <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndDatePicker(true)}>
+                  <MaterialIcons name="date-range" size={20} color="#075E54" style={styles.buttonIcon} />
                   <Text style={[styles.dateButtonText, !form.end_date && styles.dateButtonPlaceholder]}>
                     {form.end_date || 'Select end date'}
                   </Text>
@@ -278,29 +284,32 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Attach Document (Optional)</Text>
                 <TouchableOpacity style={styles.documentButton} onPress={handleDocumentPick}>
+                  <MaterialIcons name="attach-file" size={20} color="#075E54" style={styles.buttonIcon} />
                   <Text style={styles.documentButtonText}>
-                    {form.document ? form.document.name || 'Document Selected' : 'Select Document'}
+                    {form.document ? form.document.name || 'Document Selected' : 'Attach Document (Optional)'}
                   </Text>
                 </TouchableOpacity>
                 {form.document && (
                   <View style={styles.documentInfo}>
-                    <Text style={styles.documentName} numberOfLines={1}>
-                      📄 {form.document.name}
-                    </Text>
+                    <View style={styles.documentRow}>
+                      <MaterialIcons name="insert-drive-file" size={16} color="#075E54" />
+                      <Text style={styles.documentName} numberOfLines={1}>
+                        {form.document.name}
+                      </Text>
+                    </View>
                     <TouchableOpacity 
                       style={styles.removeDocumentButton} 
                       onPress={() => setForm(prev => ({ ...prev, document: null }))}
                     >
-                      <Text style={styles.removeDocumentText}>Remove</Text>
+                      <Ionicons name="close-circle" size={20} color="#FF3B30" />
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
+                <TouchableOpacity style={styles.modalCancelButton} onPress={onClose} disabled={loading}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -312,9 +321,9 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
                   disabled={loading || !form.cost || !form.description || !form.start_date || !form.end_date}
                 >
                   {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
+                    <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
-                    <Text style={styles.modalSubmitText}>Log Maintenance</Text>
+                    <Text style={styles.modalSubmitText}>Submit</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -335,51 +344,58 @@ const FuelLogModal: React.FC<FuelLogModalProps> = ({
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Fuel Log</Text>
               <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={24} color="#075E54" />
               </TouchableOpacity>
+              <Text style={styles.modalTitle}>Add Fuel Log</Text>
+              <View style={{ width: 40 }} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Quantity (Liters) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={form.quantity}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, quantity: text }))}
-                  placeholder="Enter fuel quantity"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="decimal-pad"
-                />
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons name="fuel" size={20} color="#075E54" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={form.quantity}
+                    onChangeText={(text) => setForm(prev => ({ ...prev, quantity: text }))}
+                    placeholder="Enter fuel quantity (Liters)"
+                    placeholderTextColor="#888"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Cost (₹) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={form.cost}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, cost: text }))}
-                  placeholder="Enter fuel cost"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons name="currency-inr" size={20} color="#075E54" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={form.cost}
+                    onChangeText={(text) => setForm(prev => ({ ...prev, cost: text }))}
+                    placeholder="Enter fuel cost"
+                    placeholderTextColor="#888"
+                    keyboardType="numeric"
+                  />
+                </View>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Odometer Reading (KM) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={form.odometer_reading}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, odometer_reading: text }))}
-                  placeholder="Enter current odometer reading"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons name="speedometer" size={20} color="#075E54" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={form.odometer_reading}
+                    onChangeText={(text) => setForm(prev => ({ ...prev, odometer_reading: text }))}
+                    placeholder="Enter odometer reading (KM)"
+                    placeholderTextColor="#888"
+                    keyboardType="numeric"
+                  />
+                </View>
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
+                <TouchableOpacity style={styles.modalCancelButton} onPress={onClose} disabled={loading}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -391,9 +407,9 @@ const FuelLogModal: React.FC<FuelLogModalProps> = ({
                   disabled={loading || !form.quantity || !form.cost || !form.odometer_reading}
                 >
                   {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
+                    <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
-                    <Text style={styles.modalSubmitText}>Add Fuel Log</Text>
+                    <Text style={styles.modalSubmitText}>Submit</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -413,10 +429,11 @@ const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Maintenance Logs</Text>
             <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-              <Text style={styles.modalCloseText}>✕</Text>
+              <Ionicons name="close" size={24} color="#075E54" />
             </TouchableOpacity>
+            <Text style={styles.modalTitle}>Maintenance Logs</Text>
+            <View style={{ width: 40 }} />
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
@@ -424,24 +441,32 @@ const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
               logs.map((log) => (
                 <View key={log.id} style={styles.logCard}>
                   <View style={styles.logHeader}>
-                    <Text style={styles.logCost}>₹{log.cost}</Text>
+                    <View style={styles.logHeaderLeft}>
+                      <MaterialCommunityIcons name="toolbox" size={20} color="#075E54" />
+                      <Text style={styles.logCost}>₹{log.cost}</Text>
+                    </View>
+                    <Text style={styles.logDate}>{formatDate(log.maintenance_date)}</Text>
                   </View>
                   <Text style={styles.logDescription}>{log.description}</Text>
                   <View style={styles.logDetails}>
-                    <Text style={styles.logDetail}>
-                      <Text style={styles.logLabel}>Maintenance Date:</Text> {formatDate(log.maintenance_date)}
-                    </Text>
-                    <Text style={styles.logDetail}>
-                      <Text style={styles.logLabel}>Period:</Text> {formatDate(log.start_date)} - {formatDate(log.end_date)}
-                    </Text>
-                    <Text style={styles.logDetail}>
-                      <Text style={styles.logLabel}>Logged by:</Text> {log.logged_by.full_name}
-                    </Text>
+                    <View style={styles.logDetailRow}>
+                      <MaterialIcons name="calendar-today" size={14} color="#666" />
+                      <Text style={styles.logDetail}>
+                        {formatDate(log.start_date)} - {formatDate(log.end_date)}
+                      </Text>
+                    </View>
+                    <View style={styles.logDetailRow}>
+                      <Ionicons name="person" size={14} color="#666" />
+                      <Text style={styles.logDetail}>
+                        {log.logged_by.full_name}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))
             ) : (
               <View style={styles.emptyState}>
+                <MaterialCommunityIcons name="toolbox-outline" size={60} color="#CCCCCC" />
                 <Text style={styles.emptyStateText}>No maintenance records</Text>
                 <Text style={styles.emptyStateSubtext}>Maintenance history will appear here</Text>
               </View>
@@ -461,10 +486,11 @@ const FuelLogsModal: React.FC<FuelLogsModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Fuel Logs</Text>
             <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-              <Text style={styles.modalCloseText}>✕</Text>
+              <Ionicons name="close" size={24} color="#075E54" />
             </TouchableOpacity>
+            <Text style={styles.modalTitle}>Fuel Logs</Text>
+            <View style={{ width: 40 }} />
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
@@ -472,30 +498,34 @@ const FuelLogsModal: React.FC<FuelLogsModalProps> = ({
               logs.map((log) => (
                 <View key={log.id} style={styles.logCard}>
                   <View style={styles.logHeader}>
-                    <Text style={styles.logCost}>₹{log.cost}</Text>
+                    <View style={styles.logHeaderLeft}>
+                      <MaterialCommunityIcons name="fuel" size={20} color="#075E54" />
+                      <View>
+                        <Text style={styles.logCost}>₹{log.cost}</Text>
+                        <Text style={styles.logQuantity}>{log.quantity}L</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.logDate}>{formatDateTime(log.fuel_date)}</Text>
                   </View>
                   <View style={styles.fuelDetails}>
                     <View style={styles.fuelDetailItem}>
-                      <Text style={styles.fuelDetailLabel}>Quantity</Text>
-                      <Text style={styles.fuelDetailValue}>{log.quantity}L</Text>
-                    </View>
-                    <View style={styles.fuelDetailItem}>
-                      <Text style={styles.fuelDetailLabel}>Odometer</Text>
+                      <MaterialCommunityIcons name="speedometer" size={16} color="#666" />
                       <Text style={styles.fuelDetailValue}>{log.odometer_reading} km</Text>
                     </View>
                   </View>
                   <View style={styles.logDetails}>
-                    <Text style={styles.logDetail}>
-                      <Text style={styles.logLabel}>Date:</Text> {formatDateTime(log.fuel_date)}
-                    </Text>
-                    <Text style={styles.logDetail}>
-                      <Text style={styles.logLabel}>Logged by:</Text> {log.logged_by.full_name}
-                    </Text>
+                    <View style={styles.logDetailRow}>
+                      <Ionicons name="person" size={14} color="#666" />
+                      <Text style={styles.logDetail}>
+                        {log.logged_by.full_name}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))
             ) : (
               <View style={styles.emptyState}>
+                <MaterialCommunityIcons name="fuel" size={60} color="#CCCCCC" />
                 <Text style={styles.emptyStateText}>No fuel logs</Text>
                 <Text style={styles.emptyStateSubtext}>Fuel consumption history will appear here</Text>
               </View>
@@ -506,6 +536,13 @@ const FuelLogsModal: React.FC<FuelLogsModalProps> = ({
     </Modal>
   );
 };
+
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+    <Text style={styles.backText}>Back</Text>
+  </View>
+);
 
 const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
@@ -738,16 +775,14 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
-      // Create FormData for file upload
       const formData = new FormData();
-      formData.append('token', token);
+      formData.append('token', token || '');
       formData.append('vehicle_id', selectedVehicle.id.toString());
       formData.append('cost', maintenanceForm.cost);
       formData.append('description', maintenanceForm.description);
       formData.append('start_date', maintenanceForm.start_date);
       formData.append('end_date', maintenanceForm.end_date);
 
-      // Add document if exists
       if (maintenanceForm.document) {
         formData.append('document', {
           uri: maintenanceForm.document.uri,
@@ -833,364 +868,543 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
   const getStatusColor = (status: string): string => {
     switch (status.toLowerCase()) {
-      case 'active': return colors.success;
-      case 'maintenance': return colors.warning;
-      case 'inactive': return colors.error;
-      case 'available': return colors.info;
-      case 'not_available': return colors.error;
-      case 'booked': return colors.primary;
-      case 'completed': return colors.success;
-      case 'cancelled': return colors.error;
-      case 'in-progress': return colors.warning;
-      default: return colors.textSecondary;
+      case 'active':
+      case 'available':
+      case 'completed': return '#25D366';
+      case 'maintenance':
+      case 'in-progress': return '#FF9500';
+      case 'inactive':
+      case 'not_available':
+      case 'cancelled': return '#FF3B30';
+      case 'booked': return '#007AFF';
+      default: return '#8E8E93';
     }
   };
 
-  const BackIcon = () => (
-    <View style={styles.backIcon}>
-      <View style={styles.backArrow} />
-    </View>
-  );
+  const getStatusIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active':
+      case 'available': return 'checkmark-circle';
+      case 'maintenance': return 'build';
+      case 'inactive': return 'close-circle';
+      case 'booked': return 'time';
+      case 'completed': return 'checkmark-done-circle';
+      case 'cancelled': return 'close-circle';
+      case 'in-progress': return 'sync-circle';
+      default: return 'help-circle';
+    }
+  };
 
   const renderVehicleDetailPage = () => (
-    <ScrollView style={styles.pageContainer} showsVerticalScrollIndicator={false}>
-      {selectedVehicle && (
-        <View style={styles.detailPageContent}>
-          <View style={styles.vehicleDetailHeader}>
-            <View style={styles.vehicleDetailInfo}>
-              <Text style={styles.vehicleModelText}>
-                {selectedVehicle.make} {selectedVehicle.model}
-              </Text>
-              <Text style={styles.vehiclePlateText}>{selectedVehicle.license_plate}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVehicle.status) }]}>
-              <Text style={styles.statusBadgeText}>{selectedVehicle.status}</Text>
-            </View>
-          </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+      
+      {/* Header with Back Button */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity 
+          style={styles.detailBackButton} 
+          onPress={() => setCurrentView('main')}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Text style={styles.detailBackText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.detailHeaderTitle}>Vehicle Details</Text>
+        <View style={styles.detailHeaderSpacer} />
+      </View>
 
-          <View style={styles.vehicleInfoGrid}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Type</Text>
-              <Text style={styles.infoValue}>{selectedVehicle.color}</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Fuel Type</Text>
-              <Text style={styles.infoValue}>{selectedVehicle.fuel_type}</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Year</Text>
-              <Text style={styles.infoValue}>{selectedVehicle.year}</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Seating</Text>
-              <Text style={styles.infoValue}>{selectedVehicle.seating_capacity} seats</Text>
-            </View>
-          </View>
-
-          <View style={styles.locationSection}>
-            <Text style={styles.sectionTitle}>Current Location</Text>
-            <Text style={styles.locationText}>
-              {selectedVehicle.current_location.address}, {selectedVehicle.current_location.city}, {selectedVehicle.current_location.state} - {selectedVehicle.current_location.zip_code}
-            </Text>
-          </View>
-
-          <View style={styles.statusUpdateSection}>
-            <Text style={styles.sectionTitle}>Update Vehicle Status</Text>
-            <View style={styles.statusOptions}>
-              {['available', 'booked', 'in_maintenance', 'not_available'].map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[styles.statusOption, vehicleStatus === status && styles.statusOptionSelected]}
-                  onPress={() => setVehicleStatus(status)}
-                >
-                  <Text style={[styles.statusOptionText, vehicleStatus === status && styles.statusOptionTextSelected]}>
-                    {status.replace('_', ' ').charAt(0).toUpperCase() + status.replace('_', ' ').slice(1)}
+      <ScrollView style={styles.detailPageContainer} showsVerticalScrollIndicator={false}>
+        {selectedVehicle && (
+          <View style={styles.detailPageContent}>
+            {/* Vehicle Header Card */}
+            <View style={styles.vehicleDetailHeaderCard}>
+              <View style={styles.vehicleDetailHeader}>
+                <View style={styles.vehicleAvatar}>
+                  <MaterialCommunityIcons name="car" size={40} color="#075E54" />
+                </View>
+                <View style={styles.vehicleDetailInfo}>
+                  <Text style={styles.vehicleModelText}>
+                    {selectedVehicle.make} {selectedVehicle.model}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.primaryButton} onPress={updateVehicleStatus} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Update Status</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.buttonGroupsContainer}>
-            <View style={styles.buttonGroup}>
-              <Text style={styles.buttonGroupTitle}>Maintenance</Text>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => setIsMaintenanceModalVisible(true)}>
-                <Text style={styles.secondaryButtonText}>Log Maintenance</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.outlineButton} onPress={() => fetchMaintenanceLogs(selectedVehicle.id)}>
-                <Text style={styles.outlineButtonText}>View Maintenance Logs</Text>
-              </TouchableOpacity>
+                  <Text style={styles.vehiclePlateText}>{selectedVehicle.license_plate}</Text>
+                  <View style={styles.vehicleMeta}>
+                    <View style={styles.metaChip}>
+                      <MaterialCommunityIcons name="palette" size={12} color="#075E54" />
+                      <Text style={styles.metaChipText}>{selectedVehicle.color}</Text>
+                    </View>
+                    <View style={styles.metaChip}>
+                      <MaterialCommunityIcons name="fuel" size={12} color="#075E54" />
+                      <Text style={styles.metaChipText}>{selectedVehicle.fuel_type}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            <View style={styles.buttonGroup}>
-              <Text style={styles.buttonGroupTitle}>Fuel</Text>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => setIsFuelLogModalVisible(true)}>
-                <Text style={styles.secondaryButtonText}>Add Fuel Log</Text>
+            {/* Status Badge */}
+            <View style={styles.statusBadgeContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedVehicle.status) }]}>
+                <Ionicons name={getStatusIcon(selectedVehicle.status)} size={16} color="#FFFFFF" />
+                <Text style={styles.statusBadgeText}>{selectedVehicle.status.toUpperCase()}</Text>
+              </View>
+            </View>
+
+            {/* Vehicle Details Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <MaterialCommunityIcons name="car-info" size={20} color="#075E54" />
+                <Text style={styles.cardTitle}>Vehicle Details</Text>
+              </View>
+              <View style={styles.infoGrid}>
+                <View style={styles.infoRow}>
+                  <MaterialCommunityIcons name="car-door" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Seating:</Text>
+                  <Text style={styles.infoValue}>{selectedVehicle.seating_capacity} seats</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="calendar-today" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Year:</Text>
+                  <Text style={styles.infoValue}>{selectedVehicle.year}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="location-on" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Location:</Text>
+                  <Text style={styles.infoValue}>
+                    {selectedVehicle.current_location.city}, {selectedVehicle.current_location.state}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Update Status Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="update" size={20} color="#075E54" />
+                <Text style={styles.cardTitle}>Update Status</Text>
+              </View>
+              <View style={styles.statusOptions}>
+                {['available', 'not_available', 'in_maintenance'].map((status) => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[styles.statusOption, vehicleStatus === status && styles.statusOptionSelected]}
+                    onPress={() => setVehicleStatus(status)}
+                  >
+                    <Ionicons 
+                      name={getStatusIcon(status)} 
+                      size={20} 
+                      color={vehicleStatus === status ? '#FFFFFF' : '#075E54'} 
+                    />
+                    <Text style={[styles.statusOptionText, vehicleStatus === status && styles.statusOptionTextSelected]}>
+                      {status.replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity 
+                style={styles.updateButton} 
+                onPress={updateVehicleStatus} 
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                    <Text style={styles.updateButtonText}>Update Status</Text>
+                  </>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.outlineButton} onPress={() => fetchFuelLogs(selectedVehicle.id)}>
-                <Text style={styles.outlineButtonText}>View Fuel Logs</Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity style={styles.actionButton} onPress={() => setIsMaintenanceModalVisible(true)}>
+                <MaterialCommunityIcons name="toolbox" size={24} color="#075E54" />
+                <Text style={styles.actionButtonText}>Maintenance</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.actionButton} onPress={() => setIsFuelLogModalVisible(true)}>
+                <MaterialCommunityIcons name="fuel" size={24} color="#075E54" />
+                <Text style={styles.actionButtonText}>Fuel Log</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.actionButton} onPress={() => fetchMaintenanceLogs(selectedVehicle.id)}>
+                <MaterialCommunityIcons name="history" size={24} color="#075E54" />
+                <Text style={styles.actionButtonText}>Logs</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.actionButton} onPress={() => fetchFuelLogs(selectedVehicle.id)}>
+                <MaterialCommunityIcons name="gas-station" size={24} color="#075E54" />
+                <Text style={styles.actionButtonText}>Fuel History</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      )}
-    </ScrollView>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 
   const renderBookingDetailPage = () => (
-    <ScrollView style={styles.pageContainer} showsVerticalScrollIndicator={false}>
-      {selectedBooking && (
-        <View style={styles.detailPageContent}>
-          <View style={styles.bookingDetailHeader}>
-            <View style={styles.bookingDetailInfo}>
-              <Text style={styles.bookingTitleText}>
-                {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
-              </Text>
-              <Text style={styles.bookingPlateText}>{selectedBooking.vehicle.license_plate}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedBooking.status) }]}>
-              <Text style={styles.statusBadgeText}>{selectedBooking.status}</Text>
-            </View>
-          </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+      
+      {/* Header with Back Button */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity 
+          style={styles.detailBackButton} 
+          onPress={() => setCurrentView('main')}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Text style={styles.detailBackText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.detailHeaderTitle}>Booking Details</Text>
+        <View style={styles.detailHeaderSpacer} />
+      </View>
 
-          <View style={styles.bookingInfoSection}>
-            <Text style={styles.sectionTitle}>Booking Information</Text>
-            <View style={styles.bookingInfoGrid}>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Booked By</Text>
-                <Text style={styles.infoValue}>{selectedBooking.booked_by.full_name}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Employee ID</Text>
-                <Text style={styles.infoValue}>{selectedBooking.booked_by.employee_id}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Purpose</Text>
-                <Text style={styles.infoValue}>{selectedBooking.purpose}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Start Location</Text>
-                <Text style={styles.infoValue}>{selectedBooking.start_location}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>End Location</Text>
-                <Text style={styles.infoValue}>{selectedBooking.end_location}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Start Date & Time</Text>
-                <Text style={styles.infoValue}>{formatDateTime(selectedBooking.start_time)}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>End Date & Time</Text>
-                <Text style={styles.infoValue}>{formatDateTime(selectedBooking.end_time)}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Booking Created</Text>
-                <Text style={styles.infoValue}>{formatDateTime(selectedBooking.created_at)}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.statusUpdateSection}>
-            <Text style={styles.sectionTitle}>Update Booking Status</Text>
-            <View style={styles.statusOptions}>
-              {['booked', 'in-progress', 'completed', 'cancelled'].map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[styles.statusOption, bookingStatus === status && styles.statusOptionSelected]}
-                  onPress={() => setBookingStatus(status)}
-                >
-                  <Text style={[styles.statusOptionText, bookingStatus === status && styles.statusOptionTextSelected]}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+      <ScrollView style={styles.detailPageContainer} showsVerticalScrollIndicator={false}>
+        {selectedBooking && (
+          <View style={styles.detailPageContent}>
+            {/* Booking Header Card */}
+            <View style={styles.vehicleDetailHeaderCard}>
+              <View style={styles.bookingDetailHeader}>
+                <View style={styles.vehicleAvatar}>
+                  <MaterialCommunityIcons name="car" size={40} color="#075E54" />
+                </View>
+                <View style={styles.bookingDetailInfo}>
+                  <Text style={styles.bookingTitleText}>
+                    {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
                   </Text>
-                </TouchableOpacity>
-              ))}
+                  <Text style={styles.bookingPlateText}>{selectedBooking.vehicle.license_plate}</Text>
+                  <View style={styles.bookingMeta}>
+                    <View style={styles.metaChip}>
+                      <Ionicons name="person" size={12} color="#075E54" />
+                      <Text style={styles.metaChipText}>{selectedBooking.booked_by.full_name}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            {bookingStatus === 'cancelled' && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Reason for Cancellation *</Text>
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={cancellationReason}
-                  onChangeText={setCancellationReason}
-                  placeholder="Please provide the reason for cancellation"
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
+            {/* Status Badge */}
+            <View style={styles.statusBadgeContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedBooking.status) }]}>
+                <Ionicons name={getStatusIcon(selectedBooking.status)} size={16} color="#FFFFFF" />
+                <Text style={styles.statusBadgeText}>{selectedBooking.status.toUpperCase()}</Text>
               </View>
-            )}
+            </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={updateBookingStatus} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Update Status</Text>
+            {/* Booking Information Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="info" size={20} color="#075E54" />
+                <Text style={styles.cardTitle}>Booking Information</Text>
+              </View>
+              <View style={styles.bookingInfoGrid}>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="description" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Purpose:</Text>
+                  <Text style={styles.infoValue}>{selectedBooking.purpose}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="location-on" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Route:</Text>
+                  <Text style={styles.infoValue}>
+                    {selectedBooking.start_location} → {selectedBooking.end_location}
+                  </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="calendar-today" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Start:</Text>
+                  <Text style={styles.infoValue}>{formatDateTime(selectedBooking.start_time)}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="calendar-today" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>End:</Text>
+                  <Text style={styles.infoValue}>{formatDateTime(selectedBooking.end_time)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Update Booking Status Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="update" size={20} color="#075E54" />
+                <Text style={styles.cardTitle}>Update Booking Status</Text>
+              </View>
+              <View style={styles.statusOptions}>
+                {['booked', 'in-progress', 'completed', 'cancelled'].map((status) => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[styles.statusOption, bookingStatus === status && styles.statusOptionSelected]}
+                    onPress={() => setBookingStatus(status)}
+                  >
+                    <Ionicons 
+                      name={getStatusIcon(status)} 
+                      size={20} 
+                      color={bookingStatus === status ? '#FFFFFF' : '#075E54'} 
+                    />
+                    <Text style={[styles.statusOptionText, bookingStatus === status && styles.statusOptionTextSelected]}>
+                      {status.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {bookingStatus === 'cancelled' && (
+                <View style={styles.formGroup}>
+                  <View style={styles.inputContainer}>
+                    <MaterialIcons name="warning" size={20} color="#FF3B30" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.descriptionInput}
+                      value={cancellationReason}
+                      onChangeText={setCancellationReason}
+                      placeholder="Reason for cancellation"
+                      placeholderTextColor="#888"
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                </View>
               )}
-            </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.updateButton} 
+                onPress={updateBookingStatus} 
+                disabled={loading || (bookingStatus === 'cancelled' && !cancellationReason.trim())}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                    <Text style={styles.updateButtonText}>Update Status</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+
+  const renderVehicleItem = ({ item }: { item: Vehicle }) => (
+    <TouchableOpacity
+      style={styles.chatItem}
+      onPress={() => {
+        setSelectedVehicle(item);
+        setVehicleStatus(item.status);
+        setCurrentView('vehicle-detail');
+      }}
+    >
+      <View style={styles.avatarContainer}>
+        <View style={[styles.avatar, { backgroundColor: '#E8F5E9' }]}>
+          <MaterialCommunityIcons name="car" size={28} color="#075E54" />
         </View>
-      )}
-    </ScrollView>
+        {item.status === 'available' && <View style={styles.onlineIndicator} />}
+      </View>
+      
+      <View style={styles.chatContent}>
+        <View style={styles.chatHeader}>
+          <Text style={styles.chatName}>
+            {item.make} {item.model}
+          </Text>
+          <Text style={styles.chatTime}>{item.year}</Text>
+        </View>
+        
+        <View style={styles.chatMessage}>
+          <Text style={styles.messageText} numberOfLines={1}>
+            <Text style={styles.plateText}>{item.license_plate}</Text> • {item.color} • {item.seating_capacity} seats
+          </Text>
+        </View>
+        
+        <View style={styles.chatFooter}>
+          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={styles.statusBadgeSmallText}>{item.status}</Text>
+          </View>
+          <Text style={styles.locationText}>
+            <Ionicons name="location" size={12} color="#666" /> {item.current_location.city}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
-  const renderVehiclesTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Assigned Vehicles</Text>
-        {vehicles.length > 0 ? (
-          vehicles.map((vehicle) => (
-            <TouchableOpacity
-              key={vehicle.id}
-              style={styles.vehicleCard}
-              onPress={() => {
-                setSelectedVehicle(vehicle);
-                setVehicleStatus(vehicle.status);
-                setCurrentView('vehicle-detail');
-              }}
-            >
-              <View style={styles.vehicleHeader}>
-                <View style={styles.vehicleInfo}>
-                  <Text style={styles.vehicleModel}>
-                    {vehicle.make} {vehicle.model}
-                  </Text>
-                  <Text style={styles.vehiclePlate}>{vehicle.license_plate}</Text>
-                  <Text style={styles.vehicleType}>
-                    {vehicle.vehicle_type} • {vehicle.fuel_type} • {vehicle.year}
-                  </Text>
-                </View>
-                <View style={[styles.vehicleStatusBadge, { backgroundColor: getStatusColor(vehicle.status) }]}>
-                  <Text style={styles.vehicleStatusText}>{vehicle.status}</Text>
-                </View>
-              </View>
-
-              <View style={styles.vehicleDetails}>
-                <Text style={styles.vehicleLocation}>
-                  📍 {vehicle.current_location.city}, {vehicle.current_location.state}
-                </Text>
-                <Text style={styles.vehicleCapacity}>👥 {vehicle.seating_capacity} seats</Text>
-              </View>
-
-              <View style={styles.vehicleFooter}>
-                <Text style={styles.tapToView}>Tap to view details and manage</Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No vehicles assigned</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Contact your administrator to get vehicle assignment
-            </Text>
-          </View>
-        )}
+  const renderBookingItem = ({ item }: { item: Booking }) => (
+    <TouchableOpacity
+      style={styles.chatItem}
+      onPress={() => {
+        setSelectedBooking(item);
+        setBookingStatus(item.status);
+        setCancellationReason('');
+        setCurrentView('booking-detail');
+      }}
+    >
+      <View style={styles.avatarContainer}>
+        <View style={[styles.avatar, { backgroundColor: '#E3F2FD' }]}>
+          <MaterialCommunityIcons name="car-clock" size={28} color="#075E54" />
+        </View>
       </View>
-    </ScrollView>
-  );
-
-  const renderBookingsTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Car Bookings</Text>
-        {bookings.length > 0 ? (
-          bookings.map((booking) => (
-            <TouchableOpacity
-              key={booking.id}
-              style={styles.bookingCard}
-              onPress={() => {
-                setSelectedBooking(booking);
-                setBookingStatus(booking.status);
-                setCancellationReason('');
-                setCurrentView('booking-detail');
-              }}
-            >
-              <View style={styles.bookingHeader}>
-                <View style={styles.bookingInfo}>
-                  <Text style={styles.bookingVehicle}>
-                    {booking.vehicle.make} {booking.vehicle.model}
-                  </Text>
-                  <Text style={styles.bookingPlate}>{booking.vehicle.license_plate}</Text>
-                </View>
-                <View style={[styles.bookingStatusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
-                  <Text style={styles.bookingStatusText}>{booking.status}</Text>
-                </View>
-              </View>
-
-              <View style={styles.bookingDetails}>
-                <Text style={styles.bookingDetail}>
-                  <Text style={styles.bookingLabel}>Booked by:</Text> {booking.booked_by.full_name}
-                </Text>
-                <Text style={styles.bookingDetail}>
-                  <Text style={styles.bookingLabel}>Purpose:</Text> {booking.purpose}
-                </Text>
-                <Text style={styles.bookingDetail}>
-                  <Text style={styles.bookingLabel}>Route:</Text> {booking.start_location} → {booking.end_location}
-                </Text>
-                <Text style={styles.bookingDetail}>
-                  <Text style={styles.bookingLabel}>Duration:</Text> {formatDate(booking.start_time)} - {formatDate(booking.end_time)}
-                </Text>
-              </View>
-
-              <View style={styles.bookingFooter}>
-                <Text style={styles.tapToUpdate}>Tap to view details and update status</Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No bookings found</Text>
-            <Text style={styles.emptyStateSubtext}>Car bookings will appear here</Text>
+      
+      <View style={styles.chatContent}>
+        <View style={styles.chatHeader}>
+          <Text style={styles.chatName}>
+            {item.vehicle.make} {item.vehicle.model}
+          </Text>
+          <Text style={styles.chatTime}>{formatDate(item.start_time)}</Text>
+        </View>
+        
+        <View style={styles.chatMessage}>
+          <Text style={styles.messageText} numberOfLines={1}>
+            <Text style={styles.boldText}>{item.booked_by.full_name}</Text> • {item.purpose}
+          </Text>
+        </View>
+        
+        <View style={styles.chatFooter}>
+          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={styles.statusBadgeSmallText}>{item.status}</Text>
           </View>
-        )}
+          <Text style={styles.locationText}>
+            <Ionicons name="swap-horizontal" size={12} color="#666" /> {item.start_location} → {item.end_location}
+          </Text>
+        </View>
       </View>
-    </ScrollView>
+    </TouchableOpacity>
   );
 
   const renderMainView = () => (
-    <>
-      <View style={styles.tabNavigation}>
-        {[
-          { key: 'vehicles' as const, label: 'Vehicles' },
-          { key: 'bookings' as const, label: 'Bookings' }
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-              {tab.label}
-            </Text>
+    <SafeAreaView style={styles.screenContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+      
+      {/* Main Header - Fixed to remove white space */}
+      <View style={styles.mainHeader}>
+        <View style={styles.mainHeaderContent}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <BackIcon />
           </TouchableOpacity>
-        ))}
+          <Text style={styles.logoText}>DRIVER MODULE</Text>
+          <View style={styles.headerSpacer} />
+        </View>
       </View>
 
-      <View style={styles.contentContainer}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Banner Section */}
+        <View style={[styles.header, styles.headerBanner]}>
+          <LinearGradient
+            colors={['#4A5568', '#2D3748']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerBanner}
+          >
+            {/* Background Image */}
+            <Image
+              source={require('../assets/cars.jpeg')}
+              style={[styles.headerImage]}
+              resizeMode="cover"
+            />
+            {/* Dark overlay for better text visibility */}
+            <View style={styles.headerOverlay} />
+            
+            {/* Banner Content */}
+            <View style={styles.bannerContent}>
+              <View style={styles.titleSection}>
+                <Text style={styles.sectionTitle}>Manage Your Vehicles</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} assigned
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* Tab Navigation */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'vehicles' && styles.activeTabButton]}
+            onPress={() => setActiveTab('vehicles')}
+          >
+            <MaterialCommunityIcons 
+              name="car" 
+              size={24} 
+              color={activeTab === 'vehicles' ? '#075E54' : '#666'} 
+            />
+            <Text style={[styles.tabText, activeTab === 'vehicles' && styles.activeTabText]}>
+              Vehicles ({vehicles.length})
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'bookings' && styles.activeTabButton]}
+            onPress={() => setActiveTab('bookings')}
+          >
+            <MaterialIcons 
+              name="bookmarks" 
+              size={24} 
+              color={activeTab === 'bookings' ? '#075E54' : '#666'} 
+            />
+            <Text style={[styles.tabText, activeTab === 'bookings' && styles.activeTabText]}>
+              Bookings ({bookings.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Content */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color="#075E54" />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         ) : (
-          activeTab === 'vehicles' ? renderVehiclesTab() : renderBookingsTab()
+          <View style={styles.listContainer}>
+            {activeTab === 'vehicles' ? (
+              vehicles.length > 0 ? (
+                <FlatList
+                  data={vehicles}
+                  renderItem={renderVehicleItem}
+                  keyExtractor={(item) => item.id.toString()}
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                />
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <MaterialCommunityIcons name="car-off" size={80} color="#CCCCCC" />
+                  <Text style={styles.emptyTitle}>No Vehicles Assigned</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Contact your administrator to get vehicle assignment
+                  </Text>
+                </View>
+              )
+            ) : (
+              bookings.length > 0 ? (
+                <FlatList
+                  data={bookings}
+                  renderItem={renderBookingItem}
+                  keyExtractor={(item) => item.id.toString()}
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                />
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <MaterialCommunityIcons name="bookmark-remove" size={80} color="#CCCCCC" />
+                  <Text style={styles.emptyTitle}>No Bookings Found</Text>
+                  <Text style={styles.emptySubtitle}>Car bookings will appear here</Text>
+                </View>
+              )
+            )}
+          </View>
         )}
-      </View>
-    </>
+      </ScrollView>
+    </SafeAreaView>
   );
 
   const getPageTitle = () => {
     switch (currentView) {
       case 'vehicle-detail':
-        return selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'Vehicle Details';
+        return 'Vehicle Details';
       case 'booking-detail':
         return 'Booking Details';
       default:
@@ -1218,17 +1432,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{getPageTitle()}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
+    <>
       {renderContent()}
 
       <MaintenanceModal
@@ -1262,142 +1466,802 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
         logs={fuelLogs}
         formatDateTime={formatDateTime}
       />
-    </SafeAreaView>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  dateButton: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, minHeight: 48, justifyContent: 'center' },
-  dateButtonText: { fontSize: fontSize.md, color: colors.black },
+  // Main View Styles
+  screenContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  mainHeader: {
+    backgroundColor: '#075E54',
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  mainHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  scrollContainer: {
+    flex: 1
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    height: 200,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerBanner: {
+    height: 200,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  bannerContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+    justifyContent: 'flex-end',
+    position: 'relative',
+    zIndex: 1,
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center'
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backButton: {
+    padding: 8,
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+    flex: 1,
+  },
+  titleSection: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    marginTop: -20,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 1,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  activeTabButton: {
+    backgroundColor: '#E8F5E9',
+    borderBottomColor: '#075E54',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginLeft: 8,
+  },
+  activeTabText: {
+    color: '#075E54',
+    fontWeight: '600',
+  },
+  listContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
+    flex: 1,
+  },
+  chatItem: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#25D366',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  chatContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  chatName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+    flex: 1,
+  },
+  chatTime: {
+    fontSize: 12,
+    color: '#666',
+  },
+  chatMessage: {
+    marginBottom: 8,
+  },
+  messageText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  plateText: {
+    fontWeight: '600',
+    color: '#075E54',
+  },
+  boldText: {
+    fontWeight: '600',
+    color: '#000000',
+  },
+  chatFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusBadgeSmall: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 80,
+  },
+  statusBadgeSmallText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  locationText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+
+  // Detail Page Styles
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#075E54',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingBottom: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  detailBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  detailBackText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  detailHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    flex: 1,
+  },
+  detailHeaderSpacer: {
+    width: 60,
+  },
+  detailPageContainer: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  detailPageContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  vehicleDetailHeaderCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  vehicleDetailHeader: {
+    flexDirection: 'row',
+  },
+  vehicleAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  vehicleDetailInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  vehicleModelText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  vehiclePlateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#075E54',
+    marginBottom: 8,
+  },
+  vehicleMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  metaChipText: {
+    fontSize: 12,
+    color: '#075E54',
+    fontWeight: '500',
+  },
+  bookingDetailHeader: {
+    flexDirection: 'row',
+  },
+  bookingDetailInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  bookingTitleText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  bookingPlateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#075E54',
+    marginBottom: 8,
+  },
+  bookingMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statusBadgeContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  statusBadgeText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginLeft: 6,
+  },
+  infoCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  infoGrid: {
+    gap: 12,
+  },
+  bookingInfoGrid: {
+    gap: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+    marginRight: 4,
+    width: 80,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#000000',
+    fontWeight: '500',
+    flex: 1,
+  },
+  statusOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#075E54',
+    backgroundColor: '#FFFFFF',
+    gap: 6,
+  },
+  statusOptionSelected: {
+    backgroundColor: '#075E54',
+    borderColor: '#075E54',
+  },
+  statusOptionText: {
+    fontSize: 12,
+    color: '#075E54',
+    fontWeight: '600',
+  },
+  statusOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+  updateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#075E54',
+    padding: 16,
+    borderRadius: 25,
+    gap: 8,
+  },
+  updateButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  actionButton: {
+    alignItems: 'center',
+    padding: 8,
+    minWidth: 70,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    color: '#075E54',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: screenHeight * 0.85,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#075E54',
+  },
+  modalScrollContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    padding: 16,
+    fontSize: 16,
+    color: '#000000',
+    minHeight: 48,
+  },
+  descriptionInput: {
+    flex: 1,
+    padding: 16,
+    fontSize: 16,
+    color: '#000000',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  dateButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000000',
+  },
+  dateButtonPlaceholder: {
+    color: '#888',
+  },
+  documentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
+  },
+  documentButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000000',
+  },
   documentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
+    backgroundColor: '#E8F5E9',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  documentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   documentName: {
+    fontSize: 14,
+    color: '#075E54',
+    marginLeft: 8,
     flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginRight: spacing.sm,
   },
-  dateButtonPlaceholder: { color: colors.textSecondary },
-  documentButton: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.backgroundSecondary, minHeight: 48, justifyContent: 'center' },
-  documentButtonText: { fontSize: fontSize.md, color: colors.text },
-  removeDocumentButton: { marginTop: spacing.sm, paddingVertical: spacing.xs, alignItems: 'center' },
-  removeDocumentText: { fontSize: fontSize.sm, color: colors.error },
-  buttonGroupsContainer: { marginTop: spacing.lg },
-  container: { flex: 1, backgroundColor: colors.primary },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary },
-  backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
-  backIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
-  headerTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center' },
-  headerSpacer: { width: 40 },
-  tabNavigation: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.xs },
-  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderRadius: borderRadius.sm, marginHorizontal: 2 },
-  activeTab: { borderBottomWidth: 3, borderBottomColor: colors.primary, backgroundColor: colors.backgroundSecondary },
-  tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '500' },
-  activeTabText: { color: colors.primary, fontWeight: '600' },
-  contentContainer: { flex: 1, backgroundColor: colors.backgroundSecondary },
-  tabContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  pageContainer: { flex: 1, backgroundColor: colors.backgroundSecondary, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  detailPageContent: { paddingBottom: spacing.xl },
-  section: { marginBottom: spacing.xl },
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { fontSize: fontSize.md, color: colors.textSecondary, marginTop: spacing.md },
-  vehicleCard: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border, elevation: 2 },
-  vehicleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
-  vehicleInfo: { flex: 1, marginRight: spacing.sm },
-  vehicleModel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  vehiclePlate: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600', marginBottom: spacing.xs },
-  vehicleType: { fontSize: fontSize.xs, color: colors.textSecondary },
-  vehicleStatusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
-  vehicleStatusText: { fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
-  vehicleDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
-  vehicleLocation: { fontSize: fontSize.xs, color: colors.textSecondary, flex: 1, marginRight: spacing.sm },
-  vehicleCapacity: { fontSize: fontSize.xs, color: colors.textSecondary },
-  vehicleFooter: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center' },
-  tapToView: { fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic' },
-  bookingCard: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, ...shadows.md, borderWidth: 1, borderColor: colors.border },
-  bookingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
-  bookingInfo: { flex: 1, marginRight: spacing.sm },
-  bookingVehicle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  bookingPlate: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
-  bookingStatusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, minWidth: 80, alignItems: 'center', justifyContent: 'center' },
-  bookingStatusText: { fontSize: fontSize.xs, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
-  bookingDetails: { marginBottom: spacing.md },
-  bookingDetail: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
-  bookingLabel: { fontWeight: '600' },
-  bookingFooter: { paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, alignItems: 'center' },
-  tapToUpdate: { fontSize: fontSize.xs, color: colors.primary, fontStyle: 'italic' },
-  vehicleDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md },
-  vehicleDetailInfo: { flex: 1, marginRight: spacing.md },
-  vehicleModelText: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  vehiclePlateText: { fontSize: fontSize.lg, color: colors.primary, fontWeight: '600' },
-  bookingDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md },
-  bookingDetailInfo: { flex: 1, marginRight: spacing.md },
-  bookingTitleText: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  bookingPlateText: { fontSize: fontSize.lg, color: colors.primary, fontWeight: '600' },
-  statusBadge: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, minWidth: 90, alignItems: 'center', justifyContent: 'center' },
-  statusBadgeText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600', textTransform: 'uppercase' },
-  vehicleInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.lg, backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, ...shadows.md },
-  bookingInfoSection: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
-  bookingInfoGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  infoItem: { width: '50%', marginBottom: spacing.md, paddingRight: spacing.sm },
-  infoLabel: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: spacing.xs },
-  infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
-  locationSection: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
-  locationText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
-  statusUpdateSection: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
-  statusOptions: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: spacing.md },
-  statusOption: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm, marginBottom: spacing.sm, backgroundColor: colors.backgroundSecondary },
-  statusOptionSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  statusOptionText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
-  statusOptionTextSelected: { color: colors.white, fontWeight: '600' },
-  buttonGroup: { backgroundColor: colors.white, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.lg, ...shadows.md },
-  buttonGroupTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.md, textAlign: 'center' },
-  primaryButton: { backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
-  primaryButtonText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
-  secondaryButton: { backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginBottom: spacing.sm },
-  secondaryButtonText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
-  outlineButton: { backgroundColor: 'transparent', padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
-  outlineButtonText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
-  emptyState: { backgroundColor: colors.white, padding: spacing.xl, borderRadius: borderRadius.lg, alignItems: 'center', marginTop: spacing.lg },
-  emptyStateText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  emptyStateSubtext: { fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
-  keyboardAvoidingView: { flex: 1, justifyContent: 'flex-end' },
-  modalContainer: { backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, maxHeight: screenHeight * 0.85, paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
-  modalCloseButton: { width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
-  modalCloseText: { fontSize: fontSize.lg, color: colors.textSecondary, fontWeight: '600' },
-  modalScrollContent: { padding: spacing.lg, paddingBottom: spacing.xl },
-  logCard: { backgroundColor: colors.backgroundSecondary, padding: spacing.lg, borderRadius: borderRadius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
-  logHeader: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-start', marginBottom: spacing.md },
-  logCost: { fontSize: fontSize.lg, color: colors.success, fontWeight: '700' },
-  logDescription: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md, lineHeight: 20 },
-  logDetails: {},
-  logDetail: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.xs },
-  logLabel: { fontWeight: '600' },
-  fuelDetails: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: colors.white, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.md },
-  fuelDetailItem: { alignItems: 'center' },
-  fuelDetailLabel: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: spacing.xs },
-  fuelDetailValue: { fontSize: fontSize.md, color: colors.text, fontWeight: '600' },
-  formGroup: { marginBottom: spacing.lg },
-  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
-  textInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fontSize.sm, color: colors.text, backgroundColor: colors.white, minHeight: 48 },
-  descriptionInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fontSize.sm, color: colors.text, backgroundColor: colors.white, minHeight: 100, textAlignVertical: 'top' },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
-  modalCancelButton: { flex: 1, backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
-  modalCancelText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600' },
-  modalSubmitButton: { flex: 1, backgroundColor: colors.primary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginLeft: spacing.sm, minHeight: 48, justifyContent: 'center' },
-  modalSubmitButtonDisabled: { backgroundColor: colors.textSecondary, opacity: 0.6 },
-  modalSubmitText: { fontSize: fontSize.sm, color: colors.white, fontWeight: '600' },
+  removeDocumentButton: {
+    padding: 4,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  modalSubmitButton: {
+    flex: 1,
+    backgroundColor: '#075E54',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  modalSubmitButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+  },
+  modalSubmitText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  logCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  logHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  logHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logCost: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#075E54',
+  },
+  logDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  logQuantity: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  logDescription: {
+    fontSize: 14,
+    color: '#000000',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  logDetails: {
+    gap: 8,
+  },
+  logDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  logDetail: {
+    fontSize: 13,
+    color: '#666',
+  },
+  fuelDetails: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  fuelDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  fuelDetailValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#075E54',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
 });
+
 export default Driver;
