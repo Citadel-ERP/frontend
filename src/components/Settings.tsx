@@ -34,9 +34,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
   const [reconfigureLoading, setReconfigureLoading] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(isDark);
-  const [mediaAutoDownload, setMediaAutoDownload] = useState('Wi-Fi');
   const [appVersion] = useState('1.0.0');
-  const [securityNotifications, setSecurityNotifications] = useState(true);
   const [messagePreview, setMessagePreview] = useState(true);
 
   const isWeb = Platform.OS === 'web';
@@ -265,30 +263,6 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Account Settings */}
-          {renderSection("ACCOUNT", (
-            <>
-              {renderSettingItem({
-                icon: "key-outline",
-                title: "Account Security",
-                subtitle: "Two-step verification, security notifications",
-                onPress: () => showComingSoon('Account Security'),
-              })}
-              {renderSettingItem({
-                icon: "lock-closed-outline",
-                title: "Privacy",
-                subtitle: "Blocked contacts, last seen, profile photo",
-                onPress: () => showComingSoon('Privacy'),
-              })}
-              {renderSettingItem({
-                icon: "chatbubble-outline",
-                title: "Chats",
-                subtitle: "Theme, wallpapers, chat history",
-                onPress: () => showComingSoon('Chats'),
-              })}
-            </>
-          ))}
-
           {/* Notifications */}
           {renderSection("NOTIFICATIONS", (
             <>
@@ -307,24 +281,6 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
                 onPress: () => setMessagePreview(!messagePreview),
                 rightComponent: renderSwitch(messagePreview, setMessagePreview),
                 showChevron: false,
-              })}
-            </>
-          ))}
-
-          {/* Storage & Data */}
-          {renderSection("STORAGE AND DATA", (
-            <>
-              {renderSettingItem({
-                icon: "cloud-download-outline",
-                title: "Storage Usage",
-                subtitle: "Network usage, auto-download",
-                onPress: () => showComingSoon('Storage Usage'),
-              })}
-              {renderSettingItem({
-                icon: "wifi-outline",
-                title: "Media Auto-Download",
-                subtitle: mediaAutoDownload,
-                onPress: () => showComingSoon('Media Auto-Download'),
               })}
             </>
           ))}
@@ -388,26 +344,6 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
                 icon: "shield-checkmark-outline",
                 title: "Terms & Privacy Policy",
                 onPress: () => showComingSoon('Terms & Privacy Policy'),
-              })}
-            </>
-          ))}
-
-          {/* Danger Zone */}
-          {renderSection("DANGER ZONE", (
-            <>
-              {renderSettingItem({
-                icon: "trash-outline",
-                title: "Clear All Chats",
-                subtitle: "Delete all chat history",
-                onPress: () => showComingSoon('Clear All Chats'),
-                isDestructive: true,
-              })}
-              {renderSettingItem({
-                icon: "log-out-outline",
-                title: "Delete My Account",
-                subtitle: "Permanently delete your account",
-                onPress: () => showComingSoon('Delete My Account'),
-                isDestructive: true,
               })}
             </>
           ))}
