@@ -10,13 +10,10 @@ import {
   TextInput,
   Image,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Modal,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { launchImageLibrary, launchCamera, ImagePickerResponse } from 'react-native-image-picker';
@@ -75,21 +72,14 @@ interface ProfileProps {
   userData?: UserData;
 }
 
-interface FormInputProps {
-  label: string;
-  value: string;
-  onChangeText?: (text: string) => void;
-  editable?: boolean;
-  multiline?: boolean;
-  icon?: keyof typeof Ionicons.glyphMap;
-}
-
 interface MenuItemProps {
   title: string;
+  subtitle?: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
-  showArrow?: boolean;
-  badge?: string | number;
+  isFirst?: boolean;
+  isLast?: boolean;
+  type?: 'default' | 'danger';
 }
 
 const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => {
@@ -116,17 +106,19 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
 
+  // WhatsApp-like colors
   const colors = {
-    primary: '#1C5CFB',
-    primaryDark: '#0742da',
-    bg: '#F5F7FA',
-    white: '#FFFFFF',
-    text: '#1a1a1a',
-    textLight: '#8F9BB3',
-    border: '#EDF1F7',
-    success: '#00E096',
-    warning: '#FFAA00',
-    error: '#FF3D71',
+    background: '#FFFFFF',
+    headerBackground: '#008069',
+    text: '#000000',
+    textSecondary: '#667781',
+    textTertiary: '#8696A0',
+    border: '#E9EDEF',
+    borderLight: '#F0F2F5',
+    icon: '#8696A0',
+    iconActive: '#008069',
+    danger: '#FF3B30',
+    modalBackground: '#F7F8FA',
   };
 
   useEffect(() => {
@@ -307,617 +299,390 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     }
   };
 
-  const FormInput: React.FC<FormInputProps> = ({ 
-    label, 
-    value, 
-    onChangeText, 
-    editable = true, 
-    multiline = false,
-    icon
-  }) => (
-    <View style={styles.inputContainer}>
-      <Text style={[styles.inputLabel, { color: colors.textLight }]}>{label}</Text>
-      <View style={[
-        styles.inputWrapper, 
-        { borderColor: colors.border, backgroundColor: editable ? colors.white : '#f5f5f5' }
-      ]}>
-        {icon && <Ionicons name={icon} size={20} color={colors.textLight} style={styles.inputIcon} />}
+  const MenuItem: React.FC<MenuItemProps> = ({ 
+    title, 
+    subtitle, 
+    icon, 
+    onPress, 
+    isFirst = false, 
+    isLast = false,
+    type = 'default'
+  }) => {
+    const containerStyle = [
+      styles.menuItemContainer,
+      isFirst && styles.menuItemFirst,
+      isLast && styles.menuItemLast,
+      { backgroundColor: colors.background },
+    ];
+
+    const iconColor = type === 'danger' ? colors.danger : colors.icon;
+    const textColor = type === 'danger' ? colors.danger : colors.text;
+
+    return (
+      <TouchableOpacity style={containerStyle} onPress={onPress}>
+        <View style={styles.menuItemIconContainer}>
+          <Ionicons name={icon} size={24} color={iconColor} />
+        </View>
+        <View style={styles.menuItemTextContainer}>
+          <Text style={[styles.menuItemTitle, { color: textColor }]}>{title}</Text>
+          {subtitle && (
+            <Text style={[styles.menuItemSubtitle, { color: colors.textTertiary }]}>
+              {subtitle}
+            </Text>
+          )}
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.icon} />
+      </TouchableOpacity>
+    );
+  };
+
+  const ProfileHeader = () => (
+    <View style={[styles.header, { backgroundColor: colors.headerBackground, paddingTop: insets.top }]}>
+      <View style={styles.headerContent}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.background} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <TouchableOpacity onPress={() => setIsEditing(!isEditing)} style={styles.editButton}>
+          <Ionicons name={isEditing ? "close" : "create-outline"} size={24} color={colors.background} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const ProfileSection = () => (
+    <View style={[styles.profileSection, { backgroundColor: colors.background }]}>
+      <TouchableOpacity style={styles.avatarContainer} onPress={handleImageUpload}>
+        {userData?.profile_picture ? (
+          <Image source={{ uri: userData.profile_picture }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.headerBackground }]}>
+            <Text style={styles.avatarText}>
+              {userData?.first_name?.[0] || 'U'}{userData?.last_name?.[0] || 'N'}
+            </Text>
+          </View>
+        )}
+        <View style={[styles.cameraButton, { backgroundColor: colors.headerBackground }]}>
+          <Ionicons name="camera" size={16} color={colors.background} />
+        </View>
+      </TouchableOpacity>
+      
+      <Text style={[styles.profileName, { color: colors.text }]}>
+        {userData?.first_name || ''} {userData?.last_name || ''}
+      </Text>
+      
+      {isEditing ? (
         <TextInput
-          style={[
-            styles.input, 
-            { color: colors.text }, 
-            multiline && styles.multilineInput,
-          ]}
-          value={value}
-          onChangeText={onChangeText}
-          editable={editable}
-          multiline={multiline}
-          numberOfLines={multiline ? 3 : 1}
-          placeholderTextColor={colors.textLight}
+          style={[styles.bioInput, { color: colors.text, borderBottomColor: colors.border }]}
+          value={formData.bio}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
+          placeholder="Add about"
+          placeholderTextColor={colors.textTertiary}
+          multiline
+        />
+      ) : (
+        <Text style={[styles.profileBio, { color: colors.textTertiary }]}>
+          {userData?.bio || 'Hey there! I am using WhatsApp.'}
+        </Text>
+      )}
+      
+      {/*<TouchableOpacity style={[styles.shareButton, { backgroundColor: colors.borderLight }]}>
+        <Ionicons name="arrow-redo" size={20} color={colors.text} />
+        <Text style={[styles.shareButtonText, { color: colors.text }]}>Share profile</Text>
+      </TouchableOpacity>*/}
+    </View>
+  );
+
+  const EditProfileSection = () => (
+    <View style={[styles.editSection, { backgroundColor: colors.background }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Profile</Text>
+      
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>First name</Text>
+        <TextInput
+          style={[styles.input, { color: colors.text }]}
+          value={formData.firstName}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
+          placeholder="Enter first name"
+          placeholderTextColor={colors.textTertiary}
         />
       </View>
-    </View>
-  );
-
-  const MenuItem: React.FC<MenuItemProps> = ({ title, icon, onPress, showArrow = true, badge }) => (
-    <TouchableOpacity 
-      style={[styles.menuItem, { backgroundColor: colors.white, borderBottomColor: colors.border }]} 
-      onPress={onPress}
-    >
-      <View style={styles.menuItemLeft}>
-        <View style={[styles.menuIconContainer, { backgroundColor: `${colors.primary}15` }]}>
-          <Ionicons name={icon} size={22} color={colors.primary} />
-        </View>
-        <Text style={[styles.menuItemText, { color: colors.text }]}>{title}</Text>
-      </View>
-      <View style={styles.menuItemRight}>
-        {badge !== undefined && badge !== 0 && (
-          <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.badgeText}>{badge}</Text>
-          </View>
-        )}
-        {showArrow && <Ionicons name="chevron-forward" size={20} color={colors.textLight} />}
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderPersonalDetailsModal = () => (
-    <View>
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>First Name</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.first_name || 'Not provided'}
-        </Text>
-      </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
       
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Last Name</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.last_name || 'Not provided'}
-        </Text>
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Last name</Text>
+        <TextInput
+          style={[styles.input, { color: colors.text }]}
+          value={formData.lastName}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
+          placeholder="Enter last name"
+          placeholderTextColor={colors.textTertiary}
+        />
       </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
       
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Email</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.email || 'Not provided'}
-        </Text>
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Phone number</Text>
+        <TextInput
+          style={[styles.input, { color: colors.text }]}
+          value={formData.phoneNumber}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, phoneNumber: text }))}
+          placeholder="Enter phone number"
+          placeholderTextColor={colors.textTertiary}
+          keyboardType="phone-pad"
+        />
       </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
       
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Phone</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.phone_number || 'Not provided'}
-        </Text>
-      </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-      
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Employee ID</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.employee_id || 'Not provided'}
-        </Text>
-      </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-      
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Designation</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.designation || userData?.role || 'Not provided'}
-        </Text>
-      </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-      
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Bio</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.bio || 'Not provided'}
-        </Text>
-      </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-      
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Home Address</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.home_address?.address || 'Not provided'}
-        </Text>
-      </View>
-      <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-      
-      <View style={styles.detailRow}>
-        <Text style={[styles.detailLabel, { color: colors.textLight }]}>Current Location</Text>
-        <Text style={[styles.detailValue, { color: colors.text }]}>
-          {userData?.current_location?.address || 'Not provided'}
-        </Text>
-      </View>
-    </View>
-  );
-
-  const renderIDCardModal = () => (
-    <View>
-      <View style={[styles.idCardContainer, { backgroundColor: colors.white, borderColor: colors.border }]}>
-        <View style={styles.idCardHeader}>
-          <Text style={[styles.companyName, { color: colors.primary }]}>Company Name</Text>
-          <Text style={[styles.idCardTitle, { color: colors.textLight }]}>Employee ID Card</Text>
-        </View>
+      <View style={styles.saveButtonContainer}>
+        <TouchableOpacity 
+          style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]} 
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.background} />
+          ) : (
+            <Text style={[styles.saveButtonText, { color: colors.background }]}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
         
-        <View style={styles.idCardContent}>
-          <View style={styles.idCardLeft}>
-            {userData?.profile_picture ? (
-              <Image source={{ uri: userData.profile_picture }} style={styles.idPhoto} />
-            ) : (
-              <LinearGradient 
-                colors={[colors.primary, colors.primaryDark]} 
-                style={styles.idPhotoPlaceholder}
-              >
-                <Text style={styles.idPhotoText}>
-                  {userData?.first_name?.charAt(0) || 'U'}{userData?.last_name?.charAt(0) || 'N'}
-                </Text>
-              </LinearGradient>
-            )}
-          </View>
-          
-          <View style={styles.idCardRight}>
-            <Text style={[styles.idName, { color: colors.text }]}>
-              {userData?.first_name || ''} {userData?.last_name || ''}
-            </Text>
-            <Text style={[styles.idDesignation, { color: colors.textLight }]}>
-              {userData?.designation || userData?.role || 'Employee'}
-            </Text>
-            <Text style={[styles.idNumber, { color: colors.primary }]}>
-              ID: {userData?.employee_id || 'N/A'}
-            </Text>
-            <Text style={[styles.idEmail, { color: colors.textLight }]}>{userData?.email || ''}</Text>
-            <Text style={[styles.idPhone, { color: colors.textLight }]}>{userData?.phone_number || ''}</Text>
-          </View>
-        </View>
-        
-        <View style={[styles.idCardFooter, { borderTopColor: colors.border }]}>
-          <Text style={[styles.validText, { color: colors.textLight }]}>Valid until: Dec 2025</Text>
-        </View>
+        <TouchableOpacity 
+          style={[styles.cancelButton, { borderColor: colors.border }]} 
+          onPress={() => {
+            setIsEditing(false);
+            if (userData) populateFormData(userData);
+          }}
+        >
+          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity 
-        style={[styles.downloadButtonLarge, { backgroundColor: colors.primary }]} 
-        onPress={handleDownloadIDCard}
-        disabled={downloading}
-      >
-        {downloading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <>
-            <Ionicons name="download-outline" size={20} color="#fff" />
-            <Text style={styles.downloadButtonText}>Download ID Card</Text>
-          </>
-        )}
-      </TouchableOpacity>
     </View>
   );
 
-  const renderAssetsModal = () => {
-    if (!assets || assets.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="briefcase-outline" size={64} color={colors.textLight} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No Assets Found</Text>
-          <Text style={[styles.emptyText, { color: colors.textLight }]}>
-            You don't have any assets assigned yet
-          </Text>
-        </View>
-      );
-    }
+  const MenuSection = () => (
+    <View style={[styles.menuSection, { backgroundColor: colors.background }]}>
+      <MenuItem
+        title="Phone"
+        subtitle={userData?.phone_number || 'Not provided'}
+        icon="call-outline"
+        onPress={() => {
+          setModalContent({ title: 'Phone', type: 'personal', content: userData });
+          setModalVisible(true);
+        }}
+        isFirst={true}
+      />
+      
+      <MenuItem
+        title="Email"
+        subtitle={userData?.email || 'Not provided'}
+        icon="mail-outline"
+        onPress={() => {
+          setModalContent({ title: 'Email', type: 'personal', content: userData });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Designation"
+        subtitle={userData?.designation || userData?.role || 'Not provided'}
+        icon="briefcase-outline"
+        onPress={() => {
+          setModalContent({ title: 'Designation', type: 'personal', content: userData });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Employee ID"
+        subtitle={userData?.employee_id || 'Not provided'}
+        icon="card-outline"
+        onPress={() => {
+          setModalContent({ title: 'Employee ID', type: 'personal', content: userData });
+          setModalVisible(true);
+        }}
+      />
+    </View>
+  );
 
-    return (
-      <View>
-        {assets.map((asset, index) => (
-          <View key={index}>
-            <View style={styles.listItemModal}>
-              <View style={[styles.listIconCircle, { backgroundColor: `${colors.primary}15` }]}>
-                <Ionicons name="briefcase" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.listItemContent}>
-                <Text style={[styles.listItemTitle, { color: colors.text }]}>
-                  {asset.name || 'Unknown Asset'}
-                </Text>
-                <Text style={[styles.listItemSubtitle, { color: colors.textLight }]}>
-                  Type: {asset.type || 'N/A'}
-                </Text>
-                <Text style={[styles.listItemSubtitle, { color: colors.textLight }]}>
-                  Serial: {asset.serial_number || 'N/A'}
-                </Text>
-              </View>
-            </View>
-            {index < assets.length - 1 && (
-              <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-            )}
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderPayslipsModal = () => {
-    if (!payslips || payslips.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="cash-outline" size={64} color={colors.textLight} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No Payslips Found</Text>
-          <Text style={[styles.emptyText, { color: colors.textLight }]}>
-            No payslips are available at the moment
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <View>
-        {payslips.map((payslip, index) => (
-          <View key={index}>
-            <View style={styles.listItemModal}>
-              <View style={[styles.listIconCircle, { backgroundColor: `${colors.success}15` }]}>
-                <Text style={[styles.iconText, { color: colors.success }]}>₹</Text>
-              </View>
-              <View style={styles.listItemContent}>
-                <Text style={[styles.listItemTitle, { color: colors.text }]}>
-                  {payslip.month || 'Unknown'} {payslip.year || ''}
-                </Text>
-                <Text style={[styles.listItemSubtitle, { color: colors.textLight }]}>
-                  Net Salary: ₹{payslip.net_salary || '0'}
-                </Text>
-              </View>
-            </View>
-            {index < payslips.length - 1 && (
-              <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-            )}
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderDocumentsModal = () => {
-    if (!documents || documents.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="document-text-outline" size={64} color={colors.textLight} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No Documents Found</Text>
-          <Text style={[styles.emptyText, { color: colors.textLight }]}>
-            No documents have been uploaded yet
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <View>
-        {documents.map((doc, index) => (
-          <View key={index}>
-            <View style={styles.listItemModal}>
-              <View style={[styles.listIconCircle, { backgroundColor: `${colors.warning}15` }]}>
-                <Ionicons name="document-text" size={24} color={colors.warning} />
-              </View>
-              <View style={styles.listItemContent}>
-                <Text style={[styles.listItemTitle, { color: colors.text }]}>
-                  {doc.document_name || 'Unknown Document'}
-                </Text>
-                <Text style={[styles.listItemSubtitle, { color: colors.textLight }]}>
-                  Type: {doc.document_type || 'N/A'}
-                </Text>
-              </View>
-            </View>
-            {index < documents.length - 1 && (
-              <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
-            )}
-          </View>
-        ))}
-      </View>
-    );
-  };
+  const FeaturesSection = () => (
+    <View style={[styles.menuSection, { backgroundColor: colors.background, marginTop: 16 }]}>
+      <MenuItem
+        title="ID Card"
+        icon="id-card-outline"
+        onPress={() => {
+          setModalContent({ title: 'ID Card', type: 'idcard', content: userData });
+          setModalVisible(true);
+        }}
+        isFirst={true}
+      />
+      
+      <MenuItem
+        title="Assets"
+        subtitle={`${assets.length} items`}
+        icon="briefcase-outline"
+        onPress={() => {
+          setModalContent({ title: 'My Assets', type: 'assets', content: assets });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Payslips"
+        subtitle={`${payslips.length} payslips`}
+        icon="cash-outline"
+        onPress={() => {
+          setModalContent({ title: 'Payslips', type: 'payslips', content: payslips });
+          setModalVisible(true);
+        }}
+      />
+      
+      <MenuItem
+        title="Documents"
+        subtitle={`${documents.length} documents`}
+        icon="document-text-outline"
+        onPress={() => {
+          setModalContent({ title: 'My Documents', type: 'documents', content: documents });
+          setModalVisible(true);
+        }}
+      />
+    </View>
+  );
 
   const renderModalContent = () => {
     switch (modalContent.type) {
       case 'personal':
-        return renderPersonalDetailsModal();
+        return (
+          <View style={styles.modalPersonalContainer}>
+            <Text style={[styles.modalDetail, { color: colors.text }]}>{modalContent.content}</Text>
+          </View>
+        );
       case 'idcard':
-        return renderIDCardModal();
-      case 'assets':
-        return renderAssetsModal();
-      case 'payslips':
-        return renderPayslipsModal();
-      case 'documents':
-        return renderDocumentsModal();
-      default:
-        return <Text>No data available</Text>;
-    }
-  };
-
-  const renderProfileContent = () => (
-    <View style={styles.content}>
-      {/* Contact Info Card */}
-      <View style={[styles.card, { backgroundColor: colors.white }]}>
-        <View style={styles.contactRow}>
-          <View style={[styles.contactIconBox, { backgroundColor: `${colors.primary}10` }]}>
-            <Ionicons name="call" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.contactInfo}>
-            <Text style={[styles.contactLabel, { color: colors.textLight }]}>Phone</Text>
-            <Text style={[styles.contactValue, { color: colors.text }]}>
-              {userData?.phone_number || 'Not provided'}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        
-        <View style={styles.contactRow}>
-          <View style={[styles.contactIconBox, { backgroundColor: `${colors.primary}10` }]}>
-            <Ionicons name="mail" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.contactInfo}>
-            <Text style={[styles.contactLabel, { color: colors.textLight }]}>Email</Text>
-            <Text style={[styles.contactValue, { color: colors.text }]}>
-              {userData?.email || 'Not provided'}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Menu Items */}
-      <View style={[styles.menuSection, { backgroundColor: colors.white }]}>
-        <MenuItem 
-          title="Personal Details" 
-          icon="person-outline" 
-          onPress={() => {
-            setModalContent({ title: 'Personal Details', type: 'personal', content: userData });
-            setModalVisible(true);
-          }} 
-        />
-        <MenuItem 
-          title="ID Card" 
-          icon="card-outline" 
-          onPress={() => {
-            setModalContent({ title: 'ID Card', type: 'idcard', content: userData });
-            setModalVisible(true);
-          }} 
-        />
-        <MenuItem 
-          title="Assets" 
-          icon="briefcase-outline" 
-          onPress={() => {
-            setModalContent({ title: 'My Assets', type: 'assets', content: assets });
-            setModalVisible(true);
-          }} 
-          badge={assets.length}
-        />
-        <MenuItem 
-          title="Payslips" 
-          icon="cash-outline" 
-          onPress={() => {
-            setModalContent({ title: 'Payslips', type: 'payslips', content: payslips });
-            setModalVisible(true);
-          }} 
-          badge={payslips.length}
-        />
-        <MenuItem 
-          title="Documents" 
-          icon="document-text-outline" 
-          onPress={() => {
-            setModalContent({ title: 'My Documents', type: 'documents', content: documents });
-            setModalVisible(true);
-          }} 
-          badge={documents.length}
-        />
-      </View>
-
-      {/* Edit Profile Section */}
-      {isEditing && (
-        <View style={[styles.card, { backgroundColor: colors.white, marginTop: 20 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Information</Text>
-          
-          <FormInput 
-            label="First Name" 
-            value={formData.firstName} 
-            onChangeText={(text: string) => setFormData(prev => ({ ...prev, firstName: text }))} 
-            icon="person-outline"
-            editable={true}
-          />
-          
-          <FormInput 
-            label="Last Name" 
-            value={formData.lastName} 
-            onChangeText={(text: string) => setFormData(prev => ({ ...prev, lastName: text }))} 
-            icon="person-outline"
-            editable={true}
-          />
-          
-          <FormInput 
-            label="Phone Number" 
-            value={formData.phoneNumber} 
-            onChangeText={(text: string) => setFormData(prev => ({ ...prev, phoneNumber: text }))} 
-            icon="call-outline"
-            editable={true}
-          />
-          
-          <FormInput 
-            label="Bio" 
-            value={formData.bio} 
-            onChangeText={(text: string) => setFormData(prev => ({ ...prev, bio: text }))} 
-            multiline 
-            icon="text-outline"
-            editable={true}
-          />
-
-          <FormInput 
-            label="Home Address" 
-            value={formData.homeAddress} 
-            onChangeText={(text: string) => setFormData(prev => ({ ...prev, homeAddress: text }))} 
-            icon="home-outline"
-            editable={true}
-          />
-
-          <FormInput 
-            label="Current Location" 
-            value={formData.currentLocation} 
-            onChangeText={(text: string) => setFormData(prev => ({ ...prev, currentLocation: text }))} 
-            icon="location-outline"
-            editable={true}
-          />
-
-          <View style={styles.editActions}>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.cancelButton, { borderColor: colors.border }]} 
-              onPress={() => {
-                setIsEditing(false);
-                populateFormData(userData!);
-              }}
-            >
-              <Text style={[styles.actionButtonText, { color: colors.text }]}>Cancel</Text>
-            </TouchableOpacity>
+        return (
+          <View style={[styles.modalIDCard, { backgroundColor: colors.background }]}>
+            <View style={styles.idCardHeader}>
+              <Text style={[styles.companyName, { color: colors.headerBackground }]}>
+                Company Name
+              </Text>
+              <Text style={[styles.idCardTitle, { color: colors.textTertiary }]}>
+                Employee ID Card
+              </Text>
+            </View>
+            
+            <View style={styles.idCardContent}>
+              {userData?.profile_picture ? (
+                <Image source={{ uri: userData.profile_picture }} style={styles.idPhoto} />
+              ) : (
+                <View style={[styles.idPhotoPlaceholder, { backgroundColor: colors.headerBackground }]}>
+                  <Text style={styles.idPhotoText}>
+                    {userData?.first_name?.[0] || 'U'}{userData?.last_name?.[0] || 'N'}
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.idCardInfo}>
+                <Text style={[styles.idName, { color: colors.text }]}>
+                  {userData?.first_name || ''} {userData?.last_name || ''}
+                </Text>
+                <Text style={[styles.idDesignation, { color: colors.textTertiary }]}>
+                  {userData?.designation || userData?.role || 'Employee'}
+                </Text>
+                <Text style={[styles.idNumber, { color: colors.headerBackground }]}>
+                  ID: {userData?.employee_id || 'N/A'}
+                </Text>
+                <Text style={[styles.idEmail, { color: colors.textTertiary }]}>
+                  {userData?.email || ''}
+                </Text>
+              </View>
+            </View>
             
             <TouchableOpacity 
-              style={[styles.actionButton, styles.saveButtonFull, { backgroundColor: colors.primary }]} 
-              onPress={handleSave}
-              disabled={saving}
+              style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]} 
+              onPress={handleDownloadIDCard}
+              disabled={downloading}
             >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
+              {downloading ? (
+                <ActivityIndicator size="small" color={colors.background} />
               ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <>
+                  <Ionicons name="download-outline" size={20} color={colors.background} />
+                  <Text style={[styles.downloadButtonText, { color: colors.background }]}>
+                    Download ID Card
+                  </Text>
+                </>
               )}
             </TouchableOpacity>
           </View>
-        </View>
-      )}
-    </View>
-  );
+        );
+      default:
+        return <Text style={{ color: colors.text }}>No data available</Text>;
+    }
+  };
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.text }]}>Loading profile...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.headerBackground} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          Loading profile...
+        </Text>
       </View>
     );
   }
 
   if (!userData) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
-        <Text style={[styles.loadingText, { color: colors.text }]}>No user data available</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          No user data available
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} translucent />
+    <View style={[styles.container, { backgroundColor: colors.modalBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.headerBackground} />
       
-      {/* Header with Gradient and Decorative Pattern */}
-      <LinearGradient 
-        colors={[colors.primary, colors.primaryDark]} 
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
-      >
-        {/* Decorative Background Pattern */}
-        <View style={styles.decorativePattern}>
-          {/* Large circles */}
-          <View style={[styles.circle, styles.circle1]} />
-          <View style={[styles.circle, styles.circle2]} />
-          <View style={[styles.circle, styles.circle3]} />
-          <View style={[styles.circle, styles.circle4]} />
-          
-          {/* Grid pattern */}
-          <View style={styles.gridPattern}>
-            {[...Array(8)].map((_, i) => (
-              <View key={`row-${i}`} style={styles.gridRow}>
-                {[...Array(4)].map((_, j) => (
-                  <View key={`dot-${i}-${j}`} style={styles.gridDot} />
-                ))}
-              </View>
-            ))}
-          </View>
-          
-          {/* Wave shapes */}
-          <View style={[styles.wave, styles.wave1]} />
-          <View style={[styles.wave, styles.wave2]} />
-        </View>
-
-        <View style={styles.headerTop}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-          
-          <Text style={styles.headerTitle}>PROFILE</Text>
-          
-          <TouchableOpacity 
-            style={styles.editButton} 
-            onPress={() => setIsEditing(!isEditing)}
-          >
-            <Ionicons name={isEditing ? "close" : "create-outline"} size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Profile Card */}
-        <View style={styles.profileCardContainer}>
-          <View style={[styles.profileCard, { backgroundColor: colors.white }]}>
-            <TouchableOpacity style={styles.avatarContainer} onPress={handleImageUpload}>
-              {userData.profile_picture ? (
-                <Image source={{ uri: userData.profile_picture }} style={styles.avatar} />
-              ) : (
-                <LinearGradient 
-                  colors={[colors.primary, colors.primaryDark]} 
-                  style={styles.avatarPlaceholder}
-                >
-                  <Text style={styles.avatarText}>
-                    {userData.first_name?.[0] || 'U'}{userData.last_name?.[0] || 'N'}
-                  </Text>
-                </LinearGradient>
-              )}
-              <View style={[styles.cameraButton, { backgroundColor: colors.white }]}>
-                <Ionicons name="camera" size={16} color={colors.primary} />
-              </View>
-            </TouchableOpacity>
-            
-            <Text style={[styles.profileName, { color: colors.text }]}>
-              {userData.first_name || ''} {userData.last_name || ''}
-            </Text>
-            <Text style={[styles.profileRole, { color: colors.textLight }]}>
-              {userData.designation || userData.role || 'Employee'} • {userData.employee_id || 'N/A'}
-            </Text>
-            
-            {userData.bio && (
-              <Text style={[styles.profileBio, { color: colors.textLight }]}>
-                {userData.bio}
-              </Text>
-            )}
-          </View>
-        </View>
-      </LinearGradient>
-
+      <ProfileHeader />
+      
       <ScrollView 
-        style={styles.scrollView} 
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={styles.scrollContent}
       >
-        {renderProfileContent()}
+        <ProfileSection />
+        
+        {isEditing ? (
+          <EditProfileSection />
+        ) : (
+          <>
+            <MenuSection />
+            <FeaturesSection />
+          </>
+        )}
+        
+        {/* Spacer for bottom */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+      >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.white }]}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 {modalContent.title || 'Details'}
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close-circle" size={28} color={colors.textLight} />
-              </TouchableOpacity>
+              <View style={{ width: 24 }} />
             </View>
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            
+            <ScrollView style={styles.modalBody}>
               {renderModalContent()}
             </ScrollView>
           </View>
@@ -937,118 +702,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 12,
     fontSize: 16,
-    fontWeight: '500',
   },
   
+  // Header Styles
   header: {
-    paddingBottom: 80,
-    position: 'relative',
-    overflow: 'hidden',
+    paddingBottom: 20,
   },
-  
-  // Decorative Pattern Styles
-  decorativePattern: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  circle: {
-    position: 'absolute',
-    borderRadius: 1000,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  circle1: {
-    width: 200,
-    height: 200,
-    top: -50,
-    right: -60,
-  },
-  circle2: {
-    width: 150,
-    height: 150,
-    top: 100,
-    left: -40,
-  },
-  circle3: {
-    width: 100,
-    height: 100,
-    bottom: 50,
-    right: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  circle4: {
-    width: 80,
-    height: 80,
-    top: 150,
-    right: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  gridPattern: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    opacity: 0.4,
-  },
-  gridRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  gridDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginRight: 12,
-  },
-  wave: {
-    position: 'absolute',
-    height: 120,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 60,
-  },
-  wave1: {
-    width: width * 1.5,
-    bottom: -40,
-    left: -100,
-    transform: [{ rotate: '-5deg' }],
-  },
-  wave2: {
-    width: width * 1.3,
-    bottom: -20,
-    right: -80,
-    transform: [{ rotate: '3deg' }],
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-  },
-  
-  headerTop: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    zIndex: 10,
+    paddingHorizontal: 16,
+    height: 56,
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 70,
-  },
-  backText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-    marginLeft: 4,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   editButton: {
     width: 40,
@@ -1056,340 +734,250 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
-
-  profileCardContainer: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-    zIndex: 10,
+  
+  // Scroll View
+  scrollView: {
+    flex: 1,
   },
-  profileCard: {
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+  scrollContent: {
+    paddingBottom: 20,
   },
   
-  avatarContainer: {
-    position: 'relative',
+  // Profile Section
+  profileSection: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
     marginBottom: 16,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
-    borderColor: '#fff',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
   },
   avatarText: {
-    color: '#fff',
-    fontSize: 36,
+    color: '#FFFFFF',
+    fontSize: 48,
     fontWeight: 'bold',
   },
   cameraButton: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
   },
   profileName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  profileRole: {
-    fontSize: 14,
+    fontWeight: '600',
     marginBottom: 8,
     textAlign: 'center',
   },
   profileBio: {
-    fontSize: 13,
+    fontSize: 16,
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-
-  scrollView: {
-    flex: 1,
-    marginTop: -60,
-  },
-  content: {
+    marginBottom: 20,
     paddingHorizontal: 20,
   },
-
-  card: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  contactIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactLabel: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  contactValue: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    marginVertical: 16,
-  },
-
-  menuSection: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+  bioInput: {
+    width: '100%',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingBottom: 8,
     borderBottomWidth: 1,
   },
-  menuItemLeft: {
+  shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-  },
-  menuIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  menuItemText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  menuItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
     gap: 8,
   },
-  badge: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 8,
+  shareButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+  
+  // Edit Section
+  editSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    marginBottom: 16,
   },
-
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     marginBottom: 20,
   },
   inputContainer: {
+    borderBottomWidth: 1,
     marginBottom: 20,
+    paddingBottom: 8,
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-  },
-  inputIcon: {
-    marginRight: 12,
   },
   input: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 15,
+    fontSize: 16,
+    paddingVertical: 4,
   },
-  multilineInput: {
-    height: 90,
-    textAlignVertical: 'top',
-    paddingTop: 14,
-  },
-
-  editActions: {
-    flexDirection: 'row',
-    gap: 12,
+  saveButtonContainer: {
     marginTop: 8,
   },
-  actionButton: {
-    flex: 1,
+  saveButton: {
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButton: {
-    borderWidth: 1.5,
-  },
-  saveButtonFull: {
-    shadowColor: '#1C5CFB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  actionButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
+    marginBottom: 12,
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
   },
-
+  cancelButton: {
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Menu Section
+  menuSection: {
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  menuItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E9EDEF',
+  },
+  menuItemFirst: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E9EDEF',
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuItemIconContainer: {
+    width: 40,
+    alignItems: 'center',
+  },
+  menuItemTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  menuItemTitle: {
+    fontSize: 17,
+  },
+  menuItemSubtitle: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  
+  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: height * 0.8,
+  modalContainer: {
+    flex: 1,
+    marginTop: 100,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 1,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
   },
   modalBody: {
-    padding: 20,
+    flex: 1,
+    padding: 16,
   },
-
-  detailRow: {
-    paddingVertical: 12,
+  modalPersonalContainer: {
+    padding: 16,
   },
-  detailLabel: {
-    fontSize: 13,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  detailValue: {
+  modalDetail: {
     fontSize: 16,
-    fontWeight: '500',
   },
-  detailDivider: {
-    height: 1,
-    marginVertical: 8,
-  },
-
-  idCardContainer: {
-    borderRadius: 16,
+  
+  // ID Card Modal
+  modalIDCard: {
     padding: 20,
-    borderWidth: 1,
-    marginBottom: 20,
+    borderRadius: 16,
   },
   idCardHeader: {
     alignItems: 'center',
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    paddingBottom: 12,
-    borderBottomColor: '#e9ecef',
+    marginBottom: 20,
   },
   companyName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   idCardTitle: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 4,
   },
   idCardContent: {
     flexDirection: 'row',
-    marginBottom: 16,
-  },
-  idCardLeft: {
-    marginRight: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   idPhoto: {
     width: 80,
     height: 80,
-    borderRadius: 12,
+    borderRadius: 40,
+    marginRight: 16,
   },
   idPhotoPlaceholder: {
     width: 80,
     height: 80,
-    borderRadius: 12,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
   idPhotoText: {
-    color: 'white',
-    fontSize: 28,
+    color: '#FFFFFF',
+    fontSize: 32,
     fontWeight: 'bold',
   },
-  idCardRight: {
+  idCardInfo: {
     flex: 1,
   },
   idName: {
@@ -1408,79 +996,23 @@ const styles = StyleSheet.create({
   },
   idEmail: {
     fontSize: 13,
-    marginBottom: 2,
   },
-  idPhone: {
-    fontSize: 13,
-  },
-  idCardFooter: {
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 12,
-  },
-  validText: {
-    fontSize: 12,
-  },
-
-  downloadButtonLarge: {
+  downloadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 8,
     gap: 8,
   },
   downloadButtonText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-
-  listItemModal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  listIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  listItemContent: {
-    flex: 1,
-  },
-  listItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  listItemSubtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  iconText: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  
+  // Spacer
+  bottomSpacer: {
+    height: 20,
   },
 });
 
