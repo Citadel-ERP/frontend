@@ -44,7 +44,6 @@ import EmployeeManagement from './EmployeeManagement';
 import Notifications from './Notifications';
 
 // Import components
-import HamburgerMenu from './dashboard/menu';
 import AllModulesModal from './dashboard/allModules';
 import QuickActions from './dashboard/quickActions';
 import UpcomingReminder from './dashboard/upcomingReminder';
@@ -182,9 +181,9 @@ const lightColors = {
   hrPink: '#FF637F',
   cabOrange: '#FFBB64',
   headerBg: '#2D3748',
-  primaryBlue: '#007AFF',
-  gradientStart: '#007AFF',
-  gradientEnd: '#0056CC',
+  primaryBlue: '#008069',
+  gradientStart: '#086755ff',
+  gradientEnd: '#036c59ff',
 };
 
 const darkColors = {
@@ -203,10 +202,180 @@ const darkColors = {
   hrPink: '#FF637F',
   cabOrange: '#FFBB64',
   headerBg: '#141414ff',
-  primaryBlue: '#007AFF',
-  gradientStart: '#007AFF',
-  gradientEnd: '#0056CC',
+  primaryBlue: '#008069',
+  gradientStart: '#086755ff',
+  gradientEnd: '#036c59ff',
   headerBgLight: '#d8d8d8ff',
+};
+
+// WhatsApp-style Hamburger Menu Component
+interface HamburgerMenuProps {
+  isVisible: boolean;
+  onClose: () => void;
+  userData: UserData | null;
+  menuItems: any[];
+  activeMenuItem: string;
+  onMenuItemPress: (item: any) => void;
+  onLogout: () => void;
+  isDark: boolean;
+  slideAnim: Animated.Value;
+  getInitials: (fullName: string) => string;
+  currentColors: any;
+}
+
+const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
+  isVisible,
+  onClose,
+  userData,
+  menuItems,
+  activeMenuItem,
+  onMenuItemPress,
+  onLogout,
+  isDark,
+  slideAnim,
+  getInitials,
+  currentColors,
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // WhatsApp-style menu items with icons and colors
+  const whatsappMenuItems = [
+    { id: 'profile', title: 'Profile', icon: 'person-circle-outline', color: '#008069' },
+    { id: 'settings', title: 'Settings', icon: 'settings-outline', color: '#008069' },
+    { id: 'notifications', title: 'Notifications', icon: 'notifications-outline', color: '#F59E0B' },
+    { id: 'privacy', title: 'Privacy Policy', icon: 'shield-checkmark-outline', color: '#1E40AF' },
+    { id: 'messages', title: 'Messages', icon: 'chatbubbles-outline', color: '#10B981' },
+    { id: 'logout', title: 'Logout', icon: 'log-out-outline', color: '#EF4444' },
+  ];
+
+  // Filter menu items based on search
+  const filteredMenuItems = whatsappMenuItems.filter(item =>
+    item.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (!isVisible) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <TouchableOpacity
+        style={styles.menuBackdrop}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <Animated.View
+          style={[
+            styles.menuContainer,
+            {
+              transform: [{ translateX: slideAnim }],
+              backgroundColor: isDark ? '#111B21' : '#FFFFFF',
+            },
+          ]}
+        >
+          {/* Header Section - WhatsApp Style */}
+          <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }]}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+            
+            <View style={styles.userInfoContainer}>
+              {userData?.profile_picture ? (
+                <Image
+                  source={{ uri: userData.profile_picture }}
+                  style={styles.userAvatar}
+                />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: '#0c4036ff' }]}>
+                  <Text style={styles.avatarText}>
+                    {getInitials(userData?.full_name || 'User')}
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.userDetails}>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {userData?.full_name || 'User'}
+                </Text>
+                <Text style={styles.userStatus} numberOfLines={1}>
+                  {userData?.designation || 'Employee'}
+                </Text>
+              </View>
+            </View>
+            
+            {/* <TouchableOpacity style={styles.qrButton}>
+              <Ionicons name="qr-code-outline" size={24} color="white" />
+            </TouchableOpacity> */}
+          </View>
+
+          {/* Search Bar */}
+          {/* <View style={[styles.searchContainer, { backgroundColor: isDark ? '#202C33' : '#F0F2F5' }]}>
+            <Ionicons name="search" size={18} color={isDark ? '#8696A0' : '#667781'} />
+            <TextInput
+              style={[styles.searchInput, { color: isDark ? '#E9EDEF' : '#111B21' }]}
+              placeholder="Search menu"
+              placeholderTextColor={isDark ? '#8696A0' : '#667781'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color={isDark ? '#8696A0' : '#667781'} />
+              </TouchableOpacity>
+            )}
+          </View> */}
+
+          {/* Menu Items */}
+          <ScrollView style={styles.menuItemsContainer}>
+            {filteredMenuItems.map((item, index) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.menuItem,
+                  activeMenuItem === item.title && styles.activeMenuItem,
+                  index === filteredMenuItems.length - 1 && styles.lastMenuItem,
+                ]}
+                onPress={() => {
+                  if (item.id === 'logout') {
+                    onLogout();
+                  } else {
+                    onMenuItemPress(item);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
+                  <Ionicons
+                    name={item.icon as any}
+                    size={22}
+                    color={item.color}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
+                  {item.title}
+                </Text>
+                
+                {item.id !== 'logout' && (
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={isDark ? '#8696A0' : '#667781'}
+                    style={styles.chevronIcon}
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Footer - App Version */}
+          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
+            <Text style={[styles.versionText, { color: isDark ? '#8696A0' : '#667781' }]}>
+              Citadel v1.0.0
+            </Text>
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
+    </>
+  );
 };
 
 // Configure notification handler
@@ -292,7 +461,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     cardBg: isDark ? '#111a2d' : '#ffffff',
     textMain: isDark ? '#ffffff' : '#333333',
     textSub: isDark ? '#a0a0a0' : '#666666',
-    accentBlue: isDark ? '#3262f1' : '#007bff',
+    accentBlue: isDark ? '#008069' : '#008069',
     navBg: isDark ? '#0a111f' : '#ffffff',
   };
 
@@ -1332,7 +1501,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     module.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Menu items
+  // Menu items for the old menu (keeping for reference but not used)
   const drawerMenuItems = [
     { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
     { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
@@ -1353,6 +1522,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       // setShowChat(true);
     } else if (item.id === 'notifications') {
       setShowNotifications(true);
+    } else if (item.id === 'logout') {
+      handleLogout();
     } else {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     }
@@ -1610,7 +1781,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         translucent={false}
       />
 
-      {/* Hamburger Menu Modal */}
+      {/* WhatsApp-style Hamburger Menu */}
       <HamburgerMenu
         isVisible={isMenuVisible}
         onClose={closeMenu}
@@ -1827,7 +1998,7 @@ const getModuleColor = (moduleName: string): string => {
     case 'bdt':
       return '#1da1f2';
     default:
-      return '#007AFF';
+      return '#008069';
   }
 };
 
@@ -2011,7 +2182,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 14,
     borderRadius: 12,
-    shadowColor: '#007AFF',
+    shadowColor: '#008069',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2092,5 +2263,139 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     paddingLeft: 20,
+  },
+  // WhatsApp-style Hamburger Menu Styles
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 1000,
+  },
+  menuContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: width * 0.85,
+    maxWidth: 340,
+    zIndex: 1001,
+  },
+  menuHeader: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    left: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  avatarPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  userDetails: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  userName: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  userStatus: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+  },
+  qrButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 12,
+    padding: 0,
+  },
+  menuItemsContainer: {
+    flex: 1,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  activeMenuItem: {
+    backgroundColor: 'rgba(0, 128, 105, 0.1)',
+  },
+  lastMenuItem: {
+    marginBottom: 0,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  chevronIcon: {
+    marginLeft: 8,
+  },
+  menuFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+  },
+  versionText: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

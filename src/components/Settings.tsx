@@ -5,13 +5,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, fontSize } from '../styles/theme';
 import { BACKEND_URL } from '../config/config';
@@ -24,14 +25,53 @@ if (Platform.OS !== 'web') {
 
 interface SettingsProps {
   onBack: () => void;
+  isDark?: boolean;
 }
 
-const Settings: React.FC<SettingsProps> = ({ onBack }) => {
+const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [reconfigureLoading, setReconfigureLoading] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [darkMode, setDarkMode] = useState(isDark);
+  const [mediaAutoDownload, setMediaAutoDownload] = useState('Wi-Fi');
+  const [appVersion] = useState('1.0.0');
+  const [securityNotifications, setSecurityNotifications] = useState(true);
+  const [messagePreview, setMessagePreview] = useState(true);
 
   const isWeb = Platform.OS === 'web';
+
+  // WhatsApp-style colors
+  const whatsappColors = {
+    dark: {
+      background: '#111B21',
+      card: '#202C33',
+      text: '#E9EDEF',
+      textSecondary: '#8696A0',
+      border: '#2A3942',
+      primary: '#008069',
+      accent: '#00A884',
+      header: '#202C33',
+      icon: '#AEBAC1',
+      danger: '#F15C6D',
+      warning: '#FFB347',
+    },
+    light: {
+      background: '#FFFFFF',
+      card: '#F0F2F5',
+      text: '#111B21',
+      textSecondary: '#667781',
+      border: '#E1E8ED',
+      primary: '#008069',
+      accent: '#00A884',
+      header: '#008069',
+      icon: '#8696A0',
+      danger: '#F15C6D',
+      warning: '#FFB347',
+    }
+  };
+
+  const currentTheme = darkMode ? whatsappColors.dark : whatsappColors.light;
 
   const handleReconfigureDevice = async () => {
     if (isWeb) {
@@ -113,252 +153,310 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     ]);
   };
 
-  const BackIcon = ({ color = colors.text, size = 24 }) => (
-    <View style={{ width: size, height: size, justifyContent: 'center' }}>
-      <View
-        style={{
-          width: size * 0.5,
-          height: size * 0.5,
-          borderLeftWidth: 2,
-          borderBottomWidth: 2,
-          borderColor: color,
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
-    </View>
-  );
-
-  const ChevronIcon = ({ color = colors.textSecondary, size = 20 }) => (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'flex-end' }}>
-      <View
-        style={{
-          width: size * 0.4,
-          height: size * 0.4,
-          borderTopWidth: 2,
-          borderRightWidth: 2,
-          borderColor: color,
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
-    </View>
-  );
-
-  interface SettingItemProps {
-    title: string;
-    subtitle?: string;
-    onPress: () => void;
-    isDestructive?: boolean;
-    showChevron?: boolean;
-    isLoading?: boolean;
-  }
-
-  const SettingItem: React.FC<SettingItemProps> = ({
-    title,
-    subtitle,
-    onPress,
-    isDestructive = false,
-    showChevron = true,
-    isLoading = false,
-  }) => (
-    <TouchableOpacity
-      style={styles.settingItem}
-      onPress={onPress}
-      activeOpacity={0.7}
-      disabled={isLoading}
-    >
-      <View style={styles.settingItemContent}>
-        <Text style={[styles.settingTitle, isDestructive && styles.destructiveText]}>
-          {title}
-        </Text>
-        {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
-      </View>
-      {isLoading ? (
-        <ActivityIndicator size="small" color={colors.primary} />
-      ) : (
-        showChevron && <ChevronIcon />
-      )}
-    </TouchableOpacity>
-  );
-
-  interface SettingSectionProps {
-    title: string;
-    children: React.ReactNode;
-  }
-
-  const SettingSection: React.FC<SettingSectionProps> = ({ title, children }) => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionContent}>{children}</View>
-    </View>
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-      
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon color={colors.text} />
+  const renderHeader = () => (
+    <View style={[styles.header, { 
+      backgroundColor: currentTheme.header,
+      paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight,
+    }]}>
+      <View style={styles.headerContent}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={onBack}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={styles.headerSpacer} />
       </View>
+    </View>
+  );
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Account Settings */}
-        <SettingSection title="Account">
-          <SettingItem
-            title="Profile Settings"
-            subtitle="Edit your personal information"
-            onPress={() => showComingSoon('Profile Settings')}
-          />
-          <SettingItem
-            title="Change Password"
-            subtitle="Update your password"
-            onPress={() => showComingSoon('Change Password')}
-          />
-          <SettingItem
-            title="Privacy Settings"
-            subtitle="Manage your privacy preferences"
-            onPress={() => showComingSoon('Privacy Settings')}
-          />
-        </SettingSection>
+  const renderSettingItem = ({
+    icon,
+    title,
+    subtitle,
+    rightComponent,
+    onPress,
+    showChevron = true,
+    isDestructive = false,
+    isLoading = false,
+  }: {
+    icon: string;
+    title: string;
+    subtitle?: string;
+    rightComponent?: React.ReactNode;
+    onPress: () => void;
+    showChevron?: boolean;
+    isDestructive?: boolean;
+    isLoading?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.settingItem, { 
+        backgroundColor: currentTheme.card,
+        borderBottomColor: currentTheme.border,
+      }]}
+      onPress={onPress}
+      activeOpacity={0.7}
+      disabled={isLoading}
+    >
+      <View style={[styles.settingIcon, { backgroundColor: currentTheme.primary + '20' }]}>
+        <Ionicons name={icon as any} size={20} color={currentTheme.primary} />
+      </View>
+      <View style={styles.settingContent}>
+        <Text style={[
+          styles.settingTitle, 
+          { color: isDestructive ? currentTheme.danger : currentTheme.text }
+        ]}>
+          {title}
+        </Text>
+        {subtitle && (
+          <Text style={[styles.settingSubtitle, { color: currentTheme.textSecondary }]}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+      {isLoading ? (
+        <ActivityIndicator size="small" color={currentTheme.primary} />
+      ) : rightComponent ? (
+        rightComponent
+      ) : showChevron ? (
+        <Ionicons name="chevron-forward" size={18} color={currentTheme.icon} />
+      ) : null}
+    </TouchableOpacity>
+  );
 
-        {/* Device Settings */}
-        <SettingSection title="Device">
-          <SettingItem
-            title="Reconfigure Device"
-            subtitle={isWeb ? "Available only on mobile app" : "Update your device ID"}
-            onPress={handleReconfigureDevice}
-            isLoading={reconfigureLoading}
-          />
-          <SettingItem
-            title="Device Information"
-            subtitle="View device details"
-            onPress={() => showComingSoon('Device Information')}
-          />
-        </SettingSection>
+  const renderSwitch = (value: boolean, onValueChange: (val: boolean) => void) => (
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: currentTheme.textSecondary + '40', true: currentTheme.accent }}
+      thumbColor="#FFFFFF"
+      ios_backgroundColor={currentTheme.textSecondary + '40'}
+    />
+  );
 
-        {/* Notifications */}
-        <SettingSection title="Notifications">
-          <SettingItem
-            title="Push Notifications"
-            subtitle="Manage notification preferences"
-            onPress={() => showComingSoon('Push Notifications')}
-          />
-          <SettingItem
-            title="Email Notifications"
-            subtitle="Configure email alerts"
-            onPress={() => showComingSoon('Email Notifications')}
-          />
-        </SettingSection>
+  const renderSection = (title: string, children: React.ReactNode) => (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: currentTheme.textSecondary }]}>
+        {title}
+      </Text>
+      <View style={[styles.sectionContent, { backgroundColor: currentTheme.card }]}>
+        {children}
+      </View>
+    </View>
+  );
 
-        {/* App Settings */}
-        <SettingSection title="App">
-          <SettingItem
-            title="Language"
-            subtitle="English (US)"
-            onPress={() => showComingSoon('Language')}
-          />
-          <SettingItem
-            title="Theme"
-            subtitle="Light mode"
-            onPress={() => showComingSoon('Theme')}
-          />
-          <SettingItem
-            title="Data & Storage"
-            subtitle="Manage app data"
-            onPress={() => showComingSoon('Data & Storage')}
-          />
-        </SettingSection>
+  return (
+    <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
+      <StatusBar 
+        barStyle={"light-content"} 
+        backgroundColor={currentTheme.header} 
+      />
+      
+      {/* Fixed Header */}
+      {renderHeader()}
+      
+      {/* Main Content with SafeArea */}
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Account Settings */}
+          {renderSection("ACCOUNT", (
+            <>
+              {renderSettingItem({
+                icon: "key-outline",
+                title: "Account Security",
+                subtitle: "Two-step verification, security notifications",
+                onPress: () => showComingSoon('Account Security'),
+              })}
+              {renderSettingItem({
+                icon: "lock-closed-outline",
+                title: "Privacy",
+                subtitle: "Blocked contacts, last seen, profile photo",
+                onPress: () => showComingSoon('Privacy'),
+              })}
+              {renderSettingItem({
+                icon: "chatbubble-outline",
+                title: "Chats",
+                subtitle: "Theme, wallpapers, chat history",
+                onPress: () => showComingSoon('Chats'),
+              })}
+            </>
+          ))}
 
-        {/* Support */}
-        <SettingSection title="Support">
-          <SettingItem
-            title="Help Center"
-            subtitle="Get help and support"
-            onPress={() => showComingSoon('Help Center')}
-          />
-          <SettingItem
-            title="Report a Problem"
-            subtitle="Let us know about issues"
-            onPress={() => showComingSoon('Report a Problem')}
-          />
-          <SettingItem
-            title="Terms of Service"
-            onPress={() => showComingSoon('Terms of Service')}
-          />
-          <SettingItem
-            title="Privacy Policy"
-            onPress={() => showComingSoon('Privacy Policy')}
-          />
-        </SettingSection>
+          {/* Notifications */}
+          {renderSection("NOTIFICATIONS", (
+            <>
+              {renderSettingItem({
+                icon: "notifications-outline",
+                title: "Notifications",
+                subtitle: "Message, group & call tones",
+                onPress: () => showComingSoon('Notifications'),
+                rightComponent: renderSwitch(notificationsEnabled, setNotificationsEnabled),
+                showChevron: false,
+              })}
+              {renderSettingItem({
+                icon: "eye-outline",
+                title: "Message Preview",
+                subtitle: "Show message preview in notifications",
+                onPress: () => setMessagePreview(!messagePreview),
+                rightComponent: renderSwitch(messagePreview, setMessagePreview),
+                showChevron: false,
+              })}
+            </>
+          ))}
 
-        {/* About */}
-        <SettingSection title="About">
-          <SettingItem
-            title="App Version"
-            subtitle="1.0.0"
-            onPress={() => showComingSoon('App Version')}
-            showChevron={false}
-          />
-          <SettingItem
-            title="Check for Updates"
-            onPress={() => showComingSoon('Check for Updates')}
-          />
-        </SettingSection>
+          {/* Storage & Data */}
+          {renderSection("STORAGE AND DATA", (
+            <>
+              {renderSettingItem({
+                icon: "cloud-download-outline",
+                title: "Storage Usage",
+                subtitle: "Network usage, auto-download",
+                onPress: () => showComingSoon('Storage Usage'),
+              })}
+              {renderSettingItem({
+                icon: "wifi-outline",
+                title: "Media Auto-Download",
+                subtitle: mediaAutoDownload,
+                onPress: () => showComingSoon('Media Auto-Download'),
+              })}
+            </>
+          ))}
 
-        {/* Danger Zone */}
-        <SettingSection title="Danger Zone">
-          <SettingItem
-            title="Clear Cache"
-            subtitle="Free up storage space"
-            onPress={() => showComingSoon('Clear Cache')}
-          />
-          <SettingItem
-            title="Delete Account"
-            subtitle="Permanently delete your account"
-            onPress={() => showComingSoon('Delete Account')}
-            isDestructive={true}
-          />
-        </SettingSection>
+          {/* Device */}
+          {renderSection("DEVICE", (
+            <>
+              {renderSettingItem({
+                icon: "phone-portrait-outline",
+                title: "App Language",
+                subtitle: "English (phone's language)",
+                onPress: () => showComingSoon('App Language'),
+              })}
+              {renderSettingItem({
+                icon: "moon-outline",
+                title: "Dark Mode",
+                subtitle: darkMode ? "On" : "Off",
+                onPress: () => setDarkMode(!darkMode),
+                rightComponent: renderSwitch(darkMode, setDarkMode),
+                showChevron: false,
+              })}
+              {renderSettingItem({
+                icon: "refresh-outline",
+                title: "Reconfigure Device",
+                subtitle: isWeb ? "Available only on mobile app" : "Update your device ID",
+                onPress: handleReconfigureDevice,
+                isLoading: reconfigureLoading,
+              })}
+            </>
+          ))}
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-    </SafeAreaView>
+          {/* Help */}
+          {renderSection("HELP", (
+            <>
+              {renderSettingItem({
+                icon: "help-circle-outline",
+                title: "Help Center",
+                subtitle: "Help, contact info, privacy policy",
+                onPress: () => showComingSoon('Help Center'),
+              })}
+              {renderSettingItem({
+                icon: "flag-outline",
+                title: "Report a Problem",
+                subtitle: "Report bugs and issues",
+                onPress: () => showComingSoon('Report a Problem'),
+              })}
+            </>
+          ))}
+
+          {/* About */}
+          {renderSection("ABOUT", (
+            <>
+              {renderSettingItem({
+                icon: "information-circle-outline",
+                title: "About Citadel Hub",
+                subtitle: `Version ${appVersion}`,
+                onPress: () => showComingSoon('About'),
+                showChevron: false,
+              })}
+              {renderSettingItem({
+                icon: "shield-checkmark-outline",
+                title: "Terms & Privacy Policy",
+                onPress: () => showComingSoon('Terms & Privacy Policy'),
+              })}
+            </>
+          ))}
+
+          {/* Danger Zone */}
+          {renderSection("DANGER ZONE", (
+            <>
+              {renderSettingItem({
+                icon: "trash-outline",
+                title: "Clear All Chats",
+                subtitle: "Delete all chat history",
+                onPress: () => showComingSoon('Clear All Chats'),
+                isDestructive: true,
+              })}
+              {renderSettingItem({
+                icon: "log-out-outline",
+                title: "Delete My Account",
+                subtitle: "Permanently delete your account",
+                onPress: () => showComingSoon('Delete My Account'),
+                isDestructive: true,
+              })}
+            </>
+          ))}
+
+          <View style={styles.bottomSpacing} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
-    backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingBottom: 16,
+    zIndex: 1000, // Ensure header stays on top
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    justifyContent: 'space-between',
   },
   backButton: {
-    padding: 8,
-    marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginLeft: 8,
   },
   headerTitle: {
     flex: 1,
     fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
+    fontWeight: '600',
+    color: '#FFFFFF',
     textAlign: 'center',
-    marginRight: 40,
+    marginLeft: -40,
   },
   headerSpacer: {
     width: 40,
@@ -367,55 +465,50 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingVertical: 16,
+    padding: 16,
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
-    paddingHorizontal: 16,
+    marginLeft: 4,
   },
   sectionContent: {
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  settingItemContent: {
+  settingIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  settingContent: {
     flex: 1,
-    marginRight: 12,
   },
   settingTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.text,
     marginBottom: 2,
   },
   settingSubtitle: {
     fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
   },
-  destructiveText: {
-    color: colors.error,
-  },
-  bottomPadding: {
+  bottomSpacing: {
     height: 32,
   },
 });

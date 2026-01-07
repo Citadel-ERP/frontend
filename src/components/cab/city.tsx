@@ -97,7 +97,7 @@ const CityScreen: React.FC<CityScreenProps> = ({
                 {/* Search Box */}
                 <View style={styles.searchBox}>
                     <View style={styles.searchInputWrapper}>
-                        <Ionicons name="search" size={20} color="#017bf9" style={styles.searchIcon} />
+                        <Ionicons name="search" size={20} color="#008069" style={styles.searchIcon} />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Search for your city"
@@ -153,7 +153,7 @@ const CityScreen: React.FC<CityScreenProps> = ({
                         <Text style={styles.bookingsLinkText}>
                             view your previous bookings
                         </Text>
-                        <Ionicons name="chevron-forward" size={20} color="#017bf9" />
+                        <Ionicons name="chevron-forward" size={20} color="#008069" />
                     </TouchableOpacity>
                 </View>
             </ScrollView>
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     },
     bookingsLinkText: {
         fontSize: 16,
-        color: '#017bf9',
+        color: '#008069',
         fontWeight: '600',
         marginRight: 8,
     },
