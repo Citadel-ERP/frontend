@@ -97,12 +97,17 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalContent, setModalContent] = useState<ModalContent>({});
   const [downloading, setDownloading] = useState(false);
-  
+
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDateSet, setIsDateSet] = useState(false);
-  
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+      <Text style={styles.backText}>Back</Text>
+    </View>
+  );
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
@@ -112,7 +117,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     currentLocation: '',
     dateOfBirth: '',
   });
-  
+
   const [documents, setDocuments] = useState<Document[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
@@ -140,7 +145,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     try {
       const storedToken = await AsyncStorage.getItem('token_2');
       setToken(storedToken);
-      
+
       if (propUserData) {
         populateFormData(propUserData);
         if (storedToken) fetchAdditionalData(storedToken);
@@ -166,7 +171,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         }
       }
     }
-    
+
     setFormData({
       firstName: user.first_name || '',
       lastName: user.last_name || '',
@@ -186,9 +191,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: userToken }),
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch user data');
-      
+
       const data = await response.json();
       if (data.message === "Get modules successful") {
         setUserData(data.user);
@@ -236,14 +241,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
   const handleSave = async () => {
     if (!token) return;
-    
+
     try {
       setSaving(true);
       const response = await fetch(`${BACKEND_URL}/core/updateProfile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token, 
+        body: JSON.stringify({
+          token,
           firstName: formData.firstName,
           lastName: formData.lastName,
           homeAddress: formData.homeAddress,
@@ -251,7 +256,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           dateOfBirth: formData.dateOfBirth,
         }),
       });
-      
+
       const result = await response.json();
       if (response.ok) {
         Alert.alert('Success', 'Profile updated successfully!');
@@ -278,17 +283,17 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
-    
+
     if (date) {
       setSelectedDate(date);
       setIsDateSet(true);
-      
+
       // Format date as YYYY-MM-DD
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const formattedDate = `${year}-${month}-${day}`;
-      
+
       setFormData(prev => ({ ...prev, dateOfBirth: formattedDate }));
     }
   };
@@ -300,10 +305,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
   const formatDisplayDate = (dateString: string) => {
     if (!dateString) return 'Select Date';
-    
+
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'Select Date';
-    
+
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -339,7 +344,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           },
           body: formDataImage,
         });
-        
+
         const result = await res.json();
         if (res.ok) {
           setUserData(prev => prev ? { ...prev, profile_picture: result.profile_picture_url } : prev);
@@ -363,7 +368,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      
+
       const result = await response.json();
       if (response.ok) {
         Alert.alert('Success', 'ID Card downloaded successfully!');
@@ -377,12 +382,12 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     }
   };
 
-  const MenuItem: React.FC<MenuItemProps> = ({ 
-    title, 
-    subtitle, 
-    icon, 
-    onPress, 
-    isFirst = false, 
+  const MenuItem: React.FC<MenuItemProps> = ({
+    title,
+    subtitle,
+    icon,
+    onPress,
+    isFirst = false,
     isLast = false,
     type = 'default'
   }) => {
@@ -414,18 +419,19 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     );
   };
 
+
   const ProfileHeader = () => (
     <View style={[styles.header, { backgroundColor: colors.headerBackground, paddingTop: insets.top }]}>
       <View style={styles.headerContent}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.background} />
+           <BackIcon />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             Keyboard.dismiss();
             setIsEditing(!isEditing);
-          }} 
+          }}
           style={styles.editButton}
         >
           <Ionicons name={isEditing ? "close" : "create-outline"} size={24} color={colors.background} />
@@ -450,11 +456,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           <Ionicons name="camera" size={16} color={colors.background} />
         </View>
       </TouchableOpacity>
-      
+
       <Text style={[styles.profileName, { color: colors.text }]}>
         {userData?.first_name || ''} {userData?.last_name || ''}
       </Text>
-      
+
       {isEditing ? (
         <TextInput
           style={[styles.bioInput, { color: colors.text, borderBottomColor: colors.border }]}
@@ -476,7 +482,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     return (
       <View style={[styles.editSection, { backgroundColor: colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Profile</Text>
-        
+
         <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>First name</Text>
           <TextInput
@@ -487,7 +493,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             placeholderTextColor={colors.textTertiary}
           />
         </View>
-        
+
         <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Last name</Text>
           <TextInput
@@ -498,7 +504,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             placeholderTextColor={colors.textTertiary}
           />
         </View>
-        
+
         {/* Phone number field - Read Only */}
         <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Phone number</Text>
@@ -513,7 +519,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             Contact admin to change phone number
           </Text>
         </View>
-        
+
         {/* Home Address field */}
         <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Home Address</Text>
@@ -526,7 +532,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             multiline
           />
         </View>
-        
+
         {/* Current Address field */}
         <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Current Address</Text>
@@ -539,24 +545,24 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             multiline
           />
         </View>
-        
+
         {/* Date of Birth field with dropdown */}
         <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
-          
+
           <TouchableOpacity
             style={styles.datePickerButton}
             onPress={showDatePickerModal}
           >
             <Text style={[
-              styles.datePickerText, 
+              styles.datePickerText,
               { color: formData.dateOfBirth ? colors.text : colors.textTertiary }
             ]}>
               {formatDisplayDate(formData.dateOfBirth)}
             </Text>
             <Ionicons name="calendar-outline" size={20} color={colors.icon} />
           </TouchableOpacity>
-          
+
           {showDatePicker && (
             <DateTimePicker
               value={selectedDate}
@@ -567,17 +573,17 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
               textColor={colors.text}
             />
           )}
-          
+
           {formData.dateOfBirth && (
             <Text style={[styles.dateFormatNote, { color: colors.textTertiary }]}>
               Selected: {formData.dateOfBirth}
             </Text>
           )}
         </View>
-        
+
         <View style={styles.saveButtonContainer}>
-          <TouchableOpacity 
-            style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]} 
+          <TouchableOpacity
+            style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]}
             onPress={handleSave}
             disabled={saving}
           >
@@ -587,9 +593,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
               <Text style={[styles.saveButtonText, { color: colors.background }]}>Save Changes</Text>
             )}
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.cancelButton, { borderColor: colors.border }]} 
+
+          <TouchableOpacity
+            style={[styles.cancelButton, { borderColor: colors.border }]}
             onPress={() => {
               Keyboard.dismiss();
               setIsEditing(false);
@@ -617,7 +623,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         }}
         isFirst={true}
       />
-      
+
       <MenuItem
         title="Email"
         subtitle={userData?.email || 'Not provided'}
@@ -627,7 +633,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Designation"
         subtitle={userData?.designation || userData?.role || 'Not provided'}
@@ -637,7 +643,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Employee ID"
         subtitle={userData?.employee_id || 'Not provided'}
@@ -647,7 +653,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Date of Birth"
         subtitle={userData?.date_of_birth || 'Not provided'}
@@ -657,7 +663,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Home Address"
         subtitle={userData?.home_address?.address || 'Not provided'}
@@ -667,7 +673,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Current Address"
         subtitle={userData?.current_location?.address || 'Not provided'}
@@ -691,7 +697,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         }}
         isFirst={true}
       />
-      
+
       <MenuItem
         title="Assets"
         subtitle={`${assets.length} items`}
@@ -701,7 +707,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Payslips"
         subtitle={`${payslips.length} payslips`}
@@ -711,7 +717,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalVisible(true);
         }}
       />
-      
+
       <MenuItem
         title="Documents"
         subtitle={`${documents.length} documents`}
@@ -743,7 +749,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 Employee ID Card
               </Text>
             </View>
-            
+
             <View style={styles.idCardContent}>
               {userData?.profile_picture ? (
                 <Image source={{ uri: userData.profile_picture }} style={styles.idPhoto} />
@@ -754,7 +760,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                   </Text>
                 </View>
               )}
-              
+
               <View style={styles.idCardInfo}>
                 <Text style={[styles.idName, { color: colors.text }]}>
                   {userData?.first_name || ''} {userData?.last_name || ''}
@@ -775,9 +781,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 )}
               </View>
             </View>
-            
-            <TouchableOpacity 
-              style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]} 
+
+            <TouchableOpacity
+              style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]}
               onPress={handleDownloadIDCard}
               disabled={downloading}
             >
@@ -823,17 +829,17 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   return (
     <View style={[styles.container, { backgroundColor: colors.modalBackground }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.headerBackground} />
-      
+
       <ProfileHeader />
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
         <ProfileSection />
-        
+
         {isEditing ? (
           <EditProfileSection />
         ) : (
@@ -842,7 +848,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             <FeaturesSection />
           </>
         )}
-        
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -863,7 +869,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
               </Text>
               <View style={{ width: 24 }} />
             </View>
-            
+
             <ScrollView style={styles.modalBody}>
               {renderModalContent()}
             </ScrollView>
@@ -887,7 +893,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
   },
-  
+
   header: {
     paddingBottom: 20,
   },
@@ -903,11 +909,13 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: 15,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+    marginLeft:-15
   },
   editButton: {
     width: 40,
@@ -915,14 +923,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
-  
+
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingBottom: 20,
   },
-  
+
   profileSection: {
     alignItems: 'center',
     paddingVertical: 32,
@@ -982,7 +990,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1,
   },
-  
+
   editSection: {
     paddingHorizontal: 16,
     paddingVertical: 20,
@@ -1038,7 +1046,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  
+
   // Date picker styles
   datePickerButton: {
     flexDirection: 'row',
@@ -1049,7 +1057,7 @@ const styles = StyleSheet.create({
   datePickerText: {
     fontSize: 16,
   },
-  
+
   menuSection: {
     borderRadius: 0,
     overflow: 'hidden',
@@ -1084,7 +1092,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
-  
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1119,7 +1127,7 @@ const styles = StyleSheet.create({
   modalDetail: {
     fontSize: 16,
   },
-  
+
   modalIDCard: {
     padding: 20,
     borderRadius: 16,
@@ -1196,9 +1204,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  
+
   bottomSpacer: {
     height: 20,
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
 });
 

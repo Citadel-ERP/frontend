@@ -150,6 +150,12 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
       { text: 'OK' },
     ]);
   };
+  const BackIcon = () => (
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+      <Text style={styles.backText}>Back</Text>
+    </View>
+  );
 
   const renderHeader = () => (
     <View style={[styles.header, { 
@@ -162,8 +168,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          <Text style={styles.backText}>Back</Text>
+          <BackIcon />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={styles.headerSpacer} />
@@ -365,6 +370,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingBottom: 16,
+    height: 106,
     zIndex: 1000, // Ensure header stays on top
   },
   headerContent: {
@@ -377,14 +383,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  backText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    marginLeft: 8,
   },
   headerTitle: {
     flex: 1,
@@ -446,6 +444,27 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 32,
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
 });
 

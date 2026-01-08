@@ -435,14 +435,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return;
     }
 
-    if (isBeforeTimeIST(17, 30)) {
+    if (isBeforeTimeIST(18, 0)) {
       setLoading(true);
       const hasSpecialPermission = await checkSpecialAttendance();
       setLoading(false);
       if (!hasSpecialPermission) {
         Alert.alert(
           'Early Checkout',
-          'You cannot mark checkout before 5:30 PM. Kindly raise a request to your HR to allow early checkout.',
+          'You cannot mark checkout before 6:00 PM. Kindly raise a request to your HR to allow early checkout.',
           [{ text: 'OK' }]
         );
         return;
