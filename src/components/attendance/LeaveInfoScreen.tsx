@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ const colors = {
   blue: '#3b82f6',
   purple: '#a855f7',
   modalOverlay: 'rgba(0, 0, 0, 0.5)',
+  cancelled: '#6b7280',
 };
 
 const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
@@ -57,6 +58,7 @@ interface LeaveApplication {
     email: string;
     designation?: string;
   };
+  cancelled_at?: string;
 }
 
 interface LeaveInfoScreenProps {
@@ -64,12 +66,21 @@ interface LeaveInfoScreenProps {
   onBack: () => void;
   baseUrl: string;
   token: string;
+  onLeaveUpdate?: (updatedLeave: LeaveApplication) => void;
 }
 
-const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUrl, token }) => {
+const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ 
+  leave, onBack, baseUrl, token, onLeaveUpdate 
+}) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
+  const [currentLeave, setCurrentLeave] = useState<LeaveApplication>(leave);
+
+  // Update currentLeave when prop changes
+  useEffect(() => {
+    setCurrentLeave(leave);
+  }, [leave]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -96,6 +107,8 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
         return colors.error;
       case 'pending':
         return colors.primary;
+      case 'cancelled':
+        return colors.cancelled;
       default:
         return colors.textSecondary;
     }
@@ -109,6 +122,8 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
         return '✕';
       case 'pending':
         return '⏳';
+      case 'cancelled':
+        return '🗑️';
       default:
         return '•';
     }
@@ -156,44 +171,85 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
 
   const handleCancelLeave = async () => {
     setIsCancelling(true);
-
     try {
       // Fetch token directly from AsyncStorage
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-
       if (!storedToken) {
         Alert.alert('Error', 'Authentication token not found. Please login again.');
         setIsCancelling(false);
         return;
       }
-      baseUrl  = BACKEND_URL
-      console.log("Cancel Leave Request:", { baseUrl, token: storedToken, leave_id: leave.id });
-      const response = await fetch(`${baseUrl}/core/cancelLeave`, {
+      
+      const apiBaseUrl = BACKEND_URL;
+      console.log("Cancel Leave Request:", { baseUrl: apiBaseUrl, token: storedToken, leave_id: currentLeave.id });
+      
+      const response = await fetch(`${apiBaseUrl}/core/cancelLeave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           token: storedToken,
-          leave_id: leave.id,
+          leave_id: currentLeave.id,
         }),
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Leave request has been cancelled.');
+        const cancelledDate = new Date().toISOString();
+        
+        // Create updated leave object with cancelled status
+        const updatedLeave = {
+          ...currentLeave,
+          status: 'cancelled',
+          cancelled_at: cancelledDate,
+        };
+        
+        // Update local state first
+        setCurrentLeave(updatedLeave);
+        
+        // Close modal
+        closeCancelModal();
         setIsCancelling(false);
-        onBack();
+        
+        // CRITICAL: Update parent component state via callback BEFORE navigating back
+        // This ensures the leave list updates in real-time
+        if (onLeaveUpdate) {
+          console.log('Calling onLeaveUpdate with:', updatedLeave);
+          onLeaveUpdate(updatedLeave);
+        }
+        
+        // Show success message and navigate back
+        Alert.alert(
+          'Success', 
+          'Leave request has been cancelled successfully.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate back to show updated list
+                onBack();
+              }
+            }
+          ]
+        );
+        
       } else {
         const errorData = await response.json();
         console.error('Error response:', errorData);
         setIsCancelling(false);
+        closeCancelModal();
         Alert.alert('Error', errorData.message || 'Failed to cancel leave. Please try again.');
       }
     } catch (error) {
       console.error('Error cancelling leave:', error);
       setIsCancelling(false);
+      closeCancelModal();
       Alert.alert('Error', 'Failed to cancel leave. Please try again.');
     }
+  };
+
+  const handleBack = () => {
+    onBack();
   };
 
   const BackIcon = () => (
@@ -206,7 +262,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-
+      
       <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
@@ -219,14 +275,15 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
             resizeMode="cover"
           />
           <View style={styles.headerOverlay} />
+          
           <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <BackIcon />
             </TouchableOpacity>
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
-
+          
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Leave Details</Text>
           </View>
@@ -238,50 +295,64 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
             <View style={styles.statusBadgeContainer}>
               <View style={[
                 styles.statusBadge,
-                { backgroundColor: getStatusBadgeColor(leave.status) }
+                { backgroundColor: getStatusBadgeColor(currentLeave.status) }
               ]}>
-                <Text style={styles.statusIcon}>{getStatusIcon(leave.status)}</Text>
+                <Text style={styles.statusIcon}>{getStatusIcon(currentLeave.status)}</Text>
                 <Text style={styles.statusText}>
-                  {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
+                  {currentLeave.status.charAt(0).toUpperCase() + currentLeave.status.slice(1)}
                 </Text>
               </View>
             </View>
 
             <View style={styles.leaveTypeHeader}>
-              <Text style={styles.leaveTypeIcon}>{getLeaveTypeIcon(leave.leave_type)}</Text>
-              <Text style={styles.leaveTypeTitle}>{formatLeaveType(leave.leave_type)} Leave</Text>
+              <Text style={styles.leaveTypeIcon}>{getLeaveTypeIcon(currentLeave.leave_type)}</Text>
+              <Text style={styles.leaveTypeTitle}>{formatLeaveType(currentLeave.leave_type)} Leave</Text>
             </View>
 
             <View style={styles.dateRangeContainer}>
               <View style={styles.dateItem}>
                 <Text style={styles.dateLabel}>From</Text>
-                <Text style={styles.dateValue}>{formatDate(leave.start_date)}</Text>
+                <Text style={styles.dateValue}>{formatDate(currentLeave.start_date)}</Text>
               </View>
               <View style={styles.dateDivider}>
                 <Text style={styles.dateDividerText}>→</Text>
               </View>
               <View style={styles.dateItem}>
                 <Text style={styles.dateLabel}>To</Text>
-                <Text style={styles.dateValue}>{formatDate(leave.end_date)}</Text>
+                <Text style={styles.dateValue}>{formatDate(currentLeave.end_date)}</Text>
               </View>
             </View>
 
             <View style={styles.durationBadge}>
               <Text style={styles.durationText}>
-                📅 {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} {' '}
-                {(leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)) === 1 ? 'day' : 'days'}
+                📅 {currentLeave.total_number_of_days || calculateDuration(currentLeave.start_date, currentLeave.end_date)} {' '}
+                {(currentLeave.total_number_of_days || calculateDuration(currentLeave.start_date, currentLeave.end_date)) === 1 ? 'day' : 'days'}
               </Text>
             </View>
 
             {/* Cancel Leave Button - Only show if status is pending */}
-            {leave.status === 'pending' && (
+            {currentLeave.status === 'pending' && (
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={openCancelModal}
                 activeOpacity={0.7}
+                disabled={isCancelling}
               >
-                <Text style={styles.cancelButtonText}>✕ Cancel Leave Request</Text>
+                {isCancelling ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.cancelButtonText}>✕ Cancel Leave Request</Text>
+                )}
               </TouchableOpacity>
+            )}
+
+            {/* Show cancelled timestamp if leave is cancelled */}
+            {currentLeave.status === 'cancelled' && currentLeave.cancelled_at && (
+              <View style={styles.cancelledInfo}>
+                <Text style={styles.cancelledText}>
+                  🗑️ Cancelled on {formatDateTime(currentLeave.cancelled_at)}
+                </Text>
+              </View>
             )}
           </View>
 
@@ -289,7 +360,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
           <View style={styles.section}>
             <Text style={styles.sectionTitleAlt}>Reason for Leave</Text>
             <View style={styles.card}>
-              <Text style={styles.reasonText}>{leave.reason}</Text>
+              <Text style={styles.reasonText}>{currentLeave.reason}</Text>
             </View>
           </View>
 
@@ -299,65 +370,92 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
             <View style={styles.infoGrid}>
               <View style={styles.infoCard}>
                 <Text style={styles.infoLabel}>Leave Type</Text>
-                <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
+                <Text style={styles.infoValue}>{formatLeaveType(currentLeave.leave_type)}</Text>
               </View>
+              
               <View style={styles.infoCard}>
                 <Text style={styles.infoLabel}>Duration</Text>
                 <Text style={styles.infoValue}>
-                  {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} days
+                  {currentLeave.total_number_of_days || calculateDuration(currentLeave.start_date, currentLeave.end_date)} days
                 </Text>
               </View>
-              {leave.is_sandwich !== undefined && (
+              
+              {currentLeave.is_sandwich !== undefined && (
                 <View style={styles.infoCard}>
                   <Text style={styles.infoLabel}>Sandwich Leave</Text>
-                  <Text style={[styles.infoValue, { color: leave.is_sandwich ? colors.error : colors.success }]}>
-                    {leave.is_sandwich ? 'Yes' : 'No'}
+                  <Text style={[styles.infoValue, { color: currentLeave.is_sandwich ? colors.error : colors.success }]}>
+                    {currentLeave.is_sandwich ? 'Yes' : 'No'}
                   </Text>
                 </View>
               )}
             </View>
           </View>
 
-          {/* Approval/Rejection Details */}
-          {(leave.status === 'approved' || leave.status === 'rejected') && (
+          {/* Approval/Rejection/Cancellation Details */}
+          {(currentLeave.status === 'approved' || currentLeave.status === 'rejected' || currentLeave.status === 'cancelled') && (
             <View style={styles.section}>
               <Text style={styles.sectionTitleAlt}>
-                {leave.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
+                {currentLeave.status === 'approved' ? 'Approval Details' : 
+                 currentLeave.status === 'rejected' ? 'Rejection Details' : 
+                 'Cancellation Details'}
               </Text>
               <View style={styles.card}>
-                {leave.approved_by && (
+                {currentLeave.approved_by && currentLeave.status !== 'cancelled' && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>
-                      {leave.status === 'approved' ? 'Approved by' : 'Rejected by'}
+                      {currentLeave.status === 'approved' ? 'Approved by' : 'Rejected by'}
                     </Text>
                     <Text style={styles.detailValue}>
-                      {leave.approved_by?.first_name || `User ID: ${leave.approved_by}`}
+                      {currentLeave.approved_by?.first_name || `User ID: ${currentLeave.approved_by}`}
                     </Text>
                   </View>
                 )}
-                {(leave.approved_at || leave.rejected_at) && (
+                
+                {(currentLeave.approved_at || currentLeave.rejected_at || currentLeave.cancelled_at) && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>
-                      {leave.status === 'approved' ? 'Approved on' : 'Rejected on'}
+                      {currentLeave.status === 'approved' ? 'Approved on' : 
+                       currentLeave.status === 'rejected' ? 'Rejected on' : 
+                       'Cancelled on'}
                     </Text>
                     <Text style={styles.detailValue}>
-                      {formatDateTime(leave.approved_at || leave.rejected_at || '')}
+                      {formatDateTime(
+                        currentLeave.approved_at || currentLeave.rejected_at || currentLeave.cancelled_at || ''
+                      )}
                     </Text>
                   </View>
                 )}
-                {leave.comment && (
+                
+                {currentLeave.comment && currentLeave.status !== 'cancelled' && (
                   <View style={styles.commentContainer}>
                     <Text style={styles.commentLabel}>
-                      {leave.status === 'approved' ? 'Comment' : 'Rejection Reason'}
+                      {currentLeave.status === 'approved' ? 'Comment' : 'Rejection Reason'}
                     </Text>
                     <View style={[
                       styles.commentBox,
                       {
-                        borderLeftColor: leave.status === 'approved' ? colors.success : colors.error,
-                        backgroundColor: leave.status === 'approved' ? colors.success + '10' : colors.error + '10'
+                        borderLeftColor: currentLeave.status === 'approved' ? colors.success : colors.error,
+                        backgroundColor: currentLeave.status === 'approved' ? colors.success + '10' : colors.error + '10'
                       }
                     ]}>
-                      <Text style={styles.commentText}>{leave.comment}</Text>
+                      <Text style={styles.commentText}>{currentLeave.comment}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {currentLeave.status === 'cancelled' && (
+                  <View style={styles.commentContainer}>
+                    <Text style={styles.commentLabel}>Cancellation Note</Text>
+                    <View style={[
+                      styles.commentBox,
+                      {
+                        borderLeftColor: colors.cancelled,
+                        backgroundColor: colors.cancelled + '10'
+                      }
+                    ]}>
+                      <Text style={styles.commentText}>
+                        This leave request was cancelled by the employee.
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -366,31 +464,32 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
           )}
 
           {/* Employee Information */}
-          {leave.user && (
+          {currentLeave.user && (
             <View style={styles.section}>
               <Text style={styles.sectionTitleAlt}>Employee Details</Text>
               <View style={styles.card}>
                 <View style={styles.employeeHeader}>
                   <View style={styles.avatarCircle}>
                     <Text style={styles.avatarText}>
-                      {leave.user.full_name.charAt(0).toUpperCase()}
+                      {currentLeave.user.full_name.charAt(0).toUpperCase()}
                     </Text>
                   </View>
                   <View style={styles.employeeInfo}>
-                    <Text style={styles.employeeName}>{leave.user.full_name}</Text>
-                    {leave.user.designation && (
-                      <Text style={styles.employeeDesignation}>{leave.user.designation}</Text>
+                    <Text style={styles.employeeName}>{currentLeave.user.full_name}</Text>
+                    {currentLeave.user.designation && (
+                      <Text style={styles.employeeDesignation}>{currentLeave.user.designation}</Text>
                     )}
                   </View>
                 </View>
+                
                 <View style={styles.employeeDetails}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Employee ID</Text>
-                    <Text style={styles.detailValue}>{leave.user.employee_id}</Text>
+                    <Text style={styles.detailValue}>{currentLeave.user.employee_id}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Email</Text>
-                    <Text style={styles.detailValue}>{leave.user.email}</Text>
+                    <Text style={styles.detailValue}>{currentLeave.user.email}</Text>
                   </View>
                 </View>
               </View>
@@ -426,12 +525,12 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
             <View style={styles.modalIcon}>
               <Text style={styles.modalIconText}>⚠️</Text>
             </View>
-
+            
             <Text style={styles.modalTitle}>Cancel Leave Request?</Text>
             <Text style={styles.modalMessage}>
               Are you sure you want to cancel this leave request? This action cannot be undone.
             </Text>
-
+            
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonSecondary]}
@@ -441,7 +540,7 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUr
               >
                 <Text style={styles.modalButtonTextSecondary}>No, Keep It</Text>
               </TouchableOpacity>
-
+              
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonPrimary]}
                 onPress={handleCancelLeave}
@@ -658,6 +757,18 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 15,
     fontWeight: '700',
+  },
+  cancelledInfo: {
+    backgroundColor: colors.cancelled + '10',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  cancelledText: {
+    fontSize: 13,
+    color: colors.cancelled,
+    fontWeight: '600',
   },
   section: {
     marginBottom: 16,

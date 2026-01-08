@@ -97,7 +97,8 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
             rejected_at: leave.rejected_at,
             total_number_of_days: leave.total_number_of_days,
             is_sandwich: leave.is_sandwich,
-            comment: leave.comment && leave.status === 'rejected' ? leave.comment : undefined
+            comment: leave.comment && leave.status === 'rejected' ? leave.comment : undefined,
+            cancelled_at: leave.cancelled_at
           }));
           setLeaveApplications(formattedLeaveApplications);
         }
@@ -115,6 +116,23 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
     setRefreshing(true);
     fetchLeaveBalance();
   }, [token]);
+
+  // CRITICAL FIX: Add callback to update leave in real-time
+  const handleLeaveUpdate = (updatedLeave: LeaveApplication) => {
+    console.log('LeaveScreen received updated leave:', updatedLeave);
+    
+    // Update the leave applications array with the updated leave
+    setLeaveApplications(prevApplications => 
+      prevApplications.map(leave => 
+        leave.id === updatedLeave.id ? updatedLeave : leave
+      )
+    );
+    
+    // Also update selectedLeave if it's the same leave
+    if (selectedLeave && selectedLeave.id === updatedLeave.id) {
+      setSelectedLeave(updatedLeave);
+    }
+  };
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
@@ -206,6 +224,8 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
         return { backgroundColor: '#ef4444', color: '#fff' };
       case 'pending':
         return { backgroundColor: '#f59e0b', color: '#fff' };
+      case 'cancelled':
+        return { backgroundColor: '#6b7280', color: '#fff' };
       default:
         return { backgroundColor: '#6b7280', color: '#fff' };
     }
@@ -222,6 +242,9 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
       <LeaveInfoScreen
         leave={selectedLeave}
         onBack={handleBackFromLeaveInfo}
+        baseUrl={BACKEND_URL}
+        token={token || ''}
+        onLeaveUpdate={handleLeaveUpdate}
       />
     );
   }
@@ -251,7 +274,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
           />
           <View style={styles.headerOverlay} />
 
-          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 :0 }]}>
+          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
             </TouchableOpacity>
@@ -367,10 +390,6 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
         onFormChange={setLeaveForm}
         onSubmit={submitLeaveApplication}
         loading={loading}
-        onStartDatePress={() => setShowStartDatePicker(true)}
-        onEndDatePress={() => setShowEndDatePicker(true)}
-        onStartDateChange={onStartDateChange}
-        onEndDateChange={onEndDateChange}
       />
     </View>
   );
@@ -627,8 +646,12 @@ const styles = StyleSheet.create({
     alignContent: 'center' 
   },
   backArrow: {
-    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+    width: 12, 
+    height: 12, 
+    borderLeftWidth: 2, 
+    borderTopWidth: 2,
+    borderColor: colors.white, 
+    transform: [{ rotate: '-45deg' }],
   },
   backText: {
     color: colors.white,

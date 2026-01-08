@@ -11,8 +11,6 @@ import {
   Platform,
   KeyboardAvoidingView,
   Keyboard,
-  findNodeHandle,
-  UIManager,
 } from 'react-native';
 import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
 
@@ -300,7 +298,6 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       style={styles.modalContainer}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
-      // Add these props for better keyboard handling
       contentInsetAdjustmentBehavior="automatic"
     >
       {/* Header */}
@@ -454,7 +451,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
           numberOfLines={3}
           textAlignVertical="top"
           maxLength={200}
-          onFocus={handleReasonInputFocus} // Add focus handler
+          onFocus={handleReasonInputFocus}
         />
         <Text style={styles.characterCount}>
           {leaveForm.reason.length}/200
@@ -477,7 +474,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardContainer}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0} // Adjust offset as needed
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
         >
           <View style={styles.modalWrapper}>
             {renderContent()}
@@ -806,7 +803,6 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
   },
-   
 });
 
 export default LeaveModal;
