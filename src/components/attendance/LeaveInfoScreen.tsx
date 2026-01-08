@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,15 @@ import {
   ScrollView,
   StatusBar,
   Image,
-  Platform
+  Platform,
+  Modal,
+  ActivityIndicator,
+  Animated,
+  Alert
 } from 'react-native';
+const TOKEN_2_KEY = 'token_2';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_URL } from '../../config/config';
 
 // Theme colors matching your app
 const colors = {
@@ -24,6 +31,7 @@ const colors = {
   error: '#ef4444',
   blue: '#3b82f6',
   purple: '#a855f7',
+  modalOverlay: 'rgba(0, 0, 0, 0.5)',
 };
 
 const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
@@ -54,9 +62,14 @@ interface LeaveApplication {
 interface LeaveInfoScreenProps {
   leave: LeaveApplication;
   onBack: () => void;
+  baseUrl: string;
+  token: string;
 }
 
-const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
+const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack, baseUrl, token }) => {
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [scaleAnim] = useState(new Animated.Value(0));
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -120,17 +133,80 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
     if (lowerType.includes('earned')) return '⭐';
     return '📋';
   };
-  
+
+  const openCancelModal = () => {
+    setShowCancelModal(true);
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeCancelModal = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowCancelModal(false);
+    });
+  };
+
+  const handleCancelLeave = async () => {
+    setIsCancelling(true);
+
+    try {
+      // Fetch token directly from AsyncStorage
+      const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+
+      if (!storedToken) {
+        Alert.alert('Error', 'Authentication token not found. Please login again.');
+        setIsCancelling(false);
+        return;
+      }
+      baseUrl  = BACKEND_URL
+      console.log("Cancel Leave Request:", { baseUrl, token: storedToken, leave_id: leave.id });
+      const response = await fetch(`${baseUrl}/core/cancelLeave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: storedToken,
+          leave_id: leave.id,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Leave request has been cancelled.');
+        setIsCancelling(false);
+        onBack();
+      } else {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        setIsCancelling(false);
+        Alert.alert('Error', errorData.message || 'Failed to cancel leave. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error cancelling leave:', error);
+      setIsCancelling(false);
+      Alert.alert('Error', 'Failed to cancel leave. Please try again.');
+    }
+  };
+
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
+      <View style={styles.backArrow} />
+      <Text style={styles.backText}>Back</Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-      
+
       <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
@@ -143,15 +219,14 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
             resizeMode="cover"
           />
           <View style={styles.headerOverlay} />
-
-          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 :0 }]}>
+          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
             </TouchableOpacity>
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
-          
+
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Leave Details</Text>
           </View>
@@ -197,6 +272,17 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                 {(leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)) === 1 ? 'day' : 'days'}
               </Text>
             </View>
+
+            {/* Cancel Leave Button - Only show if status is pending */}
+            {leave.status === 'pending' && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={openCancelModal}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>✕ Cancel Leave Request</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Reason Section */}
@@ -215,14 +301,12 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                 <Text style={styles.infoLabel}>Leave Type</Text>
                 <Text style={styles.infoValue}>{formatLeaveType(leave.leave_type)}</Text>
               </View>
-
               <View style={styles.infoCard}>
                 <Text style={styles.infoLabel}>Duration</Text>
                 <Text style={styles.infoValue}>
                   {leave.total_number_of_days || calculateDuration(leave.start_date, leave.end_date)} days
                 </Text>
               </View>
-
               {leave.is_sandwich !== undefined && (
                 <View style={styles.infoCard}>
                   <Text style={styles.infoLabel}>Sandwich Leave</Text>
@@ -240,7 +324,6 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
               <Text style={styles.sectionTitleAlt}>
                 {leave.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
               </Text>
-
               <View style={styles.card}>
                 {leave.approved_by && (
                   <View style={styles.detailRow}>
@@ -252,7 +335,6 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                     </Text>
                   </View>
                 )}
-
                 {(leave.approved_at || leave.rejected_at) && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>
@@ -263,7 +345,6 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                     </Text>
                   </View>
                 )}
-
                 {leave.comment && (
                   <View style={styles.commentContainer}>
                     <Text style={styles.commentLabel}>
@@ -302,7 +383,6 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
                     )}
                   </View>
                 </View>
-
                 <View style={styles.employeeDetails}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Employee ID</Text>
@@ -321,6 +401,63 @@ const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ leave, onBack }) => {
           <View style={{ height: 32 }} />
         </View>
       </ScrollView>
+
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCancelModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={closeCancelModal}
+          />
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                transform: [{ scale: scaleAnim }],
+              }
+            ]}
+          >
+            <View style={styles.modalIcon}>
+              <Text style={styles.modalIconText}>⚠️</Text>
+            </View>
+
+            <Text style={styles.modalTitle}>Cancel Leave Request?</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to cancel this leave request? This action cannot be undone.
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={closeCancelModal}
+                disabled={isCancelling}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalButtonTextSecondary}>No, Keep It</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleCancelLeave}
+                disabled={isCancelling}
+                activeOpacity={0.7}
+              >
+                {isCancelling ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.modalButtonTextPrimary}>Yes, Cancel</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -497,11 +634,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
     alignSelf: 'center',
+    marginBottom: 16,
   },
   durationText: {
     fontSize: 13,
     color: colors.success,
     fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: colors.error,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  cancelButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
   section: {
     marginBottom: 16,
@@ -642,8 +798,12 @@ const styles = StyleSheet.create({
     alignContent: 'center'
   },
   backArrow: {
-    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: colors.white, transform: [{ rotate: '-45deg' }],
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: colors.white,
+    transform: [{ rotate: '-45deg' }],
   },
   backText: {
     color: colors.white,
@@ -655,6 +815,96 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     marginBottom: 12,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.modalOverlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    padding: 28,
+    width: '85%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  modalIconText: {
+    fontSize: 32,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  modalButtonPrimary: {
+    backgroundColor: colors.error,
+    shadowColor: colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  modalButtonSecondary: {
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  modalButtonTextPrimary: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalButtonTextSecondary: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

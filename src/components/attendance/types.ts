@@ -72,7 +72,6 @@ export interface ReasonOption {
 }
 
 export const CHECKIN_REASONS: ReasonOption[] = [
-  { value: 'working_from_home', label: 'Working from home' },
   { value: 'client_visit', label: 'Client visit/meeting' },
   { value: 'field_work', label: 'Field work' },
   { value: 'sick', label: 'Sick/Medical appointment' },

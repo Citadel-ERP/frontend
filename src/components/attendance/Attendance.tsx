@@ -44,6 +44,102 @@ import ReasonModal from './ReasonModal';
 const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const AttendanceButtonSection: React.FC<{
+  isAfter11AM: boolean;
+  locationPermission: boolean;
+  loading: boolean;
+  onPress: () => void;
+  token: string | null;
+  todayAttendance: AttendanceRecord | null;
+  attendanceRecords: AttendanceRecord[]; // Add this prop
+}> = ({ isAfter11AM, locationPermission, loading, onPress, token, todayAttendance, attendanceRecords }) => {
+  const [hasSpecialPermission, setHasSpecialPermission] = useState(false);
+  const [checkingPermission, setCheckingPermission] = useState(false);
+
+  // Check if attendance is marked for today
+  const checkTodaysAttendance = () => {
+    const today = new Date().toISOString().split('T')[0];
+
+    // First check todayAttendance
+    if (todayAttendance && todayAttendance.check_in_time) {
+      return true;
+    }
+
+    // Then check attendanceRecords
+    const todaysRecord = attendanceRecords.find(record => record.date === today);
+    return todaysRecord && todaysRecord.check_in_time;
+  };
+
+  const attendanceMarked = checkTodaysAttendance();
+  console.log("Attendance Marked:", attendanceMarked, "TodayAttendance:", todayAttendance);
+
+  useEffect(() => {
+    if (isAfter11AM && token) {
+      checkSpecialPermission();
+    }
+  }, [isAfter11AM, token]);
+
+  const checkSpecialPermission = async () => {
+    try {
+      setCheckingPermission(true);
+      const response = await fetch(`${BACKEND_URL}/core/checkSpecialAttendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHasSpecialPermission(data.special_attendance === true);
+      }
+    } catch (error) {
+      console.error('Error checking special attendance:', error);
+      setHasSpecialPermission(false);
+    } finally {
+      setCheckingPermission(false);
+    }
+  };
+
+  // Before 11 AM or has special permission - show button
+  if (!isAfter11AM || hasSpecialPermission) {
+    return (
+      <TouchableOpacity
+        style={[
+          styles.markButton,
+          !locationPermission && styles.disabledButton
+        ]}
+        onPress={onPress}
+        disabled={loading || !locationPermission || checkingPermission || attendanceMarked}
+      >
+        {loading || checkingPermission ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.markButtonText}>
+            {attendanceMarked ? 'Attendance Already Marked' :
+              !locationPermission ? 'Enable Location to Mark Attendance' : 'Mark Attendance'}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  }
+  console.log(attendanceMarked);
+  // After 11 AM and no special permission
+  if (!attendanceMarked) {
+    return null
+    // return (
+    //   <View style={styles.noActionContainer}>
+    //     <Text style={styles.noActionText}>
+    //       Attendance window has closed for today.{'\n'}
+    //       Please contact HR if needed.
+    //     </Text>
+    //   </View>
+    // );
+  }
+
+  // If attendance is marked, return null (parent will handle display)
+  return null;
+};
+
+
 const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isDriver, setIsDriver] = useState<boolean>(false);
@@ -157,6 +253,70 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return false;
     }
   };
+  const getISTTime = () => {
+    const now = new Date();
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    return new Date(utcTime + 19800000);
+  };
+  const isAfterTimeIST = (hours: number, minutes: number): boolean => {
+    const now = new Date();
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const istTime = new Date(utcTime + 19800000);
+    const currentHours = istTime.getHours();
+    const currentMinutes = istTime.getMinutes();
+
+    if (currentHours > hours) return true;
+    if (currentHours === hours && currentMinutes >= minutes) return true;
+    return false;
+  };
+
+  const getAttendanceMessage = (todayAttendance: AttendanceRecord, hasSpecialPermission: boolean) => {
+    const istTime = getISTTime();
+    const hours = istTime.getHours();
+    const minutes = istTime.getMinutes();
+
+    // Before 10:15 AM
+    if (hours < 10 || (hours === 10 && minutes < 15)) {
+      return {
+        message: "Mark your attendance between\n10:00 AM - 10:15 AM",
+        type: 'normal',
+        canMarkAttendance: true
+      };
+    }
+
+    // Between 10:15 AM and 11:00 AM
+    if (hours === 10 && minutes >= 15) {
+      return {
+        message: "Late Login Period\n10:15 AM - 11:00 AM\nContact HR if needed",
+        type: 'warning',
+        canMarkAttendance: true
+      };
+    }
+    if (hours === 11 && minutes === 0) {
+      console.log(hasSpecialPermission, todayAttendance);
+      if (hasSpecialPermission) {
+        return {
+          message: "You have special permission to mark attendance today.",
+          type: 'normal',
+          canMarkAttendance: true
+        }
+      }
+      // After 11:00 AM
+      if (!todayAttendance) {
+        return {
+          message: "You can not mark attendance after 11:00 AM, kindly contact your HR",
+          type: 'error',
+          canMarkAttendance: false
+        };
+      }
+    }
+
+    return {
+      message: "Kindly mark Attendance before 10:15 AM",
+      type: 'normal',
+      canMarkAttendance: false
+    }
+  };
 
   const initializeLocationPermission = async () => {
     try {
@@ -265,6 +425,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
     </View>
   );
+  const hasSpecialPermission = checkSpecialAttendance();
+  const attendanceMsg = getAttendanceMessage(todayAttendance, hasSpecialPermission);
 
   const fetchInitialData = async (token?: string) => {
     setLoading(true);
@@ -649,36 +811,31 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           console.log('Fetched attendance records:', formattedRecords);
           setAttendanceRecords(formattedRecords);
 
-          // FIXED: Only update todayAttendance when fetching current month's data
+          // Always check for today's attendance regardless of month
           const today = new Date();
-          const currentMonth = today.getMonth();
-          const currentYear = today.getFullYear();
+          const todayStr = today.toISOString().split('T')[0];
+          const todaysRecord = data.attendances.find((attendance: any) => attendance.date === todayStr);
 
-          // Only check for today's attendance if we're fetching the current month
-          if (actualMonth === currentMonth && actualYear === currentYear) {
-            const todayStr = today.toISOString().split('T')[0];
-            const todaysRecord = data.attendances.find((attendance: any) => attendance.date === todayStr);
-
-            // Only set todayAttendance if attendance is actually marked (has check_in_time)
-            if (todaysRecord && todaysRecord.check_in_time) {
-              setTodayAttendance({
-                date: todaysRecord.date,
-                status: todaysRecord.day,
-                check_in_time: todaysRecord.check_in_time,
-                check_out_time: todaysRecord.check_out_time
-              });
-            } else {
-              // No attendance marked yet today
+          if (todaysRecord && todaysRecord.check_in_time) {
+            setTodayAttendance({
+              date: todaysRecord.date,
+              status: todaysRecord.day,
+              check_in_time: todaysRecord.check_in_time,
+              check_out_time: todaysRecord.check_out_time
+            });
+          } else {
+            // Only clear todayAttendance if we're viewing current month
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            if (actualMonth === currentMonth && actualYear === currentYear) {
               setTodayAttendance(null);
             }
           }
-          // Don't modify todayAttendance when viewing other months
         }
       }
     } catch (error) {
       console.error('Error fetching attendance records:', error);
       setAttendanceRecords([]);
-      // Only clear todayAttendance on error, not when browsing months
     }
   };
 
@@ -882,7 +1039,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (status === 'absent') return 'absent';
       if (status === 'holiday') return 'holiday';
       if (status === 'leave') return 'leave';
-      if (status === 'work from home' || status === 'wfh') return 'wfh';
       if (status === 'pending') return 'pending';
     }
 
@@ -960,6 +1116,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       <LeaveInfoScreen
         leave={selectedLeave}
         onBack={handleBackFromLeaveInfo}
+        baseUrl={BACKEND_URL}
+        token={token}
       />
     );
   }
@@ -981,8 +1139,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -1002,15 +1160,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             resizeMode="cover"
           />
           <View style={styles.headerOverlay} />
-          
-          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 :0 }]}>
+
+          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
             </TouchableOpacity>
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
-          
+
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Attendance</Text>
           </View>
@@ -1020,8 +1178,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           {/* Today's Attendance Card */}
           <View style={styles.todayCard}>
             <Text style={styles.todayTitle}>Today's Attendance</Text>
-            <Text style={styles.todaySubtitle}>
-              Mark your attendance between{'\n'}10:00 AM - 11:00 AM
+            <Text style={[
+              styles.todaySubtitle,
+              attendanceMsg.type === 'warning' && styles.warningText,
+              attendanceMsg.type === 'error' && styles.errorText
+            ]}>
+              {attendanceMsg.message}
             </Text>
 
             {!locationPermission && (
@@ -1056,42 +1218,40 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                   <Text style={styles.markedTime}>Check-out: {todayAttendance.check_out_time}</Text>
                 )}
                 {todayAttendance.check_in_time && !todayAttendance.check_out_time && (
-                  <TouchableOpacity
-                    style={[
-                      styles.markButton,
-                      styles.checkoutButton,
-                      !locationPermission && styles.disabledButton
-                    ]}
-                    onPress={handleCheckoutButtonPress}
-                    disabled={loading || !locationPermission}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.markButtonText}>
-                        {!locationPermission ? 'Enable Location for Checkout' : 'Checkout'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
+                  <>
+                    <Text style={styles.checkoutReminderText}>
+                      Mark your checkout after 6:00 PM
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.markButton,
+                        styles.checkoutButton,
+                        !locationPermission && styles.disabledButton
+                      ]}
+                      onPress={handleCheckoutButtonPress}
+                      disabled={loading || !locationPermission}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.markButtonText}>
+                          {!locationPermission ? 'Enable Location for Checkout' : 'Checkout'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
             ) : (
-              <TouchableOpacity
-                style={[
-                  styles.markButton,
-                  !locationPermission && styles.disabledButton
-                ]}
+              <AttendanceButtonSection
+                isAfter11AM={isAfterTimeIST(11, 0)}
+                locationPermission={locationPermission}
+                loading={loading}
                 onPress={handleAttendanceButtonPress}
-                disabled={loading || !locationPermission}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.markButtonText}>
-                    {!locationPermission ? 'Enable Location to Mark Attendance' : 'Mark Attendance'}
-                  </Text>
-                )}
-              </TouchableOpacity>
+                token={token}
+                todayAttendance={todayAttendance}
+                attendanceRecords={attendanceRecords} // Add this line
+              />
             )}
           </View>
 
@@ -1548,26 +1708,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
   },
-  backIcon: { 
-    height: 24, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    display: 'flex', 
-    flexDirection: 'row', 
-    alignContent: 'center' 
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center'
   },
   backArrow: {
-    width: 12, 
-    height: 12, 
-    borderLeftWidth: 2, 
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
     borderTopWidth: 2,
-    borderColor: '#fff', 
+    borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
   backText: {
     color: '#fff',
     fontSize: 14,
     marginLeft: 2,
+  },
+  warningText: {
+    color: '#f59e0b',
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  noActionContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    backgroundColor: '#fef3c7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  noActionText: {
+    fontSize: 14,
+    color: '#92400e',
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  checkoutReminderText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 8,
+    marginBottom: 8,
+    textAlign: 'center',
   },
 });
 

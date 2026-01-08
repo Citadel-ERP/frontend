@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   Keyboard,
+  findNodeHandle,
+  UIManager,
 } from 'react-native';
 import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
 
@@ -71,18 +73,61 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
   });
   const [editMode, setEditMode] = useState<DateEditMode>('none');
 
+  // Add refs for ScrollView and TextInput
+  const scrollViewRef = useRef<ScrollView>(null);
+  const reasonInputRef = useRef<TextInput>(null);
+
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
       setKeyboardVisible(true);
+      
+      // Scroll to the reason input when keyboard opens
+      if (reasonInputRef.current) {
+        // Small delay to ensure keyboard is fully up
+        setTimeout(() => {
+          reasonInputRef.current?.measure((x, y, width, height, pageX, pageY) => {
+            const scrollPosition = pageY - 100; // Adjust offset as needed
+            scrollViewRef.current?.scrollTo({
+              y: Math.max(0, scrollPosition),
+              animated: true
+            });
+          });
+        }, 100);
+      }
     });
+    
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardVisible(false);
     });
+    
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
   }, []);
+
+  // Add a function to handle TextInput focus
+  const handleReasonInputFocus = () => {
+    // Scroll to the input field
+    reasonInputRef.current?.measure((x, y, width, height, pageX, pageY) => {
+      // Calculate position to scroll to (input position minus some offset)
+      const scrollToY = Math.max(0, pageY - 420); // Adjust 120 based on your header height
+      scrollViewRef.current?.scrollTo({
+        y: scrollToY,
+        animated: true
+      });
+    });
+  };
+
+  // Alternatively, you can use this simpler approach without measure
+  const scrollToReason = () => {
+    // Scroll to a specific position where the reason section is
+    // You might need to adjust the 450 value based on your content
+    scrollViewRef.current?.scrollTo({
+      y: 450,
+      animated: true
+    });
+  };
 
   useEffect(() => {
     if (leaveForm.startDate && leaveForm.endDate) {
@@ -120,8 +165,6 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-
- 
 
   const handleDateChange = (params: { startDate: DateType; endDate: DateType }) => {
     const newStartDate = params.startDate ? new Date(params.startDate) : undefined;
@@ -253,9 +296,12 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
 
   const renderContent = () => (
     <ScrollView 
+      ref={scrollViewRef}
       style={styles.modalContainer}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      // Add these props for better keyboard handling
+      contentInsetAdjustmentBehavior="automatic"
     >
       {/* Header */}
       <View style={styles.modalHeader}>
@@ -398,6 +444,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Reason</Text>
         <TextInput
+          ref={reasonInputRef}
           style={styles.reasonInput}
           value={leaveForm.reason}
           onChangeText={(text) => onFormChange({ ...leaveForm, reason: text })}
@@ -407,6 +454,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
           numberOfLines={3}
           textAlignVertical="top"
           maxLength={200}
+          onFocus={handleReasonInputFocus} // Add focus handler
         />
         <Text style={styles.characterCount}>
           {leaveForm.reason.length}/200
@@ -429,6 +477,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardContainer}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0} // Adjust offset as needed
         >
           <View style={styles.modalWrapper}>
             {renderContent()}
