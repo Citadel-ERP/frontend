@@ -29,7 +29,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Profile from './Profile';
 import HR from './HR';
 import Cab from './cab/Cab';
-import Driver from './Driver';
+import Driver from './driver/Driver';
 import BDT from './bdt/BDT';
 import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
@@ -1242,11 +1242,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       // setShowCab(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('driver')) {
-      // setShowDriver(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowDriver(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
-      // setShowBDT(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowBDT(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
       // setShowMedical(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
