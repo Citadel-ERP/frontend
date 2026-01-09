@@ -332,28 +332,25 @@ const Notifications: React.FC<NotificationsProps> = ({
 
       if (!response.ok) {
         console.error('Failed to mark notification as read on backend');
+        // Revert the change if backend fails
         setNotifications(prev =>
           prev.map(notif =>
             notif.id === id ? { ...notif, Read: false } : notif
           )
         );
-        await fetchNotifications();
       } else {
         const result = await response.json();
         console.log('Mark as read response:', result);
-        
-        setTimeout(() => {
-          fetchNotifications();
-        }, 500);
+        // REMOVED the fetchNotifications call - we already updated locally
       }
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      // Revert the change if there's an error
       setNotifications(prev =>
         prev.map(notif =>
           notif.id === id ? { ...notif, Read: false } : notif
         )
       );
-      await fetchNotifications();
     }
   };
 
@@ -382,14 +379,11 @@ const Notifications: React.FC<NotificationsProps> = ({
       } else {
         const result = await response.json();
         console.log('Mark all as read response:', result);
-        
-        setTimeout(() => {
-          fetchNotifications();
-        }, 500);
+        // REMOVED the fetchNotifications call - we already updated locally
       }
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
-      fetchNotifications();
+      // Don't refetch on error, just keep local state
     }
   };
 
