@@ -1236,14 +1236,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
     } else if (key.includes('hr')) {
-      // setShowHR(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowHR(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('cab')) {
-      // setShowCab(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowCab(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('driver')) {
-      // setShowDriver(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowDriver(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
       // setShowBDT(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);

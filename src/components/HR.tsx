@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, ActivityIndicator, TextInput, Platform,
-  Dimensions, FlatList,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert,
+  Modal, ActivityIndicator, TextInput, Platform, Dimensions, FlatList
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,8 +14,13 @@ const TOKEN_KEY = 'token_2';
 interface HRProps { onBack: () => void; }
 interface RequestNature { id: string; name: string; description?: string; }
 interface Comment {
-  id: string; comment: string; created_by: string; created_by_name: string;
-  created_at: string; is_hr_comment: boolean;
+  id: string; 
+  comment: string; 
+  created_by: string; 
+  created_by_name: string;
+  created_by_email: string;
+  created_at: string; 
+  is_hr_comment: boolean;
 }
 interface Item {
   id: string; nature: string; description: string; issue?: string;
@@ -72,7 +77,7 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
   onSelectNature,
   activeTab
 }) => {
-  const filteredNatures = natures.filter(nature => 
+  const filteredNatures = natures.filter(nature =>
     nature.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -93,7 +98,7 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
           </Text>
           <View style={styles.modalSpacer} />
         </View>
-        
+
         <View style={styles.searchContainerModal}>
           <Ionicons name="search" size={20} color={WHATSAPP_COLORS.gray} style={styles.searchIconModal} />
           <TextInput
@@ -105,7 +110,7 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
             autoFocus={true}
           />
         </View>
-        
+
         <FlatList
           data={filteredNatures}
           keyExtractor={(item) => item.id}
@@ -118,10 +123,10 @@ const DropdownModal: React.FC<DropdownModalProps> = ({
               activeOpacity={0.7}
             >
               <View style={styles.dropdownItemIcon}>
-                <Ionicons 
-                  name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
-                  size={24} 
-                  color={WHATSAPP_COLORS.primary} 
+                <Ionicons
+                  name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
+                  size={24}
+                  color={WHATSAPP_COLORS.primary}
                 />
               </View>
               <View style={styles.dropdownItemContent}>
@@ -172,8 +177,8 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar 
-        barStyle="light-content" 
+      <StatusBar
+        barStyle="light-content"
         backgroundColor={WHATSAPP_COLORS.primaryDark}
       />
 
@@ -213,10 +218,10 @@ const NewItemPage: React.FC<NewItemPageProps> = ({
                 activeOpacity={0.7}
               >
                 <View style={styles.selectFieldLeft}>
-                  <Ionicons 
-                    name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
-                    size={20} 
-                    color={WHATSAPP_COLORS.primary} 
+                  <Ionicons
+                    name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
+                    size={20}
+                    color={WHATSAPP_COLORS.primary}
                     style={styles.fieldIcon}
                   />
                   <Text style={[
@@ -289,6 +294,7 @@ interface ItemDetailPageProps {
   onBack: () => void;
   loading: boolean;
   loadingDetails: boolean;
+  currentUserEmail: string | null; // ADD THIS LINE
 }
 
 const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
@@ -299,23 +305,129 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   onAddComment,
   onBack,
   loading,
-  loadingDetails
+  loadingDetails,
+  currentUserEmail
 }) => {
   const insets = useSafeAreaInsets();
+  const flatListRef = useRef<FlatList>(null);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const formatDate = (dateString: string): string => {
+  // WhatsApp-style date formatting helper
+  const formatWhatsAppDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Reset hours for date comparison
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+    if (compareDate.getTime() === compareToday.getTime()) {
+      return 'Today';
+    } else if (compareDate.getTime() === compareYesterday.getTime()) {
+      return 'Yesterday';
+    } else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+      // Within last 7 days
+      return date.toLocaleDateString('en-US', { weekday: 'short' });
+    } else {
+      // Older dates
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
   };
+
+  // Process comments to include date separators
+  const getProcessedComments = () => {
+    if (!item?.comments || item.comments.length === 0) return [];
+
+    const processed: any[] = [];
+    let lastDate = '';
+
+    // Sort comments by date ascending for display
+    const sortedComments = [...item.comments].sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    sortedComments.forEach((comment, index) => {
+      const commentDate = formatWhatsAppDate(comment.created_at);
+
+      // Add date separator if this is the first comment of a new date
+      if (commentDate !== lastDate) {
+        processed.push({
+          type: 'dateSeparator',
+          id: `date-${commentDate}-${index}`,
+          date: commentDate,
+          originalDate: comment.created_at
+        });
+        lastDate = commentDate;
+      }
+
+      // Add the actual comment
+      processed.push({
+        type: 'comment',
+        id: comment.id,
+        data: comment
+      });
+    });
+
+    return processed;
+  };
+
+  // Auto-scroll to bottom
+  const scrollToBottom = (animated = true) => {
+    if (flatListRef.current && !isUserScrolling) {
+      const processedComments = getProcessedComments();
+      flatListRef.current.scrollToOffset({
+        offset: 0,
+        animated,
+      });
+
+      // Alternative approach - scroll to end after a brief delay
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated });
+        }
+      }, 100);
+    }
+  };
+
+  // Handle user scrolling
+  const handleScrollBeginDrag = () => {
+    setIsUserScrolling(true);
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Reset user scrolling flag after 2 seconds of inactivity
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsUserScrolling(false);
+    }, 2000);
+  };
+
+  // Auto-scroll when new comments are added or component mounts
+  useEffect(() => {
+    if (item?.comments && !loading) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 300);
+    }
+  }, [item?.comments, loading]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const formatTime = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
+    return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
@@ -332,13 +444,73 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
     }
   };
 
+  // Render item for FlatList
+  const renderItem = ({ item: listItem }: { item: any }) => {
+    if (listItem.type === 'dateSeparator') {
+      return (
+        <View style={styles.dateSeparatorContainer} key={listItem.id}>
+          <View style={styles.dateSeparatorLine} />
+          <View style={styles.dateSeparatorBubble}>
+            <Text style={styles.dateSeparatorText}>{listItem.date}</Text>
+          </View>
+          <View style={styles.dateSeparatorLine} />
+        </View>
+      );
+    }
+
+    const comment = listItem.data;
+    console.log('Rendering comment:', comment.created_by_email, currentUserEmail);
+    const isCurrentUser = comment.created_by_email === currentUserEmail;
+
+    return (
+      <View
+        key={comment.id}
+        style={[
+          styles.messageContainer,
+          isCurrentUser ? styles.userMessageContainer : styles.hrMessageContainer
+        ]}
+      >
+        <View style={[
+          styles.messageBubbleWrapper,
+          isCurrentUser ? styles.userMessageWrapper : styles.hrMessageWrapper
+        ]}>
+          {!isCurrentUser && (
+            <Text style={styles.messageSender}>
+              {comment.created_by_name}
+            </Text>
+          )}
+
+          <View style={[
+            styles.messageBubble,
+            isCurrentUser ? styles.userMessageBubble : styles.hrMessageBubble
+          ]}>
+            <Text style={[
+              styles.messageText,
+              isCurrentUser ? styles.userMessageText : styles.hrMessageText
+            ]}>
+              {comment.comment}
+            </Text>
+            <View style={styles.messageTimeContainer}>
+              <Text style={[
+                styles.messageTime,
+                isCurrentUser ? styles.userMessageTime : styles.hrMessageTime
+              ]}>
+                {formatTime(comment.created_at)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   // FIXED: Proper comment count logic
   const totalComments = item?.comments?.length || 0;
 
   return (
     <View style={styles.container}>
-      <StatusBar 
-        barStyle="light-content" 
+      <StatusBar
+        barStyle="light-content"
         backgroundColor={WHATSAPP_COLORS.primaryDark}
       />
 
@@ -381,7 +553,11 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                   </View>
                 </View>
                 <Text style={styles.infoDate}>
-                  Submitted on {formatDate(item.created_at)}
+                  Submitted on {new Date(item.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
                 </Text>
               </View>
               <View style={styles.infoBody}>
@@ -391,7 +567,12 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
               </View>
               <View style={styles.infoFooter}>
                 <Text style={styles.infoFooterText}>
-                  Last updated: {formatDate(item.updated_at)}
+                  Last updated: {new Date(item.updated_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
                 </Text>
               </View>
             </View>
@@ -412,67 +593,27 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
               </View>
             )}
 
-            {/* Comments List with WhatsApp-style chat */}
-            <ScrollView 
+            {/* Comments List with WhatsApp-style chat and date separators */}
+            <FlatList
+              ref={flatListRef}
+              data={getProcessedComments()}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
               style={styles.commentsList}
-              showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.commentsListContent}
-            >
-              {item.comments && item.comments.length > 0 ? (
-                item.comments.map((comment) => {
-                  // FIXED: WhatsApp-style alignment logic
-                  // Determine if message is from current user or other user
-                  // Assuming is_hr_comment = true means HR user (other user)
-                  // and is_hr_comment = false means current user (employee)
-                  const isCurrentUser = !comment.is_hr_comment;
-                  
-                  return (
-                    <View 
-                      key={comment.id} 
-                      style={[
-                        styles.messageContainer,
-                        // Current user's messages on RIGHT side
-                        isCurrentUser ? styles.userMessageContainer : styles.hrMessageContainer
-                      ]}
-                    >
-                      <View style={[
-                        styles.messageBubbleWrapper,
-                        isCurrentUser ? styles.userMessageWrapper : styles.hrMessageWrapper
-                      ]}>
-                        {/* WhatsApp-style message bubble */}
-                        <View style={[
-                          styles.messageBubble,
-                          // Different colors for user vs HR messages
-                          isCurrentUser ? styles.userMessageBubble : styles.hrMessageBubble
-                        ]}>
-                          <Text style={[
-                            styles.messageText,
-                            // Different text colors
-                            isCurrentUser ? styles.userMessageText : styles.hrMessageText
-                          ]}>
-                            {comment.comment}
-                          </Text>
-                          <View style={styles.messageTimeContainer}>
-                            <Text style={[
-                              styles.messageTime,
-                              // Different time text colors
-                              isCurrentUser ? styles.userMessageTime : styles.hrMessageTime
-                            ]}>
-                              {formatTime(comment.created_at)}
-                            </Text>
-                          </View>
-                        </View>
-                        {/* Sender name for HR messages (other users) */}
-                        {!isCurrentUser && (
-                          <Text style={styles.messageSender}>
-                            {comment.created_by_name} • HR Team
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })
-              ) : (
+              showsVerticalScrollIndicator={false}
+              inverted={false}
+              onScrollBeginDrag={handleScrollBeginDrag}
+              onScrollEndDrag={() => {
+                // Reset user scrolling after a delay
+                if (scrollTimeoutRef.current) {
+                  clearTimeout(scrollTimeoutRef.current);
+                }
+                scrollTimeoutRef.current = setTimeout(() => {
+                  setIsUserScrolling(false);
+                }, 2000);
+              }}
+              ListEmptyComponent={() => (
                 <View style={styles.noComments}>
                   <Ionicons name="chatbubble-outline" size={60} color={WHATSAPP_COLORS.gray} />
                   <Text style={styles.noCommentsTitle}>No comments yet</Text>
@@ -481,7 +622,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                   </Text>
                 </View>
               )}
-            </ScrollView>
+            />
 
             {/* Comment Input - WhatsApp-style */}
             <View style={styles.commentInputContainer}>
@@ -494,13 +635,28 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                   placeholderTextColor={WHATSAPP_COLORS.gray}
                   multiline
                   maxLength={300}
+                  onSubmitEditing={() => {
+                    if (newComment.trim()) {
+                      onAddComment();
+                      // Auto-scroll after sending
+                      setTimeout(() => {
+                        scrollToBottom(true);
+                      }, 100);
+                    }
+                  }}
                 />
                 <TouchableOpacity
                   style={[
                     styles.sendButton,
                     !newComment.trim() && styles.sendButtonDisabled
                   ]}
-                  onPress={onAddComment}
+                  onPress={() => {
+                    onAddComment();
+                    // Auto-scroll after sending
+                    setTimeout(() => {
+                      scrollToBottom(true);
+                    }, 100);
+                  }}
                   disabled={loading || !newComment.trim()}
                   activeOpacity={0.8}
                 >
@@ -521,7 +677,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
 
 const HR: React.FC<HRProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  
+
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('requests');
   const [loading, setLoading] = useState(false);
@@ -536,21 +692,28 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   const [requests, setRequests] = useState<Item[]>([]);
   const [grievances, setGrievances] = useState<Item[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   const currentNatures = activeTab === 'requests' ? requestNatures : grievanceNatures;
   const currentItems = activeTab === 'requests' ? requests : grievances;
 
   useEffect(() => {
-    const getToken = async () => {
-      try {
-        const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-        setToken(storedToken);
-      } catch (error) {
-        console.error('Error getting token:', error);
+  const getToken = async () => {
+    try {
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      setToken(storedToken);
+      
+      // Fetch current user email
+      if (storedToken) {
+        const email = await fetchCurrentUser();
+        setCurrentUserEmail(email);
       }
-    };
-    getToken();
-  }, []);
+    } catch (error) {
+      console.error('Error getting token:', error);
+    }
+  };
+  getToken();
+}, []);
 
   useEffect(() => {
     if (token && viewMode === 'main') {
@@ -570,13 +733,13 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         if (response.ok) {
           const data = await response.json();
           const commonRequests = data.common_requests || [];
-          
+
           const transformedRequests: RequestNature[] = commonRequests.map((request: any) => ({
             id: request.id.toString(),
             name: request.common_request,
             description: request.common_request
           }));
-          
+
           setRequestNatures([...transformedRequests, OTHER_OPTION]);
         } else {
           setRequestNatures([OTHER_OPTION]);
@@ -590,13 +753,13 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         if (response.ok) {
           const data = await response.json();
           const commonGrievances = data.common_grievances || [];
-          
+
           const transformedGrievances: RequestNature[] = commonGrievances.map((grievance: any) => ({
             id: grievance.id.toString(),
             name: grievance.common_grievance,
             description: grievance.common_grievance
           }));
-          
+
           setGrievanceNatures([...transformedGrievances, OTHER_OPTION]);
         } else {
           setGrievanceNatures([OTHER_OPTION]);
@@ -627,7 +790,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     try {
       if (activeTab === 'grievances') {
         const response = await fetch(`${BACKEND_URL}/core/getGrievances`, {
-          method: 'POST', 
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
@@ -635,7 +798,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         if (response.ok) {
           const data = await response.json();
           const grievancesData = data.grievances || [];
-          
+
           // FIXED: Fetch comments count for each grievance
           const transformedGrievances = await Promise.all(grievancesData.map(async (grievance: any) => {
             const commentsCount = await fetchCommentsCount(grievance.id, 'grievance');
@@ -650,7 +813,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
               comments: new Array(commentsCount).fill({}) // Create array with correct length
             };
           }));
-          
+
           setGrievances(transformedGrievances);
         } else {
           setGrievances([]);
@@ -658,7 +821,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       } else {
         const endpoint = 'getRequests';
         const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
-          method: 'POST', 
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
@@ -666,7 +829,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         if (response.ok) {
           const data = await response.json();
           const itemsData = data.requests || [];
-          
+
           // FIXED: Fetch comments count for each request
           const transformedRequests = await Promise.all(itemsData.map(async (item: any) => {
             const commentsCount = await fetchCommentsCount(item.id, 'request');
@@ -681,7 +844,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
               comments: new Array(commentsCount).fill({}) // Create array with correct length
             };
           }));
-          
+
           setRequests(transformedRequests);
         } else {
           setRequests([]);
@@ -697,11 +860,11 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   // NEW FUNCTION: Fetch comments count for an item
   const fetchCommentsCount = async (itemId: string, type: 'request' | 'grievance'): Promise<number> => {
     if (!token) return 0;
-    
+
     try {
       const endpoint = type === 'request' ? 'getRequest' : 'getGrievance';
       const idField = type === 'request' ? 'request_id' : 'grievance_id';
-      
+
       const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -714,7 +877,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       if (response.ok) {
         const data = await response.json();
         const itemData = type === 'request' ? data.request : data.grievance;
-        
+
         // Return the actual comment count from backend
         return itemData.comments?.length || 0;
       }
@@ -725,14 +888,33 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     }
   };
 
+  const fetchCurrentUser = async () => {
+  if (!token) return null;
+  try {
+    const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return data.user?.email || null;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching current user:', error);
+    return null;
+  }
+};
+
   const fetchItemDetails = async (itemId: string) => {
     if (!token) return null;
-    
+
     setLoadingDetails(true);
     try {
       const endpoint = activeTab === 'requests' ? 'getRequest' : 'getGrievance';
       const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
-      
+
       const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -745,22 +927,20 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       if (response.ok) {
         const data = await response.json();
         const itemData = activeTab === 'requests' ? data.request : data.grievance;
-        
+
         // FIXED: Properly count comments from backend response
         const transformedComments = itemData.comments?.map((commentWrapper: any) => {
-          const comment = commentWrapper.comment;
-          return {
-            id: comment.id.toString(),
-            comment: comment.content,
-            created_by: comment.user.employee_id,
-            created_by_name: comment.user.full_name,
-            created_at: comment.created_at,
-            // FIXED: Determine if comment is from HR or user
-            // Assuming user's own comments are when created_by matches current user
-            // For demo, we'll assume HR comments have role === 'hr'
-            is_hr_comment: comment.user.role === 'hr'
-          };
-        }) || [];
+  const comment = commentWrapper.comment;
+  return {
+    id: comment.id.toString(),
+    comment: comment.content,
+    created_by: comment.user.employee_id,
+    created_by_name: comment.user.full_name,
+    created_by_email: comment.user.email, // ADD THIS LINE
+    created_at: comment.created_at,
+    is_hr_comment: comment.user.role === 'hr' || comment.user.role === 'admin'
+  };
+}) || [];
 
         const detailedItem: Item = {
           id: itemData.id.toString(),
@@ -789,7 +969,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   const handleItemPress = async (item: Item) => {
     setSelectedItem(item);
     setViewMode('itemDetail');
-    
+
     const detailedItem = await fetchItemDetails(item.id);
     if (detailedItem) {
       setSelectedItem(detailedItem);
@@ -828,20 +1008,20 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     setLoading(true);
     try {
       const endpoint = activeTab === 'requests' ? 'createRequest' : 'createGrievance';
-      const requestBody = activeTab === 'requests' 
+      const requestBody = activeTab === 'requests'
         ? {
-            token,
-            nature: newItemForm.natureName,
-            description: newItemForm.description
-          }
+          token,
+          nature: newItemForm.natureName,
+          description: newItemForm.description
+        }
         : {
-            token,
-            nature: newItemForm.natureName,
-            issue: newItemForm.description
-          };
-      
+          token,
+          nature: newItemForm.natureName,
+          issue: newItemForm.description
+        };
+
       const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
-        method: 'POST', 
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
@@ -850,7 +1030,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         const result = await response.json();
         Alert.alert('Success', `${activeTab.slice(0, -1)} submitted successfully!`);
         handleBackFromNewItem();
-        await fetchItems(); 
+        await fetchItems();
       } else {
         const error = await response.json();
         Alert.alert('Error', error.message || `Failed to submit ${activeTab.slice(0, -1)}`);
@@ -873,9 +1053,9 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
     try {
       const endpoint = activeTab === 'requests' ? 'addCommentToRequest' : 'addCommentToGrievance';
       const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
-      
+
       const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
-        method: 'POST', 
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
@@ -886,7 +1066,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
       if (response.ok) {
         setNewComment('');
-        
+
         const updatedItem = await fetchItemDetails(selectedItem.id);
         if (updatedItem) {
           setSelectedItem(updatedItem);
@@ -911,9 +1091,9 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
     });
   };
 
@@ -938,6 +1118,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
         onBack={handleBackFromDetail}
         loading={loading}
         loadingDetails={loadingDetails}
+        currentUserEmail={currentUserEmail}
       />
     );
   }
@@ -972,8 +1153,8 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar 
-        barStyle="light-content" 
+      <StatusBar
+        barStyle="light-content"
         backgroundColor={WHATSAPP_COLORS.primaryDark}
       />
 
@@ -1006,10 +1187,10 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name={tab.icon as any} 
-              size={20} 
-              color={activeTab === tab.key ? WHATSAPP_COLORS.white : 'rgba(255, 255, 255, 0.7)'} 
+            <Ionicons
+              name={tab.icon as any}
+              size={20}
+              color={activeTab === tab.key ? WHATSAPP_COLORS.white : 'rgba(255, 255, 255, 0.7)'}
             />
             <Text style={[
               styles.tabText,
@@ -1033,7 +1214,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
 
       {/* Content */}
       <View style={styles.content}>
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
         >
@@ -1062,7 +1243,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             <Text style={styles.listTitle}>
               Your {activeTab === 'requests' ? 'Requests' : 'Grievances'}
             </Text>
-            
+
             {loading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
@@ -1073,7 +1254,7 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
                 const statusConfig = getStatusConfig(item.status);
                 // FIXED: Using accurate comment count from fetched data
                 const commentCount = item.comments?.length || 0;
-                
+
                 return (
                   <TouchableOpacity
                     key={item.id}
@@ -1082,10 +1263,10 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
                     activeOpacity={0.7}
                   >
                     <View style={styles.itemIcon}>
-                      <Ionicons 
-                        name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
-                        size={24} 
-                        color={WHATSAPP_COLORS.primary} 
+                      <Ionicons
+                        name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
+                        size={24}
+                        color={WHATSAPP_COLORS.primary}
                       />
                     </View>
                     <View style={styles.itemContent}>
@@ -1119,16 +1300,16 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
               })
             ) : (
               <View style={styles.emptyState}>
-                <Ionicons 
-                  name={activeTab === 'requests' ? 'document-text-outline' : 'alert-circle-outline'} 
-                  size={60} 
-                  color={WHATSAPP_COLORS.gray} 
+                <Ionicons
+                  name={activeTab === 'requests' ? 'document-text-outline' : 'alert-circle-outline'}
+                  size={60}
+                  color={WHATSAPP_COLORS.gray}
                 />
                 <Text style={styles.emptyTitle}>
                   No {activeTab} yet
                 </Text>
                 <Text style={styles.emptySubtitle}>
-                  {activeTab === 'requests' 
+                  {activeTab === 'requests'
                     ? 'Submit your first request to HR team'
                     : 'Submit your first grievance to HR team'}
                 </Text>
@@ -1589,12 +1770,15 @@ const styles = StyleSheet.create({
   },
   messageBubbleWrapper: {
     maxWidth: '80%',
+    marginHorizontal: 12, // Added for better spacing
   },
   userMessageWrapper: {
     alignItems: 'flex-end',
+    marginLeft: 'auto', // Ensures right alignment
   },
   hrMessageWrapper: {
     alignItems: 'flex-start',
+    marginRight: 'auto', // Ensures left alignment
   },
   messageBubble: {
     paddingHorizontal: 12,
@@ -1607,20 +1791,52 @@ const styles = StyleSheet.create({
     backgroundColor: WHATSAPP_COLORS.primaryLight,
     borderBottomRightRadius: 4,
   },
-  // HR messages - white bubble on left (other users)
+  // HR/Admin messages - white bubble on left (other users)
   hrMessageBubble: {
     backgroundColor: WHATSAPP_COLORS.white,
     borderBottomLeftRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05, // Reduced opacity for subtle shadow
     shadowRadius: 1,
     elevation: 1,
+  },
+  messageSender: {
+    fontSize: 12, // Slightly smaller for sender name
+    color: WHATSAPP_COLORS.darkGray,
+    marginLeft: 8, // Align with bubble
+    marginBottom: 2, // Space between name and bubble
+    fontWeight: '500', // Slightly bolder
   },
   messageText: {
     fontSize: 14,
     lineHeight: 20,
   },
+  dateSeparatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 12,
+  },
+  dateSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  dateSeparatorBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginHorizontal: 8,
+  },
+  dateSeparatorText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.darkGray,
+    fontWeight: '500',
+  },
+
   // User message text - dark color
   userMessageText: {
     color: WHATSAPP_COLORS.darkGray,
@@ -1649,12 +1865,12 @@ const styles = StyleSheet.create({
   messageStatusIcon: {
     marginLeft: 4,
   },
-  messageSender: {
-    fontSize: 11,
-    color: WHATSAPP_COLORS.gray,
-    marginLeft: 8,
-    marginTop: 2,
-  },
+  // messageSender: {
+  //   fontSize: 11,
+  //   color: WHATSAPP_COLORS.gray,
+  //   marginLeft: 8,
+  //   marginTop: 2,
+  // },
   noComments: {
     alignItems: 'center',
     paddingVertical: 60,

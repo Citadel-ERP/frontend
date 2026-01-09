@@ -71,7 +71,7 @@ interface Notification {
   message: string;
   time: string;
   type: 'info' | 'success' | 'warning' | 'error' | 'reminder' | 'attendance' | 'hr' | 'cab' | 'leave' | 'system';
-  isRead: boolean;
+  Read: boolean;
   icon: string;
   category: 'today' | 'week' | 'earlier';
   page?: string;
@@ -93,11 +93,14 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [swipedItem, setSwipedItem] = useState<string | null>(null);
-  const [activeSwipe, setActiveSwipe] = useState<string | null>(null);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
+
+  // Android-specific fix: separate tap and swipe handling
+  const [isSwiping, setIsSwiping] = useState(false);
+  const swipeThreshold = 50; // Minimum swipe distance to trigger delete
 
   useEffect(() => {
     fetchNotifications();
@@ -122,10 +125,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setNotifications(prev =>
-        prev.map(notif => ({ ...notif, isRead: true }))
+        prev.map(notif => ({ ...notif, Read: true }))
       );
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      console.error('Error marking all notifications as Read:', error);
     }
   };
 
@@ -147,8 +150,8 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
         );
         
         formattedNotifications.sort((a: Notification, b: Notification) => {
-          if (a.isRead !== b.isRead) {
-            return a.isRead ? 1 : -1;
+          if (a.Read !== b.Read) {
+            return a.Read ? 1 : -1;
           }
           if (a.created_at && b.created_at) {
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -202,7 +205,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
       message: notif.message,
       time: timeText,
       type: notif.type || 'info',
-      isRead: notif.is_read || false,
+      Read: notif.is_read || false,
       icon: getIconForType(notif.type),
       category,
       page: notif.page,
@@ -257,34 +260,51 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setNotifications(prev =>
           prev.map(notif =>
-            notif.id === id ? { ...notif, isRead: true } : notif
+            notif.id === id ? { ...notif, Read: true } : notif
           )
         );
       }
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error('Error marking notification as Read:', error);
     }
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      const token = await AsyncStorage.getItem('token_2');
-      if (!token) return;
+    Alert.alert(
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('token_2');
+              if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/core/deleteNotification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, notification_id: id }),
-      });
+              const response = await fetch(`${BACKEND_URL}/core/deleteNotification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, notification_id: id }),
+              });
 
-      if (response.ok) {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setNotifications(prev => prev.filter(notif => notif.id !== id));
-        setSwipedItem(null);
-      }
-    } catch (error) {
-      console.error('Error deleting notification:', error);
-    }
+              if (response.ok) {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setNotifications(prev => prev.filter(notif => notif.id !== id));
+                setSwipedItem(null);
+              }
+            } catch (error) {
+              console.error('Error deleting notification:', error);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const onRefresh = () => {
@@ -293,7 +313,13 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
   };
 
   const handleNotificationPress = (notification: Notification) => {
-    if (!notification.isRead) {
+    // Prevent modal from opening if we were swiping
+    if (isSwiping) {
+      setIsSwiping(false);
+      return;
+    }
+
+    if (!notification.Read) {
       handleMarkAsRead(notification.id);
     }
     setSelectedNotification(notification);
@@ -312,6 +338,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
       useNativeDriver: true,
     }).start(() => {
       setModalVisible(false);
+      setSelectedNotification(null);
       modalAnim.setValue(height);
     });
   };
@@ -334,10 +361,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
         <Text style={styles.headerTitle}>Notifications</Text>
         <TouchableOpacity 
           style={[styles.markAllButton, {
-            opacity: notifications.every(n => n.isRead) ? 0.5 : 1
+            opacity: notifications.every(n => n.Read) ? 0.5 : 1
           }]}
           onPress={markAllNotificationsAsRead}
-          disabled={notifications.every(n => n.isRead)}
+          disabled={notifications.every(n => n.Read)}
         >
           <Ionicons 
             name="checkmark-done" 
@@ -349,138 +376,157 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
       {notifications.length > 0 && (
         <View style={styles.headerStats}>
           <Text style={styles.headerStatsText}>
-            {notifications.filter(n => !n.isRead).length} unread • {notifications.length} total
+            {notifications.filter(n => !n.Read).length} unread • {notifications.length} total
           </Text>
         </View>
       )}
     </Animated.View>
   );
 
-  const SwipeableNotification = ({ notification }: { notification: Notification }) => {
-    const swipeX = useRef(new Animated.Value(0)).current;
+  // Android-compatible swipe handler
+  const NotificationItem = ({ notification }: { notification: Notification }) => {
+    const translateX = useRef(new Animated.Value(0)).current;
     const notificationColor = getNotificationColor(notification.type);
     
-    const panResponder = PanResponder.create({
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) {
-          swipeX.setValue(gestureState.dx);
-          setActiveSwipe(notification.id);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -100) {
-          Animated.timing(swipeX, {
-            toValue: -width,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
-            handleDelete(notification.id);
-          });
-        } else {
-          Animated.spring(swipeX, {
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          // Only activate for horizontal swipes
+          return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        },
+        onPanResponderGrant: () => {
+          setIsSwiping(true);
+        },
+        onPanResponderMove: (_, gestureState) => {
+          // Only allow left swipe (negative dx)
+          if (gestureState.dx < 0) {
+            translateX.setValue(gestureState.dx);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          setIsSwiping(false);
+          
+          if (gestureState.dx < -swipeThreshold) {
+            // Swipe beyond threshold - trigger delete
+            Animated.timing(translateX, {
+              toValue: -width,
+              duration: 200,
+              useNativeDriver: true,
+            }).start(() => {
+              handleDelete(notification.id);
+            });
+          } else {
+            // Return to original position
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 100,
+              friction: 10,
+            }).start();
+          }
+        },
+        onPanResponderTerminate: () => {
+          setIsSwiping(false);
+          Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
+            tension: 100,
+            friction: 10,
           }).start();
-          setActiveSwipe(null);
-        }
-      },
-    });
+        },
+      })
+    ).current;
 
     return (
-      <Animated.View 
-        style={[
-          styles.swipeContainer,
-          {
-            transform: [{ translateX: swipeX }],
-            opacity: swipeX.interpolate({
-              inputRange: [-width, 0],
-              outputRange: [0, 1],
-            }),
-          }
-        ]}
-      >
-        <View style={styles.deleteSwipeBackground}>
+      <View style={styles.notificationItemContainer}>
+        <Animated.View 
+          style={[
+            styles.deleteSwipeBackground,
+            {
+              transform: [{ translateX: translateX.interpolate({
+                inputRange: [-width, 0],
+                outputRange: [0, width]
+              })}],
+            }
+          ]}
+        >
           <Ionicons name="trash" size={24} color="#FFFFFF" />
           <Text style={styles.deleteSwipeText}>Delete</Text>
-        </View>
+        </Animated.View>
         
-        <Animated.View 
-          style={styles.swipeContent}
+        <Animated.View
+          style={[
+            styles.notificationCard,
+            { 
+              backgroundColor: currentColors.card,
+              borderLeftWidth: 4,
+              borderLeftColor: notificationColor,
+              transform: [{ translateX }],
+            }
+          ]}
           {...panResponder.panHandlers}
         >
           <TouchableOpacity
-            style={[
-              styles.notificationCard,
-              { 
-                backgroundColor: currentColors.card,
-                borderLeftWidth: 4,
-                borderLeftColor: notificationColor,
-                opacity: activeSwipe === notification.id ? 0.8 : 1,
-              }
-            ]}
+            style={styles.notificationContent}
             onPress={() => handleNotificationPress(notification)}
             activeOpacity={0.7}
+            delayPressIn={200} // Delay to distinguish between tap and swipe
           >
-            <View style={styles.notificationContent}>
-              <View style={[
-                styles.iconContainer,
-                { backgroundColor: `${notificationColor}15` }
-              ]}>
-                <Ionicons
-                  name={notification.icon as any}
-                  size={20}
-                  color={notificationColor}
-                />
-              </View>
+            <View style={[
+              styles.iconContainer,
+              { backgroundColor: `${notificationColor}15` }
+            ]}>
+              <Ionicons
+                name={notification.icon as any}
+                size={20}
+                color={notificationColor}
+              />
+            </View>
 
-              <View style={styles.notificationTextContainer}>
-                <View style={styles.titleRow}>
-                  <View style={styles.titleContainer}>
-                    <Text
-                      style={[
-                        styles.notificationTitle,
-                        { 
-                          color: currentColors.text,
-                          fontWeight: notification.isRead ? '400' : '600',
-                        }
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {notification.title}
-                    </Text>
-                    {!notification.isRead && (
-                      <View style={[styles.unreadDot, { backgroundColor: currentColors.green }]} />
-                    )}
-                  </View>
-                  <Text style={[styles.notificationTime, { color: currentColors.textSecondary }]}>
-                    {notification.time}
+            <View style={styles.notificationTextContainer}>
+              <View style={styles.titleRow}>
+                <View style={styles.titleContainer}>
+                  <Text
+                    style={[
+                      styles.notificationTitle,
+                      { 
+                        color: currentColors.text,
+                        fontWeight: notification.Read ? '400' : '600',
+                      }
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {notification.title}
                   </Text>
+                  {!notification.Read && (
+                    <View style={[styles.unreadDot, { backgroundColor: currentColors.green }]} />
+                  )}
                 </View>
-                
-                <Text
-                  style={[
-                    styles.notificationMessage,
-                    { 
-                      color: notification.isRead ? currentColors.textSecondary : currentColors.text,
-                    }
-                  ]}
-                  numberOfLines={2}
-                >
-                  {notification.message}
+                <Text style={[styles.notificationTime, { color: currentColors.textSecondary }]}>
+                  {notification.time}
                 </Text>
               </View>
-
-              <TouchableOpacity
-                style={styles.chevronButton}
-                onPress={() => handleNotificationPress(notification)}
+              
+              <Text
+                style={[
+                  styles.notificationMessage,
+                  { 
+                    color: notification.Read ? currentColors.textSecondary : currentColors.text,
+                  }
+                ]}
+                numberOfLines={2}
               >
-                <Ionicons name="chevron-forward" size={20} color={currentColors.textSecondary} />
-              </TouchableOpacity>
+                {notification.message}
+              </Text>
+            </View>
+
+            <View style={styles.chevronContainer}>
+              <Ionicons name="chevron-forward" size={20} color={currentColors.textSecondary} />
             </View>
           </TouchableOpacity>
         </Animated.View>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -588,7 +634,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
                 <>
                   <SectionHeader title="Today" count={groupedNotifications.today.length} />
                   {groupedNotifications.today.map(notification => (
-                    <SwipeableNotification key={notification.id} notification={notification} />
+                    <NotificationItem key={notification.id} notification={notification} />
                   ))}
                 </>
               )}
@@ -597,7 +643,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
                 <>
                   <SectionHeader title="This Week" count={groupedNotifications.week.length} />
                   {groupedNotifications.week.map(notification => (
-                    <SwipeableNotification key={notification.id} notification={notification} />
+                    <NotificationItem key={notification.id} notification={notification} />
                   ))}
                 </>
               )}
@@ -606,7 +652,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
                 <>
                   <SectionHeader title="Earlier" count={groupedNotifications.earlier.length} />
                   {groupedNotifications.earlier.map(notification => (
-                    <SwipeableNotification key={notification.id} notification={notification} />
+                    <NotificationItem key={notification.id} notification={notification} />
                   ))}
                 </>
               )}
@@ -619,122 +665,127 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false })
 
       {/* Notification Detail Modal */}
       <Modal
-        animationType="none"
+        animationType="slide"
         transparent={true}
         visible={modalVisible}
         onRequestClose={closeModal}
         statusBarTranslucent
+        hardwareAccelerated
       >
-        <Animated.View style={[styles.modalOverlay, {
-          transform: [{ translateY: modalAnim }],
-        }]}>
-          <View style={[
-            styles.modalContainer,
-            { backgroundColor: currentColors.background }
-          ]}>
-            {/* Modal Header */}
-            <View style={[styles.modalHeader, { 
-              backgroundColor: currentColors.card,
-              paddingTop: insets.top,
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalOverlayTouchable}
+            activeOpacity={1}
+            onPress={closeModal}
+          >
+            <Animated.View style={[styles.modalContainer, {
+              backgroundColor: currentColors.background,
+              transform: [{ translateY: modalAnim }],
             }]}>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeModal}
-                activeOpacity={0.6}
-              >
-                <Ionicons name="close" size={24} color={currentColors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.modalHeaderTitle, { color: currentColors.text }]}>
-                Notification Details
-              </Text>
-              <View style={styles.modalHeaderSpacer} />
-            </View>
+              {/* Modal Header */}
+              <View style={[styles.modalHeader, { 
+                backgroundColor: currentColors.card,
+              }]}>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={closeModal}
+                  activeOpacity={0.6}
+                >
+                  <Ionicons name="close" size={24} color={currentColors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.modalHeaderTitle, { color: currentColors.text }]}>
+                  Notification Details
+                </Text>
+                <View style={styles.modalHeaderSpacer} />
+              </View>
 
-            {selectedNotification && (
-              <ScrollView 
-                style={styles.modalContent}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-              >
-                <View style={styles.modalIconRow}>
-                  <View
-                    style={[
-                      styles.modalIconContainer,
-                      { backgroundColor: `${getNotificationColor(selectedNotification.type)}15` }
-                    ]}
-                  >
-                    <Ionicons
-                      name={selectedNotification.icon as any}
-                      size={28}
-                      color={getNotificationColor(selectedNotification.type)}
-                    />
-                  </View>
-                  <View style={styles.modalTitleContainer}>
-                    <Text style={[styles.modalTitle, { color: currentColors.text }]}>
-                      {selectedNotification.title}
-                    </Text>
-                    <View style={styles.modalTimeRow}>
-                      <Ionicons name="time-outline" size={16} color={currentColors.textSecondary} />
-                      <Text style={[styles.modalTime, { color: currentColors.textSecondary }]}>
-                        {selectedNotification.time}
+              {selectedNotification && (
+                <ScrollView 
+                  style={styles.modalContent}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  contentContainerStyle={styles.modalContentContainer}
+                >
+                  <View style={styles.modalIconRow}>
+                    <View
+                      style={[
+                        styles.modalIconContainer,
+                        { backgroundColor: `${getNotificationColor(selectedNotification.type)}15` }
+                      ]}
+                    >
+                      <Ionicons
+                        name={selectedNotification.icon as any}
+                        size={28}
+                        color={getNotificationColor(selectedNotification.type)}
+                      />
+                    </View>
+                    <View style={styles.modalTitleContainer}>
+                      <Text style={[styles.modalTitle, { color: currentColors.text }]}>
+                        {selectedNotification.title}
                       </Text>
-                      <View style={[styles.typeBadge, { 
-                        backgroundColor: `${getNotificationColor(selectedNotification.type)}20` 
-                      }]}>
-                        <Text style={[styles.typeText, { 
-                          color: getNotificationColor(selectedNotification.type) 
-                        }]}>
-                          {selectedNotification.type.toUpperCase()}
+                      <View style={styles.modalTimeRow}>
+                        <Ionicons name="time-outline" size={16} color={currentColors.textSecondary} />
+                        <Text style={[styles.modalTime, { color: currentColors.textSecondary }]}>
+                          {selectedNotification.time}
                         </Text>
+                        <View style={[styles.typeBadge, { 
+                          backgroundColor: `${getNotificationColor(selectedNotification.type)}20` 
+                        }]}>
+                          <Text style={[styles.typeText, { 
+                            color: getNotificationColor(selectedNotification.type) 
+                          }]}>
+                            {selectedNotification.type.toUpperCase()}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   </View>
-                </View>
 
-                <View style={[styles.modalDivider, { backgroundColor: currentColors.border }]} />
+                  <View style={[styles.modalDivider, { backgroundColor: currentColors.border }]} />
 
-                <View style={[styles.modalMessageContainer]}>
-                  <Text style={[styles.modalMessage, { color: currentColors.text }]}>
-                    {selectedNotification.message}
-                  </Text>
-                </View>
+                  <View style={[styles.modalMessageContainer]}>
+                    <Text style={[styles.modalMessage, { color: currentColors.text }]}>
+                      {selectedNotification.message}
+                    </Text>
+                  </View>
 
-                <View style={styles.modalActions}>
-                  {selectedNotification.page && (
+                  <View style={styles.modalActions}>
+                    {selectedNotification.page && (
+                      <TouchableOpacity
+                        style={[styles.modalActionButton, { 
+                          backgroundColor: currentColors.green,
+                          flex: 1,
+                        }]}
+                        onPress={() => {
+                          closeModal();
+                          // Navigate to the page if needed
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="open-outline" size={20} color="#FFFFFF" />
+                        <Text style={styles.modalActionButtonText}>Open Link</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                       style={[styles.modalActionButton, { 
-                        backgroundColor: currentColors.green,
+                        backgroundColor: currentColors.card,
                         flex: 1,
+                        marginLeft: 12,
                       }]}
-                      onPress={() => {
-                        closeModal();
-                        // Navigate to the page if needed
-                      }}
+                      onPress={closeModal}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="open-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.modalActionButtonText}>Open Link</Text>
+                      <Ionicons name="close" size={20} color={currentColors.text} />
+                      <Text style={[styles.modalActionButtonText, { color: currentColors.text }]}>
+                        Close
+                      </Text>
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    style={[styles.modalActionButton, { 
-                      backgroundColor: currentColors.card,
-                      flex: 1,
-                      marginLeft: 12,
-                    }]}
-                    onPress={closeModal}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="close" size={20} color={currentColors.text} />
-                    <Text style={[styles.modalActionButtonText, { color: currentColors.text }]}>
-                      Close
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </Animated.View>
+                  </View>
+                </ScrollView>
+              )}
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
       </Modal>
     </Animated.View>
   );
@@ -830,7 +881,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  swipeContainer: {
+  notificationItemContainer: {
     position: 'relative',
     marginBottom: 8,
     borderRadius: 10,
@@ -838,10 +889,10 @@ const styles = StyleSheet.create({
   },
   deleteSwipeBackground: {
     position: 'absolute',
-    right: 0,
     top: 0,
+    right: 0,
     bottom: 0,
-    width: width,
+    left: 0,
     backgroundColor: '#EF4444',
     flexDirection: 'row',
     alignItems: 'center',
@@ -853,9 +904,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
-  },
-  swipeContent: {
-    backgroundColor: 'transparent',
   },
   notificationCard: {
     borderRadius: 10,
@@ -908,7 +956,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  chevronButton: {
+  chevronContainer: {
     padding: 4,
     marginLeft: 8,
   },
@@ -963,9 +1011,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
-  modalContainer: {
+  modalOverlayTouchable: {
     flex: 1,
-    marginTop: 100,
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    maxHeight: height * 0.85,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -976,6 +1027,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 16,
+    paddingTop: Platform.OS === 'ios' ? 16 : 24,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
@@ -994,6 +1046,9 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     padding: 24,
+  },
+  modalContentContainer: {
+    paddingBottom: 24,
   },
   modalIconRow: {
     flexDirection: 'row',

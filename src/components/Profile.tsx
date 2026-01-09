@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Dimensions,
   Keyboard,
   Platform,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,14 @@ import { BACKEND_URL } from '../config/config';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width, height } = Dimensions.get('window');
+
+interface AddressData {
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  country?: string;
+}
 
 interface UserData {
   first_name?: string;
@@ -34,9 +43,9 @@ interface UserData {
   designation?: string;
   role?: string;
   employee_id?: string;
-  home_address?: { address?: string };
-  current_location?: { address?: string };
-  date_of_birth?: string;
+  home_address?: AddressData;
+  current_location?: AddressData;
+  birth_date?: string;
 }
 
 interface Asset {
@@ -61,9 +70,21 @@ interface FormData {
   lastName: string;
   bio: string;
   phoneNumber: string;
-  homeAddress: string;
-  currentLocation: string;
   dateOfBirth: string;
+  homeAddress: {
+    address: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+  };
+  currentLocation: {
+    address: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+  };
 }
 
 interface ModalContent {
@@ -81,11 +102,312 @@ interface MenuItemProps {
   title: string;
   subtitle?: string;
   icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
+  onPress?: () => void;
   isFirst?: boolean;
   isLast?: boolean;
   type?: 'default' | 'danger';
+  isStatic?: boolean;
 }
+
+// Separate component for empty state
+const EmptyState: React.FC<{ icon: string; message: string; color: string }> = ({ 
+  icon, 
+  message, 
+  color 
+}) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View 
+      style={[
+        styles.emptyStateContainer,
+        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+      ]}
+    >
+      <Ionicons name={icon as any} size={64} color={color} />
+      <Text style={[styles.emptyStateText, { color }]}>{message}</Text>
+    </Animated.View>
+  );
+};
+
+interface AddressInputsProps {
+  type: 'home' | 'current';
+  title: string;
+  addressData: {
+    address: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+  };
+  onChange: (type: 'home' | 'current', field: string, value: string) => void;
+}
+
+const AddressInputs: React.FC<AddressInputsProps> = React.memo(({ 
+  type, 
+  title, 
+  addressData,
+  onChange
+}) => {
+  return (
+    <View style={styles.addressSection}>
+      <Text style={[styles.addressTitle, { color: '#000000' }]}>{title}</Text>
+      
+      <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
+        <Text style={[styles.inputLabel, { color: '#667781' }]}>Address</Text>
+        <TextInput
+          style={[styles.input, { color: '#000000' }]}
+          value={addressData.address}
+          onChangeText={(text) => onChange(type, 'address', text)}
+          placeholder="Street address"
+          placeholderTextColor="#8696A0"
+          multiline
+        />
+      </View>
+
+      <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
+        <Text style={[styles.inputLabel, { color: '#667781' }]}>City</Text>
+        <TextInput
+          style={[styles.input, { color: '#000000' }]}
+          value={addressData.city}
+          onChangeText={(text) => onChange(type, 'city', text)}
+          placeholder="City"
+          placeholderTextColor="#8696A0"
+        />
+      </View>
+
+      <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
+        <Text style={[styles.inputLabel, { color: '#667781' }]}>State</Text>
+        <TextInput
+          style={[styles.input, { color: '#000000' }]}
+          value={addressData.state}
+          onChangeText={(text) => onChange(type, 'state', text)}
+          placeholder="State/Province"
+          placeholderTextColor="#8696A0"
+        />
+      </View>
+
+      <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
+        <Text style={[styles.inputLabel, { color: '#667781' }]}>Zip Code</Text>
+        <TextInput
+          style={[styles.input, { color: '#000000' }]}
+          value={addressData.zip_code}
+          onChangeText={(text) => onChange(type, 'zip_code', text)}
+          placeholder="Postal/Zip Code"
+          placeholderTextColor="#8696A0"
+          keyboardType="numeric"
+        />
+      </View>
+
+      <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
+        <Text style={[styles.inputLabel, { color: '#667781' }]}>Country</Text>
+        <TextInput
+          style={[styles.input, { color: '#000000' }]}
+          value={addressData.country}
+          onChangeText={(text) => onChange(type, 'country', text)}
+          placeholder="Country"
+          placeholderTextColor="#8696A0"
+        />
+      </View>
+    </View>
+  );
+});
+
+interface EditProfileSectionProps {
+  formData: FormData;
+  onFormChange: (field: keyof FormData, value: any) => void;
+  onAddressChange: (type: 'home' | 'current', field: string, value: string) => void;
+  showDatePickerModal: () => void;
+  handleDateChange: (event: any, date?: Date) => void;
+  selectedDate: Date;
+  showDatePicker: boolean;
+  formatDisplayDate: (dateString: string) => string;
+  firstNameInputRef: React.RefObject<TextInput>;
+  lastNameInputRef: React.RefObject<TextInput>;
+  handleSave: () => void;
+  saving: boolean;
+  setIsEditing: (value: boolean) => void;
+  userData: UserData | null;
+  populateFormData: (user: UserData) => void;
+}
+
+const EditProfileSection: React.FC<EditProfileSectionProps> = React.memo(({
+  formData,
+  onFormChange,
+  onAddressChange,
+  showDatePickerModal,
+  handleDateChange,
+  selectedDate,
+  showDatePicker,
+  formatDisplayDate,
+  firstNameInputRef,
+  lastNameInputRef,
+  handleSave,
+  saving,
+  setIsEditing,
+  userData,
+  populateFormData
+}) => {
+  const colors = {
+    background: '#FFFFFF',
+    headerBackground: '#008069',
+    text: '#000000',
+    textSecondary: '#667781',
+    textTertiary: '#8696A0',
+    border: '#E9EDEF',
+    borderLight: '#F0F2F5',
+    icon: '#8696A0',
+    iconActive: '#008069',
+    danger: '#FF3B30',
+    modalBackground: '#F7F8FA',
+    emptyState: '#8696A0',
+  };
+
+  return (
+    <View style={[styles.editSection, { backgroundColor: colors.background }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Profile</Text>
+
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>First name</Text>
+        <TextInput
+          ref={firstNameInputRef}
+          style={[styles.input, { color: colors.text }]}
+          value={formData.firstName}
+          onChangeText={(text) => onFormChange('firstName', text)}
+          placeholder="Enter first name"
+          placeholderTextColor={colors.textTertiary}
+          returnKeyType="next"
+          onSubmitEditing={() => Keyboard.dismiss()}
+        />
+      </View>
+
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Last name</Text>
+        <TextInput
+          ref={lastNameInputRef}
+          style={[styles.input, { color: colors.text }]}
+          value={formData.lastName}
+          onChangeText={(text) => onFormChange('lastName', text)}
+          placeholder="Enter last name"
+          placeholderTextColor={colors.textTertiary}
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+        />
+      </View>
+
+      {/* Phone number field - Read Only */}
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Phone number</Text>
+        <TextInput
+          style={[styles.input, { color: colors.textTertiary }]}
+          value={formData.phoneNumber}
+          editable={false}
+          placeholder="Phone number (not editable)"
+          placeholderTextColor={colors.textTertiary}
+        />
+        <Text style={[styles.readOnlyNote, { color: colors.textTertiary }]}>
+          Contact admin to change phone number
+        </Text>
+      </View>
+
+      {/* Home Address section */}
+      <AddressInputs 
+        type="home" 
+        title="Home Address" 
+        addressData={formData.homeAddress}
+        onChange={onAddressChange}
+      />
+
+      {/* Current Address section */}
+      <AddressInputs 
+        type="current" 
+        title="Current Address" 
+        addressData={formData.currentLocation}
+        onChange={onAddressChange}
+      />
+
+      {/* Date of Birth field with dropdown */}
+      <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
+
+        <TouchableOpacity
+          style={styles.datePickerButton}
+          onPress={showDatePickerModal}
+          activeOpacity={0.7}
+        >
+          <Text style={[
+            styles.datePickerText,
+            { color: formData.dateOfBirth ? colors.text : colors.textTertiary }
+          ]}>
+            {formatDisplayDate(formData.dateOfBirth)}
+          </Text>
+          <Ionicons name="calendar-outline" size={20} color={colors.icon} />
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+            maximumDate={new Date()}
+            textColor={colors.text}
+          />
+        )}
+
+        {formData.dateOfBirth && (
+          <Text style={[styles.dateFormatNote, { color: colors.textTertiary }]}>
+            Selected: {formData.dateOfBirth}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.saveButtonContainer}>
+        <TouchableOpacity
+          style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]}
+          onPress={handleSave}
+          disabled={saving}
+          activeOpacity={0.8}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.background} />
+          ) : (
+            <Text style={[styles.saveButtonText, { color: colors.background }]}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.cancelButton, { borderColor: colors.border }]}
+          onPress={() => {
+            Keyboard.dismiss();
+            setIsEditing(false);
+            if (userData) populateFormData(userData);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
 
 const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => {
   const insets = useSafeAreaInsets();
@@ -102,20 +424,40 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDateSet, setIsDateSet] = useState(false);
+
+  // Refs for keyboard handling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const firstNameInputRef = useRef<TextInput>(null);
+  const lastNameInputRef = useRef<TextInput>(null);
+  const bioInputRef = useRef<TextInput>(null);
+
   const BackIcon = () => (
     <View style={styles.backIcon}>
       <View style={styles.backArrow} />
       <Text style={styles.backText}>Back</Text>
     </View>
   );
+
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
     bio: '',
     phoneNumber: '',
-    homeAddress: '',
-    currentLocation: '',
     dateOfBirth: '',
+    homeAddress: {
+      address: '',
+      city: '',
+      state: '',
+      zip_code: '',
+      country: '',
+    },
+    currentLocation: {
+      address: '',
+      city: '',
+      state: '',
+      zip_code: '',
+      country: '',
+    },
   });
 
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -135,10 +477,12 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     iconActive: '#008069',
     danger: '#FF3B30',
     modalBackground: '#F7F8FA',
+    emptyState: '#8696A0',
   };
 
   useEffect(() => {
     initializeData();
+    return () => {};
   }, []);
 
   const initializeData = async () => {
@@ -157,13 +501,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     }
   };
 
-  const populateFormData = (user: UserData) => {
-    const dob = user.date_of_birth || '';
+  const populateFormData = useCallback((user: UserData) => {
+    // Parse date of birth
+    const dob = user.birth_date || '';
     if (dob) {
       const dateParts = dob.split('-');
       if (dateParts.length === 3) {
         const year = parseInt(dateParts[0]);
-        const month = parseInt(dateParts[1]) - 1; // Months are 0-indexed
+        const month = parseInt(dateParts[1]) - 1;
         const day = parseInt(dateParts[2]);
         if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
           setSelectedDate(new Date(year, month, day));
@@ -172,16 +517,32 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       }
     }
 
+    // Parse home address
+    const homeAddress = user.home_address || {};
+    const currentLocation = user.current_location || {};
+
     setFormData({
       firstName: user.first_name || '',
       lastName: user.last_name || '',
       bio: user.bio || '',
       phoneNumber: user.phone_number || '',
-      homeAddress: user.home_address?.address || '',
-      currentLocation: user.current_location?.address || '',
       dateOfBirth: dob,
+      homeAddress: {
+        address: homeAddress.address || '',
+        city: homeAddress.city || '',
+        state: homeAddress.state || '',
+        zip_code: homeAddress.zip_code || '',
+        country: homeAddress.country || '',
+      },
+      currentLocation: {
+        address: currentLocation.address || '',
+        city: currentLocation.city || '',
+        state: currentLocation.state || '',
+        zip_code: currentLocation.zip_code || '',
+        country: currentLocation.country || '',
+      },
     });
-  };
+  }, []);
 
   const fetchUserData = async (userToken: string) => {
     try {
@@ -242,6 +603,21 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   const handleSave = async () => {
     if (!token) return;
 
+    // Validate address fields
+    if (!formData.homeAddress.address || !formData.homeAddress.city || 
+        !formData.homeAddress.state || !formData.homeAddress.zip_code || 
+        !formData.homeAddress.country) {
+      Alert.alert('Validation Error', 'Please fill all home address fields (address, city, state, zip code, country)');
+      return;
+    }
+
+    if (!formData.currentLocation.address || !formData.currentLocation.city || 
+        !formData.currentLocation.state || !formData.currentLocation.zip_code || 
+        !formData.currentLocation.country) {
+      Alert.alert('Validation Error', 'Please fill all current address fields (address, city, state, zip code, country)');
+      return;
+    }
+
     try {
       setSaving(true);
       const response = await fetch(`${BACKEND_URL}/core/updateProfile`, {
@@ -249,11 +625,24 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          homeAddress: formData.homeAddress,
-          currentLocation: formData.currentLocation,
-          dateOfBirth: formData.dateOfBirth,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          bio: formData.bio,
+          date_of_birth: formData.dateOfBirth,
+          home_address: {
+            address: formData.homeAddress.address,
+            city: formData.homeAddress.city,
+            state: formData.homeAddress.state,
+            zip_code: formData.homeAddress.zip_code,
+            country: formData.homeAddress.country,
+          },
+          current_address: {
+            address: formData.currentLocation.address,
+            city: formData.currentLocation.city,
+            state: formData.currentLocation.state,
+            zip_code: formData.currentLocation.zip_code,
+            country: formData.currentLocation.country,
+          }
         }),
       });
 
@@ -265,9 +654,22 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           ...prev,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          home_address: { address: formData.homeAddress },
-          current_location: { address: formData.currentLocation },
+          bio: formData.bio,
           date_of_birth: formData.dateOfBirth,
+          home_address: {
+            address: formData.homeAddress.address,
+            city: formData.homeAddress.city,
+            state: formData.homeAddress.state,
+            zip_code: formData.homeAddress.zip_code,
+            country: formData.homeAddress.country,
+          },
+          current_location: {
+            address: formData.currentLocation.address,
+            city: formData.currentLocation.city,
+            state: formData.currentLocation.state,
+            zip_code: formData.currentLocation.zip_code,
+            country: formData.currentLocation.country,
+          }
         } : prev);
       } else {
         throw new Error(result.message || 'Update failed');
@@ -279,7 +681,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     }
   };
 
-  const handleDateChange = (event: any, date?: Date) => {
+  const handleDateChange = useCallback((event: any, date?: Date) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
@@ -288,7 +690,6 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       setSelectedDate(date);
       setIsDateSet(true);
 
-      // Format date as YYYY-MM-DD
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -296,14 +697,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
       setFormData(prev => ({ ...prev, dateOfBirth: formattedDate }));
     }
-  };
+  }, []);
 
-  const showDatePickerModal = () => {
-    Keyboard.dismiss(); // Dismiss keyboard before showing date picker
+  const showDatePickerModal = useCallback(() => {
+    Keyboard.dismiss();
     setShowDatePicker(true);
-  };
+  }, []);
 
-  const formatDisplayDate = (dateString: string) => {
+  const formatDisplayDate = useCallback((dateString: string) => {
     if (!dateString) return 'Select Date';
 
     const date = new Date(dateString);
@@ -314,30 +715,83 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       month: 'long',
       day: 'numeric',
     });
-  };
-
-  // Rest of your existing functions remain the same (handleImageUpload, handleImageResponse, handleDownloadIDCard, etc.)
+  }, []);
 
   const handleImageUpload = () => {
-    Alert.alert('Update Picture', 'Choose option', [
-      { text: 'Camera', onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, handleImageResponse) },
-      { text: 'Gallery', onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, handleImageResponse) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    Alert.alert(
+      'Update Profile Picture',
+      'Choose an option',
+      [
+        { 
+          text: 'Take Photo', 
+          onPress: () => handleCameraLaunch() 
+        },
+        { 
+          text: 'Choose from Gallery', 
+          onPress: () => handleGalleryLaunch() 
+        },
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const handleCameraLaunch = () => {
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+        includeBase64: false,
+      },
+      handleImageResponse
+    );
+  };
+
+  const handleGalleryLaunch = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+        includeBase64: false,
+      },
+      handleImageResponse
+    );
   };
 
   const handleImageResponse = async (response: ImagePickerResponse) => {
-    if (response.assets?.[0] && token) {
-      const formDataImage = new FormData();
-      formDataImage.append('token', token);
-      formDataImage.append('profile_picture', {
-        uri: response.assets[0].uri,
-        type: response.assets[0].type || 'image/jpeg',
-        name: response.assets[0].fileName || 'profile.jpg',
-      } as any);
+    if (response.didCancel) {
+      console.log('User cancelled image picker');
+      return;
+    }
+
+    if (response.errorCode) {
+      Alert.alert('Error', `Image picker error: ${response.errorMessage}`);
+      return;
+    }
+
+    if (response.assets && response.assets.length > 0 && token) {
+      const asset = response.assets[0];
+      console.log('Selected image:', asset.uri);
 
       try {
-        const res = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
+        const formDataImage = new FormData();
+        formDataImage.append('token', token);
+        formDataImage.append('profile_picture', {
+          uri: asset.uri,
+          type: asset.type || 'image/jpeg',
+          name: asset.fileName || `profile_${Date.now()}.jpg`,
+        } as any);
+
+        console.log('Uploading image...');
+        
+        const uploadResponse = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
           method: 'POST',
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -345,16 +799,25 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           body: formDataImage,
         });
 
-        const result = await res.json();
-        if (res.ok) {
-          setUserData(prev => prev ? { ...prev, profile_picture: result.profile_picture_url } : prev);
-          Alert.alert('Success', 'Profile picture updated!');
+        const result = await uploadResponse.json();
+        
+        if (uploadResponse.ok) {
+          console.log('Upload successful:', result);
+          setUserData(prev => prev ? { 
+            ...prev, 
+            profile_picture: result.profile_picture_url 
+          } : prev);
+          Alert.alert('Success', 'Profile picture updated successfully!');
         } else {
           throw new Error(result.message || 'Upload failed');
         }
       } catch (error) {
         console.error('Image upload error:', error);
-        Alert.alert('Error', 'Failed to upload image');
+        Alert.alert(
+          'Upload Failed',
+          'Could not upload profile picture. Please try again.',
+          [{ text: 'OK' }]
+        );
       }
     }
   };
@@ -382,14 +845,15 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     }
   };
 
-  const MenuItem: React.FC<MenuItemProps> = ({
+  const MenuItem: React.FC<MenuItemProps> = React.memo(({
     title,
     subtitle,
     icon,
     onPress,
     isFirst = false,
     isLast = false,
-    type = 'default'
+    type = 'default',
+    isStatic = false,
   }) => {
     const containerStyle = [
       styles.menuItemContainer,
@@ -401,8 +865,30 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     const iconColor = type === 'danger' ? colors.danger : colors.icon;
     const textColor = type === 'danger' ? colors.danger : colors.text;
 
+    if (isStatic) {
+      return (
+        <View style={containerStyle}>
+          <View style={styles.menuItemIconContainer}>
+            <Ionicons name={icon} size={24} color={iconColor} />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: textColor }]}>{title}</Text>
+            {subtitle && (
+              <Text style={[styles.menuItemSubtitle, { color: colors.textTertiary }]}>
+                {subtitle}
+              </Text>
+            )}
+          </View>
+        </View>
+      );
+    }
+
     return (
-      <TouchableOpacity style={containerStyle} onPress={onPress}>
+      <TouchableOpacity 
+        style={containerStyle} 
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
         <View style={styles.menuItemIconContainer}>
           <Ionicons name={icon} size={24} color={iconColor} />
         </View>
@@ -417,14 +903,13 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         <Ionicons name="chevron-forward" size={20} color={colors.icon} />
       </TouchableOpacity>
     );
-  };
-
+  });
 
   const ProfileHeader = () => (
     <View style={[styles.header, { backgroundColor: colors.headerBackground, paddingTop: insets.top }]}>
       <View style={styles.headerContent}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-           <BackIcon />
+          <BackIcon />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         <TouchableOpacity
@@ -440,251 +925,170 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     </View>
   );
 
-  const ProfileSection = () => (
-    <View style={[styles.profileSection, { backgroundColor: colors.background }]}>
-      <TouchableOpacity style={styles.avatarContainer} onPress={handleImageUpload}>
-        {userData?.profile_picture ? (
-          <Image source={{ uri: userData.profile_picture }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.headerBackground }]}>
-            <Text style={styles.avatarText}>
-              {userData?.first_name?.[0] || 'U'}{userData?.last_name?.[0] || 'N'}
-            </Text>
+  const ProfileSection = React.memo(() => {
+    const [bioText, setBioText] = useState(userData?.bio || 'Hey there! I am using WhatsApp.');
+    
+    // Update bioText when userData changes
+    useEffect(() => {
+      if (userData?.bio !== undefined) {
+        setBioText(userData.bio || 'Hey there! I am using WhatsApp.');
+      }
+    }, [userData?.bio]);
+
+    // Update bioText when formData.bio changes in edit mode
+    useEffect(() => {
+      if (isEditing) {
+        setBioText(formData.bio);
+      }
+    }, [formData.bio, isEditing]);
+
+    const handleBioChange = useCallback((text: string) => {
+      if (isEditing) {
+        setBioText(text);
+        setFormData(prev => ({ ...prev, bio: text }));
+      }
+    }, [isEditing]);
+
+    return (
+      <View style={[styles.profileSection, { backgroundColor: colors.background }]}>
+        <TouchableOpacity 
+          style={styles.avatarContainer} 
+          onPress={handleImageUpload}
+          activeOpacity={0.8}
+        >
+          {userData?.profile_picture ? (
+            <Image source={{ uri: userData.profile_picture }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.headerBackground }]}>
+              <Text style={styles.avatarText}>
+                {userData?.first_name?.[0] || 'U'}{userData?.last_name?.[0] || 'N'}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.cameraButton, { backgroundColor: colors.headerBackground }]}>
+            <Ionicons name="camera" size={16} color={colors.background} />
           </View>
-        )}
-        <View style={[styles.cameraButton, { backgroundColor: colors.headerBackground }]}>
-          <Ionicons name="camera" size={16} color={colors.background} />
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
 
-      <Text style={[styles.profileName, { color: colors.text }]}>
-        {userData?.first_name || ''} {userData?.last_name || ''}
-      </Text>
+        <Text style={[styles.profileName, { color: colors.text }]}>
+          {userData?.first_name || ''} {userData?.last_name || ''}
+        </Text>
 
-      {isEditing ? (
         <TextInput
-          style={[styles.bioInput, { color: colors.text, borderBottomColor: colors.border }]}
-          value={formData.bio}
-          onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
+          ref={bioInputRef}
+          style={[
+            styles.bioInput, 
+            { 
+              color: isEditing ? colors.text : colors.textTertiary,
+              borderBottomColor: isEditing ? colors.border : 'transparent'
+            }
+          ]}
+          value={bioText}
+          onChangeText={handleBioChange}
           placeholder="Add about"
           placeholderTextColor={colors.textTertiary}
           multiline
+          editable={isEditing}
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+          pointerEvents={isEditing ? 'auto' : 'none'}
         />
-      ) : (
-        <Text style={[styles.profileBio, { color: colors.textTertiary }]}>
-          {userData?.bio || 'Hey there! I am using WhatsApp.'}
-        </Text>
-      )}
-    </View>
-  );
+      </View>
+    );
+  });
 
-  const EditProfileSection = () => {
+  const handleFormChange = useCallback((field: keyof FormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleAddressChange = useCallback((type: 'home' | 'current', field: string, value: string) => {
+    if (type === 'home') {
+      setFormData(prev => ({
+        ...prev,
+        homeAddress: {
+          ...prev.homeAddress,
+          [field]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        currentLocation: {
+          ...prev.currentLocation,
+          [field]: value
+        }
+      }));
+    }
+  }, []);
+
+  const MenuSection = () => {
+    // Format address for display
+    const formatAddress = (address: AddressData | undefined) => {
+      if (!address) return 'Not provided';
+      const parts = [];
+      if (address.address) parts.push(address.address);
+      if (address.city) parts.push(address.city);
+      if (address.state) parts.push(address.state);
+      if (address.country) parts.push(address.country);
+      if (address.zip_code) parts.push(`Zip: ${address.zip_code}`);
+      return parts.join(', ') || 'Not provided';
+    };
+
     return (
-      <View style={[styles.editSection, { backgroundColor: colors.background }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Profile</Text>
+      <View style={[styles.menuSection, { backgroundColor: colors.background }]}>
+        <MenuItem
+          title="Phone"
+          subtitle={userData?.phone_number || 'Not provided'}
+          icon="call-outline"
+          isStatic={true}
+          isFirst={true}
+        />
 
-        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>First name</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text }]}
-            value={formData.firstName}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
-            placeholder="Enter first name"
-            placeholderTextColor={colors.textTertiary}
-          />
-        </View>
+        <MenuItem
+          title="Email"
+          subtitle={userData?.email || 'Not provided'}
+          icon="mail-outline"
+          isStatic={true}
+        />
 
-        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Last name</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text }]}
-            value={formData.lastName}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
-            placeholder="Enter last name"
-            placeholderTextColor={colors.textTertiary}
-          />
-        </View>
+        <MenuItem
+          title="Designation"
+          subtitle={userData?.designation || userData?.role || 'Not provided'}
+          icon="briefcase-outline"
+          isStatic={true}
+        />
 
-        {/* Phone number field - Read Only */}
-        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Phone number</Text>
-          <TextInput
-            style={[styles.input, { color: colors.textTertiary }]}
-            value={formData.phoneNumber}
-            editable={false}
-            placeholder="Phone number (not editable)"
-            placeholderTextColor={colors.textTertiary}
-          />
-          <Text style={[styles.readOnlyNote, { color: colors.textTertiary }]}>
-            Contact admin to change phone number
-          </Text>
-        </View>
+        <MenuItem
+          title="Employee ID"
+          subtitle={userData?.employee_id || 'Not provided'}
+          icon="card-outline"
+          isStatic={true}
+        />
 
-        {/* Home Address field */}
-        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Home Address</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text }]}
-            value={formData.homeAddress}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, homeAddress: text }))}
-            placeholder="Enter home address"
-            placeholderTextColor={colors.textTertiary}
-            multiline
-          />
-        </View>
+        <MenuItem
+          title="Date of Birth"
+          subtitle={userData?.birth_date || 'Not provided'}
+          icon="calendar-outline"
+          isStatic={true}
+        />
 
-        {/* Current Address field */}
-        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Current Address</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text }]}
-            value={formData.currentLocation}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, currentLocation: text }))}
-            placeholder="Enter current address"
-            placeholderTextColor={colors.textTertiary}
-            multiline
-          />
-        </View>
+        <MenuItem
+          title="Home Address"
+          subtitle={formatAddress(userData?.home_address)}
+          icon="home-outline"
+          isStatic={true}
+        />
 
-        {/* Date of Birth field with dropdown */}
-        <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
-
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={showDatePickerModal}
-          >
-            <Text style={[
-              styles.datePickerText,
-              { color: formData.dateOfBirth ? colors.text : colors.textTertiary }
-            ]}>
-              {formatDisplayDate(formData.dateOfBirth)}
-            </Text>
-            <Ionicons name="calendar-outline" size={20} color={colors.icon} />
-          </TouchableOpacity>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-              textColor={colors.text}
-            />
-          )}
-
-          {formData.dateOfBirth && (
-            <Text style={[styles.dateFormatNote, { color: colors.textTertiary }]}>
-              Selected: {formData.dateOfBirth}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.saveButtonContainer}>
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: saving ? colors.textTertiary : colors.headerBackground }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.background} />
-            ) : (
-              <Text style={[styles.saveButtonText, { color: colors.background }]}>Save Changes</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.cancelButton, { borderColor: colors.border }]}
-            onPress={() => {
-              Keyboard.dismiss();
-              setIsEditing(false);
-              if (userData) populateFormData(userData);
-            }}
-          >
-            <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+        <MenuItem
+          title="Current Address"
+          subtitle={formatAddress(userData?.current_location)}
+          icon="location-outline"
+          isStatic={true}
+          isLast={true}
+        />
       </View>
     );
   };
-
-  // Rest of your component remains the same (MenuSection, FeaturesSection, renderModalContent, etc.)
-
-  const MenuSection = () => (
-    <View style={[styles.menuSection, { backgroundColor: colors.background }]}>
-      <MenuItem
-        title="Phone"
-        subtitle={userData?.phone_number || 'Not provided'}
-        icon="call-outline"
-        onPress={() => {
-          setModalContent({ title: 'Phone', type: 'personal', content: userData?.phone_number || 'Not provided' });
-          setModalVisible(true);
-        }}
-        isFirst={true}
-      />
-
-      <MenuItem
-        title="Email"
-        subtitle={userData?.email || 'Not provided'}
-        icon="mail-outline"
-        onPress={() => {
-          setModalContent({ title: 'Email', type: 'personal', content: userData?.email || 'Not provided' });
-          setModalVisible(true);
-        }}
-      />
-
-      <MenuItem
-        title="Designation"
-        subtitle={userData?.designation || userData?.role || 'Not provided'}
-        icon="briefcase-outline"
-        onPress={() => {
-          setModalContent({ title: 'Designation', type: 'personal', content: userData?.designation || userData?.role || 'Not provided' });
-          setModalVisible(true);
-        }}
-      />
-
-      <MenuItem
-        title="Employee ID"
-        subtitle={userData?.employee_id || 'Not provided'}
-        icon="card-outline"
-        onPress={() => {
-          setModalContent({ title: 'Employee ID', type: 'personal', content: userData?.employee_id || 'Not provided' });
-          setModalVisible(true);
-        }}
-      />
-
-      <MenuItem
-        title="Date of Birth"
-        subtitle={userData?.date_of_birth || 'Not provided'}
-        icon="calendar-outline"
-        onPress={() => {
-          setModalContent({ title: 'Date of Birth', type: 'personal', content: userData?.date_of_birth || 'Not provided' });
-          setModalVisible(true);
-        }}
-      />
-
-      <MenuItem
-        title="Home Address"
-        subtitle={userData?.home_address?.address || 'Not provided'}
-        icon="home-outline"
-        onPress={() => {
-          setModalContent({ title: 'Home Address', type: 'personal', content: userData?.home_address?.address || 'Not provided' });
-          setModalVisible(true);
-        }}
-      />
-
-      <MenuItem
-        title="Current Address"
-        subtitle={userData?.current_location?.address || 'Not provided'}
-        icon="location-outline"
-        onPress={() => {
-          setModalContent({ title: 'Current Address', type: 'personal', content: userData?.current_location?.address || 'Not provided' });
-          setModalVisible(true);
-        }}
-      />
-    </View>
-  );
 
   const FeaturesSection = () => (
     <View style={[styles.menuSection, { backgroundColor: colors.background, marginTop: 16 }]}>
@@ -726,6 +1130,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           setModalContent({ title: 'My Documents', type: 'documents', content: documents });
           setModalVisible(true);
         }}
+        isLast={true}
       />
     </View>
   );
@@ -774,9 +1179,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 <Text style={[styles.idEmail, { color: colors.textTertiary }]}>
                   {userData?.email || ''}
                 </Text>
-                {userData?.date_of_birth && (
+                {userData?.birth_date && (
                   <Text style={[styles.idDob, { color: colors.textTertiary }]}>
-                    DOB: {userData.date_of_birth}
+                    DOB: {userData.birth_date}
                   </Text>
                 )}
               </View>
@@ -786,6 +1191,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
               style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]}
               onPress={handleDownloadIDCard}
               disabled={downloading}
+              activeOpacity={0.8}
             >
               {downloading ? (
                 <ActivityIndicator size="small" color={colors.background} />
@@ -798,6 +1204,90 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 </>
               )}
             </TouchableOpacity>
+          </View>
+        );
+      case 'assets':
+        return (
+          <View style={styles.modalListContainer}>
+            {modalContent.content && modalContent.content.length > 0 ? (
+              modalContent.content.map((asset: Asset, index: number) => (
+                <View key={index} style={[styles.modalListItem, { borderBottomColor: colors.border }]}>
+                  <View style={styles.modalListItemIcon}>
+                    <Ionicons name="briefcase-outline" size={24} color={colors.icon} />
+                  </View>
+                  <View style={styles.modalListItemContent}>
+                    <Text style={[styles.modalListItemTitle, { color: colors.text }]}>
+                      {asset.name || 'Unnamed Asset'}
+                    </Text>
+                    <Text style={[styles.modalListItemSubtitle, { color: colors.textTertiary }]}>
+                      {asset.type || 'No type'} • Serial: {asset.serial_number || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <EmptyState 
+                icon="briefcase-outline" 
+                message="Oops! No assets found!" 
+                color={colors.emptyState} 
+              />
+            )}
+          </View>
+        );
+      case 'payslips':
+        return (
+          <View style={styles.modalListContainer}>
+            {modalContent.content && modalContent.content.length > 0 ? (
+              modalContent.content.map((payslip: Payslip, index: number) => (
+                <View key={index} style={[styles.modalListItem, { borderBottomColor: colors.border }]}>
+                  <View style={styles.modalListItemIcon}>
+                    <Ionicons name="cash-outline" size={24} color={colors.icon} />
+                  </View>
+                  <View style={styles.modalListItemContent}>
+                    <Text style={[styles.modalListItemTitle, { color: colors.text }]}>
+                      {payslip.month || ''} {payslip.year || ''}
+                    </Text>
+                    <Text style={[styles.modalListItemSubtitle, { color: colors.textTertiary }]}>
+                      Net Salary: {payslip.net_salary || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <EmptyState 
+                icon="cash-outline" 
+                message="Oops! No payslips have been updated for you!" 
+                color={colors.emptyState} 
+              />
+            )}
+          </View>
+        );
+      case 'documents':
+        return (
+          <View style={styles.modalListContainer}>
+            {modalContent.content && modalContent.content.length > 0 ? (
+              modalContent.content.map((doc: Document, index: number) => (
+                <View key={index} style={[styles.modalListItem, { borderBottomColor: colors.border }]}>
+                  <View style={styles.modalListItemIcon}>
+                    <Ionicons name="document-text-outline" size={24} color={colors.icon} />
+                  </View>
+                  <View style={styles.modalListItemContent}>
+                    <Text style={[styles.modalListItemTitle, { color: colors.text }]}>
+                      {doc.document_name || 'Unnamed Document'}
+                    </Text>
+                    <Text style={[styles.modalListItemSubtitle, { color: colors.textTertiary }]}>
+                      Type: {doc.document_type || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <EmptyState 
+                icon="document-text-outline" 
+                message="Oops! No documents found!" 
+                color={colors.emptyState} 
+              />
+            )}
           </View>
         );
       default:
@@ -827,55 +1317,84 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.modalBackground }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.headerBackground} />
+    <View 
+      style={{ flex: 1 }}
+    >
+      <View style={[styles.container, { backgroundColor: colors.modalBackground }]}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.headerBackground} />
 
-      <ProfileHeader />
+        <ProfileHeader />
 
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <ProfileSection />
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          scrollEventThrottle={16}
+          bounces={true}
+          overScrollMode="always"
+        >
+          <ProfileSection />
 
-        {isEditing ? (
-          <EditProfileSection />
-        ) : (
-          <>
-            <MenuSection />
-            <FeaturesSection />
-          </>
-        )}
+          {isEditing ? (
+            <EditProfileSection
+              formData={formData}
+              onFormChange={handleFormChange}
+              onAddressChange={handleAddressChange}
+              showDatePickerModal={showDatePickerModal}
+              handleDateChange={handleDateChange}
+              selectedDate={selectedDate}
+              showDatePicker={showDatePicker}
+              formatDisplayDate={formatDisplayDate}
+              firstNameInputRef={firstNameInputRef}
+              lastNameInputRef={lastNameInputRef}
+              handleSave={handleSave}
+              saving={saving}
+              setIsEditing={setIsEditing}
+              userData={userData}
+              populateFormData={populateFormData}
+            />
+          ) : (
+            <>
+              <MenuSection />
+              <FeaturesSection />
+            </>
+          )}
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
 
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {modalContent.title || 'Details'}
-              </Text>
-              <View style={{ width: 24 }} />
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="slide"
+          statusBarTranslucent
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>
+                  {modalContent.title || 'Details'}
+                </Text>
+                <View style={{ width: 24 }} />
+              </View>
+
+              <ScrollView 
+                style={styles.modalBody}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+              >
+                {renderModalContent()}
+              </ScrollView>
             </View>
-
-            <ScrollView style={styles.modalBody}>
-              {renderModalContent()}
-            </ScrollView>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      </View>
     </View>
   );
 };
@@ -915,7 +1434,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginLeft:-15
+    marginLeft: -15
   },
   editButton: {
     width: 40,
@@ -1001,9 +1520,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 20,
   },
+  addressSection: {
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9EDEF',
+  },
+  addressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#000000',
+  },
   inputContainer: {
     borderBottomWidth: 1,
-    marginBottom: 20,
+    marginBottom: 16,
     paddingBottom: 8,
   },
   inputLabel: {
@@ -1024,7 +1555,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButtonContainer: {
-    marginTop: 8,
+    marginTop: 24,
   },
   saveButton: {
     paddingVertical: 14,
@@ -1093,6 +1624,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1126,6 +1658,47 @@ const styles = StyleSheet.create({
   },
   modalDetail: {
     fontSize: 16,
+  },
+
+  // List modal styles
+  modalListContainer: {
+    flex: 1,
+  },
+  modalListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  modalListItemIcon: {
+    width: 40,
+    alignItems: 'center',
+  },
+  modalListItemContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  modalListItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  modalListItemSubtitle: {
+    fontSize: 14,
+  },
+
+  // Empty state styles
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: 'center',
+    opacity: 0.8,
   },
 
   modalIDCard: {
