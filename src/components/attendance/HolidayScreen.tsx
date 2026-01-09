@@ -14,6 +14,8 @@ import {
   Platform,
   RefreshControl
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Add this import
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { Holiday } from './types';
 import { BACKEND_URL } from '../../config/config';
@@ -37,13 +39,33 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
   const [loading, setLoading] = useState(false);
   const [citiesLoading, setCitiesLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true); // Add for initial load state
 
   useEffect(() => {
-    fetchCities();
+    loadSavedCityAndFetchData();
   }, []);
 
-  const fetchCities = async () => {
-    if (!token) return;
+  // Load saved city from AsyncStorage and fetch data
+  const loadSavedCityAndFetchData = async () => {
+    try {
+      setInitialLoading(true);
+      // Try to get saved city from AsyncStorage
+      const savedCity = await AsyncStorage.getItem('city');
+      
+      // Fetch cities first
+      await fetchCities(savedCity);
+    } catch (error) {
+      console.error('Error loading saved city:', error);
+      Alert.alert('Error', 'Failed to load saved preferences');
+      setInitialLoading(false);
+    }
+  };
+
+  const fetchCities = async (savedCity: string | null = null) => {
+    if (!token) {
+      setInitialLoading(false);
+      return;
+    }
 
     setCitiesLoading(true);
     try {
@@ -51,6 +73,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
+      
       if (response.ok) {
         const data = await response.json();
         if (data.cities && Array.isArray(data.cities)) {
@@ -59,10 +82,30 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
           }));
           setCities(formattedCities);
 
-          if (formattedCities.length > 0 && !selectedCity) {
-            const firstCity = formattedCities[0].name;
-            setSelectedCity(firstCity);
-            fetchHolidaysByCity(firstCity);
+          // Determine which city to select
+          let cityToSelect = '';
+          
+          if (savedCity) {
+            // Check if saved city exists in the fetched cities
+            const cityExists = formattedCities.some(city => 
+              city.name.toLowerCase() === savedCity.toLowerCase()
+            );
+
+            console.log('Saved city exists:', cityExists);
+            
+            if (cityExists) {
+              cityToSelect = savedCity;
+            }
+          }
+          
+          // If no saved city or saved city doesn't exist, use first city
+          if (!cityToSelect && formattedCities.length > 0) {
+            cityToSelect = formattedCities[0].name;
+          }
+          
+          if (cityToSelect) {
+            setSelectedCity(cityToSelect);
+            await fetchHolidaysByCity(cityToSelect);
           }
         }
       } else {
@@ -73,6 +116,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
       Alert.alert('Error', 'Network error occurred while fetching cities');
     } finally {
       setCitiesLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -119,11 +163,21 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
     }
   }, [selectedCity]);
 
-  const handleCitySelect = (cityName: string) => {
+  const handleCitySelect = async (cityName: string) => {
     setSelectedCity(cityName);
     setShowCityModal(false);
+    
+    // Save selected city to AsyncStorage
+    try {
+      await AsyncStorage.setItem('city', cityName);
+    } catch (error) {
+      console.error('Error saving city to AsyncStorage:', error);
+    }
+    
     fetchHolidaysByCity(cityName);
   };
+
+  // ... rest of the functions (formatDate, getMonthDay, getHolidayGradient, etc.) remain the same
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -259,11 +313,24 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
     </Modal>
   );
 
+  // Show loading during initial data fetch
+  if (initialLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#5b21b6" translucent={false} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#5b21b6" size="large" />
+          <Text style={styles.loadingText}>Loading your preferences...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#5b21b6" translucent={false} />
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -284,14 +351,14 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
           />
           <View style={styles.headerOverlay} />
 
-          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 :0 }]}>
+          <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
             </TouchableOpacity>
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
-          
+
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Holidays</Text>
           </View>
@@ -349,13 +416,12 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 
                   return (
                     <View key={holiday.id} style={styles.holidayCard}>
-                      <View style={[
-                        styles.holidayCardGradient,
-                        {
-                          backgroundColor: gradientColors[0],
-                          backgroundImage: `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[1]} 100%)`
-                        }
-                      ]}>
+                      <LinearGradient
+                        colors={gradientColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.holidayCardGradient}
+                      >
                         <View style={styles.holidayCardOverlay} />
                         <View style={styles.holidayContent}>
                           <View style={styles.holidayLeft}>
@@ -372,7 +438,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
                             <Text style={styles.dateBadgeDay}>{dateInfo.day}</Text>
                           </View>
                         </View>
-                      </View>
+                      </LinearGradient>
                     </View>
                   );
                 })

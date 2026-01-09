@@ -45,7 +45,7 @@
         "NSFaceIDUsageDescription":
           "Face ID is used to securely authenticate you.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
-          "AttendanceTracking": "Your location is needed to verify you are at the office for attendance."
+          "attendance": "Your location is needed to verify you are at the office for attendance."
         }
       }
     },

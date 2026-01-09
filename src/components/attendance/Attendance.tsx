@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
+import { LocationService } from '../../services/locationService';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
@@ -26,7 +27,6 @@ import { BACKEND_URL } from '../../config/config';
 import LeaveInfoScreen from './LeaveInfoScreen';
 import HolidayScreen from './HolidayScreen';
 import LeaveScreen from './LeaveScreen';
-// import { ensureLocationReady, checkLocationPermissionStatus, showLocationAlert } from './../locationHelper';
 import {
   AttendanceProps,
   LeaveBalance,
@@ -52,9 +52,9 @@ const AttendanceButtonSection: React.FC<{
   onPress: () => void;
   token: string | null;
   todayAttendance: AttendanceRecord | null;
-  attendanceRecords: AttendanceRecord[]; // Add this prop
-}> = ({ isAfter11AM, locationPermission, loading, onPress, token, todayAttendance, attendanceRecords }) => {
-  const [hasSpecialPermission, setHasSpecialPermission] = useState(false);
+  attendanceRecords: AttendanceRecord[];
+  hasSpecialPermission: boolean;
+}> = ({ isAfter11AM, locationPermission, loading, onPress, token, todayAttendance, attendanceRecords, hasSpecialPermission }) => {
   const [checkingPermission, setCheckingPermission] = useState(false);
 
   // Check if attendance is marked for today
@@ -72,33 +72,6 @@ const AttendanceButtonSection: React.FC<{
   };
 
   const attendanceMarked = checkTodaysAttendance();
-  console.log("Attendance Marked:", attendanceMarked, "TodayAttendance:", todayAttendance);
-
-  useEffect(() => {
-    if (isAfter11AM && token) {
-      checkSpecialPermission();
-    }
-  }, [isAfter11AM, token]);
-
-  const checkSpecialPermission = async () => {
-    try {
-      setCheckingPermission(true);
-      const response = await fetch(`${BACKEND_URL}/core/checkSpecialAttendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setHasSpecialPermission(data.special_attendance === true);
-      }
-    } catch (error) {
-      console.error('Error checking special attendance:', error);
-      setHasSpecialPermission(false);
-    } finally {
-      setCheckingPermission(false);
-    }
-  };
 
   // Before 11 AM or has special permission - show button
   if (!isAfter11AM || hasSpecialPermission) {
@@ -109,7 +82,7 @@ const AttendanceButtonSection: React.FC<{
           !locationPermission && styles.disabledButton
         ]}
         onPress={onPress}
-        disabled={loading || !locationPermission || checkingPermission || attendanceMarked}
+        disabled={Boolean(loading || !locationPermission || checkingPermission || attendanceMarked)}
       >
         {loading || checkingPermission ? (
           <ActivityIndicator color="#fff" />
@@ -122,24 +95,14 @@ const AttendanceButtonSection: React.FC<{
       </TouchableOpacity>
     );
   }
-  console.log(attendanceMarked);
+
   // After 11 AM and no special permission
   if (!attendanceMarked) {
-    return null
-    // return (
-    //   <View style={styles.noActionContainer}>
-    //     <Text style={styles.noActionText}>
-    //       Attendance window has closed for today.{'\n'}
-    //       Please contact HR if needed.
-    //     </Text>
-    //   </View>
-    // );
+    return null;
   }
 
-  // If attendance is marked, return null (parent will handle display)
   return null;
 };
-
 
 const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [token, setToken] = useState<string | null>(null);
@@ -180,7 +143,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [showLeaveScreen, setShowLeaveScreen] = useState(false);
   const [isCheckingPermission, setIsCheckingPermission] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
+  const [hasSpecialPermission, setHasSpecialPermission] = useState(false);
+  // DO NOT REMOVE THIS COMMENT BY ANY CHANCE
+  // const TEST_IST_TIME = '11:18';
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -198,6 +163,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           }
           await fetchInitialData(storedToken);
           await initializeLocationPermission();
+          await checkSpecialPermission(storedToken);
         }
       } catch (error) {
         console.error('Error initializing app:', error);
@@ -205,6 +171,24 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     };
     initializeApp();
   }, []);
+
+  // Check special permission when token changes
+  const checkSpecialPermission = async (token: string) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/checkSpecialAttendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHasSpecialPermission(data.special_attendance === true);
+      }
+    } catch (error) {
+      console.error('Error checking special attendance:', error);
+      setHasSpecialPermission(false);
+    }
+  };
 
   // Fetch attendance records when month/year changes
   useEffect(() => {
@@ -237,28 +221,27 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return false;
   };
 
-  const checkSpecialAttendance = async (): Promise<boolean> => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/core/checkSpecialAttendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return data.special_attendance === true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error checking special attendance:', error);
-      return false;
-    }
-  };
+  // const getISTTime = () => {
+  //   const now = new Date();
+  //   const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  //   return new Date(utcTime + 19800000);
+  // };
+
   const getISTTime = () => {
     const now = new Date();
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    return new Date(utcTime + 19800000);
+    const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+    const istDate = new Date(utcTime + 19800000);
+    // DO NOT REMOVE THIS COMMENT BY ANY CHANCE
+    // if (TEST_IST_TIME) {
+    //   const [h, m] = TEST_IST_TIME.split(':').map(Number);
+    //   istDate.setHours(h);
+    //   istDate.setMinutes(m);
+    //   istDate.setSeconds(0);
+    // }
+
+    return istDate;
   };
+
   const isAfterTimeIST = (hours: number, minutes: number): boolean => {
     const now = new Date();
     const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -266,12 +249,18 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const currentHours = istTime.getHours();
     const currentMinutes = istTime.getMinutes();
 
+    // DO NOT REMOVE THIS COMMENT BY ANY CHANCE
+    // if (TEST_IST_TIME){
+    //   const [h, m] = TEST_IST_TIME.split(':').map(Number);
+    //   if (h < hours || (h === hours && m < minutes)) return false;
+    //   return true;    
+    // }
     if (currentHours > hours) return true;
     if (currentHours === hours && currentMinutes >= minutes) return true;
     return false;
   };
 
-  const getAttendanceMessage = (todayAttendance: AttendanceRecord, hasSpecialPermission: boolean) => {
+  const getAttendanceMessage = (todayAttendance: AttendanceRecord | null, hasSpecialPermission: boolean) => {
     const istTime = getISTTime();
     const hours = istTime.getHours();
     const minutes = istTime.getMinutes();
@@ -286,26 +275,26 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
 
     // Between 10:15 AM and 11:00 AM
-    if (hours === 10 && minutes >= 15) {
+    if ((hours === 10 && minutes >= 15) || (hours < 11)) {
       return {
-        message: "Late Login Period\n10:15 AM - 11:00 AM\nContact HR if needed",
+        message: "Late Login Period\n10:15 AM - 11:00 AM\nYou can still mark attendance",
         type: 'warning',
         canMarkAttendance: true
       };
     }
-    if (hours === 11 && minutes === 0) {
-      console.log(hasSpecialPermission, todayAttendance);
+
+    // After 11:00 AM
+    if (hours >= 11) {
       if (hasSpecialPermission) {
         return {
           message: "You have special permission to mark attendance today.",
           type: 'normal',
           canMarkAttendance: true
-        }
+        };
       }
-      // After 11:00 AM
       if (!todayAttendance) {
         return {
-          message: "You can not mark attendance after 11:00 AM, kindly contact your HR",
+          message: "You cannot mark attendance after 11:00 AM, kindly contact your HR",
           type: 'error',
           canMarkAttendance: false
         };
@@ -316,22 +305,22 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       message: "Kindly mark Attendance before 10:15 AM",
       type: 'normal',
       canMarkAttendance: false
-    }
+    };
   };
 
   const initializeLocationPermission = async () => {
     try {
       setIsCheckingPermission(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      const hasPermission = status === 'granted';
+
+      const hasPermission = await LocationService.requestPermissions();
       setLocationPermission(hasPermission);
+
       if (!hasPermission) {
-        Alert.alert(
-          'Permission Denied',
-          'Location permission is required for marking attendance and checkout. Please enable location access in your device settings.',
-          [{ text: 'OK' }]
+        LocationService.showLocationAlert(
+          'Location permission is required for marking attendance. Please enable location access in your device settings.'
         );
       }
+
       return hasPermission;
     } catch (error) {
       console.error('Error requesting location permission:', error);
@@ -345,15 +334,18 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const checkLocationPermission = async (): Promise<boolean> => {
     try {
       setIsCheckingPermission(true);
-      const { status } = await Location.getForegroundPermissionsAsync();
-      const hasPermission = status === 'granted';
+
+      // Use the new location service
+      const permissions = await LocationService.checkPermissionStatus();
+      const hasPermission = permissions.foreground;
+
       setLocationPermission(hasPermission);
 
       if (!hasPermission) {
         const userResponse = await new Promise<boolean>((resolve) => {
           Alert.alert(
             'Location Access Required',
-            'Location permission is required to mark attendance and checkout. Please enable location access to continue.',
+            'Location permission is required to mark attendance. Please enable location access to continue.',
             [
               {
                 text: 'Cancel',
@@ -363,8 +355,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               {
                 text: 'Enable Location',
                 onPress: async () => {
-                  const permissionGranted = await initializeLocationPermission();
-                  resolve(permissionGranted);
+                  const granted = await LocationService.requestPermissions();
+                  setLocationPermission(granted);
+                  resolve(granted);
                 }
               }
             ]
@@ -376,6 +369,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return hasPermission;
     } catch (error) {
       console.error('Error checking location permission:', error);
+      Alert.alert( 
+        'Location Error',
+        String(error),
+        [
+          { text: 'OK' }
+
+        ]
+      );
       setLocationPermission(false);
       return false;
     } finally {
@@ -383,40 +384,47 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  const getCurrentLocation = async (timeoutMs: number = 10000) => {
+  const getCurrentLocation = async () => {
     try {
-      // Check location permission first
-      const hasPermission = await checkLocationPermission();
-      if (!hasPermission) {
-        return null;
+      console.log('📍 Getting location for attendance...');
+
+      // Use the iOS-optimized location service
+      const result = await LocationService.getCurrentLocation();
+
+      if (result.success && result.coordinates) {
+        console.log('✅ Location obtained successfully');
+        return result.coordinates;
       }
 
-      const locationPromise = Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Location request timed out')), timeoutMs);
-      });
-      const location = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
-      return {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-    } catch (error) {
-      console.error('Error getting current location:', error);
+      // Show user-friendly error
       Alert.alert(
         'Location Error',
-        'Unable to get your location. Please check location permissions and try again.',
+        result.error || 'Unable to get your location. Please check location settings.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Check Permissions',
-            onPress: async () => {
-              await initializeLocationPermission();
+            text: 'Help',
+            onPress: () => {
+              Alert.alert(
+                'Enable Location',
+                'Please ensure:\n\n1. Location Services are ON\n2. App has location permission\n3. "Precise Location" is enabled (iOS)\n\nGo to Settings > Privacy > Location Services',
+                [{ text: 'OK' }]
+              );
             }
           }
         ]
       );
+
+      return null;
+    } catch (error) {
+      console.error('❌ Location error:', error);
+
+      Alert.alert(
+        'Location Error',
+        'Unable to get your location. Please check location permissions and try again.',
+        [{ text: 'OK' }]
+      );
+
       return null;
     }
   };
@@ -426,7 +434,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
     </View>
   );
-  const hasSpecialPermission = checkSpecialAttendance();
+
   const attendanceMsg = getAttendanceMessage(todayAttendance, hasSpecialPermission);
 
   const fetchInitialData = async (token?: string) => {
@@ -492,14 +500,17 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return;
     }
 
-    if (!isBeforeTimeIST(10, 15)) {
+    // Check if it's after 11:00 AM and user doesn't have special permission
+    if (isAfterTimeIST(11, 0)) {
+
       setLoading(true);
-      const hasSpecialPermission = await checkSpecialAttendance();
+      // Re-check special permission
+      await checkSpecialPermission(token);
       setLoading(false);
       if (!hasSpecialPermission) {
         Alert.alert(
           'Late Attendance',
-          'You cannot mark attendance after 10:15 AM. Kindly raise a request to your HR to allow you to mark late attendance.',
+          'You cannot mark attendance after 11:00 AM. Kindly raise a request to your HR to allow you to mark late attendance.',
           [{ text: 'OK' }]
         );
         return;
@@ -508,7 +519,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
-      const location = await getCurrentLocation(10000);
+      const location = await getCurrentLocation();
       if (!location) {
         setLoading(false);
         return;
@@ -548,9 +559,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         });
         const newTodayAttendance = {
           date: today,
-          status: 'Present',
+          status: 'present' as const,
           check_in_time: currentTime,
-          check_out_time: null
+          check_out_time: undefined
         };
         setTodayAttendance(newTodayAttendance);
         setAttendanceRecords(prevRecords => {
@@ -600,7 +611,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
     if (isBeforeTimeIST(18, 0)) {
       setLoading(true);
-      const hasSpecialPermission = await checkSpecialAttendance();
+      // Re-check special permission
+      await checkSpecialPermission(token);
       setLoading(false);
       if (!hasSpecialPermission) {
         Alert.alert(
@@ -614,7 +626,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
     setLoading(true);
     try {
-      const location = await getCurrentLocation(10000);
+      const location = await getCurrentLocation();
       if (!location) {
         setLoading(false);
         return;
@@ -1112,7 +1124,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return <LeaveScreen onBack={() => setShowLeaveScreen(false)} />;
   }
 
-  if (showLeaveInfo && selectedLeave) {
+  if (showLeaveInfo && selectedLeave && token) {
     return (
       <LeaveInfoScreen
         leave={selectedLeave}
@@ -1251,7 +1263,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 onPress={handleAttendanceButtonPress}
                 token={token}
                 todayAttendance={todayAttendance}
-                attendanceRecords={attendanceRecords} // Add this line
+                attendanceRecords={attendanceRecords}
+                hasSpecialPermission={hasSpecialPermission}
               />
             )}
           </View>
@@ -1333,6 +1346,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         </View>
       </ScrollView>
 
+      {/* Remove or update LeaveModal props based on actual component definition */}
       <LeaveModal
         visible={isLeaveModalVisible}
         onClose={handleCloseLeaveModal}
@@ -1340,14 +1354,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         onFormChange={setLeaveForm}
         onSubmit={submitLeaveApplication}
         loading={loading}
-        showStartDatePicker={showStartDatePicker}
-        showEndDatePicker={showEndDatePicker}
-        startDate={startDate}
-        endDate={endDate}
-        onStartDatePress={() => setShowStartDatePicker(true)}
-        onEndDatePress={() => setShowEndDatePicker(true)}
-        onStartDateChange={onStartDateChange}
-        onEndDateChange={onEndDateChange}
+      // Remove these props if not needed by LeaveModal:
+      // showStartDatePicker={showStartDatePicker}
+      // showEndDatePicker={showEndDatePicker}
+      // startDate={startDate}
+      // endDate={endDate}
+      // onStartDatePress={() => setShowStartDatePicker(true)}
+      // onEndDatePress={() => setShowEndDatePicker(true)}
+      // onStartDateChange={onStartDateChange}
+      // onEndDateChange={onEndDateChange}
       />
 
       <ReasonModal

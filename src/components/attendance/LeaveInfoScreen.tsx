@@ -16,6 +16,10 @@ import {
 const TOKEN_2_KEY = 'token_2';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../../config/config';
+import {
+  LeaveInfoScreenProps,
+  LeaveApplication
+} from './types';
 
 // Theme colors matching your app
 const colors = {
@@ -39,35 +43,7 @@ const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
 const fontSize = { xs: 11, sm: 13, md: 15, lg: 17, xl: 20 };
 const borderRadius = { sm: 8, md: 12, lg: 16, xl: 20 };
 
-interface LeaveApplication {
-  id: number;
-  start_date: string;
-  end_date: string;
-  leave_type: string;
-  reason: string;
-  status: string;
-  approved_by?: any;
-  approved_at?: string;
-  rejected_at?: string;
-  total_number_of_days?: number;
-  is_sandwich?: boolean;
-  comment?: string;
-  user?: {
-    full_name: string;
-    employee_id: string;
-    email: string;
-    designation?: string;
-  };
-  cancelled_at?: string;
-}
 
-interface LeaveInfoScreenProps {
-  leave: LeaveApplication;
-  onBack: () => void;
-  baseUrl: string;
-  token: string;
-  onLeaveUpdate?: (updatedLeave: LeaveApplication) => void;
-}
 
 const LeaveInfoScreen: React.FC<LeaveInfoScreenProps> = ({ 
   leave, onBack, baseUrl, token, onLeaveUpdate 

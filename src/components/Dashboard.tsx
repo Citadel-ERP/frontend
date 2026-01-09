@@ -162,6 +162,7 @@ interface ApiResponse {
   hours_worked_last_7_attendance: any[];
   overtime_hours: any[];
   upcoming_reminder: any[];
+  city?: string;
 }
 
 // Theme Colors
@@ -237,7 +238,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   currentColors,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // WhatsApp-style menu items with icons and colors
   const whatsappMenuItems = [
     { id: 'profile', title: 'Profile', icon: 'person-circle-outline', color: '#008069' },
@@ -277,7 +278,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
-            
+
             <View style={styles.userInfoContainer}>
               {userData?.profile_picture ? (
                 <Image
@@ -291,7 +292,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                   </Text>
                 </View>
               )}
-              
+
               <View style={styles.userDetails}>
                 <Text style={styles.userName} numberOfLines={1}>
                   {userData?.full_name || 'User'}
@@ -301,7 +302,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 </Text>
               </View>
             </View>
-            
+
             {/* <TouchableOpacity style={styles.qrButton}>
               <Ionicons name="qr-code-outline" size={24} color="white" />
             </TouchableOpacity> */}
@@ -353,7 +354,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
                   {item.title}
                 </Text>
-                
+
                 {item.id !== 'logout' && (
                   <Ionicons
                     name="chevron-forward"
@@ -856,6 +857,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             };
             setUserData(transformedUserData);
             setModules(data.modules || []);
+            try {
+              await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
+              await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
+              if (data.city) {
+                await AsyncStorage.setItem('city', data.city);
+              }
+              console.log('✅ User data, city, and driver status saved to AsyncStorage');
+            } catch (storageError) {
+              console.error('❌ Error saving to AsyncStorage:', storageError);
+            }
+
             setUpcomingBirthdays(data.upcoming_birthdays || []);
             setUpcomingAnniversaries(data.upcoming_anniversary || []);
 
@@ -874,14 +886,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
             console.log('Upcoming events:', events);
             setUpcomingEvents(events);
-
-            // Save driver status
-            try {
-              await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
-              console.log('Driver status saved:', data.is_driver);
-            } catch (storageError) {
-              console.error('Error saving driver status to storage:', storageError);
-            }
 
             // Set autoReconfigure if needed
             if (data.autoReconfigure) {

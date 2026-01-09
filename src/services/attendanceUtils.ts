@@ -1,15 +1,15 @@
 // services/attendanceUtils.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Location from 'expo-location';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { BACKEND_URL } from '../config/config';
+import { LocationService } from './locationService';
 
 const TOKEN_KEY = 'token_2';
 const LAST_ATTENDANCE_KEY = 'last_attendance_marked';
 const ATTENDANCE_LOCK_KEY = 'attendance_marking_lock';
 
 /**
- * Shared attendance utilities and API calls
+ * Shared attendance utilities with iOS-optimized location handling
  */
 export class AttendanceUtils {
   
@@ -61,7 +61,6 @@ export class AttendanceUtils {
 
   /**
    * Acquire lock to prevent duplicate attendance marking
-   * Returns true if lock acquired, false if already locked
    */
   static async acquireLock(): Promise<boolean> {
     try {
@@ -72,8 +71,8 @@ export class AttendanceUtils {
         const now = new Date();
         const timeDiff = now.getTime() - lockTime.getTime();
         
-        // If lock is older than 30 seconds, consider it stale and acquire new lock
-        if (timeDiff < 30000) {
+        // If lock is older than 60 seconds (increased for iOS), consider stale
+        if (timeDiff < 60000) {
           console.log('⏳ Attendance marking already in progress');
           return false;
         }
@@ -100,7 +99,6 @@ export class AttendanceUtils {
 
   /**
    * Check user's work status (leave/holiday)
-   * Returns true if user should work today, false otherwise
    */
   static async checkWorkStatus(token: string): Promise<boolean> {
     try {
@@ -118,7 +116,6 @@ export class AttendanceUtils {
       const data = await response.json();
       console.log('📊 Work status:', data);
       
-      // Backend returns data: false when user has leave or it's a holiday
       return data.data !== false;
     } catch (error) {
       console.error('❌ Error checking work status:', error);
@@ -127,32 +124,22 @@ export class AttendanceUtils {
   }
 
   /**
-   * Get current device location with high accuracy
+   * Get current device location using iOS-optimized service
    */
-  static async getCurrentLocation(): Promise<Location.LocationObject | null> {
-    try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      
-      if (status !== 'granted') {
-        console.log('❌ Location permission not granted');
-        return null;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-      });
-
-      console.log('📍 Location obtained:', {
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-      });
-
-      return location;
-    } catch (error) {
-      console.error('❌ Error getting location:', error);
-      return null;
+  static async getCurrentLocation(): Promise<{
+    latitude: number;
+    longitude: number;
+  } | null> {
+    console.log('📍 Getting current location...');
+    
+    const result = await LocationService.getCurrentLocation();
+    
+    if (result.success && result.coordinates) {
+      return result.coordinates;
     }
+    
+    console.error('❌ Location fetch failed:', result.error);
+    return null;
   }
 
   /**
@@ -174,7 +161,7 @@ export class AttendanceUtils {
           token,
           latitude: latitude.toString(),
           longitude: longitude.toString(),
-          source, // Optional: track which mechanism triggered attendance
+          source,
         }),
       });
 
@@ -198,15 +185,13 @@ export class AttendanceUtils {
   }
 
   /**
-   * Complete attendance flow: check status, get location, mark attendance
-   * This is the main orchestration function used by both polling and geofencing
+   * Complete attendance flow with iOS-optimized location handling
    */
   static async executeAttendanceFlow(
     source: 'polling' | 'geofence' | 'manual' = 'manual',
     showAlert: boolean = false
   ): Promise<boolean> {
     let lockAcquired = false;
-
     try {
       console.log(`🚀 Starting attendance flow (${source})...`);
 
@@ -217,7 +202,7 @@ export class AttendanceUtils {
         return true;
       }
 
-      // 2. Acquire lock to prevent duplicate marking
+      // 2. Acquire lock
       lockAcquired = await this.acquireLock();
       if (!lockAcquired) {
         console.log('⏳ Attendance marking already in progress');
@@ -238,29 +223,37 @@ export class AttendanceUtils {
         return false;
       }
 
-      // 5. Get current location
+      // 5. Get current location (iOS-optimized, no timeout)
       const location = await this.getCurrentLocation();
       if (!location) {
         console.log('❌ Could not get location');
+        
+        if (showAlert && Platform.OS === 'ios') {
+          Alert.alert(
+            'Location Error',
+            'Unable to get your location. Please ensure:\n\n1. Location Services are enabled\n2. App has "While Using" or "Always" permission\n3. "Precise Location" is enabled\n\nGo to Settings > Privacy & Security > Location Services',
+            [{ text: 'OK' }]
+          );
+        }
+        
         return false;
       }
 
       // 6. Mark attendance
       const result = await this.markAttendanceAPI(
         token,
-        location.coords.latitude,
-        location.coords.longitude,
+        location.latitude,
+        location.longitude,
         source
       );
 
       if (result.success) {
-        // 7. Save completion status
         await this.markAttendanceCompleted();
         
         if (showAlert) {
           Alert.alert(
             'Attendance Marked',
-            `Your attendance has been marked successfully via ${source}!`,
+            `Your attendance has been marked successfully!`,
             [{ text: 'OK' }]
           );
         }
@@ -270,12 +263,10 @@ export class AttendanceUtils {
         console.log('❌ Attendance marking failed:', result.message);
         return false;
       }
-
     } catch (error) {
       console.error('❌ Error in attendance flow:', error);
       return false;
     } finally {
-      // Always release lock
       if (lockAcquired) {
         await this.releaseLock();
       }
@@ -287,63 +278,38 @@ export class AttendanceUtils {
    */
   static isWithinWorkingHours(): boolean {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const dayOfWeek = now.getDay();
     const hours = now.getHours();
     
-    // Check if Monday-Friday (1-5)
+    // Monday-Friday (1-5)
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       return false;
     }
     
-    // Check if between 8 AM and 11 AM
+    // 8 AM to 11 AM
     return hours >= 8 && hours < 11;
   }
 
   /**
-   * Request location permissions (foreground and background)
+   * Request location permissions with iOS guidance
    */
   static async requestLocationPermissions(): Promise<{
     foreground: boolean;
     background: boolean;
   }> {
-    try {
-      // Request foreground permission
-      const foregroundResult = await Location.requestForegroundPermissionsAsync();
-      const foregroundGranted = foregroundResult.status === 'granted';
-      
-      if (!foregroundGranted) {
-        console.log('❌ Foreground location permission denied');
-        Alert.alert(
-          'Location Permission Required',
-          'Location access is required to mark attendance.'
-        );
-        return { foreground: false, background: false };
-      }
-
-      // Request background permission
-      const backgroundResult = await Location.requestBackgroundPermissionsAsync();
-      const backgroundGranted = backgroundResult.status === 'granted';
-      
-      if (!backgroundGranted) {
-        console.log('⚠️ Background location permission denied');
-        Alert.alert(
-          'Background Location Required',
-          'Please allow "Always Allow" location access to enable automatic attendance.'
-        );
-      }
-
-      return {
-        foreground: foregroundGranted,
-        background: backgroundGranted,
-      };
-    } catch (error) {
-      console.error('❌ Error requesting permissions:', error);
+    const foreground = await LocationService.requestPermissions();
+    
+    if (!foreground) {
       return { foreground: false, background: false };
     }
+
+    const background = await LocationService.requestBackgroundPermission();
+    
+    return { foreground, background };
   }
 
   /**
-   * Get all office locations from backend (for geofencing)
+   * Get all office locations from backend
    */
   static async getOfficeLocations(token: string): Promise<Array<{
     id: string;

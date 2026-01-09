@@ -13,6 +13,11 @@ import {
   Keyboard,
 } from 'react-native';
 import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
+import dayjs, { Dayjs } from 'dayjs';
+import {
+  LeaveModalProps,
+  LeaveForm,
+} from './types';
 
 // Theme colors matching your app
 const colors = {
@@ -35,21 +40,6 @@ const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
 const fontSize = { xs: 11, sm: 13, md: 15, lg: 17, xl: 20 };
 const borderRadius = { sm: 8, md: 12, lg: 16, xl: 20 };
 
-interface LeaveForm {
-  startDate: string;
-  endDate: string;
-  leaveType: string;
-  reason: string;
-}
-
-interface LeaveModalProps {
-  visible: boolean;
-  onClose: () => void;
-  leaveForm: LeaveForm;
-  onFormChange: (form: LeaveForm) => void;
-  onSubmit: () => void;
-  loading: boolean;
-}
 
 type DateEditMode = 'none' | 'start' | 'end';
 
@@ -74,11 +64,17 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
   // Add refs for ScrollView and TextInput
   const scrollViewRef = useRef<ScrollView>(null);
   const reasonInputRef = useRef<TextInput>(null);
-
+  const toDate = (value: DateType): Date | undefined => {
+    if (!value) return undefined;
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' || typeof value === 'number') return new Date(value);
+    // Handle Dayjs
+    return (value as Dayjs).toDate();
+  };
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
       setKeyboardVisible(true);
-      
+
       // Scroll to the reason input when keyboard opens
       if (reasonInputRef.current) {
         // Small delay to ensure keyboard is fully up
@@ -93,11 +89,11 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
         }, 100);
       }
     });
-    
+
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardVisible(false);
     });
-    
+
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
@@ -131,7 +127,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     if (leaveForm.startDate && leaveForm.endDate) {
       const startParts = leaveForm.startDate.split('-');
       const endParts = leaveForm.endDate.split('-');
-      
+
       setDateRange({
         startDate: new Date(parseInt(startParts[0]), parseInt(startParts[1]) - 1, parseInt(startParts[2]), 12, 0, 0),
         endDate: new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, parseInt(endParts[2]), 12, 0, 0),
@@ -165,15 +161,15 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
   };
 
   const handleDateChange = (params: { startDate: DateType; endDate: DateType }) => {
-    const newStartDate = params.startDate ? new Date(params.startDate) : undefined;
-    const newEndDate = params.endDate ? new Date(params.endDate) : undefined;
+    const newStartDate = toDate(params.startDate);
+    const newEndDate = toDate(params.endDate);
 
     if (editMode === 'start' && newStartDate) {
       const startStr = formatDateToString(newStartDate);
-      
+
       if (dateRange.endDate) {
-        const existingEnd = new Date(dateRange.endDate);
-        if (newStartDate > existingEnd) {
+        const existingEnd = toDate(dateRange.endDate);
+        if (existingEnd && newStartDate > existingEnd) {
           setDateRange({ startDate: newStartDate, endDate: newStartDate });
           onFormChange({
             ...leaveForm,
@@ -197,10 +193,10 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       setEditMode('none');
     } else if (editMode === 'end' && newEndDate) {
       const endStr = formatDateToString(newEndDate);
-      
+
       if (dateRange.startDate) {
-        const existingStart = new Date(dateRange.startDate);
-        if (newEndDate < existingStart) {
+        const existingStart = toDate(dateRange.startDate);
+        if (existingStart && newEndDate < existingStart) {
           setDateRange({ startDate: newEndDate, endDate: newEndDate });
           onFormChange({
             ...leaveForm,
@@ -225,10 +221,10 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       setEditMode('none');
     } else {
       setDateRange(params);
-      
+
       const startDateString = newStartDate ? formatDateToString(newStartDate) : '';
       const endDateString = newEndDate ? formatDateToString(newEndDate) : '';
-      
+
       onFormChange({
         ...leaveForm,
         startDate: startDateString,
@@ -259,10 +255,10 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
   };
 
   const isFormValid = () => {
-    return leaveForm.startDate && 
-           leaveForm.endDate && 
-           leaveForm.leaveType && 
-           leaveForm.reason.trim().length > 0;
+    return leaveForm.startDate &&
+      leaveForm.endDate &&
+      leaveForm.leaveType &&
+      leaveForm.reason.trim().length > 0;
   };
 
   const getDaysCount = () => {
@@ -293,7 +289,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
   };
 
   const renderContent = () => (
-    <ScrollView 
+    <ScrollView
       ref={scrollViewRef}
       style={styles.modalContainer}
       showsVerticalScrollIndicator={false}
@@ -316,7 +312,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
       <View style={styles.section}>
         {/* Selected Dates Display */}
         <View style={styles.dateDisplayContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.dateBox,
               editMode === 'start' && styles.dateBoxActive
@@ -330,15 +326,15 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
               styles.dateValue,
               !dateRange.startDate && styles.dateValuePlaceholder
             ]}>
-              {dateRange.startDate ? formatDate(new Date(dateRange.startDate)) : 'Select'}
+              {dateRange.startDate ? formatDate(toDate(dateRange.startDate)) : 'Select'}
             </Text>
           </TouchableOpacity>
-          
+
           <View style={styles.dateArrow}>
             <Text style={styles.dateArrowText}>→</Text>
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[
               styles.dateBox,
               editMode === 'end' && styles.dateBoxActive
@@ -352,7 +348,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
               styles.dateValue,
               !dateRange.endDate && styles.dateValuePlaceholder
             ]}>
-              {dateRange.endDate ? formatDate(new Date(dateRange.endDate)) : 'Select'}
+              {dateRange.endDate ? formatDate(toDate(dateRange.endDate)) : 'Select'}
             </Text>
           </TouchableOpacity>
 
@@ -366,7 +362,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
             </TouchableOpacity>
           )}
         </View>
-        
+
         {/* Duration Badge */}
         {leaveForm.startDate && leaveForm.endDate && (
           <View style={styles.durationBadge}>
@@ -478,7 +474,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
         >
           <View style={styles.modalWrapper}>
             {renderContent()}
-            
+
             {/* Fixed Bottom Buttons */}
             <View style={styles.bottomButtons}>
               <TouchableOpacity
@@ -488,7 +484,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[
                   styles.submitButton,

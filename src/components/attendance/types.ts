@@ -26,19 +26,24 @@ export interface User {
 
 export interface LeaveApplication {
   id: number;
-  user: User;
   start_date: string;
   end_date: string;
   leave_type: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  requested_at: string;
-  comment?: string | null;
-  is_sandwich?: boolean;
-  total_number_of_days?: string; // comes as "4.00", "5.00"
-  approved_by?: User | null;
+  status: string;
+  approved_by?: any;
   approved_at?: string | null;
   rejected_at?: string | null;
+  total_number_of_days?: number;
+  is_sandwich?: boolean;
+  comment?: string;
+  user?: {
+    full_name: string;
+    employee_id: string;
+    email: string;
+    designation?: string;
+  };
+  cancelled_at?: string | null;
 }
 
 
@@ -58,10 +63,19 @@ export interface AttendanceRecord {
 }
 
 export interface LeaveForm {
-  startDate: string;
+   startDate: string;
   endDate: string;
   leaveType: string;
   reason: string;
+}
+
+export interface LeaveModalProps {
+  visible: boolean;
+  onClose: () => void;
+  leaveForm: LeaveForm;
+  onFormChange: (form: LeaveForm) => void;
+  onSubmit: () => void;
+  loading: boolean;
 }
 
 // types.ts - Add these interfaces
@@ -89,3 +103,11 @@ export const CHECKOUT_REASONS: ReasonOption[] = [
 ];
 
 export type TabType = 'attendance' | 'leave' | 'calendar' | 'reports';
+
+export interface LeaveInfoScreenProps {
+  leave: LeaveApplication;
+  onBack: () => void;
+  baseUrl: string;
+  token: string;
+  onLeaveUpdate?: (updatedLeave: LeaveApplication) => void;
+}
