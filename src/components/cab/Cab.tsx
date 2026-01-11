@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 
 import BookingScreen from './booking';
@@ -172,7 +173,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
             const requestData: any = {
                 token,
                 vehicle_ids: selectedVehicles.map(sv => sv.vehicle.id),
-                driver_ids: selectedVehicles.map(sv => sv.driver?.id).filter(Boolean),
+                driver_ids: selectedVehicles.map(sv => sv.driver?.employee_id).filter(Boolean),
                 start_time: startDateTime,
                 end_time: endDateTime,
                 purpose: bookingForm.purpose,
@@ -311,8 +312,24 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                             setCurrentScreen('booking');
                             setBookingStep(1);
                         }}
+                        activeOpacity={0.7}
                     >
-                        <Text style={[styles.navLabel, currentScreen === 'booking' && styles.activeNavLabel]}>Book</Text>
+                        <View style={[
+                            styles.navIconContainer,
+                            currentScreen === 'booking' && styles.activeNavIconContainer
+                        ]}>
+                            <MaterialCommunityIcons 
+                                name="car" 
+                                size={24} 
+                                color={currentScreen === 'booking' ? '#fff' : '#666'} 
+                            />
+                        </View>
+                        <Text style={[
+                            styles.navLabel, 
+                            currentScreen === 'booking' && styles.activeNavLabel
+                        ]}>
+                            Book
+                        </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -321,8 +338,24 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                             setCurrentScreen('myBookings');
                             fetchMyBookings();
                         }}
+                        activeOpacity={0.7}
                     >
-                        <Text style={[styles.navLabel, currentScreen === 'myBookings' && styles.activeNavLabel]}>My Bookings</Text>
+                        <View style={[
+                            styles.navIconContainer,
+                            currentScreen === 'myBookings' && styles.activeNavIconContainer
+                        ]}>
+                            <MaterialCommunityIcons 
+                                name="clipboard-text" 
+                                size={24} 
+                                color={currentScreen === 'myBookings' ? '#fff' : '#666'} 
+                            />
+                        </View>
+                        <Text style={[
+                            styles.navLabel, 
+                            currentScreen === 'myBookings' && styles.activeNavLabel
+                        ]}>
+                            My Bookings
+                        </Text>
                     </TouchableOpacity>
                 </View>
             )}

@@ -1,20 +1,11 @@
 import React, { useState } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Alert
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Vehicle, Driver } from './types';
+import { Vehicle, Driver, AvailableCabsScreenProps } from './types';
 import { colors } from '../../styles/theme';
-
-interface AvailableCabsScreenProps {
-    vehicles: Vehicle[];
-    availableDrivers: Driver[];
-    selectedVehicles: Array<{vehicle: Vehicle, driver: Driver | null}>;
-    onBack: () => void;
-    onUpdateSelection: (selection: Array<{vehicle: Vehicle, driver: Driver | null}>) => void;
-    onProceedToBooking: () => void;
-}
 
 const BackIcon = () => (
     <View style={styles.backIcon}>
@@ -48,9 +39,27 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
             // Deselect
             onUpdateSelection(selectedVehicles.filter(sv => sv.vehicle.id !== vehicle.id));
         } else {
+            // Check if there are available drivers before allowing selection
+            const usedDriverEmployeeIds = selectedVehicles
+                .map(sv => sv.driver?.employee_id)
+                .filter(Boolean) as string[];
+            
+            const availableDriversForNewVehicle = availableDrivers.filter(
+                d => !usedDriverEmployeeIds.includes(d.employee_id)
+            );
+            
+            // Only allow selection if there's at least one available driver
+            if (availableDriversForNewVehicle.length === 0) {
+                Alert.alert(
+                    'No Drivers Available',
+                    'All available drivers have been assigned to other vehicles. Please deselect a vehicle or continue without this vehicle.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+            
             // Auto-assign first available driver
-            const usedDriverIds = selectedVehicles.map(sv => sv.driver?.id).filter(Boolean);
-            const availableDriver = availableDrivers.find(d => !usedDriverIds.includes(d.id)) || null;
+            const availableDriver = availableDriversForNewVehicle[0] || null;
             
             onUpdateSelection([...selectedVehicles, { vehicle, driver: availableDriver }]);
         }
@@ -76,12 +85,12 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
     };
 
     const getAvailableDriversForSelection = () => {
-        const usedDriverIds = selectedVehicles
+        const usedDriverEmployeeIds = selectedVehicles
             .filter((_, idx) => idx !== currentVehicleIndex)
-            .map(sv => sv.driver?.id)
-            .filter(Boolean);
+            .map(sv => sv.driver?.employee_id)
+            .filter(Boolean) as string[];
         
-        return availableDrivers.filter(d => !usedDriverIds.includes(d.id));
+        return availableDrivers.filter(d => !usedDriverEmployeeIds.includes(d.employee_id));
     };
 
     return (
@@ -117,92 +126,118 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                         <View style={styles.titleSection}>
                             <Text style={styles.headerTitle}>Available Vehicles</Text>
                             <Text style={styles.headerSubtitle}>
-                                {selectedVehicles.length} vehicle{selectedVehicles.length !== 1 ? 's' : ''} selected
+                                {vehicles.length > 0 
+                                    ? `${selectedVehicles.length} vehicle${selectedVehicles.length !== 1 ? 's' : ''} selected`
+                                    : 'Search results'
+                                }
                             </Text>
                         </View>
                     </LinearGradient>
                 </View>
 
                 <View style={styles.cabsListContent}>
-                    {vehicles.map((vehicle) => {
-                        const isSelected = isVehicleSelected(vehicle.id);
-                        const assignedDriver = getAssignedDriver(vehicle.id);
-
-                        return (
-                            <TouchableOpacity
-                                key={vehicle.id}
-                                style={[styles.cabCard, isSelected && styles.cabCardSelected]}
-                                onPress={() => handleSelectVehicle(vehicle)}
-                                activeOpacity={0.7}
-                            >
-                                {isSelected && (
-                                    <View style={styles.selectedBadge}>
-                                        <MaterialCommunityIcons name="check-circle" size={24} color="#00d285" />
-                                    </View>
-                                )}
-
-                                <Image
-                                    source={{ uri: `https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80` }}
-                                    style={styles.cabImage}
-                                />
-
-                                <View style={styles.cabInfo}>
-                                    <Text style={styles.cabName}>{vehicle.make} {vehicle.model}</Text>
-                                    <Text style={styles.cabMeta}>
-                                        {vehicle.license_plate} • {vehicle.color} • {vehicle.year}
-                                    </Text>
-
-                                    <View style={styles.cabSpecs}>
-                                        <View style={styles.specItem}>
-                                            <MaterialCommunityIcons name="gas-station" size={14} color="#017bf9" />
-                                            <Text style={styles.specText}>{vehicle.fuel_type}</Text>
-                                        </View>
-                                        <View style={styles.specItem}>
-                                            <MaterialCommunityIcons name="seat-passenger" size={14} color="#017bf9" />
-                                            <Text style={styles.specText}>{vehicle.seating_capacity} Seats</Text>
-                                        </View>
-                                    </View>
-
+                    {vehicles.length === 0 ? (
+                        <View style={styles.emptyStateContainer}>
+                            <View style={styles.emptyStateCard}>
+                                <View style={styles.emptyIconContainer}>
+                                    <MaterialCommunityIcons 
+                                        name="car-off" 
+                                        size={64} 
+                                        color="#CBD5E0" 
+                                    />
+                                </View>
+                                <Text style={styles.emptyStateTitle}>No Cars Available</Text>
+                                <Text style={styles.emptyStateMessage}>
+                                    Unfortunately, there are no vehicles available for the selected date and time.
+                                </Text>
+                                <Text style={styles.emptyStateSuggestion}>
+                                    Please try adjusting your booking dates or contact support for assistance.
+                                </Text>
+                                <TouchableOpacity 
+                                    style={styles.tryAgainButton}
+                                    onPress={onBack}
+                                >
+                                    <MaterialCommunityIcons name="refresh" size={20} color="#008069" />
+                                    <Text style={styles.tryAgainText}>Try Different Dates</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
+                        vehicles.map((vehicle) => {
+                            const isSelected = isVehicleSelected(vehicle.id);
+                            const assignedDriver = getAssignedDriver(vehicle.id);
+                            return (
+                                <TouchableOpacity
+                                    key={vehicle.id}
+                                    style={[styles.cabCard, isSelected && styles.cabCardSelected]}
+                                    onPress={() => handleSelectVehicle(vehicle)}
+                                    activeOpacity={0.7}
+                                >
                                     {isSelected && (
-                                        <View style={styles.driverSection}>
-                                            <View style={styles.driverHeader}>
-                                                <MaterialCommunityIcons name="account" size={18} color="#666" />
-                                                <Text style={styles.driverHeaderText}>Assigned Driver</Text>
-                                            </View>
-                                            
-                                            {assignedDriver ? (
-                                                <View style={styles.driverInfo}>
-                                                    <View style={styles.driverAvatar}>
-                                                        <Text style={styles.driverAvatarText}>
-                                                            {assignedDriver.full_name.split(' ').map(n => n[0]).join('')}
-                                                        </Text>
-                                                    </View>
-                                                    <View style={styles.driverDetails}>
-                                                        <Text style={styles.driverName}>{assignedDriver.full_name}</Text>
-                                                        <Text style={styles.driverId}>{assignedDriver.employee_id}</Text>
-                                                    </View>
-                                                    <TouchableOpacity
-                                                        style={styles.changeDriverBtn}
-                                                        onPress={() => handleChangeDriver(vehicle.id)}
-                                                    >
-                                                        <Text style={styles.changeDriverText}>Change</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ) : (
-                                                <TouchableOpacity
-                                                    style={styles.selectDriverBtn}
-                                                    onPress={() => handleChangeDriver(vehicle.id)}
-                                                >
-                                                    <MaterialCommunityIcons name="plus-circle" size={20} color="#017bf9" />
-                                                    <Text style={styles.selectDriverText}>Select Driver</Text>
-                                                </TouchableOpacity>
-                                            )}
+                                        <View style={styles.selectedBadge}>
+                                            <MaterialCommunityIcons name="check-circle" size={24} color="#00d285" />
                                         </View>
                                     )}
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
+                                    <Image
+                                        source={{ uri: `https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80` }}
+                                        style={styles.cabImage}
+                                    />
+                                    <View style={styles.cabInfo}>
+                                        <Text style={styles.cabName}>{vehicle.make} {vehicle.model}</Text>
+                                        <Text style={styles.cabMeta}>
+                                            {vehicle.license_plate} • {vehicle.color} • {vehicle.year}
+                                        </Text>
+                                        <View style={styles.cabSpecs}>
+                                            <View style={styles.specItem}>
+                                                <MaterialCommunityIcons name="gas-station" size={14} color="#008069" />
+                                                <Text style={styles.specText}>{vehicle.fuel_type}</Text>
+                                            </View>
+                                            <View style={styles.specItem}>
+                                                <MaterialCommunityIcons name="seat-passenger" size={14} color="#008069" />
+                                                <Text style={styles.specText}>{vehicle.seating_capacity} Seats</Text>
+                                            </View>
+                                        </View>
+                                        {isSelected && (
+                                            <View style={styles.driverSection}>
+                                                <View style={styles.driverHeader}>
+                                                    <MaterialCommunityIcons name="account" size={18} color="#666" />
+                                                    <Text style={styles.driverHeaderText}>Assigned Driver</Text>
+                                                </View>
+                                                
+                                                {assignedDriver ? (
+                                                    <View style={styles.driverInfo}>
+                                                        <View style={styles.driverAvatar}>
+                                                            <Text style={styles.driverAvatarText}>
+                                                                {assignedDriver.full_name.split(' ').map(n => n[0]).join('')}
+                                                            </Text>
+                                                        </View>
+                                                        <View style={styles.driverDetails}>
+                                                            <Text style={styles.driverName}>{assignedDriver.full_name}</Text>
+                                                            <Text style={styles.driverId}>{assignedDriver.employee_id}</Text>
+                                                        </View>
+                                                        <TouchableOpacity
+                                                            style={styles.changeDriverBtn}
+                                                            onPress={() => handleChangeDriver(vehicle.id)}
+                                                        >
+                                                            <Text style={styles.changeDriverText}>Change</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ) : (
+                                                    <TouchableOpacity
+                                                        style={styles.selectDriverBtn}
+                                                        onPress={() => handleChangeDriver(vehicle.id)}
+                                                    >
+                                                        <MaterialCommunityIcons name="plus-circle" size={20} color="#008069" />
+                                                        <Text style={styles.selectDriverText}>Select Driver</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })
+                    )}
                 </View>
             </ScrollView>
 
@@ -239,11 +274,10 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                 <MaterialCommunityIcons name="close" size={24} color="#333" />
                             </TouchableOpacity>
                         </View>
-
                         <ScrollView style={styles.driverList}>
-                            {getAvailableDriversForSelection().map((driver) => (
+                            {getAvailableDriversForSelection().map((driver, index) => (
                                 <TouchableOpacity
-                                    key={driver.id}
+                                    key={`driver-${driver.employee_id}-${index}`}
                                     style={styles.driverItem}
                                     onPress={() => handleSelectDriver(driver)}
                                 >
@@ -291,7 +325,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     headerBanner: {
-        height: 200,
+        height: 250,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
         overflow: 'hidden',
@@ -348,6 +382,72 @@ const styles = StyleSheet.create({
     },
     cabsListContent: {
         padding: 16,
+    },
+    emptyStateContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 60,
+        paddingHorizontal: 20,
+    },
+    emptyStateCard: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 32,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
+        width: '100%',
+        maxWidth: 400,
+    },
+    emptyIconContainer: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#F7FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 24,
+    },
+    emptyStateTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#2D3748',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    emptyStateMessage: {
+        fontSize: 16,
+        color: '#4A5568',
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 8,
+    },
+    emptyStateSuggestion: {
+        fontSize: 14,
+        color: '#718096',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 28,
+    },
+    tryAgainButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EBF8FF',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+        borderWidth: 1,
+        borderColor: '#008069',
+    },
+    tryAgainText: {
+        color: '#008069',
+        fontSize: 16,
+        fontWeight: '600',
     },
     cabCard: {
         backgroundColor: '#fff',
@@ -413,7 +513,7 @@ const styles = StyleSheet.create({
     },
     specText: {
         fontSize: 12,
-        color: '#017bf9',
+        color: '#008069',
         fontWeight: '500',
     },
     driverSection: {
@@ -470,7 +570,7 @@ const styles = StyleSheet.create({
     changeDriverBtn: {
         paddingHorizontal: 12,
         paddingVertical: 6,
-        backgroundColor: '#017bf9',
+        backgroundColor: '#008069',
         borderRadius: 8,
     },
     changeDriverText: {
@@ -491,7 +591,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     selectDriverText: {
-        color: '#017bf9',
+        color: '#008069',
         fontSize: 14,
         fontWeight: '500',
     },

@@ -4,19 +4,10 @@ import {
     TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
     Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Booking } from './types';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { CancelBookingModalProps } from './types';
 import { formatDateTime } from './utils';
 
-interface CancelBookingModalProps {
-    visible: boolean;
-    onClose: () => void;
-    selectedBooking: Booking | null;
-    cancelReason: string;
-    setCancelReason: (reason: string) => void;
-    loading: boolean;
-    onCancelBooking: () => void;
-}
 
 const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
     visible,
@@ -27,6 +18,11 @@ const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
     loading,
     onCancelBooking
 }) => {
+    // Get vehicle assignments
+    const assignments = selectedBooking?.vehicle_assignments || [];
+    const hasMultipleVehicles = assignments.length > 1;
+    const firstVehicle = assignments.length > 0 && assignments[0].vehicle ? assignments[0].vehicle : null;
+
     return (
         <Modal
             visible={visible}
@@ -57,14 +53,71 @@ const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
 
                             {selectedBooking && (
                                 <View style={styles.bookingPreview}>
-                                    <Text style={styles.previewTitle}>
-                                        {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
-                                    </Text>
-                                    <Text style={styles.previewText}>{selectedBooking.vehicle.license_plate}</Text>
-                                    <Text style={styles.previewText}>{selectedBooking.purpose}</Text>
-                                    <Text style={styles.previewText}>
-                                        {formatDateTime(selectedBooking.start_time)} - {formatDateTime(selectedBooking.end_time)}
-                                    </Text>
+                                    {/* Vehicle Title */}
+                                    <View style={styles.vehicleHeader}>
+                                        <MaterialCommunityIcons name="car" size={20} color="#008069" />
+                                        <Text style={styles.previewTitle}>
+                                            {hasMultipleVehicles 
+                                                ? `${assignments.length} Vehicles`
+                                                : firstVehicle
+                                                    ? `${firstVehicle.make} ${firstVehicle.model}`
+                                                    : 'Vehicle Booking'}
+                                        </Text>
+                                    </View>
+
+                                    {/* Show license plate for single vehicle */}
+                                    {!hasMultipleVehicles && firstVehicle && (
+                                        <Text style={styles.previewText}>
+                                            {firstVehicle.license_plate}
+                                        </Text>
+                                    )}
+
+                                    {/* Show all vehicles if multiple */}
+                                    {hasMultipleVehicles && (
+                                        <View style={styles.vehicleList}>
+                                            {assignments.map((assignment, index) => (
+                                                <Text key={assignment.id} style={styles.previewText}>
+                                                    • {assignment.vehicle.make} {assignment.vehicle.model} ({assignment.vehicle.license_plate})
+                                                </Text>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {/* Purpose */}
+                                    <View style={styles.detailRow}>
+                                        <MaterialCommunityIcons name="text" size={16} color="#666" />
+                                        <Text style={styles.previewText}>{selectedBooking.purpose}</Text>
+                                    </View>
+
+                                    {/* Location */}
+                                    <View style={styles.locationSection}>
+                                        <View style={styles.detailRow}>
+                                            <MaterialCommunityIcons name="map-marker" size={16} color="#00d285" />
+                                            <Text style={styles.previewText}>{selectedBooking.start_location}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <MaterialCommunityIcons name="map-marker" size={16} color="#ff5e7a" />
+                                            <Text style={styles.previewText}>{selectedBooking.end_location}</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Time */}
+                                    <View style={styles.detailRow}>
+                                        <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
+                                        <Text style={styles.previewTextSmall}>
+                                            {formatDateTime(selectedBooking.start_time)} - {formatDateTime(selectedBooking.end_time)}
+                                        </Text>
+                                    </View>
+
+                                    {/* Show booked for if applicable */}
+                                    {selectedBooking.booked_for && (
+                                        <View style={styles.detailRow}>
+                                            <MaterialCommunityIcons name="account" size={16} color="#666" />
+                                            <Text style={styles.previewText}>
+                                                Booked for: {selectedBooking.booked_for.full_name}
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
                             )}
 
@@ -158,17 +211,43 @@ const styles = StyleSheet.create({
         padding: 15,
         borderRadius: 12,
         marginBottom: 20,
+        borderLeftWidth: 3,
+        borderLeftColor: '#ff5e7a',
+    },
+    vehicleHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
     },
     previewTitle: {
         fontSize: 18,
         fontWeight: '600',
         color: '#333',
-        marginBottom: 5,
+        marginLeft: 8,
+    },
+    vehicleList: {
+        marginBottom: 10,
+        paddingLeft: 5,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    locationSection: {
+        marginBottom: 6,
     },
     previewText: {
         fontSize: 14,
         color: '#666',
-        marginBottom: 3,
+        marginLeft: 6,
+        flex: 1,
+    },
+    previewTextSmall: {
+        fontSize: 13,
+        color: '#666',
+        marginLeft: 6,
+        flex: 1,
     },
     formGroup: {
         marginBottom: 20,

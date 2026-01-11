@@ -5,18 +5,10 @@ import {
     Platform
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BookingFormData, AssignedEmployee, Vehicle, Driver } from './types';
+import { BookingFormData, AssignedEmployee, Vehicle, BookVehicleModalProps } from './types';
 import { BACKEND_URL } from '../../config/config';
 
-interface BookVehicleModalProps {
-    visible: boolean;
-    onClose: () => void;
-    bookingForm: BookingFormData;
-    setBookingForm: (form: BookingFormData) => void;
-    loading: boolean;
-    onBookVehicle: () => void;
-    selectedVehicles: Array<{vehicle: Vehicle, driver: Driver | null}>;
-}
+
 
 const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
     visible,
@@ -141,7 +133,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                 <Text style={styles.sectionTitle}>Booking Summary</Text>
                                 <View style={styles.summaryCard}>
                                     <View style={styles.summaryRow}>
-                                        <MaterialCommunityIcons name="car-multiple" size={20} color="#017bf9" />
+                                        <MaterialCommunityIcons name="car-multiple" size={20} color="#008069" />
                                         <Text style={styles.summaryText}>
                                             {selectedVehicles.length} Vehicle{selectedVehicles.length !== 1 ? 's' : ''}
                                         </Text>
@@ -225,7 +217,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                     <MaterialCommunityIcons
                                         name={bookingForm.bookingFor ? "checkbox-marked" : "checkbox-blank-outline"}
                                         size={24}
-                                        color="#017bf9"
+                                        color="#008069"
                                     />
                                 </TouchableOpacity>
                                 <Text style={styles.checkboxLabel}>Booking for someone else</Text>
@@ -265,7 +257,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                     />
                                     {searchLoading && (
                                         <View style={styles.loadingContainer}>
-                                            <ActivityIndicator size="small" color="#017bf9" />
+                                            <ActivityIndicator size="small" color="#008069" />
                                             <Text style={styles.loadingText}>Searching...</Text>
                                         </View>
                                     )}
@@ -418,7 +410,7 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#017bf9',
+        backgroundColor: '#008069',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -518,7 +510,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     selectedPersonName: {
-        color: '#017bf9',
+        color: '#008069',
         fontWeight: '600',
         fontSize: 15,
     },

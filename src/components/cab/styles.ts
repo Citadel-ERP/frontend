@@ -34,7 +34,24 @@ export const styles = StyleSheet.create({
         marginTop: 5,
     },
     activeNavLabel: {
-        color: '#017bf9',
+        color: '#008069',
+    },
+    navIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#f5f5f5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 4,
+    },
+    activeNavIconContainer: {
+        backgroundColor: '#008069',
+        shadowColor: '#008069',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
 });
 

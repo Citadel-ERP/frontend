@@ -4,17 +4,11 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Booking } from './types';
+import { MyBookingsScreenProps } from './types';
 import { formatDateTime, getStatusColor, getStatusText } from './utils';
 import { colors } from '../../styles/theme';
 
-interface MyBookingsScreenProps {
-    bookings: Booking[];
-    loading: boolean;
-    onBack: () => void;
-    onCancelBooking: (booking: Booking) => void;
-    onRefresh?: () => void;
-}
+
 
 const BackIcon = () => (
     <View style={styles.backIcon}>
@@ -50,7 +44,7 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                             resizeMode="cover"
                         />
                         <View style={styles.headerOverlay} />
-                        
+
                         <View style={styles.headerContent}>
                             <View style={styles.headerTopRow}>
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -70,7 +64,7 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                 <View style={styles.cabsListContent}>
                     {loading && bookings.length === 0 ? (
                         <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#017bf9" />
+                            <ActivityIndicator size="large" color="#008069" />
                             <Text style={styles.loadingText}>Loading bookings...</Text>
                         </View>
                     ) : bookings.length === 0 ? (
@@ -85,80 +79,131 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        bookings.map((booking) => (
-                            <View key={booking.id} style={styles.bookingCard}>
-                                <View style={styles.bookingHeader}>
-                                    <View>
-                                        <Text style={styles.bookingCabName}>
-                                            {booking.vehicle.make} {booking.vehicle.model}
-                                        </Text>
-                                        <Text style={styles.bookingCabMeta}>{booking.vehicle.license_plate}</Text>
-                                    </View>
-                                    <View style={[
-                                        styles.bookingStatus,
-                                        { backgroundColor: getStatusColor(booking.status) + '20' }
-                                    ]}>
-                                        <Text style={[styles.bookingStatusText, { color: getStatusColor(booking.status) }]}>
-                                            {getStatusText(booking.status)}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={styles.bookingDetails}>
-                                    <View style={styles.bookingInfoRow}>
-                                        <Text style={styles.infoLabel}>Purpose:</Text>
-                                        <Text style={styles.infoValue}>{booking.purpose}</Text>
-                                    </View>
-                                    <View style={styles.locationRow}>
-                                        <View style={[styles.locationDot, styles.startDot]} />
-                                        <Text style={styles.locationText}>{booking.start_location}</Text>
-                                    </View>
-                                    <View style={styles.locationRow}>
-                                        <View style={[styles.locationDot, styles.endDot]} />
-                                        <Text style={styles.locationText}>{booking.end_location}</Text>
-                                    </View>
-                                    <View style={styles.bookingInfoRow}>
-                                        <Text style={styles.infoLabel}>Driver:</Text>
-                                        <Text style={styles.infoValue}>{booking.vehicle.assigned_to.full_name}</Text>
-                                    </View>
-                                    <View style={styles.bookingInfoRow}>
-                                        <Text style={styles.infoLabel}>Start:</Text>
-                                        <Text style={styles.infoValue}>{formatDateTime(booking.start_time)}</Text>
-                                    </View>
-                                    <View style={styles.bookingInfoRow}>
-                                        <Text style={styles.infoLabel}>End:</Text>
-                                        <Text style={styles.infoValue}>{formatDateTime(booking.end_time)}</Text>
-                                    </View>
-                                    {booking.grace_period && (
-                                        <View style={styles.bookingInfoRow}>
-                                            <Text style={styles.infoLabel}>Grace Period:</Text>
-                                            <Text style={styles.infoValue}>{booking.grace_period} hours</Text>
+                        bookings.map((booking) => {
+                            // Get the first vehicle assignment (or handle multiple)
+                            const assignments = booking.vehicle_assignments || [];
+                            const hasMultipleVehicles = assignments.length > 1;
+
+                            return (
+                                <View key={booking.id} style={styles.bookingCard}>
+                                    <View style={styles.bookingHeader}>
+                                        <View>
+                                            <Text style={styles.bookingCabName}>
+                                                {hasMultipleVehicles 
+                                                    ? `${assignments.length} Vehicles Booked`
+                                                    : assignments.length > 0 && assignments[0].vehicle
+                                                        ? `${assignments[0].vehicle.make} ${assignments[0].vehicle.model}`
+                                                        : 'Vehicle Booking'
+                                                }
+                                            </Text>
+                                            {!hasMultipleVehicles && assignments.length > 0 && assignments[0].vehicle && (
+                                                <Text style={styles.bookingCabMeta}>
+                                                    {assignments[0].vehicle.license_plate}
+                                                </Text>
+                                            )}
                                         </View>
-                                    )}
-                                    {booking.booking_for_someone_else && (
-                                        <View style={styles.bookingInfoRow}>
-                                            <Text style={styles.infoLabel}>Booking For:</Text>
-                                            <Text style={styles.infoValue}>{booking.booking_for_someone_else.full_name}</Text>
-                                        </View>
-                                    )}
-                                    {booking.reason_of_cancellation && (
-                                        <View style={styles.bookingInfoRow}>
-                                            <Text style={styles.infoLabel}>Cancellation Reason:</Text>
-                                            <Text style={[styles.infoValue, { color: '#ff5e7a' }]}>
-                                                {booking.reason_of_cancellation}
+                                        <View style={[
+                                            styles.bookingStatus,
+                                            { backgroundColor: getStatusColor(booking.status) + '20' }
+                                        ]}>
+                                            <Text style={[styles.bookingStatusText, { color: getStatusColor(booking.status) }]}>
+                                                {getStatusText(booking.status)}
                                             </Text>
                                         </View>
+                                    </View>
+
+                                    <View style={styles.bookingDetails}>
+                                        <View style={styles.bookingInfoRow}>
+                                            <Text style={styles.infoLabel}>Purpose:</Text>
+                                            <Text style={styles.infoValue}>{booking.purpose}</Text>
+                                        </View>
+                                        <View style={styles.locationRow}>
+                                            <View style={[styles.locationDot, styles.startDot]} />
+                                            <Text style={styles.locationText}>{booking.start_location}</Text>
+                                        </View>
+                                        <View style={styles.locationRow}>
+                                            <View style={[styles.locationDot, styles.endDot]} />
+                                            <Text style={styles.locationText}>{booking.end_location}</Text>
+                                        </View>
+
+                                        {/* Show all vehicle assignments */}
+                                        {assignments.map((assignment, index) => (
+                                            <View key={assignment.id} style={styles.assignmentSection}>
+                                                {hasMultipleVehicles && (
+                                                    <Text style={styles.vehicleNumberLabel}>
+                                                        Vehicle {index + 1}:
+                                                    </Text>
+                                                )}
+                                                {assignment.vehicle && (
+                                                    <View style={styles.bookingInfoRow}>
+                                                        <Text style={styles.infoLabel}>
+                                                            {hasMultipleVehicles ? '' : 'Vehicle:'}
+                                                        </Text>
+                                                        <Text style={styles.infoValue}>
+                                                            {assignment.vehicle.make} {assignment.vehicle.model} ({assignment.vehicle.license_plate})
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                <View style={styles.bookingInfoRow}>
+                                                    <Text style={styles.infoLabel}>Driver:</Text>
+                                                    <Text style={styles.infoValue}>
+                                                        {assignment.assigned_driver 
+                                                            ? assignment.assigned_driver.full_name 
+                                                            : 'Not assigned yet'}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.bookingInfoRow}>
+                                                    <Text style={styles.infoLabel}>Assignment Status:</Text>
+                                                    <Text style={[
+                                                        styles.infoValue,
+                                                        { color: getStatusColor(assignment.assignment_status) }
+                                                    ]}>
+                                                        {getStatusText(assignment.assignment_status)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        ))}
+
+                                        <View style={styles.bookingInfoRow}>
+                                            <Text style={styles.infoLabel}>Start:</Text>
+                                            <Text style={styles.infoValue}>{formatDateTime(booking.start_time)}</Text>
+                                        </View>
+                                        <View style={styles.bookingInfoRow}>
+                                            <Text style={styles.infoLabel}>End:</Text>
+                                            <Text style={styles.infoValue}>{formatDateTime(booking.end_time)}</Text>
+                                        </View>
+                                        {booking.grace_period && (
+                                            <View style={styles.bookingInfoRow}>
+                                                <Text style={styles.infoLabel}>Grace Period:</Text>
+                                                <Text style={styles.infoValue}>{booking.grace_period} hours</Text>
+                                            </View>
+                                        )}
+                                        {booking.booked_for && (
+                                            <View style={styles.bookingInfoRow}>
+                                                <Text style={styles.infoLabel}>Booked For:</Text>
+                                                <Text style={styles.infoValue}>{booking.booked_for.full_name}</Text>
+                                            </View>
+                                        )}
+                                        {booking.reason_of_cancellation && (
+                                            <View style={styles.bookingInfoRow}>
+                                                <Text style={styles.infoLabel}>Cancellation Reason:</Text>
+                                                <Text style={[styles.infoValue, { color: '#ff5e7a' }]}>
+                                                    {booking.reason_of_cancellation}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    {(booking.status === 'pending' || booking.status === 'assigned') && (
+                                        <TouchableOpacity
+                                            style={styles.cancelBtn}
+                                            onPress={() => onCancelBooking(booking)}
+                                        >
+                                            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+                                        </TouchableOpacity>
                                     )}
                                 </View>
-                                {booking.status === 'booked' && (
-                                    <TouchableOpacity
-                                        style={styles.cancelBtn}
-                                        onPress={() => onCancelBooking(booking)}
-                                    >
-                                        <Text style={styles.cancelBtnText}>Cancel Booking</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        ))
+                            );
+                        })
                     )}
                 </View>
             </ScrollView>
@@ -285,6 +330,8 @@ const styles = StyleSheet.create({
         color: '#333',
         fontWeight: '500',
         fontSize: 14,
+        flex: 1,
+        textAlign: 'right',
     },
     locationRow: {
         flexDirection: 'row',
@@ -307,6 +354,18 @@ const styles = StyleSheet.create({
         flex: 1,
         color: '#333',
         fontSize: 14,
+    },
+    assignmentSection: {
+        backgroundColor: '#f8f8f8',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    vehicleNumberLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#008069',
+        marginBottom: 8,
     },
     cancelBtn: {
         backgroundColor: '#ff5e7a',

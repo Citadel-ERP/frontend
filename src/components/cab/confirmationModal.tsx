@@ -3,12 +3,9 @@ import {
     View, Text, StyleSheet, TouchableOpacity, Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ConfirmationModalProps} from './types';
 
-interface ConfirmationModalProps {
-    visible: boolean;
-    onClose: () => void;
-    onDone: () => void;
-}
+
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     visible,

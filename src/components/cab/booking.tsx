@@ -2,31 +2,10 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, TextInput, ActivityIndicator, Alert, StatusBar, SafeAreaView, Platform, Animated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BookingStep, BookingFormData, Booking } from './types';
+import { BookingStep, PreviousBookingsSectionProps, Booking, BookingScreenProps } from './types';
 import { formatDateForDisplay, formatTimeForDisplay } from './utils';
 import { colors } from '../../styles/theme';
 import { BACKEND_URL } from '../../config/config';
-
-interface BookingScreenProps {
-    bookingStep: BookingStep;
-    setBookingStep: (step: BookingStep) => void;
-    bookingForm: BookingFormData;
-    setBookingForm: (form: BookingFormData) => void;
-    selectedCity: string;
-    loading: boolean;
-    onBack: () => void;
-    onSearchCabs: () => void;
-    onSetActivePickerType: (type: string) => void;
-    onChangeCity: () => void;
-    formatTimeForDisplay: (date: Date) => string;
-    formatDateForDisplay: (date: Date) => string;
-    token: string | null;
-}
-
-interface PreviousBookingsSectionProps {
-    bookings: Booking[];
-    loading: boolean;
-}
 
 const BackIcon = () => (
     <View style={styles.backIcon}>
@@ -51,6 +30,7 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
         switch (status?.toLowerCase()) {
             case 'confirmed':
             case 'approved':
+            case 'assigned':
                 return '#00d285';
             case 'pending':
                 return '#ffb157';
@@ -66,6 +46,7 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
         switch (status?.toLowerCase()) {
             case 'confirmed':
             case 'approved':
+            case 'assigned':
                 return 'check-circle';
             case 'pending':
                 return 'clock-outline';
@@ -77,13 +58,23 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
         }
     };
 
+    // Get vehicle information from vehicle_assignments
+    const assignments = booking.vehicle_assignments || [];
+    const hasMultipleVehicles = assignments.length > 1;
+    const firstVehicle = assignments.length > 0 ? assignments[0].vehicle : null;
+
     return (
         <Animated.View style={[styles.bookingCard, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.bookingCardHeader}>
                 <View style={styles.vehicleInfo}>
-                    <MaterialCommunityIcons name="car" size={20} color="#017bf9" />
+                    <MaterialCommunityIcons name="car" size={20} color="#008069" />
                     <Text style={styles.vehicleName}>
-                        {booking.vehicle ? `${booking.vehicle.make} ${booking.vehicle.model}` : 'Vehicle'}
+                        {hasMultipleVehicles 
+                            ? `${assignments.length} Vehicles`
+                            : firstVehicle 
+                                ? `${firstVehicle.make} ${firstVehicle.model}`
+                                : 'Vehicle'
+                        }
                     </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(booking.status)}20` }]}>
@@ -115,16 +106,16 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
             <View style={styles.bookingCardFooter}>
                 <View style={styles.dateTimeInfo}>
                     <MaterialCommunityIcons name="calendar" size={16} color="#666" />
-                    <Text style={styles.locationText}>
+                    <Text style={styles.dateTimeInfoText}>
                         {new Date(booking.start_time).toLocaleDateString('en-US', {
                             month: 'short',
                             day: 'numeric'
                         })}
                     </Text>
                 </View>
-                <View style={[styles.dateTimeInfo, { marginLeft: -85 }]}>
+                <View style={styles.dateTimeInfo}>
                     <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
-                    <Text style={styles.locationText}>
+                    <Text style={styles.dateTimeInfoText}>
                         {new Date(booking.start_time).toLocaleTimeString('en-US', {
                             hour: '2-digit',
                             minute: '2-digit'
@@ -311,16 +302,9 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
                                 </View>
                             </View>
 
-                            <TouchableOpacity
-                                style={styles.titleSection}
-                                onPress={onChangeCity}
-                                activeOpacity={0.7}
-                            >
-                                <View style={styles.cityTitleContainer}>
-                                    <Text style={styles.headerTitle}>{selectedCity}</Text>
-                                    <MaterialCommunityIcons name="chevron-down" size={24} color="#fff" />
-                                </View>
-                            </TouchableOpacity>
+                            <View style={[styles.cityTitleContainer, styles.titleSection]}>
+                                <Text style={styles.headerTitle}>{selectedCity}</Text>
+                            </View>
                         </LinearGradient>
                     </View>
 
@@ -756,7 +740,7 @@ const styles = StyleSheet.create({
         shadowRadius: 10,
         elevation: 2,
         borderLeftWidth: 3,
-        borderLeftColor: '#017bf9',
+        borderLeftColor: '#008069',
     },
     bookingCardHeader: {
         flexDirection: 'row',
@@ -813,11 +797,16 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: '#f0f0f0',
+        gap: 20,
     },
     dateTimeInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginRight: 100,
+        gap: 6,
+    },
+    dateTimeInfoText: {
+        fontSize: 14,
+        color: '#666',
     },
     headerOverlay: {
         position: 'absolute',
