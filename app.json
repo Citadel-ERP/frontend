@@ -125,7 +125,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo.png",
+          "icon": "./assets/images/adaptive_icon_android.png",
           "color": "#2D3748",
           "useNextNotificationsApi": true
         }
