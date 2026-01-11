@@ -34,6 +34,22 @@ import {
 } from './types';
 import { BACKEND_URL } from '../../config/config';
 
+// Define the VehicleAssignment interface
+interface VehicleAssignment {
+  id: number;
+  assigned_driver: {
+    id: number;
+    full_name: string;
+  };
+  assignment_status: string;
+  created_at: string;
+}
+
+// Extend the Booking type to include vehicle_assignments
+type ExtendedBooking = Booking & {
+  vehicle_assignments?: VehicleAssignment[];
+};
+
 const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
@@ -42,12 +58,13 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<ExtendedBooking[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceRecord[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
 
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<ExtendedBooking | null>(null);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
 
   const [isMaintenanceModalVisible, setIsMaintenanceModalVisible] = useState(false);
   const [isFuelLogModalVisible, setIsFuelLogModalVisible] = useState(false);
@@ -94,22 +111,53 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const fetchVehicles = async () => {
     setLoading(true);
     try {
+      console.log('Fetching vehicles from:', `${BACKEND_URL}/employee/getAssignedVehicles`);
+      
       const response = await fetch(`${BACKEND_URL}/employee/getAssignedVehicles`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ token }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setVehicles(data.vehicle || []);
+      console.log('Vehicles response status:', response.status);
+      const text = await response.text();
+      console.log('Vehicles response text (first 500 chars):', text.substring(0, 500));
+      
+      // Check if response is JSON
+      if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            // Handle both response formats: data.vehicle or data.vehicles
+            const vehiclesData = data.vehicle || data.vehicles || data || [];
+            setVehicles(Array.isArray(vehiclesData) ? vehiclesData : [vehiclesData]);
+          } else {
+            Alert.alert('Error', data.message || 'Failed to fetch vehicles');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse JSON:', parseError);
+          Alert.alert('Error', 'Invalid response format from server');
+        }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to fetch vehicles');
+        // Not JSON - check if it's HTML error
+        if (text.includes('Page not found')) {
+          console.error('Endpoint not found. Please check the backend URL and endpoint path.');
+          Alert.alert(
+            'Connection Error', 
+            'Unable to connect to server. Please check:\n1. Backend server is running\n2. Endpoint URL is correct\n3. You have proper permissions'
+          );
+        } else {
+          console.error('Non-JSON response:', text.substring(0, 200));
+          Alert.alert('Error', 'Server returned an unexpected response');
+        }
       }
     } catch (error) {
       console.error('Error fetching vehicles:', error);
-      Alert.alert('Error', 'Network error occurred');
+      Alert.alert('Network Error', 'Unable to connect to server. Please check your internet connection.');
     } finally {
       setLoading(false);
     }
@@ -117,38 +165,98 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
   const fetchBookings = async () => {
     try {
+      console.log('Fetching bookings from:', `${BACKEND_URL}/employee/getCarBookings`);
+      
       const response = await fetch(`${BACKEND_URL}/employee/getCarBookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ token }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setBookings(data.bookings || []);
+      console.log('Bookings response status:', response.status);
+      const text = await response.text();
+      console.log('Bookings response text (first 500 chars):', text.substring(0, 500));
+      
+      // Check if response is JSON
+      if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            // Handle the response format: data.bookings should be an array
+            const bookingsData = data.bookings || [];
+            
+            // Make sure bookingsData is an array
+            if (Array.isArray(bookingsData)) {
+              const sortedBookings = [...bookingsData].sort((a: ExtendedBooking, b: ExtendedBooking) => 
+                new Date(b.created_at || b.start_time || 0).getTime() - new Date(a.created_at || a.start_time || 0).getTime()
+              );
+              setBookings(sortedBookings);
+            } else {
+              console.warn('bookingsData is not an array:', bookingsData);
+              setBookings([]);
+            }
+          } else {
+            console.error('Failed to fetch bookings:', data.message);
+            setBookings([]);
+          }
+        } catch (parseError) {
+          console.error('Failed to parse bookings JSON:', parseError);
+          setBookings([]);
+        }
       } else {
-        console.error('Failed to fetch bookings');
+        // Not JSON - check if it's HTML error
+        if (text.includes('Page not found')) {
+          console.error('Bookings endpoint not found');
+        } else {
+          console.error('Non-JSON response from bookings:', text.substring(0, 200));
+        }
+        setBookings([]);
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      setBookings([]);
     }
   };
 
   const fetchMaintenanceLogs = async (vehicleId: number) => {
     setLoading(true);
     try {
+      // FIX: Use the correct endpoint spelling from your documentation
       const response = await fetch(`${BACKEND_URL}/employee/getVehicleMaintainanceLogs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ token, vehicle_id: vehicleId }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setMaintenanceLogs(data.maintainance_logs || []);
-        setIsMaintenanceLogsModalVisible(true);
+      const text = await response.text();
+      console.log('Maintenance logs response:', text.substring(0, 500));
+      
+      if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            // FIX: Use the correct response field name from your documentation
+            const logs = data.maintainance_logs || data.maintenance_logs || data || [];
+            setMaintenanceLogs(Array.isArray(logs) ? logs : [logs]);
+            setIsMaintenanceLogsModalVisible(true);
+          } else {
+            Alert.alert('Error', data.message || 'Failed to fetch maintenance logs');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse maintenance logs:', parseError);
+          Alert.alert('Error', 'Invalid response from server');
+        }
       } else {
-        Alert.alert('Error', 'Failed to fetch maintenance logs');
+        console.error('Non-JSON response from maintenance logs:', text.substring(0, 200));
+        Alert.alert('Error', 'Invalid response from server');
       }
     } catch (error) {
       console.error('Error fetching maintenance logs:', error);
@@ -163,16 +271,32 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getVehicleFuelLogs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ token, vehicle_id: vehicleId }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setFuelLogs(data.fuel_logs || []);
-        setIsFuelLogsModalVisible(true);
+      const text = await response.text();
+      
+      if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            setFuelLogs(data.fuel_logs || data || []);
+            setIsFuelLogsModalVisible(true);
+          } else {
+            Alert.alert('Error', data.message || 'Failed to fetch fuel logs');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse fuel logs:', parseError);
+          Alert.alert('Error', 'Invalid response from server');
+        }
       } else {
-        Alert.alert('Error', 'Failed to fetch fuel logs');
+        console.error('Non-JSON response from fuel logs:', text.substring(0, 200));
+        Alert.alert('Error', 'Invalid response from server');
       }
     } catch (error) {
       console.error('Error fetching fuel logs:', error);
@@ -189,7 +313,10 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/updateVehicleStatus`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           token,
           vehicle_id: selectedVehicle.id,
@@ -197,13 +324,26 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
         }),
       });
 
-      if (response.ok) {
-        Alert.alert('Success', 'Vehicle status updated successfully!');
-        setCurrentView('main');
-        fetchVehicles();
+      const text = await response.text();
+      
+      if (text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            Alert.alert('Success', 'Vehicle status updated successfully!');
+            setCurrentView('main');
+            fetchVehicles();
+          } else {
+            Alert.alert('Error', data.message || 'Failed to update vehicle status');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse update response:', parseError);
+          Alert.alert('Error', 'Invalid response from server');
+        }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to update vehicle status');
+        console.error('Non-JSON response from update vehicle status:', text.substring(0, 200));
+        Alert.alert('Error', 'Invalid response from server');
       }
     } catch (error) {
       console.error('Error updating vehicle status:', error);
@@ -216,6 +356,17 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   const updateBookingStatus = async () => {
     if (!selectedBooking) return;
 
+    // First, we need to get the assignment_id for this booking
+    if (!selectedAssignmentId) {
+      // Try to get assignment_id from vehicle_assignments
+      if (selectedBooking.vehicle_assignments && selectedBooking.vehicle_assignments.length > 0) {
+        setSelectedAssignmentId(selectedBooking.vehicle_assignments[0].id);
+      } else {
+        Alert.alert('Error', 'No assignment found for this booking');
+        return;
+      }
+    }
+
     if (bookingStatus === 'cancelled' && !cancellationReason.trim()) {
       Alert.alert('Error', 'Please provide a reason for cancellation');
       return;
@@ -225,7 +376,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     try {
       const requestBody: any = {
         token,
-        booking_id: selectedBooking.id,
+        booking_id: selectedBooking.id, // Using booking_id as per your endpoint example
         status: bookingStatus,
       };
 
@@ -235,18 +386,34 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
       const response = await fetch(`${BACKEND_URL}/employee/updateCarBookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(requestBody),
       });
 
-      if (response.ok) {
-        Alert.alert('Success', 'Booking status updated successfully!');
-        setCurrentView('main');
-        setCancellationReason('');
-        fetchBookings();
+      const text = await response.text();
+      
+      if (text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            Alert.alert('Success', 'Booking status updated successfully!');
+            setCurrentView('main');
+            setCancellationReason('');
+            fetchBookings();
+          } else {
+            Alert.alert('Error', data.message || 'Failed to update booking status');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse update booking response:', parseError);
+          Alert.alert('Error', 'Invalid response from server');
+        }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to update booking status');
+        console.error('Non-JSON response from update booking:', text.substring(0, 200));
+        Alert.alert('Error', 'Invalid response from server');
       }
     } catch (error) {
       console.error('Error updating booking status:', error);
@@ -279,31 +446,43 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       formData.append('end_date', maintenanceForm.end_date);
 
       if (maintenanceForm.document) {
-        formData.append('document', maintenanceForm.document);
+        formData.append('document', maintenanceForm.document as any);
       }
 
+      // FIX: Use the correct endpoint spelling - "maintainance" not "maintenance"
       const response = await fetch(`${BACKEND_URL}/employee/createMaintainance`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
         body: formData,
       });
 
-      if (response.ok) {
-        Alert.alert('Success', 'Maintenance record created successfully!');
-        setIsMaintenanceModalVisible(false);
-        setMaintenanceForm({
-          cost: '',
-          description: '',
-          start_date: '',
-          end_date: '',
-          document: null,
-        });
-        fetchVehicles();
+      const text = await response.text();
+      console.log('Create maintenance response:', text.substring(0, 500));
+      
+      if (text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            Alert.alert('Success', 'Maintenance record created successfully!');
+            setIsMaintenanceModalVisible(false);
+            setMaintenanceForm({
+              cost: '',
+              description: '',
+              start_date: '',
+              end_date: '',
+              document: null,
+            });
+            fetchVehicles();
+          } else {
+            Alert.alert('Error', data.message || 'Failed to create maintenance record');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse create maintenance response:', parseError);
+          Alert.alert('Error', 'Invalid response from server');
+        }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to create maintenance record');
+        console.error('Non-JSON response from create maintenance:', text.substring(0, 200));
+        Alert.alert('Error', 'Invalid response from server. Check endpoint spelling.');
       }
     } catch (error) {
       console.error('Error creating maintenance:', error);
@@ -323,7 +502,10 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/addFuelLog`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           token,
           vehicle_id: selectedVehicle.id,
@@ -333,14 +515,27 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
         }),
       });
 
-      if (response.ok) {
-        Alert.alert('Success', 'Fuel log added successfully!');
-        setIsFuelLogModalVisible(false);
-        setFuelLogForm({ quantity: '', cost: '', odometer_reading: '' });
-        fetchVehicles();
+      const text = await response.text();
+      
+      if (text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          
+          if (response.ok) {
+            Alert.alert('Success', 'Fuel log added successfully!');
+            setIsFuelLogModalVisible(false);
+            setFuelLogForm({ quantity: '', cost: '', odometer_reading: '' });
+            fetchVehicles();
+          } else {
+            Alert.alert('Error', data.message || 'Failed to add fuel log');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse add fuel log response:', parseError);
+          Alert.alert('Error', 'Invalid response from server');
+        }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to add fuel log');
+        console.error('Non-JSON response from add fuel log:', text.substring(0, 200));
+        Alert.alert('Error', 'Invalid response from server');
       }
     } catch (error) {
       console.error('Error adding fuel log:', error);
@@ -351,28 +546,44 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    try {
+      if (!dateString) return 'No date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
   };
 
   const formatDateTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    try {
+      if (!dateString) return 'No date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      console.error('Error formatting date time:', error);
+      return 'Invalid date';
+    }
   };
 
   const getStatusColor = (status: string): string => {
-    switch (status.toLowerCase()) {
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
       case 'active':
       case 'available':
       case 'completed':
         return '#25D366';
       case 'maintenance':
+      case 'in_maintenance':
       case 'in-progress':
         return '#FF9500';
       case 'inactive':
@@ -387,13 +598,16 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
   };
 
   const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
       case 'active':
       case 'available':
         return 'checkmark-circle';
       case 'maintenance':
+      case 'in_maintenance':
         return 'build';
       case 'inactive':
+      case 'not_available':
         return 'close-circle';
       case 'booked':
         return 'time';
@@ -410,6 +624,8 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
   // Function to get vehicle image source
   const getVehicleImageSource = (vehicle: Vehicle) => {
+    if (!vehicle) return null;
+    
     if (vehicle.image_url) {
       // If image_url is a full URL, use it directly
       if (vehicle.image_url.startsWith('http')) {
@@ -436,6 +652,18 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
 
   // Function to render vehicle image or icon
   const renderVehicleImage = (vehicle: Vehicle, size: 'small' | 'large' = 'small') => {
+    if (!vehicle) {
+      return (
+        <View style={size === 'small' ? styles.vehicleIconContainer : styles.vehicleIconContainerLarge}>
+          <MaterialCommunityIcons 
+            name="car" 
+            size={size === 'small' ? 28 : 40} 
+            color="#075E54" 
+          />
+        </View>
+      );
+    }
+    
     const imageSource = getVehicleImageSource(vehicle);
     
     if (imageSource) {
@@ -469,12 +697,12 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       <StatusBar barStyle="light-content" backgroundColor="#075E54" />
 
       <View style={styles.detailHeader}>
+        {/* Using BackIcon component */}
         <TouchableOpacity
           style={styles.detailBackButton}
           onPress={() => setCurrentView('main')}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          <Text style={styles.detailBackText}>Back</Text>
+          <BackIcon />
         </TouchableOpacity>
         <Text style={styles.detailHeaderTitle}>Vehicle Details</Text>
         <View style={styles.detailHeaderSpacer} />
@@ -533,7 +761,7 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                   <MaterialIcons name="location-on" size={18} color="#666" />
                   <Text style={styles.infoLabel}>Location:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedVehicle.current_location.city}, {selectedVehicle.current_location.state}
+                    {selectedVehicle.current_location?.city || 'Unknown'}, {selectedVehicle.current_location?.state || ''}
                   </Text>
                 </View>
               </View>
@@ -606,12 +834,12 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                 <Text style={styles.actionButtonText}>Fuel Log</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionButton} onPress={() => fetchMaintenanceLogs(selectedVehicle.id)}>
+              <TouchableOpacity style={styles.actionButton} onPress={() => selectedVehicle && fetchMaintenanceLogs(selectedVehicle.id)}>
                 <MaterialCommunityIcons name="history" size={24} color="#075E54" />
                 <Text style={styles.actionButtonText}>Logs</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionButton} onPress={() => fetchFuelLogs(selectedVehicle.id)}>
+              <TouchableOpacity style={styles.actionButton} onPress={() => selectedVehicle && fetchFuelLogs(selectedVehicle.id)}>
                 <MaterialCommunityIcons name="gas-station" size={24} color="#075E54" />
                 <Text style={styles.actionButtonText}>Fuel History</Text>
               </TouchableOpacity>
@@ -627,12 +855,12 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       <StatusBar barStyle="light-content" backgroundColor="#075E54" />
 
       <View style={styles.detailHeader}>
+        {/* Using BackIcon component */}
         <TouchableOpacity
           style={styles.detailBackButton}
           onPress={() => setCurrentView('main')}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          <Text style={styles.detailBackText}>Back</Text>
+          <BackIcon />
         </TouchableOpacity>
         <Text style={styles.detailHeaderTitle}>Booking Details</Text>
         <View style={styles.detailHeaderSpacer} />
@@ -647,13 +875,13 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                 {selectedBooking.vehicle && renderVehicleImage(selectedBooking.vehicle, 'large')}
                 <View style={styles.bookingDetailInfo}>
                   <Text style={styles.bookingTitleText}>
-                    {selectedBooking.vehicle.make} {selectedBooking.vehicle.model}
+                    {selectedBooking.vehicle?.make} {selectedBooking.vehicle?.model}
                   </Text>
-                  <Text style={styles.bookingPlateText}>{selectedBooking.vehicle.license_plate}</Text>
+                  <Text style={styles.bookingPlateText}>{selectedBooking.vehicle?.license_plate}</Text>
                   <View style={styles.bookingMeta}>
                     <View style={styles.metaChip}>
                       <Ionicons name="person" size={12} color="#075E54" />
-                      <Text style={styles.metaChipText}>{selectedBooking.booked_by.full_name}</Text>
+                      <Text style={styles.metaChipText}>{selectedBooking.booked_by?.full_name || 'Unknown'}</Text>
                     </View>
                   </View>
                 </View>
@@ -676,13 +904,13 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                 <View style={styles.infoRow}>
                   <MaterialIcons name="description" size={18} color="#666" />
                   <Text style={styles.infoLabel}>Purpose:</Text>
-                  <Text style={styles.infoValue}>{selectedBooking.purpose}</Text>
+                  <Text style={styles.infoValue}>{selectedBooking.purpose || 'Not specified'}</Text>
                 </View>
                 <View style={styles.infoRow}>
                   <MaterialIcons name="location-on" size={18} color="#666" />
                   <Text style={styles.infoLabel}>Route:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedBooking.start_location} → {selectedBooking.end_location}
+                    {selectedBooking.start_location || 'Unknown'} → {selectedBooking.end_location || 'Unknown'}
                   </Text>
                 </View>
                 <View style={styles.infoRow}>
@@ -695,6 +923,13 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
                   <Text style={styles.infoLabel}>End:</Text>
                   <Text style={styles.infoValue}>{formatDateTime(selectedBooking.end_time)}</Text>
                 </View>
+                {selectedBooking.vehicle_assignments && selectedBooking.vehicle_assignments.length > 0 && (
+                  <View style={styles.infoRow}>
+                    <MaterialIcons name="assignment" size={18} color="#666" />
+                    <Text style={styles.infoLabel}>Assignment ID:</Text>
+                    <Text style={styles.infoValue}>{selectedBooking.vehicle_assignments[0].id}</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -808,53 +1043,61 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
             <Text style={styles.statusBadgeSmallText}>{item.status}</Text>
           </View>
           <Text style={styles.locationText}>
-            <Ionicons name="location" size={12} color="#666" /> {item.current_location.city}
+            <Ionicons name="location" size={12} color="#666" /> {item.current_location?.city || 'Unknown'}
           </Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  const renderBookingItem = ({ item }: { item: Booking }) => (
-    <TouchableOpacity
-      style={styles.chatItem}
-      onPress={() => {
-        setSelectedBooking(item);
-        setBookingStatus(item.status);
-        setCancellationReason('');
-        setCurrentView('booking-detail');
-      }}
-    >
-      <View style={styles.avatarContainer}>
-        {/* Vehicle Image or Icon */}
-        {item.vehicle && renderVehicleImage(item.vehicle, 'small')}
-      </View>
+  const renderBookingItem = ({ item }: { item: ExtendedBooking }) => {
+    // Extract assignment ID from vehicle_assignments if available
+    const assignmentId = item.vehicle_assignments && item.vehicle_assignments.length > 0 
+      ? item.vehicle_assignments[0].id 
+      : null;
 
-      <View style={styles.chatContent}>
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatName}>
-            {item.vehicle.make} {item.vehicle.model}
-          </Text>
-          <Text style={styles.chatTime}>{formatDate(item.start_time)}</Text>
+    return (
+      <TouchableOpacity
+        style={styles.chatItem}
+        onPress={() => {
+          setSelectedBooking(item);
+          setSelectedAssignmentId(assignmentId);
+          setBookingStatus(item.status);
+          setCancellationReason('');
+          setCurrentView('booking-detail');
+        }}
+      >
+        <View style={styles.avatarContainer}>
+          {/* Vehicle Image or Icon */}
+          {item.vehicle && renderVehicleImage(item.vehicle, 'small')}
         </View>
 
-        <View style={styles.chatMessage}>
-          <Text style={styles.messageText} numberOfLines={1}>
-            <Text style={styles.boldText}>{item.booked_by.full_name}</Text> • {item.purpose}
-          </Text>
-        </View>
-
-        <View style={styles.chatFooter}>
-          <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusBadgeSmallText}>{item.status}</Text>
+        <View style={styles.chatContent}>
+          <View style={styles.chatHeader}>
+            <Text style={styles.chatName}>
+              {item.vehicle?.make} {item.vehicle?.model}
+            </Text>
+            <Text style={styles.chatTime}>{formatDate(item.start_time)}</Text>
           </View>
-          <Text style={styles.locationText}>
-            <Ionicons name="swap-horizontal" size={12} color="#666" /> {item.start_location} → {item.end_location}
-          </Text>
+
+          <View style={styles.chatMessage}>
+            <Text style={styles.messageText} numberOfLines={1}>
+              <Text style={styles.boldText}>{item.booked_by?.full_name || 'Unknown'}</Text> • {item.purpose || 'No purpose specified'}
+            </Text>
+          </View>
+
+          <View style={styles.chatFooter}>
+            <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusColor(item.status) }]}>
+              <Text style={styles.statusBadgeSmallText}>{item.status}</Text>
+            </View>
+            <Text style={styles.locationText}>
+              <Ionicons name="swap-horizontal" size={12} color="#666" /> {item.start_location || 'Unknown'} → {item.end_location || 'Unknown'}
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderMainView = () => (
     <View style={styles.screenContainer}>
@@ -880,7 +1123,8 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
             <View style={styles.headerOverlay} />
             <View style={styles.mainHeader}>
               <View style={styles.mainHeaderContent}>
-                <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                {/* FIXED: Using BackIcon component instead of simple arrow icon */}
+                <TouchableOpacity style={styles.detailBackButton} onPress={onBack}>
                   <BackIcon />
                 </TouchableOpacity>
                 <Text style={styles.logoText}>CITADEL</Text>
@@ -976,25 +1220,6 @@ const Driver: React.FC<DriverProps> = ({ onBack }) => {
       </ScrollView>
     </View>
   );
-
-  const getPageTitle = () => {
-    switch (currentView) {
-      case 'vehicle-detail':
-        return 'Vehicle Details';
-      case 'booking-detail':
-        return 'Booking Details';
-      default:
-        return 'Driver Module';
-    }
-  };
-
-  const handleBackPress = () => {
-    if (currentView !== 'main') {
-      setCurrentView('main');
-    } else {
-      onBack();
-    }
-  };
 
   const renderContent = () => {
     switch (currentView) {
