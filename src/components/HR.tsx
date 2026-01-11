@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert,
   Modal, ActivityIndicator, TextInput, Platform, Dimensions, FlatList,
-  KeyboardAvoidingView
+  KeyboardAvoidingView, Image
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -23,6 +24,7 @@ interface Comment {
   created_by_email: string;
   created_at: string; 
   is_hr_comment: boolean;
+  images?: string[];
 }
 interface Item {
   id: string; nature: string; description: string; issue?: string;
@@ -506,6 +508,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
   const formatWhatsAppDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -582,6 +585,81 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
     }, 2000);
   };
 
+  const checkFileExists = async (fileUri: string): Promise<boolean> => {
+    try {
+      const cleanUri = Platform.OS === 'ios' ? fileUri.replace('file://', '') : fileUri;
+      const fileInfo = await FileSystem.getInfoAsync(cleanUri);
+      return fileInfo.exists;
+    } catch (error) {
+      console.log('Error checking file existence:', error);
+      return false;
+    }
+  };
+
+  const uploadImageToServer = async (imageUri: string, fileName: string) => {
+    if (!token || !item) {
+      throw new Error('Unable to upload image. Please try again.');
+    }
+
+    const fileExists = await checkFileExists(imageUri);
+    if (!fileExists) {
+      throw new Error('Image file does not exist or cannot be accessed.');
+    }
+
+    // Use the correct endpoint based on the active tab
+    const endpoint = `${BACKEND_URL}/core/${activeTab === 'requests' ? 'addCommentToRequest' : 'addCommentToGrievance'}`;
+    
+    const formData = new FormData();
+    formData.append('token', token);
+    formData.append(activeTab === 'requests' ? 'request_id' : 'grievance_id', item.id);
+    formData.append('content', '[Image uploaded]');
+    
+    const fileExtension = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+    const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
+
+    const cleanUri = Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri;
+
+    formData.append('image', {
+      uri: cleanUri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+
+    try {
+      console.log('Uploading to endpoint:', endpoint);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      console.log('Response status:', response.status);
+      
+      if (response.ok) {
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        try {
+          const data = JSON.parse(responseText);
+          console.log('Upload success:', data);
+          return { success: true, data };
+        } catch (parseError) {
+          console.log('Response is not JSON:', responseText);
+          return { success: true, message: 'Image uploaded successfully' };
+        }
+      } else {
+        const errorText = await response.text();
+        console.log('Upload error:', errorText);
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.log('Upload failed:', error);
+      throw error;
+    }
+  };
+
   const handleUploadPhoto = async () => {
     if (!token || !item) {
       Alert.alert('Error', 'Unable to upload image. Please try again.');
@@ -594,8 +672,86 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
       return;
     }
 
+    setUploadingImage(true);
+    
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        selectionLimit: 5,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uploadPromises = result.assets.map(async (asset, index) => {
+          const imageUri = asset.uri;
+          const fileName = `image_${Date.now()}_${index}.${asset.uri.split('.').pop()?.toLowerCase() || 'jpg'}`;
+          
+          try {
+            const uploadResult = await uploadImageToServer(imageUri, fileName);
+            console.log('Upload result for image', index, ':', uploadResult);
+            
+            if (uploadResult.success) {
+              return { url: `Uploaded image ${index + 1}`, success: true };
+            }
+          } catch (uploadError: any) {
+            console.error('Error uploading image:', uploadError);
+            return { url: `[Image ${index + 1} upload failed]`, success: false };
+          }
+          return null;
+        });
+
+        const uploadResults = await Promise.all(uploadPromises);
+        const validResults = uploadResults.filter(result => result !== null) as { url: string, success: boolean }[];
+        
+        const successfulUploads = validResults.filter(result => result.success);
+        const failedUploads = validResults.filter(result => !result.success);
+        
+        setSelectedImages(prev => [...prev, ...successfulUploads.map(result => result.url)]);
+        
+        if (validResults.length > 0) {
+          const imageComment = validResults
+            .map(result => result.url)
+            .join(' ');
+          
+          onCommentChange(newComment ? `${newComment} ${imageComment}` : imageComment);
+          
+          if (successfulUploads.length > 0) {
+            Alert.alert(
+              'Success', 
+              `${successfulUploads.length} image(s) uploaded successfully!${failedUploads.length > 0 ? ` ${failedUploads.length} failed.` : ''}`
+            );
+          } else {
+            Alert.alert('Info', 'Images noted in comment. You can still submit your message.');
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error in handleUploadPhoto:', error);
+      Alert.alert('Upload Error', error.message || 'Failed to process images. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    if (!token || !item) {
+      Alert.alert('Error', 'Unable to take photo. Please try again.');
+      return;
+    }
+
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    if (cameraStatus !== 'granted') {
+      Alert.alert('Permission Required', 'Sorry, we need camera permissions to take photos.');
+      return;
+    }
+
+    setUploadingImage(true);
+    
+    try {
+      const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
@@ -604,73 +760,44 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const imageUri = result.assets[0].uri;
+        const fileName = `photo_${Date.now()}.jpg`;
         
-        const formData = new FormData();
-        formData.append('token', token);
-        formData.append(activeTab === 'requests' ? 'request_id' : 'grievance_id', parseInt(item.id));
-        
-        const filename = imageUri.split('/').pop() || 'photo.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        
-        formData.append('image', {
-          uri: imageUri,
-          name: filename,
-          type,
-        } as any);
-
-        setUploadingImage(true);
-
-        Alert.alert(
-          'Info',
-          'Image upload functionality is not yet available. The backend endpoint for image upload is not implemented.',
-          [{ text: 'OK' }]
-        );
-        setUploadingImage(false);
-        return;
+        try {
+          const uploadResult = await uploadImageToServer(imageUri, fileName);
+          console.log('Photo upload result:', uploadResult);
+          
+          if (uploadResult.success) {
+            const photoComment = '[Photo uploaded]';
+            setSelectedImages(prev => [...prev, 'Photo uploaded']);
+            onCommentChange(newComment ? `${newComment} ${photoComment}` : photoComment);
+            Alert.alert('Success', 'Photo uploaded successfully!');
+          }
+        } catch (uploadError: any) {
+          console.error('Error uploading photo:', uploadError);
+          const photoComment = '[Photo taken]';
+          onCommentChange(newComment ? `${newComment} ${photoComment}` : photoComment);
+          Alert.alert('Info', 'Photo noted in comment.');
+        }
       }
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Image upload is currently unavailable. Please try adding your image as a comment instead.');
+    } catch (error: any) {
+      console.error('Error in handleTakePhoto:', error);
+      Alert.alert('Camera Error', error.message || 'Failed to take photo. Please try again.');
     } finally {
       setUploadingImage(false);
     }
   };
 
-  useEffect(() => {
-    if (item?.comments && !loading) {
-      setTimeout(() => {
-        scrollToBottom(true);
-      }, 300);
-    }
-  }, [item?.comments, loading]);
-
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const formatTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    }).toLowerCase();
-  };
-
-  const getStatusConfig = (status: string): { color: string, label: string } => {
-    switch (status) {
-      case 'resolved': return { color: WHATSAPP_COLORS.green, label: 'Resolved' };
-      case 'rejected': return { color: WHATSAPP_COLORS.red, label: 'Rejected' };
-      case 'in_progress': return { color: WHATSAPP_COLORS.blue, label: 'In Progress' };
-      case 'pending': return { color: WHATSAPP_COLORS.yellow, label: 'Pending' };
-      case 'cancelled': return { color: WHATSAPP_COLORS.purple, label: 'Cancelled' };
-      default: return { color: WHATSAPP_COLORS.gray, label: status };
-    }
+  const showImageOptions = () => {
+    Alert.alert(
+      'Add Images',
+      'Choose how you want to add images',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: handleTakePhoto },
+        { text: 'Choose from Gallery', onPress: handleUploadPhoto },
+        selectedImages.length > 0 ? { text: 'Clear Selected Images', onPress: () => setSelectedImages([]) } : null,
+      ].filter(Boolean) as any
+    );
   };
 
   const renderCommentItem = ({ item: listItem }: { item: any }) => {
@@ -714,16 +841,84 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
               )}
             </View>
           )}
+          
+          {comment.images && comment.images.length > 0 && (
+            <View style={styles.imageContainer}>
+              {comment.images.map((imageUrl: string, index: number) => {
+                const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${BACKEND_URL}/${imageUrl}`;
+                return (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={styles.imageWrapper}
+                    onPress={() => {
+                      Alert.alert('Image', 'View image', [
+                        { text: 'Close', style: 'cancel' },
+                        { text: 'Save', onPress: () => {
+                          Alert.alert('Info', 'Image saving feature coming soon');
+                        }}
+                      ]);
+                    }}
+                  >
+                    <Image 
+                      source={{ uri: fullImageUrl }} 
+                      style={styles.commentImage}
+                      resizeMode="cover"
+                      onError={(error) => console.log('Image loading error:', error.nativeEvent.error)}
+                    />
+                    <View style={styles.imageOverlay}>
+                      <Ionicons name="image-outline" size={20} color="#FFF" />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          
           <Text style={styles.messageText}>{comment.comment}</Text>
           <View style={styles.messageFooter}>
             <Text style={styles.messageTime}>
               {formatTime(comment.created_at)}
             </Text>
-            {/* FIXED: Removed double tick icon that was causing issues */}
           </View>
         </View>
       </View>
     );
+  };
+
+  useEffect(() => {
+    if (item?.comments && !loading) {
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 300);
+    }
+  }, [item?.comments, loading]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    }).toLowerCase();
+  };
+
+  const getStatusConfig = (status: string): { color: string, label: string } => {
+    switch (status) {
+      case 'resolved': return { color: WHATSAPP_COLORS.green, label: 'Resolved' };
+      case 'rejected': return { color: WHATSAPP_COLORS.red, label: 'Rejected' };
+      case 'in_progress': return { color: WHATSAPP_COLORS.blue, label: 'In Progress' };
+      case 'pending': return { color: WHATSAPP_COLORS.yellow, label: 'Pending' };
+      case 'cancelled': return { color: WHATSAPP_COLORS.purple, label: 'Cancelled' };
+      default: return { color: WHATSAPP_COLORS.gray, label: status };
+    }
   };
 
   const totalComments = item?.comments?.length || 0;
@@ -733,6 +928,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Fixed: Changed from 90 to 0 to eliminate spacing
     >
       <StatusBar
         barStyle="light-content"
@@ -823,6 +1019,27 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                 </View>
               </View>
 
+              {selectedImages.length > 0 && (
+                <View style={styles.selectedImagesPreview}>
+                  <Text style={styles.selectedImagesTitle}>Selected Images:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {selectedImages.map((image, index) => (
+                      <View key={index} style={styles.selectedImageWrapper}>
+                        <Image 
+                          source={{ uri: image.includes('http') ? image : undefined }}
+                          style={styles.selectedImage}
+                          resizeMode="cover"
+                          onError={() => console.log('Failed to load image:', image)}
+                        />
+                        <Text style={styles.selectedImageText} numberOfLines={1}>
+                          {image.includes('http') ? 'Uploaded' : image}
+                        </Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               <View style={styles.chatMessagesContainer}>
                 <FlatList
                   data={getProcessedComments()}
@@ -849,13 +1066,20 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
               <View style={styles.chatInputWrapper}>
                 <TouchableOpacity 
                   style={styles.attachmentButton}
-                  onPress={handleUploadPhoto}
+                  onPress={showImageOptions}
                   disabled={uploadingImage}
                 >
                   {uploadingImage ? (
                     <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
                   ) : (
-                    <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
+                    <>
+                      <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
+                      {selectedImages.length > 0 && (
+                        <View style={styles.imageCounterBadge}>
+                          <Text style={styles.imageCounterText}>{selectedImages.length}</Text>
+                        </View>
+                      )}
+                    </>
                   )}
                 </TouchableOpacity>
                 <View style={styles.inputFieldContainer}>
@@ -868,7 +1092,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                     multiline
                     maxLength={300}
                     onSubmitEditing={() => {
-                      if (newComment.trim()) {
+                      if (newComment.trim() || selectedImages.length > 0) {
                         onAddComment();
                         setTimeout(() => {
                           scrollToBottom(true);
@@ -880,17 +1104,18 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.sendButton,
-                    newComment.trim() ? styles.sendButtonActive : styles.sendButtonDisabled
+                    (newComment.trim() || selectedImages.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
                   ]}
                   onPress={() => {
-                    if (newComment.trim()) {
+                    if (newComment.trim() || selectedImages.length > 0) {
+                      setSelectedImages([]);
                       onAddComment();
                       setTimeout(() => {
                         scrollToBottom(true);
                       }, 100);
                     }
                   }}
-                  disabled={!newComment.trim() || loading}
+                  disabled={(!newComment.trim() && selectedImages.length === 0) || loading}
                   activeOpacity={0.8}
                 >
                   {loading ? (
@@ -899,7 +1124,7 @@ const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                     <Ionicons 
                       name="send" 
                       size={20} 
-                      color={newComment.trim() ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray} 
+                      color={(newComment.trim() || selectedImages.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray} 
                     />
                   )}
                 </TouchableOpacity>
@@ -1177,7 +1402,8 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
             created_by_name: comment.user.full_name,
             created_by_email: comment.user.email,
             created_at: comment.created_at,
-            is_hr_comment: comment.user.role === 'hr' || comment.user.role === 'admin'
+            is_hr_comment: comment.user.role === 'hr' || comment.user.role === 'admin',
+            images: comment.images || []
           };
         }) || [];
 
@@ -1283,8 +1509,8 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
   };
 
   const addComment = async () => {
-    if (!newComment.trim() || !selectedItem) {
-      Alert.alert('Error', 'Please enter a comment');
+    if (!newComment.trim() && !selectedItem) {
+      Alert.alert('Error', 'Please enter a comment or select an image');
       return;
     }
 
@@ -1293,19 +1519,17 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       const endpoint = activeTab === 'requests' ? 'addCommentToRequest' : 'addCommentToGrievance';
       const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
 
-      // FIXED: Improved error handling and added better debugging
+      let commentContent = newComment.trim();
+      
+      if (commentContent === '' && selectedItem) {
+        commentContent = 'Added image(s)';
+      }
+
       const requestBody: any = {
         token,
-        [idField]: parseInt(selectedItem.id),
-        content: newComment.trim()
+        [idField]: parseInt(selectedItem!.id),
+        content: commentContent
       };
-
-      // Try adding role field if it might be required
-      const user = await fetchCurrentUser(token!);
-      if (user) {
-        // You might need to fetch user role from backend
-        // requestBody.role = 'employee'; // Default role
-      }
 
       const response = await fetch(`${BACKEND_URL}/core/${endpoint}`, {
         method: 'POST',
@@ -1316,15 +1540,13 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       if (response.ok) {
         setNewComment('');
 
-        // FIXED: Wait a bit before fetching updated details to ensure backend has processed
         setTimeout(async () => {
-          const updatedItem = await fetchItemDetails(selectedItem.id);
+          const updatedItem = await fetchItemDetails(selectedItem!.id);
           if (updatedItem) {
             setSelectedItem(updatedItem);
           }
         }, 500);
       } else {
-        // FIXED: Better error handling with more specific messages
         try {
           const errorData = await response.json();
           console.log('Error response:', errorData);
@@ -1340,7 +1562,6 @@ const HR: React.FC<HRProps> = ({ onBack }) => {
       }
     } catch (error) {
       console.error('Error adding comment:', error);
-      // FIXED: Show user-friendly error message
       Alert.alert('Network Error', 'Unable to connect to server. Please check your internet connection and try again.');
     } finally {
       setLoading(false);
@@ -2194,7 +2415,6 @@ const styles = StyleSheet.create({
   chatScrollContent: {
     paddingVertical: 8,
   },
-  
   infoCardCompact: { 
     backgroundColor: WHATSAPP_COLORS.white, 
     margin: 12, 
@@ -2282,66 +2502,37 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.gray, 
     marginLeft: 6
   },
-  
-  cancelItemButtonCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: WHATSAPP_COLORS.purple,
-    marginHorizontal: 12,
-    marginBottom: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    shadowColor: WHATSAPP_COLORS.purple,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-    alignSelf: 'flex-start'
+  selectedImagesPreview: {
+    backgroundColor: WHATSAPP_COLORS.white,
+    margin: 12,
+    marginTop: 0,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
-  cancelItemButtonTextCompact: {
-    fontSize: 13,
+  selectedImagesTitle: {
+    fontSize: 14,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.white,
-    marginLeft: 6
+    color: WHATSAPP_COLORS.darkGray,
+    marginBottom: 8,
   },
-  
-  discussionHeader: { 
-    paddingHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 4
-  },
-  discussionTitleContainer: {
-    flexDirection: 'row',
+  selectedImageWrapper: {
+    marginRight: 10,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    alignSelf: 'flex-start'
   },
-  discussionTitle: { 
-    fontSize: 14, 
-    color: WHATSAPP_COLORS.primary, 
-    fontWeight: '600',
-    marginLeft: 6,
-    marginRight: 8
+  selectedImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
   },
-  discussionCount: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
-    alignItems: 'center'
+  selectedImageText: {
+    fontSize: 10,
+    color: WHATSAPP_COLORS.gray,
+    marginTop: 4,
+    maxWidth: 60,
   },
-  discussionCountText: {
-    fontSize: 11,
-    color: WHATSAPP_COLORS.white,
-    fontWeight: 'bold'
-  },
-  
   chatMessagesContainer: {
     flex: 1,
     minHeight: 300
@@ -2353,7 +2544,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 20
   },
-  
   messageRow: { 
     flexDirection: 'row',
     marginBottom: 8, 
@@ -2413,6 +2603,31 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.primary,
     fontWeight: 'bold'
   },
+  imageContainer: {
+    marginBottom: 8,
+  },
+  imageWrapper: {
+    position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  commentImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   messageText: { 
     fontSize: 15, 
     color: '#111111', 
@@ -2430,16 +2645,11 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.45)',
     marginRight: 4
   },
-  messageStatus: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  
   chatInputContainer: { 
     backgroundColor: WHATSAPP_COLORS.inputBackground, 
     paddingHorizontal: 8, 
     paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 8, // Fixed: Removed extra padding for iOS
     borderTopWidth: 0.5, 
     borderTopColor: WHATSAPP_COLORS.inputBorder,
     shadowColor: '#000',
@@ -2464,7 +2674,24 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 4
+    marginHorizontal: 4,
+    position: 'relative',
+  },
+  imageCounterBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageCounterText: {
+    fontSize: 10,
+    color: WHATSAPP_COLORS.white,
+    fontWeight: 'bold',
   },
   inputFieldContainer: {
     flex: 1,
@@ -2500,7 +2727,6 @@ const styles = StyleSheet.create({
   sendButtonDisabled: { 
     backgroundColor: WHATSAPP_COLORS.sendButtonDisabled
   },
-  
   dateSeparatorContainer: { 
     alignItems: 'center', 
     marginVertical: 16 
