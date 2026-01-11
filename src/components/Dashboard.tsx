@@ -27,7 +27,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 // Import all the pages
 import Profile from './Profile';
-import HR from './HR';
+import HR from './hr/HR';
 import Cab from './cab/Cab';
 import Driver from './driver/Driver';
 import BDT from './bdt/BDT';
@@ -1009,29 +1009,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
     } catch (error) {
       console.error('Error loading last opened modules:', error);
-    }
-  };
-
-  const requestLocationPermissions = async () => {
-    try {
-      const foreground = await Location.requestForegroundPermissionsAsync();
-      if (foreground.status !== 'granted') {
-        Alert.alert(
-          'Location Permission Required',
-          'Location access is required to mark attendance.'
-        );
-        return;
-      }
-      const background = await Location.requestBackgroundPermissionsAsync();
-      if (background.status !== 'granted') {
-        Alert.alert(
-          'Background Location Required',
-          'Please allow "Always Allow" location access to enable automatic attendance.'
-        );
-      }
-      console.log('✅ Location permissions granted');
-    } catch (error) {
-      console.error('❌ Location permission error:', error);
     }
   };
 
