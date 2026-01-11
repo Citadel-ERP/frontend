@@ -19,7 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { launchImageLibrary, launchCamera, ImagePickerResponse } from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { BACKEND_URL } from '../config/config';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -110,10 +110,10 @@ interface MenuItemProps {
 }
 
 // Separate component for empty state
-const EmptyState: React.FC<{ icon: string; message: string; color: string }> = ({ 
-  icon, 
-  message, 
-  color 
+const EmptyState: React.FC<{ icon: string; message: string; color: string }> = ({
+  icon,
+  message,
+  color
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -135,7 +135,7 @@ const EmptyState: React.FC<{ icon: string; message: string; color: string }> = (
   }, []);
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         styles.emptyStateContainer,
         { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
@@ -160,16 +160,18 @@ interface AddressInputsProps {
   onChange: (type: 'home' | 'current', field: string, value: string) => void;
 }
 
-const AddressInputs: React.FC<AddressInputsProps> = React.memo(({ 
-  type, 
-  title, 
+const AddressInputs: React.FC<AddressInputsProps> = React.memo(({
+  type,
+  title,
   addressData,
   onChange
 }) => {
+  console.log(`${type} address:`, addressData);
+
   return (
     <View style={styles.addressSection}>
       <Text style={[styles.addressTitle, { color: '#000000' }]}>{title}</Text>
-      
+
       <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
         <Text style={[styles.inputLabel, { color: '#667781' }]}>Address</Text>
         <TextInput
@@ -204,7 +206,7 @@ const AddressInputs: React.FC<AddressInputsProps> = React.memo(({
         />
       </View>
 
-      <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
+      {/* <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
         <Text style={[styles.inputLabel, { color: '#667781' }]}>Zip Code</Text>
         <TextInput
           style={[styles.input, { color: '#000000' }]}
@@ -214,7 +216,7 @@ const AddressInputs: React.FC<AddressInputsProps> = React.memo(({
           placeholderTextColor="#8696A0"
           keyboardType="numeric"
         />
-      </View>
+      </View> */}
 
       <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
         <Text style={[styles.inputLabel, { color: '#667781' }]}>Country</Text>
@@ -328,17 +330,17 @@ const EditProfileSection: React.FC<EditProfileSectionProps> = React.memo(({
       </View>
 
       {/* Home Address section */}
-      <AddressInputs 
-        type="home" 
-        title="Home Address" 
+      <AddressInputs
+        type="home"
+        title="Home Address"
         addressData={formData.homeAddress}
         onChange={onAddressChange}
       />
 
       {/* Current Address section */}
-      <AddressInputs 
-        type="current" 
-        title="Current Address" 
+      <AddressInputs
+        type="current"
+        title="Current Address"
         addressData={formData.currentLocation}
         onChange={onAddressChange}
       />
@@ -419,6 +421,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalContent, setModalContent] = useState<ModalContent>({});
   const [downloading, setDownloading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -482,7 +485,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
   useEffect(() => {
     initializeData();
-    return () => {};
+    return () => { };
   }, []);
 
   const initializeData = async () => {
@@ -517,9 +520,12 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       }
     }
 
-    // Parse home address
+    // Parse home address - FIXED: Ensure zip_code is included
     const homeAddress = user.home_address || {};
     const currentLocation = user.current_location || {};
+
+    console.log('Populating form with home address:', homeAddress);
+    console.log('Populating form with current location:', currentLocation);
 
     setFormData({
       firstName: user.first_name || '',
@@ -531,14 +537,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         address: homeAddress.address || '',
         city: homeAddress.city || '',
         state: homeAddress.state || '',
-        zip_code: homeAddress.zip_code || '',
+        zip_code: homeAddress.zip_code || '', // This should now be populated
         country: homeAddress.country || '',
       },
       currentLocation: {
         address: currentLocation.address || '',
         city: currentLocation.city || '',
         state: currentLocation.state || '',
-        zip_code: currentLocation.zip_code || '',
+        zip_code: currentLocation.zip_code || '', // This should now be populated
         country: currentLocation.country || '',
       },
     });
@@ -604,16 +610,16 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     if (!token) return;
 
     // Validate address fields
-    if (!formData.homeAddress.address || !formData.homeAddress.city || 
-        !formData.homeAddress.state || !formData.homeAddress.zip_code || 
-        !formData.homeAddress.country) {
+    if (!formData.homeAddress.address || !formData.homeAddress.city ||
+      !formData.homeAddress.state ||
+      !formData.homeAddress.country) {
       Alert.alert('Validation Error', 'Please fill all home address fields (address, city, state, zip code, country)');
       return;
     }
 
-    if (!formData.currentLocation.address || !formData.currentLocation.city || 
-        !formData.currentLocation.state || !formData.currentLocation.zip_code || 
-        !formData.currentLocation.country) {
+    if (!formData.currentLocation.address || !formData.currentLocation.city ||
+      !formData.currentLocation.state ||
+      !formData.currentLocation.country) {
       Alert.alert('Validation Error', 'Please fill all current address fields (address, city, state, zip code, country)');
       return;
     }
@@ -633,14 +639,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             address: formData.homeAddress.address,
             city: formData.homeAddress.city,
             state: formData.homeAddress.state,
-            zip_code: formData.homeAddress.zip_code,
+            zip_code: formData.homeAddress.zip_code, // Make sure this is sent
             country: formData.homeAddress.country,
           },
           current_address: {
             address: formData.currentLocation.address,
             city: formData.currentLocation.city,
             state: formData.currentLocation.state,
-            zip_code: formData.currentLocation.zip_code,
+            zip_code: formData.currentLocation.zip_code, // Make sure this is sent
             country: formData.currentLocation.country,
           }
         }),
@@ -722,103 +728,135 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       'Update Profile Picture',
       'Choose an option',
       [
-        { 
-          text: 'Take Photo', 
-          onPress: () => handleCameraLaunch() 
+        {
+          text: 'Take Photo',
+          onPress: () => handleCameraLaunch()
         },
-        { 
-          text: 'Choose from Gallery', 
-          onPress: () => handleGalleryLaunch() 
+        {
+          text: 'Choose from Gallery',
+          onPress: () => handleGalleryLaunch()
         },
-        { 
-          text: 'Cancel', 
-          style: 'cancel' 
+        {
+          text: 'Cancel',
+          style: 'cancel'
         },
       ],
       { cancelable: true }
     );
   };
 
-  const handleCameraLaunch = () => {
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 800,
-        includeBase64: false,
-      },
-      handleImageResponse
-    );
-  };
-
-  const handleGalleryLaunch = () => {
-    launchImageLibrary(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 800,
-        includeBase64: false,
-      },
-      handleImageResponse
-    );
-  };
-
-  const handleImageResponse = async (response: ImagePickerResponse) => {
-    if (response.didCancel) {
-      console.log('User cancelled image picker');
-      return;
-    }
-
-    if (response.errorCode) {
-      Alert.alert('Error', `Image picker error: ${response.errorMessage}`);
-      return;
-    }
-
-    if (response.assets && response.assets.length > 0 && token) {
-      const asset = response.assets[0];
-      console.log('Selected image:', asset.uri);
-
-      try {
-        const formDataImage = new FormData();
-        formDataImage.append('token', token);
-        formDataImage.append('profile_picture', {
-          uri: asset.uri,
-          type: asset.type || 'image/jpeg',
-          name: asset.fileName || `profile_${Date.now()}.jpg`,
-        } as any);
-
-        console.log('Uploading image...');
-        
-        const uploadResponse = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          body: formDataImage,
-        });
-
-        const result = await uploadResponse.json();
-        
-        if (uploadResponse.ok) {
-          console.log('Upload successful:', result);
-          setUserData(prev => prev ? { 
-            ...prev, 
-            profile_picture: result.profile_picture_url 
-          } : prev);
-          Alert.alert('Success', 'Profile picture updated successfully!');
-        } else {
-          throw new Error(result.message || 'Upload failed');
-        }
-      } catch (error) {
-        console.error('Image upload error:', error);
-        Alert.alert(
-          'Upload Failed',
-          'Could not upload profile picture. Please try again.',
-          [{ text: 'OK' }]
-        );
+  const handleCameraLaunch = async () => {
+    try {
+      // Request camera permissions
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (cameraStatus !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permission is required to take photos');
+        return;
       }
+
+      // Launch camera
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        await uploadProfilePicture(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to open camera');
+    }
+  };
+
+  const handleGalleryLaunch = async () => {
+    try {
+      // Request media library permissions
+      const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (mediaLibraryStatus !== 'granted') {
+        Alert.alert('Permission Required', 'Media library permission is required to select photos');
+        return;
+      }
+
+      // Launch image library
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        await uploadProfilePicture(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Gallery error:', error);
+      Alert.alert('Error', 'Failed to open gallery');
+    }
+  };
+
+  const uploadProfilePicture = async (imageUri: string) => {
+    if (!token) {
+      Alert.alert('Error', 'Authentication token not found');
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      
+      // Extract filename from URI
+      const filename = imageUri.split('/').pop() || `profile_${Date.now()}.jpg`;
+      
+      // Determine file type
+      let fileType = 'image/jpeg';
+      if (filename.endsWith('.png')) fileType = 'image/png';
+      if (filename.endsWith('.gif')) fileType = 'image/gif';
+
+      // Create FormData
+      const formDataImage = new FormData();
+      formDataImage.append('token', token);
+      formDataImage.append('profile_picture', {
+        uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
+        type: fileType,
+        name: filename,
+      } as any);
+
+      console.log('Uploading image to:', `${BACKEND_URL}/core/uploadProfilePicture`);
+
+      // Upload image
+      const uploadResponse = await fetch(`${BACKEND_URL}/core/uploadProfilePicture`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formDataImage,
+      });
+
+      const result = await uploadResponse.json();
+      console.log('Upload response:', result);
+
+      if (uploadResponse.ok) {
+        setUserData(prev => prev ? {
+          ...prev,
+          profile_picture: result.profile_picture_url || result.image_url || result.url
+        } : prev);
+        Alert.alert('Success', 'Profile picture updated successfully!');
+      } else {
+        throw new Error(result.message || result.error || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Image upload error:', error);
+      Alert.alert(
+        'Upload Failed',
+        'Could not upload profile picture. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -884,8 +922,8 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     }
 
     return (
-      <TouchableOpacity 
-        style={containerStyle} 
+      <TouchableOpacity
+        style={containerStyle}
         onPress={onPress}
         activeOpacity={0.7}
       >
@@ -927,7 +965,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
   const ProfileSection = React.memo(() => {
     const [bioText, setBioText] = useState(userData?.bio || 'Hey there! I am using WhatsApp.');
-    
+
     // Update bioText when userData changes
     useEffect(() => {
       if (userData?.bio !== undefined) {
@@ -951,10 +989,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
     return (
       <View style={[styles.profileSection, { backgroundColor: colors.background }]}>
-        <TouchableOpacity 
-          style={styles.avatarContainer} 
+        <TouchableOpacity
+          style={styles.avatarContainer}
           onPress={handleImageUpload}
           activeOpacity={0.8}
+          disabled={uploadingImage}
         >
           {userData?.profile_picture ? (
             <Image source={{ uri: userData.profile_picture }} style={styles.avatar} />
@@ -966,7 +1005,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             </View>
           )}
           <View style={[styles.cameraButton, { backgroundColor: colors.headerBackground }]}>
-            <Ionicons name="camera" size={16} color={colors.background} />
+            {uploadingImage ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <Ionicons name="camera" size={16} color={colors.background} />
+            )}
           </View>
         </TouchableOpacity>
 
@@ -974,11 +1017,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           {userData?.first_name || ''} {userData?.last_name || ''}
         </Text>
 
-        <TextInput
+        {/* <TextInput
           ref={bioInputRef}
           style={[
-            styles.bioInput, 
-            { 
+            styles.bioInput,
+            {
               color: isEditing ? colors.text : colors.textTertiary,
               borderBottomColor: isEditing ? colors.border : 'transparent'
             }
@@ -992,7 +1035,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
           returnKeyType="done"
           onSubmitEditing={() => Keyboard.dismiss()}
           pointerEvents={isEditing ? 'auto' : 'none'}
-        />
+        /> */}
       </View>
     );
   });
@@ -1226,10 +1269,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 </View>
               ))
             ) : (
-              <EmptyState 
-                icon="briefcase-outline" 
-                message="Oops! No assets found!" 
-                color={colors.emptyState} 
+              <EmptyState
+                icon="briefcase-outline"
+                message="Oops! No assets found!"
+                color={colors.emptyState}
               />
             )}
           </View>
@@ -1254,10 +1297,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 </View>
               ))
             ) : (
-              <EmptyState 
-                icon="cash-outline" 
-                message="Oops! No payslips have been updated for you!" 
-                color={colors.emptyState} 
+              <EmptyState
+                icon="cash-outline"
+                message="Oops! No payslips have been updated for you!"
+                color={colors.emptyState}
               />
             )}
           </View>
@@ -1282,10 +1325,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 </View>
               ))
             ) : (
-              <EmptyState 
-                icon="document-text-outline" 
-                message="Oops! No documents found!" 
-                color={colors.emptyState} 
+              <EmptyState
+                icon="document-text-outline"
+                message="Oops! No documents found!"
+                color={colors.emptyState}
               />
             )}
           </View>
@@ -1317,9 +1360,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
   }
 
   return (
-    <View 
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1 }}>
       <View style={[styles.container, { backgroundColor: colors.modalBackground }]}>
         <StatusBar barStyle="light-content" backgroundColor={colors.headerBackground} />
 
@@ -1384,7 +1425,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 <View style={{ width: 24 }} />
               </View>
 
-              <ScrollView 
+              <ScrollView
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 bounces={true}
@@ -1494,12 +1535,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     textAlign: 'center',
-  },
-  profileBio: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 20,
   },
   bioInput: {
     width: '100%',
