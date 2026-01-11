@@ -42,6 +42,7 @@ import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './EmployeeManagement';
 import Notifications from './Notifications';
+import { ValidationScreen } from './ValidationScreen';
 
 // Import components
 import AllModulesModal from './dashboard/allModules';
@@ -244,6 +245,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     { id: 'profile', title: 'Profile', icon: 'person-circle-outline', color: '#008069' },
     { id: 'settings', title: 'Settings', icon: 'settings-outline', color: '#008069' },
     { id: 'notifications', title: 'Notifications', icon: 'notifications-outline', color: '#F59E0B' },
+    { id: 'validation', title: 'System Validation', icon: 'shield-checkmark-outline', color: '#3B82F6' }, // Add this
     { id: 'privacy', title: 'Privacy Policy', icon: 'shield-checkmark-outline', color: '#1E40AF' },
     { id: 'messages', title: 'Messages', icon: 'chatbubbles-outline', color: '#10B981' },
     { id: 'logout', title: 'Logout', icon: 'log-out-outline', color: '#EF4444' },
@@ -1384,7 +1386,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('Error saving last opened module:', error);
     }
   };
-
+  const [showValidation, setShowValidation] = useState(false);
   // Handle back from pages
   const handleBackFromPage = () => {
     setShowAttendance(false);
@@ -1403,6 +1405,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowEmployeeManagement(false);
     setShowChat(false);
     setShowChatRoom(false);
+    setShowValidation(false); // Add this line
     setActiveMenuItem('Dashboard');
   };
 
@@ -1498,9 +1501,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowProfile(true);
     } else if (item.id === 'settings') {
       setShowSettings(true);
+    } else if (item.id === 'validation') {
+      setShowValidation(true); // Add this
     } else if (item.id === 'messages') {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
-      // setShowChat(true);
     } else if (item.id === 'notifications') {
       setShowNotifications(true);
     } else if (item.id === 'logout') {
@@ -1544,7 +1548,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       </View>
     );
   }
-
+  if (showValidation) {
+    return (
+      <ValidationScreen onBack={handleBackFromPage} />
+    );
+  }
   // Render different pages
   if (showChatRoom && selectedChatRoom) {
     return (

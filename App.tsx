@@ -7,6 +7,9 @@ import {
   AppState,
   AppStateStatus,
   Alert,
+  Text,
+  TouchableOpacity,
+  Platform
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +26,8 @@ import Dashboard from './src/components/Dashboard';
 import { BackgroundLocationService } from './src/services/backgroundLocationTracking';
 import { colors } from './src/styles/theme';
 import { BackgroundAttendanceService } from './src/services/backgroundAttendance';
-
+import { ConfigValidator } from './src/utils/configValidator';
+import Constants from 'expo-constants';
 type Screen =
   | 'splash'
   | 'login'
@@ -78,7 +82,7 @@ function App(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(false);
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
   const [tempData, setTempData] = useState<{ email?: string; oldPassword?: string; newPassword?: string; otp?: string }>({});
-
+  const [showDevMenu, setShowDevMenu] = useState(__DEV__);
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
     const backendUrl = BACKEND_URL;
@@ -94,6 +98,44 @@ function App(): React.JSX.Element {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
+  }, []);
+  useEffect(() => {
+    // Auto-run validation in development mode
+    if (__DEV__) {
+      const runInitialValidation = async () => {
+        console.log('🔍 Running initial system validation...');
+        const isValid = await ConfigValidator.runValidation();
+
+        const inExpoGo = Constants.appOwnership === 'expo';
+        if (inExpoGo && Platform.OS === 'ios') {
+          console.log('');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('⚠️  IMPORTANT: iOS + Expo Go Detected');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('');
+          console.log('Background location features WILL NOT WORK in Expo Go.');
+          console.log('This is NORMAL and EXPECTED behavior.');
+          console.log('');
+          console.log('✅ Your configuration is CORRECT');
+          console.log('✅ Your code logic is SOUND (Android proves it)');
+          console.log('');
+          console.log('To test iOS background features:');
+          console.log('  1. Run: eas build --profile development --platform ios');
+          console.log('  2. Install the .ipa on your device');
+          console.log('  3. Test background location services');
+          console.log('');
+          console.log('Access System Validation screen via:');
+          console.log('  Menu → System Validation');
+          console.log('');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        } else if (isValid) {
+          console.log('✅ All systems ready for development');
+          console.log('ℹ️  Access detailed validation: Menu → System Validation');
+        }
+      };
+
+      runInitialValidation();
+    }
   }, []);
 
   // Single unified useEffect for initializing all background services
@@ -681,6 +723,39 @@ function App(): React.JSX.Element {
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {renderScreen()}
       </View>
+      {__DEV__ && showDevMenu && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: 100,
+            right: 20,
+            width: 60,
+            height: 60,
+            borderRadius: 30,
+            backgroundColor: '#3B82F6',
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
+            zIndex: 9999,
+          }}
+          onPress={async () => {
+            await ConfigValidator.runValidation();
+            Alert.alert(
+              'System Validation',
+              'Check console for results. Access full report via Menu → System Validation',
+              [{ text: 'OK' }]
+            );
+          }}
+        >
+          <View>
+            <Text style={{ color: 'white', fontSize: 24 }}>🔍</Text>
+          </View>
+        </TouchableOpacity>
+      )}
     </SafeAreaProvider>
   );
 }

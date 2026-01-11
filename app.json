@@ -40,10 +40,17 @@
           "Citadel uses your location even when the app is closed to enable geofencing-based attendance.",
 
         "NSCameraUsageDescription":
-          "Camera access is required for Face ID authentication.",
+          "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
+
+        "NSPhotoLibraryUsageDescription":
+          "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
+
+        "NSPhotoLibraryAddUsageDescription":
+          "Citadel needs permission to save photos to your photo library.",
 
         "NSFaceIDUsageDescription":
           "Face ID is used to securely authenticate you.",
+        
         "NSLocationTemporaryUsageDescriptionDictionary": {
           "attendance": "Your location is needed to verify you are at the office for attendance."
         }
@@ -71,8 +78,9 @@
         "USE_FINGERPRINT",
         "RECEIVE_BOOT_COMPLETED",
         "SYSTEM_ALERT_WINDOW",
-        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ]
     },
 
@@ -102,6 +110,15 @@
         {
           "faceIDPermission":
             "Allow Citadel to use Face ID for secure authentication."
+        }
+      ],
+
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
+          "cameraPermission": "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
+          "saveToPhotosAlbum": true
         }
       ],
 

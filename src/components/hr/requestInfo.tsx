@@ -115,19 +115,16 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
   const [uploadingFile, setUploadingFile] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
-  
-  // Local state for optimistic updates
+  const [isPickerActive, setIsPickerActive] = useState(false);
   const [localComments, setLocalComments] = useState<Comment[]>([]);
   const [currentUserName, setCurrentUserName] = useState<string>('You');
 
-  // Sync local comments with item prop
   useEffect(() => {
     if (item?.comments) {
       setLocalComments(item.comments);
     }
   }, [item?.comments]);
 
-  // Fetch current user's name
   useEffect(() => {
     const fetchUserName = async () => {
       if (token) {
@@ -197,14 +194,20 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
   };
 
   const handleTakePhoto = async () => {
-    setShowAttachmentModal(false);
-    
-    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-    if (cameraStatus !== 'granted') {
-      Alert.alert('Permission Required', 'Sorry, we need camera permissions to take photos.');
+    if (isPickerActive) {
+      console.log('Picker already active, ignoring...');
       return;
     }
+    setIsPickerActive(true);
+    
     try {
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraStatus !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permissions are needed to take photos.');
+        setIsPickerActive(false);
+        setShowAttachmentModal(false);
+        return;
+      }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -214,31 +217,38 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const fileName = `photo_${Date.now()}.jpg`;
-        
         const newFile: AttachedFile = {
           uri: asset.uri,
           name: fileName,
           type: 'image',
           mimeType: 'image/jpeg',
         };
-        
         setAttachedFiles(prev => [...prev, newFile]);
       }
     } catch (error: any) {
       console.error('Error taking photo:', error);
       Alert.alert('Camera Error', 'Failed to take photo. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
     }
   };
 
   const handleSelectFromGallery = async () => {
-    setShowAttachmentModal(false);
-    
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload photos.');
+    if (isPickerActive) {
+      console.log('Picker already active, ignoring...');
       return;
     }
+    setIsPickerActive(true);
+    
     try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Photo library permissions are needed to select images.');
+        setIsPickerActive(false);
+        setShowAttachmentModal(false);
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
@@ -247,23 +257,32 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         selectionLimit: 5,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newFiles: AttachedFile[] = result.assets.map((asset, index) => ({
-          uri: asset.uri,
-          name: `image_${Date.now()}_${index}.${asset.uri.split('.').pop()?.toLowerCase() || 'jpg'}`,
-          type: 'image',
-          mimeType: `image/${asset.uri.split('.').pop()?.toLowerCase() === 'png' ? 'png' : 'jpeg'}`,
-        }));
-        
+        const newFiles: AttachedFile[] = result.assets.map((asset, index) => {
+          const extension = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+          return {
+            uri: asset.uri,
+            name: `image_${Date.now()}_${index}.${extension}`,
+            type: 'image',
+            mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
+          };
+        });
         setAttachedFiles(prev => [...prev, ...newFiles]);
       }
     } catch (error: any) {
       console.error('Error selecting images:', error);
-      Alert.alert('Selection Error', 'Failed to select images. Please try again.');
+      Alert.alert('Selection Error', 'Failed to select images. Please try again. ' + error.message);
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
     }
   };
 
   const handleSelectDocument = async () => {
-    setShowAttachmentModal(false);
+    if (isPickerActive) {
+      console.log('Picker already active, ignoring...');
+      return;
+    }
+    setIsPickerActive(true);
     
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -279,12 +298,14 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
           size: asset.size,
           mimeType: asset.mimeType || 'application/octet-stream',
         }));
-        
         setAttachedFiles(prev => [...prev, ...newFiles]);
       }
     } catch (error: any) {
       console.error('Error selecting document:', error);
-      Alert.alert('Selection Error', 'Failed to select document. Please try again.');
+      Alert.alert('Selection Error', 'Failed to select document. Please try again.'+ error.message);
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
     }
   };
 
@@ -300,8 +321,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     if (!newComment.trim() && attachedFiles.length === 0) {
       return;
     }
-
-    // Create optimistic comment
     const optimisticComment: Comment = {
       id: `temp-${Date.now()}`,
       comment: newComment.trim() || 'Sent attachment(s)',
@@ -320,40 +339,32 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         uploaded_at: new Date().toISOString()
       }))
     };
-
-    // Add optimistic comment to local state immediately
     setLocalComments(prev => [...prev, optimisticComment]);
-    
-    // Clear input and attachments
     const commentText = newComment;
     const files = [...attachedFiles];
     onCommentChange('');
     setAttachedFiles([]);
-
-    // Scroll to bottom
     setTimeout(() => {
       scrollToBottom(true);
     }, 100);
-
     setUploadingFile(true);
     try {
       const endpoint = `${BACKEND_URL}/core/${activeTab === 'requests' ? 'addCommentToRequest' : 'addCommentToGrievance'}`;
-      
       const formData = new FormData();
       formData.append('token', token);
       formData.append(activeTab === 'requests' ? 'request_id' : 'grievance_id', item.id);
       formData.append('content', commentText.trim() || 'Sent attachment(s)');
-      
       for (const file of files) {
-        const cleanUri = Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri;
-        
+        let cleanUri = file.uri;
+        if (Platform.OS === 'ios') {
+          cleanUri = file.uri.replace('file://', '');
+        }
         formData.append('documents', {
-          uri: cleanUri,
+          uri: Platform.OS === 'ios' ? file.uri : cleanUri,
           name: file.name,
           type: file.mimeType,
         } as any);
       }
-
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -361,29 +372,20 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         },
         body: formData,
       });
-
       if (response.ok) {
-        // Comment sent successfully - do nothing, keep optimistic update
-        // The real comment will load when user navigates back and reopens
         console.log('Comment sent successfully');
       } else {
-        // Remove optimistic comment on failure
         setLocalComments(prev => prev.filter(c => c.id !== optimisticComment.id));
         const errorText = await response.text();
         console.error('Upload error:', errorText);
-        Alert.alert('Error', 'Failed to send comment. Please try again.');
-        
-        // Restore input
+        Alert.alert('Error', 'Failed to send comment. Please try again.'+ errorText);
         onCommentChange(commentText);
         setAttachedFiles(files);
       }
     } catch (error: any) {
-      // Remove optimistic comment on error
       setLocalComments(prev => prev.filter(c => c.id !== optimisticComment.id));
       console.error('Error sending comment:', error);
       Alert.alert('Error', error.message || 'Failed to send comment. Please try again.');
-      
-      // Restore input
       onCommentChange(commentText);
       setAttachedFiles(files);
     } finally {
@@ -397,11 +399,11 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
       if (supported) {
         await Linking.openURL(fileUrl);
       } else {
-        Alert.alert('Error', 'Cannot open this file');
+        Alert.alert('Notification', 'File is Being Uploaded, kindly wait for some time and try again.');
       }
     } catch (error) {
       console.error('Error downloading file:', error);
-      Alert.alert('Error', 'Failed to download file');
+      Alert.alert('Notification', 'File is Being Uploaded, kindly wait for some time and try again.');
     }
   };
 
@@ -417,7 +419,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     }
     const comment = listItem.data;
     const isCurrentUser = comment.created_by_email === currentUserEmail;
-    
     return (
       <View
         style={[
@@ -439,16 +440,14 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
               <Text style={styles.senderName}>{comment.created_by_name}</Text>
             </View>
           )}
-          
           {comment.documents && comment.documents.length > 0 && (
             <View style={styles.documentsContainer}>
               {comment.documents.map((doc: any, index: number) => {
                 const isImage = doc.document_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                
                 if (isImage) {
                   return (
                     <TouchableOpacity 
-                      key={index} 
+                      key={`${doc.id}-${index}`}
                       style={styles.imageWrapper}
                       onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
                     >
@@ -466,7 +465,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 } else {
                   return (
                     <TouchableOpacity
-                      key={index}
+                      key={`${doc.id}-${index}`}
                       style={styles.documentItem}
                       onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
                     >
@@ -486,7 +485,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
               })}
             </View>
           )}
-          
           <Text style={styles.messageText}>{comment.comment}</Text>
           <View style={styles.messageFooter}>
             <Text style={styles.messageTime}>
@@ -498,7 +496,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     );
   };
 
-  // Auto-scroll when comments change or on initial load
   useEffect(() => {
     if (localComments.length > 0 && !loadingDetails) {
       setTimeout(() => {
@@ -507,7 +504,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     }
   }, [localComments, loadingDetails]);
 
-  // Initial scroll on mount
   useEffect(() => {
     if (item?.comments && item.comments.length > 0) {
       setTimeout(() => {
@@ -607,7 +603,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                   </View>
                 </View>
               </View>
-              
               <View style={styles.chatMessagesContainer}>
                 <FlatList
                   data={getProcessedComments()}
@@ -635,7 +630,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 {attachedFiles.map((file, index) => {
                   if (file.type === 'image') {
                     return (
-                      <View key={index} style={styles.previewImageWrapper}>
+                      <View key={`attached-image-${index}-${file.name}`} style={styles.previewImageWrapper}>
                         <Image 
                           source={{ uri: file.uri }}
                           style={styles.previewImage}
@@ -651,7 +646,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                     );
                   } else {
                     return (
-                      <View key={index} style={styles.previewDocumentItem}>
+                      <View key={`attached-doc-${index}-${file.name}`} style={styles.previewDocumentItem}>
                         <Ionicons name="document-text" size={24} color={WHATSAPP_COLORS.primary} />
                         <View style={styles.previewDocumentInfo}>
                           <Text style={styles.previewDocumentName} numberOfLines={1}>
@@ -675,7 +670,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 <TouchableOpacity 
                   style={styles.attachmentButton}
                   onPress={() => setShowAttachmentModal(true)}
-                  disabled={uploadingFile}
+                  disabled={uploadingFile || isPickerActive}
                 >
                   {uploadingFile ? (
                     <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
@@ -729,17 +724,26 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         visible={showAttachmentModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowAttachmentModal(false)}
+        onRequestClose={() => {
+          if (!isPickerActive) {
+            setShowAttachmentModal(false);
+          }
+        }}
       >
         <TouchableOpacity 
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowAttachmentModal(false)}
+          onPress={() => {
+            if (!isPickerActive) {
+              setShowAttachmentModal(false);
+            }
+          }}
         >
           <View style={styles.attachmentModalContent}>
             <TouchableOpacity
               style={styles.attachmentOption}
               onPress={handleSelectDocument}
+              disabled={isPickerActive}
             >
               <View style={[styles.attachmentIconContainer, { backgroundColor: '#7F66FF' }]}>
                 <Ionicons name="document-text" size={24} color="#FFF" />
@@ -749,6 +753,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             <TouchableOpacity
               style={styles.attachmentOption}
               onPress={handleTakePhoto}
+              disabled={isPickerActive}
             >
               <View style={[styles.attachmentIconContainer, { backgroundColor: '#FF4D67' }]}>
                 <Ionicons name="camera" size={24} color="#FFF" />
@@ -758,6 +763,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             <TouchableOpacity
               style={styles.attachmentOption}
               onPress={handleSelectFromGallery}
+              disabled={isPickerActive}
             >
               <View style={[styles.attachmentIconContainer, { backgroundColor: '#C861F9' }]}>
                 <Ionicons name="images" size={24} color="#FFF" />
