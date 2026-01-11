@@ -245,7 +245,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     { id: 'profile', title: 'Profile', icon: 'person-circle-outline', color: '#008069' },
     { id: 'settings', title: 'Settings', icon: 'settings-outline', color: '#008069' },
     { id: 'notifications', title: 'Notifications', icon: 'notifications-outline', color: '#F59E0B' },
-    { id: 'validation', title: 'System Validation', icon: 'shield-checkmark-outline', color: '#3B82F6' }, // Add this
+    // { id: 'validation', title: 'System Validation', icon: 'shield-checkmark-outline', color: '#3B82F6' }, // Add this
     { id: 'privacy', title: 'Privacy Policy', icon: 'shield-checkmark-outline', color: '#1E40AF' },
     { id: 'messages', title: 'Messages', icon: 'chatbubbles-outline', color: '#10B981' },
     { id: 'logout', title: 'Logout', icon: 'log-out-outline', color: '#EF4444' },
