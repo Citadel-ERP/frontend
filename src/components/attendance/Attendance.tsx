@@ -616,7 +616,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       setLoading(false);
       if (!hasSpecialPermission) {
         Alert.alert(
-          'Early Checkout',
+          'Checkout',
           'You cannot mark checkout before 6:00 PM. Kindly raise a request to your HR to allow early checkout.',
           [{ text: 'OK' }]
         );
@@ -798,7 +798,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
   const fetchAttendanceRecords = async (token?: string, month?: number, year?: number) => {
     try {
-      // Format month as YYYY-MM
       const actualMonth = month !== undefined ? month : selectedMonth;
       const actualYear = year !== undefined ? year : selectedYear;
       const monthStr = `${actualYear}-${String(actualMonth + 1).padStart(2, '0')}`;
@@ -824,9 +823,16 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           console.log('Fetched attendance records:', formattedRecords);
           setAttendanceRecords(formattedRecords);
 
-          // Always check for today's attendance regardless of month
-          const today = new Date();
-          const todayStr = today.toISOString().split('T')[0];
+          // FIX: Get IST date string correctly
+          const istTime = getISTTime();
+          const year = istTime.getFullYear();
+          const month = String(istTime.getMonth() + 1).padStart(2, '0');
+          const day = String(istTime.getDate()).padStart(2, '0');
+          const todayStr = `${year}-${month}-${day}`;
+
+          console.log('IST Time for today\'s attendance check:', istTime);
+          console.log('Today\'s date string (IST):', todayStr);
+
           const todaysRecord = data.attendances.find((attendance: any) => attendance.date === todayStr);
 
           if (todaysRecord && todaysRecord.check_in_time) {
@@ -838,8 +844,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             });
           } else {
             // Only clear todayAttendance if we're viewing current month
-            const currentMonth = today.getMonth();
-            const currentYear = today.getFullYear();
+            const currentMonth = istTime.getMonth();
+            const currentYear = istTime.getFullYear();
             if (actualMonth === currentMonth && actualYear === currentYear) {
               setTodayAttendance(null);
             }
@@ -1217,7 +1223,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 </TouchableOpacity>
               </View>
             )}
-
+            {/* Console.log todays attendance */}
             {todayAttendance ? (
               <View style={styles.markedContainer}>
                 <View style={styles.checkmarkCircle}>

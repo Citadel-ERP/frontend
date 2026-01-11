@@ -1222,14 +1222,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowHR(true);
       // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('cab')) {
-      setShowCab(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      // setShowCab(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('driver')) {
-      setShowDriver(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      // setShowDriver(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
-      setShowBDT(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      // setShowBDT(true);
+      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
       // setShowMedical(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);

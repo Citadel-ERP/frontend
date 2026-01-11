@@ -174,13 +174,13 @@ export class LocationService {
       const { status } = await Location.requestBackgroundPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert(
-          'Background Location Required',
-          Platform.OS === 'ios'
-            ? 'For automatic attendance, please:\n\n1. Go to Settings > Privacy & Security > Location Services > [Your App]\n2. Select "Always"\n3. Enable "Precise Location"'
-            : 'Please enable "Allow all the time" for location access in Settings.',
-          [{ text: 'OK' }]
-        );
+        // Alert.alert(
+        //   'Background Location Required',
+        //   Platform.OS === 'ios'
+        //     ? 'For automatic attendance, please:\n\n1. Go to Settings > Privacy & Security > Location Services > [Your App]\n2. Select "Always"\n3. Enable "Precise Location"'
+        //     : 'Please enable "Allow all the time" for location access in Settings.',
+        //   [{ text: 'OK' }]
+        // );
         return false;
       }
 
