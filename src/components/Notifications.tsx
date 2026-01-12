@@ -19,7 +19,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import * as ExpoNotifications from 'expo-notifications';
 import { BACKEND_URL } from '../config/config';
+
+// Configure notification handler for iOS badge support
+ExpoNotifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,  // Added missing property
+    shouldShowList: true,     // Added missing property
+  }),
+});
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -109,21 +121,84 @@ const Notifications: React.FC<NotificationsProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
 
+  // Function to update iOS badge count
+  const updateIOSBadgeCount = async (count: number) => {
+    if (Platform.OS === 'ios') {
+      try {
+        // Set the badge count on iOS
+        await ExpoNotifications.setBadgeCountAsync(count);
+        console.log(`✅ iOS badge count updated to: ${count}`);
+        
+        // Clear all notifications from tray when count is 0
+        if (count === 0) {
+          await ExpoNotifications.dismissAllNotificationsAsync();
+          console.log('✅ Cleared all notifications from tray');
+        }
+      } catch (error) {
+        console.error('❌ Error updating iOS badge count:', error);
+      }
+    }
+  };
+
+  // Function to request notification permissions
+  const requestNotificationPermissions = async () => {
+    if (Platform.OS === 'ios') {
+      try {
+        const { status } = await ExpoNotifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+            // Removed allowAnnouncements as it's not a valid property
+          },
+        });
+        
+        if (status !== 'granted') {
+          console.warn('⚠️ Notification permissions not granted - badge updates may not work');
+        } else {
+          console.log('✅ Notification permissions granted');
+        }
+      } catch (error) {
+        console.error('❌ Error requesting notification permissions:', error);
+      }
+    }
+  };
+
   useEffect(() => {
+    // Request permissions when component mounts
+    requestNotificationPermissions();
+    
+    // Fetch notifications
     fetchNotifications();
+    
+    // Fade in animation
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 400,
       useNativeDriver: true,
     }).start();
+    
+    // Cleanup function when component unmounts
+    return () => {
+      // Ensure badge count is accurate when leaving
+      const unreadCount = notifications.filter(n => !n.Read).length;
+      updateIOSBadgeCount(unreadCount).catch(console.error);
+    };
   }, []);
 
+  // Update badge whenever notifications change
   useEffect(() => {
     const unreadCount = notifications.filter(n => !n.Read).length;
+    
+    // Call parent callback for badge update
     onBadgeUpdate?.(unreadCount);
-  }, [notifications]);
-
-  useEffect(() => {
+    
+    // Update iOS badge
+    updateIOSBadgeCount(unreadCount);
+    
+    console.log(`📱 Total: ${notifications.length}, Unread: ${unreadCount}`);
+    
+    // Save read status locally for persistence
     if (notifications.length > 0) {
       saveReadStatusLocally();
     }
@@ -137,7 +212,7 @@ const Notifications: React.FC<NotificationsProps> = ({
       });
       await AsyncStorage.setItem('notification_read_status', JSON.stringify(readStatusMap));
     } catch (error) {
-      console.error('Error saving read status locally:', error);
+      console.error('❌ Error saving read status locally:', error);
     }
   };
 
@@ -148,16 +223,17 @@ const Notifications: React.FC<NotificationsProps> = ({
         return JSON.parse(savedStatus);
       }
     } catch (error) {
-      console.error('Error loading local read status:', error);
+      console.error('❌ Error loading local read status:', error);
     }
     return {};
   };
 
   const fetchNotifications = async () => {
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem('token_2');
       if (!token) {
-        console.error('No token found');
+        console.error('❌ No authentication token found');
         return;
       }
 
@@ -169,39 +245,31 @@ const Notifications: React.FC<NotificationsProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Fetched notifications from backend:', data.notifications?.length || 0);
+        console.log(`📥 Fetched ${data.notifications?.length || 0} notifications from backend`);
         
         const localReadStatus = await loadLocalReadStatus();
         
         if (data.notifications && data.notifications.length > 0) {
-          console.log('Sample notification from backend:', {
+          console.log('📝 Sample notification from backend:', {
             id: data.notifications[0].id,
             title: data.notifications[0].title,
             Read: data.notifications[0].Read,
-            is_read: data.notifications[0].is_read,
-            read: data.notifications[0].read,
           });
         }
         
         const formattedNotifications = data.notifications.map((notif: any) => {
           const formatted = formatNotification(notif);
           
+          // Override with local read status if available
           if (!formatted.Read && localReadStatus[formatted.id] === true) {
-            console.log(`Notification ${formatted.id} marked as read from local storage`);
+            console.log(`✅ Notification ${formatted.id} marked as read from local storage`);
             return { ...formatted, Read: true };
           }
           
           return formatted;
         });
         
-        if (formattedNotifications.length > 0) {
-          console.log('Sample formatted notification:', {
-            id: formattedNotifications[0].id,
-            title: formattedNotifications[0].title,
-            Read: formattedNotifications[0].Read,
-          });
-        }
-        
+        // Sort: unread first, then by date
         formattedNotifications.sort((a: Notification, b: Notification) => {
           if (a.Read !== b.Read) {
             return a.Read ? 1 : -1;
@@ -214,12 +282,12 @@ const Notifications: React.FC<NotificationsProps> = ({
         
         setNotifications(formattedNotifications);
         
-        console.log('Total unread notifications:', formattedNotifications.filter((n: Notification) => !n.Read).length);
+        console.log(`📊 Final - Total: ${formattedNotifications.length}, Unread: ${formattedNotifications.filter((n: Notification) => !n.Read).length}`);
       } else {
-        console.error('Failed to fetch notifications, status:', response.status);
+        console.error(`❌ Failed to fetch notifications, status: ${response.status}`);
       }
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('❌ Error fetching notifications:', error);
     } finally {
       setLoading(false);
     }
@@ -318,12 +386,14 @@ const Notifications: React.FC<NotificationsProps> = ({
       const token = await AsyncStorage.getItem('token_2');
       if (!token) return;
 
+      // Optimistic update
       setNotifications(prev =>
         prev.map(notif =>
           notif.id === id ? { ...notif, Read: true } : notif
         )
       );
 
+      // Call backend
       const response = await fetch(`${BACKEND_URL}/core/markNotificationAsRead`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -331,21 +401,19 @@ const Notifications: React.FC<NotificationsProps> = ({
       });
 
       if (!response.ok) {
-        console.error('Failed to mark notification as read on backend');
-        // Revert the change if backend fails
+        console.error('❌ Failed to mark notification as read on backend');
+        // Revert on failure
         setNotifications(prev =>
           prev.map(notif =>
             notif.id === id ? { ...notif, Read: false } : notif
           )
         );
       } else {
-        const result = await response.json();
-        console.log('Mark as read response:', result);
-        // REMOVED the fetchNotifications call - we already updated locally
+        console.log(`✅ Notification ${id} marked as read`);
       }
     } catch (error) {
-      console.error('Error marking notification as read:', error);
-      // Revert the change if there's an error
+      console.error('❌ Error marking notification as read:', error);
+      // Revert on error
       setNotifications(prev =>
         prev.map(notif =>
           notif.id === id ? { ...notif, Read: false } : notif
@@ -356,7 +424,10 @@ const Notifications: React.FC<NotificationsProps> = ({
 
   const markAllNotificationsAsRead = async () => {
     const unreadNotifications = notifications.filter(n => !n.Read);
-    if (unreadNotifications.length === 0) return;
+    if (unreadNotifications.length === 0) {
+      console.log('✅ No unread notifications to mark');
+      return;
+    }
 
     try {
       const token = await AsyncStorage.getItem('token_2');
@@ -364,9 +435,14 @@ const Notifications: React.FC<NotificationsProps> = ({
 
       const originalNotifications = [...notifications];
 
+      // Optimistic update
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setNotifications(prev => prev.map(notif => ({ ...notif, Read: true })));
 
+      // Force iOS badge to 0 immediately
+      await updateIOSBadgeCount(0);
+
+      // Call backend
       const response = await fetch(`${BACKEND_URL}/core/markAllRead`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -374,16 +450,15 @@ const Notifications: React.FC<NotificationsProps> = ({
       });
 
       if (!response.ok) {
-        console.error('Failed to mark all as read on backend');
+        console.error('❌ Failed to mark all as read on backend');
         setNotifications(originalNotifications);
       } else {
-        const result = await response.json();
-        console.log('Mark all as read response:', result);
-        // REMOVED the fetchNotifications call - we already updated locally
+        console.log(`✅ Marked all ${unreadNotifications.length} notifications as read`);
       }
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-      // Don't refetch on error, just keep local state
+      console.error('❌ Error marking all notifications as read:', error);
+      // On error, refresh to get correct state
+      fetchNotifications();
     }
   };
 
@@ -412,13 +487,13 @@ const Notifications: React.FC<NotificationsProps> = ({
       if (response.ok) {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setNotifications(prev => prev.filter(notif => notif.id !== id));
-        console.log('Notification deleted successfully:', id);
+        console.log(`✅ Notification ${id} deleted successfully`);
       } else {
-        console.error('Failed to delete notification on backend');
+        console.error('❌ Failed to delete notification on backend');
         Alert.alert('Error', 'Failed to delete notification. Please try again.');
       }
     } catch (error) {
-      console.error('Error deleting notification:', error);
+      console.error('❌ Error deleting notification:', error);
       Alert.alert('Error', 'Failed to delete notification. Please try again.');
     } finally {
       setDeletingIds(prev => {
@@ -436,10 +511,12 @@ const Notifications: React.FC<NotificationsProps> = ({
   };
 
   const handleNotificationPress = (notification: Notification) => {
+    // Mark as read if unread
     if (!notification.Read) {
       handleMarkAsRead(notification.id);
     }
     
+    // Show modal
     setSelectedNotification(notification);
     setModalVisible(true);
     Animated.spring(modalAnim, {

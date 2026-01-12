@@ -265,6 +265,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const hours = istTime.getHours();
     const minutes = istTime.getMinutes();
 
+    // If attendance is already marked, don't show time-based messages
+    if (todayAttendance && todayAttendance.check_in_time) {
+      return {
+        message: "Attendance marked successfully",
+        type: 'normal',
+        canMarkAttendance: false
+      };
+    }
+
     // Before 10:15 AM
     if (hours < 10 || (hours === 10 && minutes < 15)) {
       return {
@@ -292,13 +301,11 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           canMarkAttendance: true
         };
       }
-      if (!todayAttendance) {
-        return {
-          message: "You cannot mark attendance after 11:00 AM, kindly contact your HR",
-          type: 'error',
-          canMarkAttendance: false
-        };
-      }
+      return {
+        message: "You cannot mark attendance after 11:00 AM, kindly contact your HR",
+        type: 'error',
+        canMarkAttendance: false
+      };
     }
 
     return {
@@ -369,7 +376,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return hasPermission;
     } catch (error) {
       console.error('Error checking location permission:', error);
-      Alert.alert( 
+      Alert.alert(
         'Location Error',
         String(error),
         [
