@@ -8,10 +8,32 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption } from './types';
 import DropdownModal from './dropdownModal';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+
+// Modern green color scheme
+const MODERN_COLORS = {
+  primary: '#075E54', // WhatsApp green
+  primaryLight: '#128C7E', // Light WhatsApp green
+  primaryDark: '#054D44', // Dark WhatsApp green
+  secondary: '#25D366', // WhatsApp bright green
+  accent: '#10B981', // Emerald green
+  danger: '#EF4444', // Red
+  warning: '#F59E0B', // Amber
+  background: '#F0F2F5', // Light background
+  surface: '#FFFFFF', // White for surfaces
+  textPrimary: '#1F2937', // Dark gray
+  textSecondary: '#6B7280', // Medium gray
+  textTertiary: '#9CA3AF', // Light gray
+  border: '#E5E7EB', // Border gray
+  success: '#25D366', // WhatsApp bright green
+  info: '#3B82F6', // Blue for info
+  white: '#FFFFFF',
+};
 
 interface EditLeadProps {
   lead: Lead;
@@ -60,6 +82,40 @@ const EditLead: React.FC<EditLeadProps> = ({
       fetchSubphasesForPhase(editedLead.phase);
     }
   }, []);
+
+  // Modern Header Component
+  const ModernHeader = () => (
+    <SafeAreaView style={styles.header}>
+      <View style={styles.headerContent}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            Edit Lead
+          </Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
+            {lead.name || 'Lead Details'}
+          </Text>
+        </View>
+        
+        <View style={styles.headerActions}>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <TouchableOpacity 
+              onPress={handleSave}
+              style={styles.saveHeaderButton}
+              disabled={loading}
+            >
+              <Text style={styles.saveHeaderText}>Save</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
 
   const fetchPhases = async () => {
     try {
@@ -189,158 +245,154 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   return (
-    <ScrollView 
-      style={[styles.detailScrollView, { backgroundColor: theme.background }]} 
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Contact Information */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Email Addresses ({editingEmails.length})</Text>
-        
-        {editingEmails.map((email, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <View style={styles.contactItemContent}>
-              <Text style={[styles.contactItemText, { color: theme.text }]}>📧 {email}</Text>
+    <View style={styles.container}>
+      <ModernHeader />
+      
+      <ScrollView 
+        style={styles.detailScrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Contact Information */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="email" size={20} color={MODERN_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Email Addresses ({editingEmails.length})</Text>
+          </View>
+          
+          {editingEmails.map((email, index) => (
+            <View key={index} style={styles.contactItemContainer}>
+              <View style={styles.contactItemContent}>
+                <Text style={styles.contactItemText}>📧 {email}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.removeContactButton}
+                onPress={() => handleRemoveEmail(index)}
+              >
+                <Ionicons name="close-circle" size={22} color={MODERN_COLORS.danger} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              style={[styles.removeContactButton, { backgroundColor: theme.error }]}
-              onPress={() => handleRemoveEmail(index)}
-            >
-              <Text style={[styles.removeContactButtonText, { color: theme.white }]}>×</Text>
+          ))}
+
+          <View style={styles.addContactContainer}>
+            <TextInput
+              style={styles.input}
+              value={newEmail}
+              onChangeText={setNewEmail}
+              placeholder="Add email..."
+              placeholderTextColor={MODERN_COLORS.textTertiary}
+              keyboardType="email-address"
+            />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddEmail}>
+              <Ionicons name="add-circle" size={24} color={MODERN_COLORS.primary} />
             </TouchableOpacity>
           </View>
-        ))}
-
-        <View style={[styles.addContactContainer, { borderTopColor: theme.border }]}>
-          <TextInput
-            style={[styles.input, { flex: 1, 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={newEmail}
-            onChangeText={setNewEmail}
-            placeholder="Add email..."
-            placeholderTextColor={theme.textSecondary}
-            keyboardType="email-address"
-          />
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddEmail}>
-            <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
-          </TouchableOpacity>
         </View>
-      </View>
 
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Phone Numbers ({editingPhones.length})</Text>
-        
-        {editingPhones.map((phone, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <View style={styles.contactItemContent}>
-              <Text style={[styles.contactItemText, { color: theme.text }]}>📱 {phone}</Text>
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="phone" size={20} color={MODERN_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Phone Numbers ({editingPhones.length})</Text>
+          </View>
+          
+          {editingPhones.map((phone, index) => (
+            <View key={index} style={styles.contactItemContainer}>
+              <View style={styles.contactItemContent}>
+                <Text style={styles.contactItemText}>📱 {phone}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.removeContactButton}
+                onPress={() => handleRemovePhone(index)}
+              >
+                <Ionicons name="close-circle" size={22} color={MODERN_COLORS.danger} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              style={[styles.removeContactButton, { backgroundColor: theme.error }]}
-              onPress={() => handleRemovePhone(index)}
-            >
-              <Text style={[styles.removeContactButtonText, { color: theme.white }]}>×</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          ))}
 
-        <View style={[styles.addContactContainer, { borderTopColor: theme.border }]}>
-          <TextInput
-            style={[styles.input, { flex: 1, 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={newPhone}
-            onChangeText={setNewPhone}
-            placeholder="Add phone..."
-            placeholderTextColor={theme.textSecondary}
-            keyboardType="phone-pad"
-          />
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddPhone}>
-            <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Lead Management */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Lead Management</Text>
-        
-        <View style={styles.managementRow}>
-          <View style={styles.managementItem}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>Status</Text>
-            <TouchableOpacity
-              style={[styles.dropdown, { 
-                backgroundColor: theme.white,
-                borderColor: theme.border
-              }]}
-              onPress={() => setActiveDropdown('status')}
-            >
-              <Text style={[styles.dropdownText, { color: theme.text }]}>
-                {getFilterLabel('status', editedLead.status)}
-              </Text>
-              <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.managementItem}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>Phase</Text>
-            <TouchableOpacity
-              style={[styles.dropdown, { 
-                backgroundColor: theme.white,
-                borderColor: theme.border
-              }]}
-              onPress={() => setActiveDropdown('phase')}
-            >
-              <Text style={[styles.dropdownText, { color: theme.text }]}>
-                {getFilterLabel('phase', editedLead.phase)}
-              </Text>
-              <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
+          <View style={styles.addContactContainer}>
+            <TextInput
+              style={styles.input}
+              value={newPhone}
+              onChangeText={setNewPhone}
+              placeholder="Add phone..."
+              placeholderTextColor={MODERN_COLORS.textTertiary}
+              keyboardType="phone-pad"
+            />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddPhone}>
+              <Ionicons name="add-circle" size={24} color={MODERN_COLORS.primary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Subphase</Text>
-          <TouchableOpacity
-            style={[styles.dropdown, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border
-            }]}
-            onPress={() => setActiveDropdown('subphase')}
+        {/* Lead Management */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="settings" size={20} color={MODERN_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Lead Management</Text>
+          </View>
+          
+          <View style={styles.managementRow}>
+            <View style={styles.managementItem}>
+              <Text style={styles.inputLabel}>Status</Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setActiveDropdown('status')}
+              >
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                  {getFilterLabel('status', editedLead.status)}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color={MODERN_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.managementItem}>
+              <Text style={styles.inputLabel}>Phase</Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setActiveDropdown('phase')}
+              >
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                  {getFilterLabel('phase', editedLead.phase)}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color={MODERN_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Subphase</Text>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setActiveDropdown('subphase')}
+            >
+              <Text style={styles.dropdownText} numberOfLines={1}>
+                {getFilterLabel('subphase', editedLead.subphase)}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={24} color={MODERN_COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Save Button */}
+        <View style={styles.detailCard}>
+          <TouchableOpacity 
+            style={[styles.saveButton, loading && styles.buttonDisabled]} 
+            onPress={handleSave}
+            disabled={loading}
           >
-            <Text style={[styles.dropdownText, { color: theme.text }]}>
-              {getFilterLabel('subphase', editedLead.subphase)}
-            </Text>
-            <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
+            {loading ? (
+              <ActivityIndicator color={MODERN_COLORS.white} size="small" />
+            ) : (
+              <>
+                <MaterialIcons name="save" size={20} color={MODERN_COLORS.white} />
+                <Text style={styles.saveButtonText}>Save Changes</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Save Button */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <TouchableOpacity 
-          style={[styles.saveButton, { backgroundColor: theme.success }, loading && styles.buttonDisabled]} 
-          onPress={handleSave}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={theme.white} size="small" />
-          ) : (
-            <Text style={[styles.saveButtonText, { color: theme.white }]}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
 
       {/* Dropdown Modals */}
       <DropdownModal
@@ -349,7 +401,14 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={STATUS_CHOICES}
         onSelect={(value) => setEditedLead({...editedLead, status: value as Lead['status']})}
         title="Select Status"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: MODERN_COLORS.primary,
+          background: MODERN_COLORS.background,
+          cardBg: MODERN_COLORS.surface,
+          text: MODERN_COLORS.textPrimary,
+          border: MODERN_COLORS.border,
+        }}
       />
       <DropdownModal
         visible={activeDropdown === 'phase'}
@@ -357,7 +416,14 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={allPhases}
         onSelect={handlePhaseSelection}
         title="Select Phase"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: MODERN_COLORS.primary,
+          background: MODERN_COLORS.background,
+          cardBg: MODERN_COLORS.surface,
+          text: MODERN_COLORS.textPrimary,
+          border: MODERN_COLORS.border,
+        }}
       />
       <DropdownModal
         visible={activeDropdown === 'subphase'}
@@ -365,85 +431,171 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={allSubphases}
         onSelect={(value) => setEditedLead({...editedLead, subphase: value})}
         title="Select Subphase"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: MODERN_COLORS.primary,
+          background: MODERN_COLORS.background,
+          cardBg: MODERN_COLORS.surface,
+          text: MODERN_COLORS.textPrimary,
+          border: MODERN_COLORS.border,
+        }}
       />
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: MODERN_COLORS.background,
+  },
+  
+  // Header Styles
+  header: {
+    backgroundColor: MODERN_COLORS.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: MODERN_COLORS.primaryDark,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    height: 64,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: MODERN_COLORS.white,
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  saveHeaderButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: MODERN_COLORS.secondary,
+    borderRadius: 20,
+  },
+  saveHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: MODERN_COLORS.white,
+  },
+  
+  // Scroll View
   detailScrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  
+  // Detail Cards
   detailCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    marginBottom: 16,
     padding: 20,
     borderRadius: 16,
+    backgroundColor: MODERN_COLORS.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  
+  // Section Headers
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 15,
+    color: MODERN_COLORS.textPrimary,
   },
+  
+  // Contact Items
   contactItemContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 8,
+    backgroundColor: MODERN_COLORS.background,
     borderLeftWidth: 3,
+    borderLeftColor: MODERN_COLORS.primary,
   },
   contactItemContent: {
     flex: 1,
   },
   contactItemText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
+    color: MODERN_COLORS.textPrimary,
   },
   removeContactButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
+    padding: 4,
   },
-  removeContactButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+  
+  // Add Contact
   addContactContainer: {
     flexDirection: 'row',
     gap: 8,
-    alignItems: 'flex-end',
-    marginTop: 15,
-    paddingTop: 15,
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
+    borderTopColor: MODERN_COLORS.border,
   },
   input: {
+    flex: 1,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: MODERN_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: 15,
+    color: MODERN_COLORS.textPrimary,
+    backgroundColor: MODERN_COLORS.background,
   },
   addButton: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: MODERN_COLORS.background,
   },
-  addButtonText: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
+  
+  // Management
   managementRow: {
     flexDirection: 'row',
-    gap: 15,
-    marginBottom: 15,
+    gap: 16,
+    marginBottom: 20,
   },
   managementItem: {
     flex: 1,
@@ -451,32 +603,40 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
+    color: MODERN_COLORS.textSecondary,
     marginBottom: 8,
   },
   dropdown: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderColor: MODERN_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: MODERN_COLORS.background,
   },
   dropdownText: {
-    fontSize: 16,
+    fontSize: 15,
+    color: MODERN_COLORS.textPrimary,
     flex: 1,
-  },
-  dropdownArrow: {
-    fontSize: 14,
+    marginRight: 8,
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 8,
   },
+  
+  // Save Button
   saveButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: MODERN_COLORS.primary,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -484,6 +644,12 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: MODERN_COLORS.white,
+  },
+  
+  // Bottom Spacing
+  bottomSpacing: {
+    height: 20,
   },
 });
 

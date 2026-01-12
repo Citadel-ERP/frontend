@@ -423,17 +423,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   };
 
   const renderContent = () => {
-    if (viewMode === 'incentive' && selectedLead) {
-      return (
-        <Incentive
-          onBack={handleBackPress}
-          leadId={selectedLead.id}
-          leadName={selectedLead.name}
-          hideHeader={true}
-        />
-      );
-    }
-    if (viewMode === 'detail' && selectedLead) {
+  if (viewMode === 'incentive' && selectedLead) {
+    return (
+      <Incentive
+        onBack={handleBackPress}
+        leadId={selectedLead.id}
+        leadName={selectedLead.name}
+        hideHeader={true}
+      />
+    );
+  }
+  if (viewMode === 'detail' && selectedLead) {
       if (isEditMode) {
         return (
           <EditLead
@@ -521,19 +521,17 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           ) : undefined
         }
       >
-        <Header
-          title={getHeaderTitle()}
-          onBack={handleBackPress}
-          onThemeToggle={toggleDarkMode}
-          isDarkMode={isDarkMode}
-          theme={theme}
-          showThemeToggle={viewMode === 'list'}
-          showEditButton={viewMode === 'detail' && !isEditMode}
-          onEdit={handleEditPress}
-          showSaveButton={viewMode === 'detail' && isEditMode}
-          onSave={() => {/* Save is handled in EditLead component */}}
-          loading={loading}
-        />
+        {viewMode === 'list' && (
+  <Header
+    title={getHeaderTitle()}
+    onBack={handleBackPress}
+    onThemeToggle={toggleDarkMode}
+    isDarkMode={isDarkMode}
+    theme={theme}
+    showThemeToggle={true}
+    loading={loading}
+  />
+)}
         
         <View style={[styles.contentContainer, { paddingBottom: insets.bottom }]}>
           {renderContent()}

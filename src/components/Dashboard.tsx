@@ -1228,8 +1228,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       // setShowDriver(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
-      // setShowBDT(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowBDT(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
       // setShowMedical(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
