@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    height: 64,
+    height: 60,
   },
   backButton: {
     padding: 8,

@@ -4,7 +4,7 @@ import {
   StatusBar, Alert, TextInput, ActivityIndicator
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../../styles/theme';
+import { colors, spacing, fontSize, borderRadius, shadows } from './theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../../config/config';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -1001,7 +1001,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    marginTop:40
+    marginTop:50
   },
   // ADDED: Style for header when using green header
   headerWithGreen: {
@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
   },
   // ADDED: Green header styles
   greenHeader: {
-    paddingTop: 70,
+    paddingTop: 80,
     paddingBottom: 20,
     paddingHorizontal: spacing.lg,
   },
