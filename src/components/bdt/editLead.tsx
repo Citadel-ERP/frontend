@@ -17,21 +17,21 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 // Modern green color scheme
 const MODERN_COLORS = {
-  primary: '#075E54', // WhatsApp green
-  primaryLight: '#128C7E', // Light WhatsApp green
-  primaryDark: '#054D44', // Dark WhatsApp green
-  secondary: '#25D366', // WhatsApp bright green
-  accent: '#10B981', // Emerald green
-  danger: '#EF4444', // Red
-  warning: '#F59E0B', // Amber
-  background: '#F0F2F5', // Light background
-  surface: '#FFFFFF', // White for surfaces
-  textPrimary: '#1F2937', // Dark gray
-  textSecondary: '#6B7280', // Medium gray
-  textTertiary: '#9CA3AF', // Light gray
-  border: '#E5E7EB', // Border gray
-  success: '#25D366', // WhatsApp bright green
-  info: '#3B82F6', // Blue for info
+  primary: '#075E54',
+  primaryLight: '#128C7E',
+  primaryDark: '#054D44',
+  secondary: '#25D366',
+  accent: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F0F2F5',
+  surface: '#FFFFFF',
+  textPrimary: '#1F2937',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+  success: '#25D366',
+  info: '#3B82F6',
   white: '#FFFFFF',
 };
 
@@ -42,6 +42,20 @@ interface EditLeadProps {
   token: string | null;
   theme: ThemeColors;
   fetchSubphases: (phase: string) => Promise<void>;
+}
+
+interface Collaborator {
+  id: string | number;
+  user: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+    employee_id?: string;
+    [key: string]: any;
+  };
+  created_at: string;
+  updated_at: string;
 }
 
 const EditLead: React.FC<EditLeadProps> = ({
@@ -62,9 +76,17 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'collaborator' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  const [allEmployees, setAllEmployees] = useState<FilterOption[]>([]);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>(lead.collaborators || []);
+  const [loadingCollaborators, setLoadingCollaborators] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [potentialCollaborators, setPotentialCollaborators] = useState<FilterOption[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -78,12 +100,14 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   useEffect(() => {
     fetchPhases();
+    fetchEmployees();
     if (editedLead.phase) {
       fetchSubphasesForPhase(editedLead.phase);
     }
+    // Fetch current collaborators when component mounts
+    fetchCollaborators();
   }, []);
 
-  // Modern Header Component
   const ModernHeader = () => (
     <SafeAreaView style={styles.header}>
       <View style={styles.headerContent}>
@@ -171,6 +195,200 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/employee/getPotentialCollaborators?query=`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform employees to match API response structure
+      const employeeOptions = data.potential_collaborators.map((emp: any) => ({
+        value: emp.email,
+        label: `${emp.first_name} ${emp.last_name} (${emp.email})`,
+        employeeData: emp
+      }));
+      
+      setAllEmployees(employeeOptions);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      setAllEmployees([]);
+    }
+  };
+
+  const fetchCollaborators = async () => {
+    try {
+      if (!token || !lead.id) return;
+      
+      setLoadingCollaborators(true);
+      const response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          lead_id: lead.id
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.collaborators) {
+        setCollaborators(data.collaborators);
+      }
+    } catch (error) {
+      console.error('Error fetching collaborators:', error);
+      Alert.alert('Error', 'Failed to fetch collaborators');
+    } finally {
+      setLoadingCollaborators(false);
+    }
+  };
+
+  const searchPotentialCollaborators = async (query: string) => {
+    try {
+      if (!token || query.length < 2) {
+        setPotentialCollaborators([]);
+        return;
+      }
+
+      setSearchLoading(true);
+      const response = await fetch(
+        `${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform to match FilterOption structure
+      const options = data.potential_collaborators.map((user: any) => ({
+        value: user.email,
+        label: `${user.first_name} ${user.last_name} (${user.email})`,
+        userData: user
+      }));
+
+      setPotentialCollaborators(options);
+    } catch (error) {
+      console.error('Error searching collaborators:', error);
+      setPotentialCollaborators([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const addCollaborator = async (email: string) => {
+    try {
+      if (!token || !lead.id) {
+        Alert.alert('Error', 'Missing required information');
+        return;
+      }
+      
+      // Validate email
+      if (!validateEmail(email)) {
+        Alert.alert('Error', 'Please enter a valid email address');
+        return;
+      }
+      
+      setLoadingCollaborators(true);
+      const response = await fetch(`${BACKEND_URL}/employee/addCollaborators`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          lead_id: lead.id,
+          email: email
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add collaborator');
+      }
+
+      // Refresh collaborators list
+      await fetchCollaborators();
+      // Clear search
+      setSearchQuery('');
+      setPotentialCollaborators([]);
+      Alert.alert('Success', data.message || 'Collaborator added successfully');
+    } catch (error: any) {
+      console.error('Error adding collaborator:', error);
+      Alert.alert('Error', error.message || 'Failed to add collaborator');
+    } finally {
+      setLoadingCollaborators(false);
+    }
+  };
+
+  const removeCollaborator = async (collaboratorId: string | number) => {
+    try {
+      if (!token || !lead.id) return;
+      
+      Alert.alert(
+        'Remove Collaborator',
+        'Are you sure you want to remove this collaborator?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              setLoadingCollaborators(true);
+              const response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  token,
+                  lead_id: lead.id,
+                  collaborator_id: collaboratorId
+                })
+              });
+
+              const data = await response.json();
+              
+              if (!response.ok) {
+                throw new Error(data.message || 'Failed to remove collaborator');
+              }
+
+              // Refresh collaborators list
+              await fetchCollaborators();
+              Alert.alert('Success', data.message || 'Collaborator removed successfully');
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error removing collaborator:', error);
+      Alert.alert('Error', error.message || 'Failed to remove collaborator');
+    } finally {
+      setLoadingCollaborators(false);
+    }
+  };
+
   const beautifyName = (name: string): string => {
     return name
       .split('_')
@@ -178,17 +396,37 @@ const EditLead: React.FC<EditLeadProps> = ({
       .join(' ');
   };
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+  };
+
   const handleAddEmail = () => {
-    if (!newEmail.trim()) {
-      Alert.alert('Error', 'Please enter a valid email');
+    const trimmedEmail = newEmail.trim();
+    
+    if (!trimmedEmail) {
+      setEmailError('Please enter an email address');
       return;
     }
-    if (editingEmails.includes(newEmail.trim())) {
-      Alert.alert('Error', 'This email already exists');
+    
+    if (!validateEmail(trimmedEmail)) {
+      setEmailError('Please enter a valid email address');
       return;
     }
-    setEditingEmails([...editingEmails, newEmail.trim()]);
+    
+    if (editingEmails.includes(trimmedEmail)) {
+      setEmailError('This email already exists');
+      return;
+    }
+    
+    setEditingEmails([...editingEmails, trimmedEmail]);
     setNewEmail('');
+    setEmailError(null);
   };
 
   const handleRemoveEmail = (index: number) => {
@@ -196,16 +434,26 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   const handleAddPhone = () => {
-    if (!newPhone.trim()) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+    const trimmedPhone = newPhone.trim();
+    
+    if (!trimmedPhone) {
+      setPhoneError('Please enter a phone number');
       return;
     }
-    if (editingPhones.includes(newPhone.trim())) {
-      Alert.alert('Error', 'This phone number already exists');
+    
+    if (!validatePhone(trimmedPhone)) {
+      setPhoneError('Please enter a valid phone number');
       return;
     }
-    setEditingPhones([...editingPhones, newPhone.trim()]);
+    
+    if (editingPhones.includes(trimmedPhone)) {
+      setPhoneError('This phone number already exists');
+      return;
+    }
+    
+    setEditingPhones([...editingPhones, trimmedPhone]);
     setNewPhone('');
+    setPhoneError(null);
   };
 
   const handleRemovePhone = (index: number) => {
@@ -215,6 +463,8 @@ const EditLead: React.FC<EditLeadProps> = ({
   const handleSave = async () => {
     try {
       setLoading(true);
+      
+      // Update the lead with new data
       await onSave(editedLead, editingEmails, editingPhones);
     } catch (error) {
       Alert.alert('Error', 'Failed to update lead');
@@ -242,6 +492,11 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
     const option = choices.find(choice => choice.value === value);
     return option ? option.label : beautifyName(value);
+  };
+
+  const getEmployeeNameByEmail = (email: string): string => {
+    const employee = allEmployees.find(emp => emp.value === email);
+    return employee?.label || email;
   };
 
   return (
@@ -276,17 +531,23 @@ const EditLead: React.FC<EditLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, emailError && styles.inputError]}
               value={newEmail}
-              onChangeText={setNewEmail}
+              onChangeText={(text) => {
+                setNewEmail(text);
+                setEmailError(null);
+              }}
               placeholder="Add email..."
               placeholderTextColor={MODERN_COLORS.textTertiary}
               keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
             />
             <TouchableOpacity style={styles.addButton} onPress={handleAddEmail}>
               <Ionicons name="add-circle" size={24} color={MODERN_COLORS.primary} />
             </TouchableOpacity>
           </View>
+          {emailError && <Text style={styles.errorText}>{emailError}</Text>}
         </View>
 
         <View style={styles.detailCard}>
@@ -311,17 +572,132 @@ const EditLead: React.FC<EditLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, phoneError && styles.inputError]}
               value={newPhone}
-              onChangeText={setNewPhone}
+              onChangeText={(text) => {
+                setNewPhone(text);
+                setPhoneError(null);
+              }}
               placeholder="Add phone..."
               placeholderTextColor={MODERN_COLORS.textTertiary}
               keyboardType="phone-pad"
+              autoComplete="tel"
             />
             <TouchableOpacity style={styles.addButton} onPress={handleAddPhone}>
               <Ionicons name="add-circle" size={24} color={MODERN_COLORS.primary} />
             </TouchableOpacity>
           </View>
+          {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+        </View>
+
+        {/* Collaborators */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="people" size={20} color={MODERN_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Collaborators ({collaborators.length})</Text>
+            {loadingCollaborators && (
+              <ActivityIndicator size="small" color={MODERN_COLORS.primary} style={{ marginLeft: 8 }} />
+            )}
+          </View>
+          
+          {collaborators.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No collaborators added yet</Text>
+            </View>
+          ) : (
+            collaborators.map((collaborator) => (
+              <View key={collaborator.id} style={styles.contactItemContainer}>
+                <View style={styles.contactItemContent}>
+                  <Text style={styles.contactItemText}>
+                    👤 {collaborator.user.full_name} 
+                  </Text>
+                  {/* <Text style={styles.collaboratorAddedDate}>
+                    Added on {new Date(collaborator.created_at).toLocaleDateString()}
+                  </Text> */}
+                </View>
+                <TouchableOpacity 
+                  style={styles.removeContactButton}
+                  onPress={() => removeCollaborator(collaborator.id)}
+                  disabled={loadingCollaborators}
+                >
+                  {loadingCollaborators ? (
+                    <ActivityIndicator size="small" color={MODERN_COLORS.danger} />
+                  ) : (
+                    <Ionicons name="close-circle" size={22} color={MODERN_COLORS.danger} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+
+          {/* Add Collaborator Input */}
+          <View style={styles.addContactContainer}>
+            <View style={styles.searchInputContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={(text) => {
+                  setSearchQuery(text);
+                  if (text.length >= 2) {
+                    searchPotentialCollaborators(text);
+                  } else {
+                    setPotentialCollaborators([]);
+                  }
+                }}
+                placeholder="Search by name or email..."
+                placeholderTextColor={MODERN_COLORS.textTertiary}
+                autoCapitalize="none"
+              />
+              {searchLoading && (
+                <ActivityIndicator size="small" color={MODERN_COLORS.primary} style={styles.searchLoading} />
+              )}
+            </View>
+          </View>
+
+          {/* Search Results */}
+          {potentialCollaborators.length > 0 && (
+            <View style={styles.searchResultsContainer}>
+              <Text style={styles.searchResultsTitle}>Search Results:</Text>
+              {potentialCollaborators
+                .filter(emp => 
+                  !collaborators.some(collab => collab.user.email === emp.value)
+                )
+                .map((employee) => (
+                  <TouchableOpacity
+                    key={employee.value}
+                    style={styles.searchResultItem}
+                    onPress={() => addCollaborator(employee.value)}
+                    disabled={loadingCollaborators}
+                  >
+                    <View style={styles.searchResultContent}>
+                      <Ionicons name="person" size={18} color={MODERN_COLORS.primary} />
+                      <Text style={styles.searchResultText} numberOfLines={2}>
+                        {employee.label}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => addCollaborator(employee.value)}
+                      disabled={loadingCollaborators}
+                    >
+                      <Ionicons name="add-circle" size={24} color={MODERN_COLORS.success} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))
+              }
+            </View>
+          )}
+
+          {/* Or use dropdown if no search results */}
+          {searchQuery.length < 2 && potentialCollaborators.length === 0 && (
+            <TouchableOpacity
+              style={styles.addCollaboratorButton}
+              onPress={() => setActiveDropdown('collaborator')}
+              disabled={loadingCollaborators}
+            >
+              <MaterialIcons name="person-add" size={20} color={MODERN_COLORS.primary} />
+              <Text style={styles.addCollaboratorText}>Browse All Employees</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Lead Management */}
@@ -431,6 +807,30 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={allSubphases}
         onSelect={(value) => setEditedLead({...editedLead, subphase: value})}
         title="Select Subphase"
+        theme={{
+          ...theme,
+          primary: MODERN_COLORS.primary,
+          background: MODERN_COLORS.background,
+          cardBg: MODERN_COLORS.surface,
+          text: MODERN_COLORS.textPrimary,
+          border: MODERN_COLORS.border,
+        }}
+      />
+      <DropdownModal
+        visible={activeDropdown === 'collaborator'}
+        onClose={() => {
+          setActiveDropdown(null);
+          setSearchQuery('');
+          setPotentialCollaborators([]);
+        }}
+        options={allEmployees.filter(emp => 
+          !collaborators.some(collab => collab.user.email === emp.value)
+        )}
+        onSelect={async (email) => {
+          await addCollaborator(email);
+          setActiveDropdown(null);
+        }}
+        title="Add Collaborator"
         theme={{
           ...theme,
           primary: MODERN_COLORS.primary,
@@ -556,6 +956,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: MODERN_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  collaboratorAddedDate: {
+    fontSize: 12,
+    color: MODERN_COLORS.textTertiary,
   },
   removeContactButton: {
     padding: 4,
@@ -582,6 +987,9 @@ const styles = StyleSheet.create({
     color: MODERN_COLORS.textPrimary,
     backgroundColor: MODERN_COLORS.background,
   },
+  inputError: {
+    borderColor: MODERN_COLORS.danger,
+  },
   addButton: {
     width: 40,
     height: 40,
@@ -589,6 +997,106 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: MODERN_COLORS.background,
+  },
+  addCollaboratorButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: MODERN_COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    backgroundColor: MODERN_COLORS.background,
+    borderStyle: 'dashed',
+  },
+  addCollaboratorText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: MODERN_COLORS.primary,
+  },
+  
+  // Search Input
+  searchInputContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: MODERN_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginBottom:10,
+    color: MODERN_COLORS.textPrimary,
+    backgroundColor: MODERN_COLORS.background,
+    paddingRight: 40,
+  },
+  searchLoading: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  
+  // Search Results
+  searchResultsContainer: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: MODERN_COLORS.border,
+    paddingTop: 16,
+  },
+  searchResultsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: MODERN_COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: MODERN_COLORS.background,
+    borderLeftWidth: 3,
+    borderLeftColor: MODERN_COLORS.accent,
+  },
+  searchResultContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchResultText: {
+    fontSize: 14,
+    color: MODERN_COLORS.textPrimary,
+    flex: 1,
+  },
+  
+  // Error Text
+  errorText: {
+    fontSize: 12,
+    color: MODERN_COLORS.danger,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  
+  // Empty State
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: MODERN_COLORS.background,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: MODERN_COLORS.textTertiary,
+    textAlign: 'center',
   },
   
   // Management

@@ -457,12 +457,27 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     </View>
   );
 
+  // ADDED: Green header component
+  const GreenHeader = () => (
+    <LinearGradient
+      colors={['#075E54', '#075E54']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.greenHeader}
+    >
+      <View style={styles.greenHeaderContent}>
+        {/* <Text style={styles.greenHeaderTitle}>Incentive Checklist</Text> */}
+        {/* <Text style={styles.greenHeaderSubtitle}>Lead: {leadName}</Text> */}
+      </View>
+    </LinearGradient>
+  );
+
   if (loading && !incentiveData) {
     return (
       <View style={styles.container}>
         {!hideHeader && (
           <>
-            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+            <StatusBar barStyle="light-content" backgroundColor="#075E54" />
             <View style={styles.header}>
               <TouchableOpacity style={styles.backButton} onPress={onBack}>
                 <BackIcon />
@@ -488,7 +503,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         <View style={styles.container}>
           {!hideHeader && (
             <>
-              <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+              <StatusBar barStyle="light-content" backgroundColor="#075E54" />
               <View style={styles.header}>
                 <TouchableOpacity style={styles.backButton} onPress={() => setShowCalculation(false)}>
                   <BackIcon />
@@ -573,19 +588,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
               </Text>
             </View>
 
-            {/* <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              onPress={createIncentive}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.submitButtonText}>Submit Incentive</Text>
-              )}
-            </TouchableOpacity> */}
             <LinearGradient
-              colors={['#007AFF', '#0056CC']}
+              colors={['#075E54', '#075E54']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[
@@ -616,8 +620,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
       <View style={styles.container}>
         {!hideHeader && (
           <>
-            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+            {/* ADDED: Green Header */}
+            <GreenHeader />
+            <View style={[styles.header, styles.headerWithGreen]}>
               <TouchableOpacity style={styles.backButton} onPress={onBack}>
                 <BackIcon />
               </TouchableOpacity>
@@ -750,7 +756,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
           )}
 
           <LinearGradient
-            colors={['#007AFF', '#0056CC']}
+            colors={['#075E54', '#075E54']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.continueButton}
@@ -774,8 +780,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
       <View style={styles.container}>
         {!hideHeader && (
           <>
-            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+            {/* ADDED: Green Header */}
+            <GreenHeader />
+            <View style={[styles.header, styles.headerWithGreen]}>
               <TouchableOpacity style={styles.backButton} onPress={onBack}>
                 <BackIcon />
               </TouchableOpacity>
@@ -795,8 +803,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     <View style={styles.container}>
       {!hideHeader && (
         <>
-          <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-          <View style={styles.header}>
+          <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+          {/* ADDED: Green Header */}
+          <GreenHeader />
+          <View style={[styles.header, styles.headerWithGreen]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
             </TouchableOpacity>
@@ -991,6 +1001,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
+    marginTop:40
+  },
+  // ADDED: Style for header when using green header
+  headerWithGreen: {
+    backgroundColor: 'transparent',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+
+  },
+  // ADDED: Green header styles
+  greenHeader: {
+    paddingTop: 70,
+    paddingBottom: 20,
+    paddingHorizontal: spacing.lg,
+  },
+  greenHeaderContent: {
+    marginTop: 20,
+  },
+  greenHeaderTitle: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+    color: colors.white,
+    marginBottom: spacing.xs,
+  },
+  greenHeaderSubtitle: {
+    fontSize: fontSize.md,
+    color: colors.white,
+    opacity: 0.9,
+    fontWeight: '500',
   },
   backButton: {
     padding: spacing.sm,

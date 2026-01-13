@@ -1,6 +1,6 @@
 export const lightTheme = {
-  primary: '#007AFF',
-  primaryBlue: '#007AFF',
+  primary: '#075E54',
+  primaryBlue: '#075E54',
   background: '#f5f7fa',
   backgroundSecondary: '#FFFFFF',
   cardBg: '#FFFFFF',
@@ -31,8 +31,8 @@ export const lightTheme = {
 };
 
 export const darkTheme = {
-  primary: '#1C5CFB',
-  primaryBlue: '#1C5CFB',
+  primary: '#075E54',
+  primaryBlue: '#075E54',
   background: '#050b18',
   backgroundSecondary: '#111a2d',
   cardBg: '#111a2d',
