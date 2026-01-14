@@ -94,7 +94,6 @@ export const CHECKIN_REASONS: ReasonOption[] = [
 ];
 
 export const CHECKOUT_REASONS: ReasonOption[] = [
-  { value: 'early_leave', label: 'Early leave' },
   { value: 'client_meeting', label: 'Client meeting outside' },
   { value: 'personal_work', label: 'Personal work' },
   { value: 'sick', label: 'Feeling unwell' },

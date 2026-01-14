@@ -62,6 +62,12 @@ export interface Vehicle {
     url: string;
     is_primary: boolean;
   }>;
+  vehicle_photos?: Array<{ // Add this for multiple images
+    id: number;
+    photo: string;
+    created_at: string;
+    updated_at: string;
+  }>;
 }
 
 export interface Booking {
@@ -70,6 +76,7 @@ export interface Booking {
   start_time: string;
   end_time: string;
   booked_by: AssignedEmployee;
+  booked_for: AssignedEmployee;
   status: string;
   purpose: string;
   reason_of_cancellation: string | null;
@@ -77,6 +84,7 @@ export interface Booking {
   end_location: string;
   created_at: string;
   updated_at: string;
+  vehicle_assignments?: VehicleAssignment[]
 }
 
 export interface MaintenanceRecord {
@@ -150,6 +158,15 @@ export interface FuelLogsModalProps {
   onClose: () => void;
   logs: FuelLog[];
   formatDateTime: (dateString: string) => string;
+}
+export interface VehicleAssignment {
+  id: number;
+  vehicle: Vehicle;
+  assigned_driver: AssignedEmployee | null;
+  assignment_status: string; // 'pending', 'assigned', 'in-progress', 'completed', 'cancelled'
+  assigned_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ViewType = 'main' | 'vehicle-detail' | 'booking-detail';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,20 @@ import {
   StatusBar,
   Alert,
   Platform,
-  Modal,
-  TextInput,
   ActivityIndicator,
   ScrollView,
   Dimensions,
   Image,
-  RefreshControl
+  RefreshControl,
+  Animated,
+  LayoutAnimation,
+  UIManager
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Location from 'expo-location';
-import * as FileSystem from 'expo-file-system/legacy';
 import { LocationService } from '../../services/locationService';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
-import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
+import * as FileSystem from 'expo-file-system/legacy';
 import { BACKEND_URL } from '../../config/config';
 import LeaveInfoScreen from './LeaveInfoScreen';
 import HolidayScreen from './HolidayScreen';
@@ -34,16 +32,73 @@ import {
   Holiday,
   AttendanceRecord,
   LeaveForm,
-  TabType,
   CHECKIN_REASONS,
   CHECKOUT_REASONS
 } from './types';
 import LeaveModal from './LeaveModal';
-import { MonthDropdown, YearDropdown } from './DropdownComponents';
 import ReasonModal from './ReasonModal';
+
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const STATUS_COLORS = {
+  present: '#31ff31ff',
+  leave: '#ff9a34ff',
+  holiday: '#00bfffff',
+  checkout_missing: '#E6CC00',
+  late_login: '#a855f7',
+  late_login_checkout_missing: '#C7907C',
+  late_login_checkout_pending: '#D9BFDA',
+  checkout_pending: '#D9F2D9',
+  pending: '#D3D3D3',
+  weekend: '#FFFFFF',
+  absent: '#ff2929ff',
+};
+
+const STATUS_TEXT_COLORS = {
+  present: '#ffffffff',
+  leave: '#ffffffff',
+  holiday: '#ffffffff',
+  checkout_missing: '#ffffffff',
+  late_login: '#ffffffff',
+  late_login_checkout_missing: '#ffffffff',
+  late_login_checkout_pending: '#363636ff',
+  checkout_pending: '#363636ff',
+  pending: '#363636ff',
+  weekend: '#363636ff',
+  absent: '#ffffffff',
+};
+
+const STATUS_NAMES: Record<string, string> = {
+  present: 'Present',
+  leave: 'Leave',
+  holiday: 'Holiday',
+  checkout_missing: 'Checkout Missing',
+  late_login: 'Late Login',
+  late_login_checkout_missing: 'Late Login + Checkout Missing',
+  late_login_checkout_pending: 'Late Login + Checkout Pending',
+  checkout_pending: 'Checkout Pending',
+  pending: 'Pending',
+  weekend: 'Weekend',
+  absent: 'Absent/LOP',
+};
+
+const LEGEND_ITEMS = [
+  { key: 'present', color: STATUS_COLORS.present, label: 'Present' },
+  { key: 'absent', color: STATUS_COLORS.absent, label: 'Absent' },
+  { key: 'late_login', color: STATUS_COLORS.late_login, label: 'Late Login' },
+  { key: 'leave', color: STATUS_COLORS.leave, label: 'Leave' },
+  { key: 'holiday', color: STATUS_COLORS.holiday, label: 'Holiday' },
+  { key: 'checkout_missing', color: STATUS_COLORS.checkout_missing, label: 'Checkout Missing' },
+  { key: 'late_login_checkout_missing', color: STATUS_COLORS.late_login_checkout_missing, label: 'Late + Checkout Missing' },
+  { key: 'checkout_pending', color: STATUS_COLORS.checkout_pending, label: 'Checkout Pending' },
+  { key: 'late_login_checkout_pending', color: STATUS_COLORS.late_login_checkout_pending, label: 'Late + Checkout Pending' },
+];
 
 const AttendanceButtonSection: React.FC<{
   isAfter11AM: boolean;
@@ -55,25 +110,16 @@ const AttendanceButtonSection: React.FC<{
   attendanceRecords: AttendanceRecord[];
   hasSpecialPermission: boolean;
 }> = ({ isAfter11AM, locationPermission, loading, onPress, token, todayAttendance, attendanceRecords, hasSpecialPermission }) => {
-  const [checkingPermission, setCheckingPermission] = useState(false);
-
-  // Check if attendance is marked for today
   const checkTodaysAttendance = () => {
     const today = new Date().toISOString().split('T')[0];
-
-    // First check todayAttendance
     if (todayAttendance && todayAttendance.check_in_time) {
       return true;
     }
-
-    // Then check attendanceRecords
     const todaysRecord = attendanceRecords.find(record => record.date === today);
     return todaysRecord && todaysRecord.check_in_time;
   };
-
   const attendanceMarked = checkTodaysAttendance();
 
-  // Before 11 AM or has special permission - show button
   if (!isAfter11AM || hasSpecialPermission) {
     return (
       <TouchableOpacity
@@ -82,9 +128,9 @@ const AttendanceButtonSection: React.FC<{
           !locationPermission && styles.disabledButton
         ]}
         onPress={onPress}
-        disabled={Boolean(loading || !locationPermission || checkingPermission || attendanceMarked)}
+        disabled={Boolean(loading || !locationPermission || attendanceMarked)}
       >
-        {loading || checkingPermission ? (
+        {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.markButtonText}>
@@ -95,13 +141,71 @@ const AttendanceButtonSection: React.FC<{
       </TouchableOpacity>
     );
   }
-
-  // After 11 AM and no special permission
   if (!attendanceMarked) {
     return null;
   }
-
   return null;
+};
+
+const StatusTooltip: React.FC<{
+  visible: boolean;
+  status: string;
+  day: number;
+}> = ({ visible, status, day }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-10)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(fadeAnim, {
+          toValue: 1,
+          friction: 7,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          friction: 7,
+          tension: 40,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: -10,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  const statusKey = status.toLowerCase().replace(/ /g, '_');
+  const displayName = STATUS_NAMES[statusKey] || status;
+
+  return (
+    <Animated.View
+      style={[
+        styles.statusTooltip,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY }],
+        }
+      ]}
+    >
+      <Text style={styles.statusTooltipText}>{displayName}</Text>
+      <View style={styles.tooltipArrow} />
+    </Animated.View>
+  );
 };
 
 const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
@@ -124,15 +228,9 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     leaveType: 'casual',
     reason: ''
   });
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
-  const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [showLeaveInfo, setShowLeaveInfo] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveApplication | null>(null);
   const [showReasonModal, setShowReasonModal] = useState(false);
@@ -144,8 +242,10 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [isCheckingPermission, setIsCheckingPermission] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasSpecialPermission, setHasSpecialPermission] = useState(false);
-  // DO NOT REMOVE THIS COMMENT BY ANY CHANCE
-  // const TEST_IST_TIME = '11:18';
+  const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
+  const [showAllLegend, setShowAllLegend] = useState(false);
+  const legendHeight = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -172,7 +272,25 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     initializeApp();
   }, []);
 
-  // Check special permission when token changes
+  useEffect(() => {
+    if (selectedDate) {
+      const timer = setTimeout(() => {
+        setSelectedDate(null);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    Animated.spring(legendHeight, {
+      toValue: showAllLegend ? 1 : 0,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: false,
+    }).start();
+  }, [showAllLegend]);
+
   const checkSpecialPermission = async (token: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/core/checkSpecialAttendance`, {
@@ -190,7 +308,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
-  // Fetch attendance records when month/year changes
   useEffect(() => {
     if (token) {
       fetchAttendanceRecords(token, selectedMonth, selectedYear);
@@ -221,24 +338,10 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return false;
   };
 
-  // const getISTTime = () => {
-  //   const now = new Date();
-  //   const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  //   return new Date(utcTime + 19800000);
-  // };
-
   const getISTTime = () => {
     const now = new Date();
     const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
     const istDate = new Date(utcTime + 19800000);
-    // DO NOT REMOVE THIS COMMENT BY ANY CHANCE
-    // if (TEST_IST_TIME) {
-    //   const [h, m] = TEST_IST_TIME.split(':').map(Number);
-    //   istDate.setHours(h);
-    //   istDate.setMinutes(m);
-    //   istDate.setSeconds(0);
-    // }
-
     return istDate;
   };
 
@@ -248,13 +351,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const istTime = new Date(utcTime + 19800000);
     const currentHours = istTime.getHours();
     const currentMinutes = istTime.getMinutes();
-
-    // DO NOT REMOVE THIS COMMENT BY ANY CHANCE
-    // if (TEST_IST_TIME){
-    //   const [h, m] = TEST_IST_TIME.split(':').map(Number);
-    //   if (h < hours || (h === hours && m < minutes)) return false;
-    //   return true;    
-    // }
     if (currentHours > hours) return true;
     if (currentHours === hours && currentMinutes >= minutes) return true;
     return false;
@@ -265,7 +361,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const hours = istTime.getHours();
     const minutes = istTime.getMinutes();
 
-    // If attendance is already marked, don't show time-based messages
     if (todayAttendance && todayAttendance.check_in_time) {
       return {
         message: "Attendance marked successfully",
@@ -274,7 +369,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       };
     }
 
-    // Before 10:15 AM
     if (hours < 10 || (hours === 10 && minutes < 15)) {
       return {
         message: "Mark your attendance between\n10:00 AM - 10:15 AM",
@@ -283,7 +377,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       };
     }
 
-    // Between 10:15 AM and 11:00 AM
     if ((hours === 10 && minutes >= 15) || (hours < 11)) {
       return {
         message: "Late Login Period\n10:15 AM - 11:00 AM\nYou can still mark attendance",
@@ -292,7 +385,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       };
     }
 
-    // After 11:00 AM
     if (hours >= 11) {
       if (hasSpecialPermission) {
         return {
@@ -318,16 +410,13 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const initializeLocationPermission = async () => {
     try {
       setIsCheckingPermission(true);
-
       const hasPermission = await LocationService.requestPermissions();
       setLocationPermission(hasPermission);
-
       if (!hasPermission) {
         LocationService.showLocationAlert(
           'Location permission is required for marking attendance. Please enable location access in your device settings.'
         );
       }
-
       return hasPermission;
     } catch (error) {
       console.error('Error requesting location permission:', error);
@@ -341,11 +430,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const checkLocationPermission = async (): Promise<boolean> => {
     try {
       setIsCheckingPermission(true);
-
-      // Use the new location service
       const permissions = await LocationService.checkPermissionStatus();
       const hasPermission = permissions.foreground;
-
       setLocationPermission(hasPermission);
 
       if (!hasPermission) {
@@ -372,18 +458,10 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         });
         return userResponse;
       }
-
       return hasPermission;
     } catch (error) {
       console.error('Error checking location permission:', error);
-      Alert.alert(
-        'Location Error',
-        String(error),
-        [
-          { text: 'OK' }
-
-        ]
-      );
+      Alert.alert('Location Error', String(error), [{ text: 'OK' }]);
       setLocationPermission(false);
       return false;
     } finally {
@@ -394,16 +472,11 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const getCurrentLocation = async () => {
     try {
       console.log('📍 Getting location for attendance...');
-
-      // Use the iOS-optimized location service
       const result = await LocationService.getCurrentLocation();
-
       if (result.success && result.coordinates) {
         console.log('✅ Location obtained successfully');
         return result.coordinates;
       }
-
-      // Show user-friendly error
       Alert.alert(
         'Location Error',
         result.error || 'Unable to get your location. Please check location settings.',
@@ -421,24 +494,22 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           }
         ]
       );
-
       return null;
     } catch (error) {
       console.error('❌ Location error:', error);
-
       Alert.alert(
         'Location Error',
         'Unable to get your location. Please check location permissions and try again.',
         [{ text: 'OK' }]
       );
-
       return null;
     }
   };
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
-      <View style={styles.backArrow} /><Text style={styles.backText}>Back</Text>
+      <View style={styles.backArrow} />
+      <Text style={styles.backText}>Back</Text>
     </View>
   );
 
@@ -488,6 +559,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         ? CHECKIN_REASONS.find(r => r.value === selectedReason)?.label || selectedReason
         : CHECKOUT_REASONS.find(r => r.value === selectedReason)?.label || selectedReason;
     }
+
     if (reasonModalType === 'checkin') {
       markAttendance(finalReason);
     } else {
@@ -496,7 +568,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const markAttendance = async (description?: string) => {
-    // Check location permission before proceeding
     const hasPermission = await checkLocationPermission();
     if (!hasPermission) {
       return;
@@ -507,11 +578,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return;
     }
 
-    // Check if it's after 11:00 AM and user doesn't have special permission
     if (isAfterTimeIST(11, 0)) {
-
       setLoading(true);
-      // Re-check special permission
       await checkSpecialPermission(token);
       setLoading(false);
       if (!hasSpecialPermission) {
@@ -557,24 +625,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (response.status === 200) {
         Alert.alert('Success', 'Attendance marked successfully!');
         resetReasonModal();
-        const today = new Date().toISOString().split('T')[0];
-        const currentTime = isDriver ? requestBody.check_in_time : new Date().toLocaleTimeString('en-US', {
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-        const newTodayAttendance = {
-          date: today,
-          status: 'present' as const,
-          check_in_time: currentTime,
-          check_out_time: undefined
-        };
-        setTodayAttendance(newTodayAttendance);
-        setAttendanceRecords(prevRecords => {
-          const updatedRecords = prevRecords.filter(record => record.date !== today);
-          return [newTodayAttendance, ...updatedRecords];
-        });
         await fetchAttendanceRecords(token, selectedMonth, selectedYear);
         setLoading(false);
       } else if (response.status === 400) {
@@ -605,7 +655,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   };
 
   const markCheckout = async (reason?: string) => {
-    // Check location permission before proceeding
     const hasPermission = await checkLocationPermission();
     if (!hasPermission) {
       return;
@@ -618,7 +667,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
     if (isBeforeTimeIST(18, 0)) {
       setLoading(true);
-      // Re-check special permission
       await checkSpecialPermission(token);
       setLoading(false);
       if (!hasSpecialPermission) {
@@ -663,27 +711,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       if (response.status === 200) {
         Alert.alert('Success', 'Checkout time marked successfully!');
         resetReasonModal();
-        const today = new Date().toISOString().split('T')[0];
-        setTodayAttendance(prev => {
-          if (prev && prev.date === today) {
-            return {
-              ...prev,
-              check_out_time: checkOutTimeIST
-            };
-          }
-          return prev;
-        });
-        setAttendanceRecords(prevRecords => {
-          return prevRecords.map(record => {
-            if (record.date === today) {
-              return {
-                ...record,
-                check_out_time: checkOutTimeIST
-              };
-            }
-            return record;
-          });
-        });
         await fetchAttendanceRecords(token, selectedMonth, selectedYear);
         setLoading(false);
       } else if (response.status === 400) {
@@ -825,21 +852,17 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             date: attendance.date,
             status: attendance.day,
             check_in_time: attendance.check_in_time,
-            check_out_time: attendance.check_out_time
+            check_out_time: attendance.check_out_time,
+            holiday_name: attendance.holiday_name,
+            leave_type: attendance.leave_type
           }));
-          console.log('Fetched attendance records:', formattedRecords);
           setAttendanceRecords(formattedRecords);
 
-          // FIX: Get IST date string correctly
           const istTime = getISTTime();
           const year = istTime.getFullYear();
           const month = String(istTime.getMonth() + 1).padStart(2, '0');
           const day = String(istTime.getDate()).padStart(2, '0');
           const todayStr = `${year}-${month}-${day}`;
-
-          console.log('IST Time for today\'s attendance check:', istTime);
-          console.log('Today\'s date string (IST):', todayStr);
-
           const todaysRecord = data.attendances.find((attendance: any) => attendance.date === todayStr);
 
           if (todaysRecord && todaysRecord.check_in_time) {
@@ -850,7 +873,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               check_out_time: todaysRecord.check_out_time
             });
           } else {
-            // Only clear todayAttendance if we're viewing current month
             const currentMonth = istTime.getMonth();
             const currentYear = istTime.getFullYear();
             if (actualMonth === currentMonth && actualYear === currentYear) {
@@ -920,6 +942,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                     await FileSystem.writeAsStringAsync(fileUri, base64Content, {
                       encoding: FileSystem.EncodingType.Base64,
                     });
+
                     const canShare = await Sharing.isAvailableAsync();
                     if (canShare) {
                       await Sharing.shareAsync(fileUri, {
@@ -927,10 +950,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                         dialogTitle: 'Share Attendance Report',
                         UTI: 'com.adobe.pdf',
                       });
-                      Alert.alert(
-                        'Success',
-                        'Report downloaded successfully! You can now share it.'
-                      );
+                      Alert.alert('Success', 'Report downloaded successfully!');
                     } else {
                       Alert.alert('Info', 'File saved to app directory');
                     }
@@ -962,33 +982,10 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       );
     } catch (error: any) {
       console.error('Error downloading report:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to generate report. Please try again.'
-      );
+      Alert.alert('Error', error.message || 'Failed to generate report. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const onStartDateChange = (event: any, selectedDate?: Date) => {
-    const currentDate = selectedDate || startDate;
-    setShowStartDatePicker(false);
-    setStartDate(currentDate);
-    const formattedDate = currentDate.toISOString().split('T')[0];
-    setLeaveForm(prev => ({ ...prev, startDate: formattedDate }));
-    if (endDate < currentDate) {
-      setEndDate(currentDate);
-      setLeaveForm(prev => ({ ...prev, startDate: formattedDate, endDate: formattedDate }));
-    }
-  };
-
-  const onEndDateChange = (event: any, selectedDate?: Date) => {
-    const currentDate = selectedDate || endDate;
-    setShowEndDatePicker(false);
-    setEndDate(currentDate);
-    const formattedDate = currentDate.toISOString().split('T')[0];
-    setLeaveForm(prev => ({ ...prev, endDate: formattedDate }));
   };
 
   const handleApplyLeave = () => {
@@ -1040,50 +1037,30 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return new Date(year, month, 1).getDay();
   };
 
+  const getDateColor = (status: string | null) => {
+    if (!status) return '#e5e7eb';
+    const statusKey = status.toLowerCase().replace(/ /g, '_');
+    return STATUS_COLORS[statusKey as keyof typeof STATUS_COLORS] || '#e5e7eb';
+  };
+
+  const getDateTextColor = (status: string | null) => {
+    if (!status) return '#9ca3af';
+    const statusKey = status.toLowerCase().replace(/ /g, '_');
+    return STATUS_TEXT_COLORS[statusKey as keyof typeof STATUS_TEXT_COLORS] || '#9ca3af';
+  };
+
   const getDateStatus = (day: number) => {
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-    // Check for holiday first
-    const holiday = holidays.find(h => h.date === dateStr);
-    if (holiday) return 'holiday';
-
-    // Check for leave
-    const leave = leaveApplications.find(l =>
-      dateStr >= l.start_date &&
-      dateStr <= l.end_date &&
-      l.status === 'approved'
-    );
-    if (leave) {
-      return leave.leave_type === 'Work From Home' ? 'wfh' : 'leave';
-    }
-
-    // Check attendance record
     const record = attendanceRecords.find(r => r.date === dateStr);
     if (record) {
-      const status = record.status.toLowerCase();
-      if (status === 'present') return 'present';
-      if (status === 'absent') return 'absent';
-      if (status === 'holiday') return 'holiday';
-      if (status === 'leave') return 'leave';
-      if (status === 'pending') return 'pending';
+      return record.status;
     }
-
-    // Check if date is in the future
-    const currentDate = new Date();
-    const checkDate = new Date(selectedYear, selectedMonth, day);
-    if (checkDate > currentDate) return null;
-
     return null;
   };
 
-  const getDateColor = (status: string | null) => {
-    switch (status) {
-      case 'present': return '#10b981';
-      case 'leave': return '#f59e0b';
-      case 'wfh': return '#a855f7';
-      case 'holiday': return '#3b82f6';
-      case 'absent': return '#ef4444';
-      default: return '#e5e7eb';
+  const handleDatePress = (day: number, status: string | null) => {
+    if (status) {
+      setSelectedDate({ day, status });
     }
   };
 
@@ -1105,7 +1082,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
 
       days.push(
-        <View key={day} style={styles.calendarDay}>
+        <TouchableOpacity
+          key={day}
+          style={styles.calendarDay}
+          onPress={() => handleDatePress(day, status)}
+          activeOpacity={0.7}
+        >
           <View style={[
             styles.dayCircle,
             status && { backgroundColor: getDateColor(status) },
@@ -1113,13 +1095,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           ]}>
             <Text style={[
               styles.dayText,
+              status && { color: getDateTextColor(status) },
               status && styles.dayTextActive,
               !status && styles.dayTextInactive
             ]}>
               {day}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
       );
     }
 
@@ -1162,10 +1145,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
   };
 
+  const toggleLegend = () => {
+    setShowAllLegend(!showAllLegend);
+  };
+
+  const visibleLegendItems = showAllLegend ? LEGEND_ITEMS : LEGEND_ITEMS.slice(0, 6);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-
       <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
@@ -1178,7 +1166,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           />
         }
       >
-        {/* Header Section - Now inside ScrollView */}
         <View style={[styles.header, styles.headerBanner]}>
           <Image
             source={require('../../assets/attendance_bg.jpg')}
@@ -1186,7 +1173,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             resizeMode="cover"
           />
           <View style={styles.headerOverlay} />
-
           <View style={[styles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <BackIcon />
@@ -1194,14 +1180,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             <Text style={styles.logoText}>CITADEL</Text>
             <View style={styles.headerSpacer} />
           </View>
-
           <View style={styles.titleSection}>
             <Text style={styles.sectionTitle}>Attendance</Text>
           </View>
         </View>
 
         <View style={styles.contentPadding}>
-          {/* Today's Attendance Card */}
           <View style={styles.todayCard}>
             <Text style={styles.todayTitle}>Today's Attendance</Text>
             <Text style={[
@@ -1230,7 +1214,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 </TouchableOpacity>
               </View>
             )}
-            {/* Console.log todays attendance */}
+
             {todayAttendance ? (
               <View style={styles.markedContainer}>
                 <View style={styles.checkmarkCircle}>
@@ -1282,8 +1266,15 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             )}
           </View>
 
-          {/* Calendar Section */}
           <View style={styles.calendarCard}>
+            {selectedDate && (
+              <StatusTooltip
+                visible={true}
+                status={selectedDate.status}
+                day={selectedDate.day}
+              />
+            )}
+
             <View style={styles.calendarHeader}>
               <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
@@ -1306,31 +1297,61 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               {renderCalendar()}
             </View>
 
-            <View style={styles.legend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                <Text style={styles.legendText}>Present</Text>
+            <View style={styles.legendContainer}>
+              <View style={styles.legendVisible}>
+                {visibleLegendItems.map((item, index) => (
+                  <View key={item.key} style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                    <Text style={styles.legendText}>{item.label}</Text>
+                  </View>
+                ))}
               </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                <Text style={styles.legendText}>Leave</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#a855f7' }]} />
-                <Text style={styles.legendText}>Late Login</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#3b82f6' }]} />
-                <Text style={styles.legendText}>Holiday</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                <Text style={styles.legendText}>Absent</Text>
-              </View>
+
+              {!showAllLegend && LEGEND_ITEMS.length > 6 && (
+                <TouchableOpacity
+                  style={styles.viewMoreButton}
+                  onPress={toggleLegend}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.viewMoreText}>View More</Text>
+                  <Text style={styles.viewMoreIcon}>▼</Text>
+                </TouchableOpacity>
+              )}
+
+              {showAllLegend && (
+                <Animated.View
+                  style={[
+                    styles.legendExpanded,
+                    {
+                      opacity: legendHeight,
+                      transform: [{
+                        translateY: legendHeight.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-10, 0]
+                        })
+                      }]
+                    }
+                  ]}
+                >
+                  {/* {LEGEND_ITEMS.slice(6).map((item) => (
+                    <View key={item.key} style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                      <Text style={styles.legendText}>{item.label}</Text>
+                    </View>
+                  ))} */}
+                  <TouchableOpacity
+                    style={styles.viewLessButton}
+                    onPress={toggleLegend}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.viewMoreText}>View Less</Text>
+                    <Text style={styles.viewLessIcon}>▲</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
             </View>
           </View>
 
-          {/* Bottom Actions - Now inside ScrollView at the end */}
           <View style={styles.bottomActions}>
             <TouchableOpacity
               style={[styles.actionButton, styles.applyLeaveButton]}
@@ -1359,7 +1380,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         </View>
       </ScrollView>
 
-      {/* Remove or update LeaveModal props based on actual component definition */}
       <LeaveModal
         visible={isLeaveModalVisible}
         onClose={handleCloseLeaveModal}
@@ -1367,15 +1387,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         onFormChange={setLeaveForm}
         onSubmit={submitLeaveApplication}
         loading={loading}
-      // Remove these props if not needed by LeaveModal:
-      // showStartDatePicker={showStartDatePicker}
-      // showEndDatePicker={showEndDatePicker}
-      // startDate={startDate}
-      // endDate={endDate}
-      // onStartDatePress={() => setShowStartDatePicker(true)}
-      // onEndDatePress={() => setShowEndDatePicker(true)}
-      // onStartDateChange={onStartDateChange}
-      // onEndDateChange={onEndDateChange}
       />
 
       <ReasonModal
@@ -1668,9 +1679,10 @@ const styles = StyleSheet.create({
   dayText: {
     fontSize: 14,
     fontWeight: '500',
+    color: '#ffffffff',
   },
   dayTextActive: {
-    color: '#fff',
+    // color: '#3c3d3cff',
     fontWeight: '600',
   },
   dayTextInactive: {
@@ -1679,21 +1691,22 @@ const styles = StyleSheet.create({
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginRight: 4,
+    gap: 4,
+    marginRight: 8,
+    marginBottom: 8,
   },
   legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   legendText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#6b7280',
   },
   bottomActions: {
@@ -1766,27 +1779,105 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontWeight: '600',
   },
-  noActionContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    backgroundColor: '#fef3c7',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f59e0b',
-  },
-  noActionText: {
-    fontSize: 14,
-    color: '#92400e',
-    textAlign: 'center',
-    fontWeight: '500',
-    lineHeight: 20,
-  },
   checkoutReminderText: {
     fontSize: 14,
     color: '#6b7280',
     marginTop: 8,
     marginBottom: 8,
     textAlign: 'center',
+  },
+  legendContainer: {
+    marginTop: 8,
+  },
+  legendVisible: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  viewMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  viewMoreButtonText: {
+    color: '#3b82f6',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  viewMoreArrow: {
+    marginLeft: 4,
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#3b82f6',
+    transform: [{ rotate: '-45deg' }],
+  },
+  viewMoreArrowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewMoreText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginRight: 4,
+  },
+  viewMoreIcon: {
+    fontSize: 10,
+    color: '#3b82f6',
+    marginLeft: 2,
+  },
+  legendExpanded: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  viewLessButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingVertical: 6,
+  },
+  viewLessIcon: {
+    fontSize: 10,
+    color: '#3b82f6',
+    marginLeft: 4,
+  },
+  statusTooltip: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  statusTooltipText: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    color: '#fff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    overflow: 'hidden',
+  },
+  tooltipArrow: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: 'rgba(0, 0, 0, 0.9)',
+    marginTop: -1,
   },
 });
 

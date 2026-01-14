@@ -43,11 +43,11 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
             const usedDriverEmployeeIds = selectedVehicles
                 .map(sv => sv.driver?.employee_id)
                 .filter(Boolean) as string[];
-            
+
             const availableDriversForNewVehicle = availableDrivers.filter(
                 d => !usedDriverEmployeeIds.includes(d.employee_id)
             );
-            
+
             // Only allow selection if there's at least one available driver
             if (availableDriversForNewVehicle.length === 0) {
                 Alert.alert(
@@ -57,10 +57,10 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                 );
                 return;
             }
-            
+
             // Auto-assign first available driver
             const availableDriver = availableDriversForNewVehicle[0] || null;
-            
+
             onUpdateSelection([...selectedVehicles, { vehicle, driver: availableDriver }]);
         }
     };
@@ -89,13 +89,13 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
             .filter((_, idx) => idx !== currentVehicleIndex)
             .map(sv => sv.driver?.employee_id)
             .filter(Boolean) as string[];
-        
+
         return availableDrivers.filter(d => !usedDriverEmployeeIds.includes(d.employee_id));
     };
 
     return (
         <View style={styles.screenContainer}>
-            <ScrollView 
+            <ScrollView
                 style={styles.scrollContainer}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
@@ -113,7 +113,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                             resizeMode="cover"
                         />
                         <View style={styles.headerOverlay} />
-                        
+
                         <View style={styles.headerContent}>
                             <View style={styles.headerTopRow}>
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -126,7 +126,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                         <View style={styles.titleSection}>
                             <Text style={styles.headerTitle}>Available Vehicles</Text>
                             <Text style={styles.headerSubtitle}>
-                                {vehicles.length > 0 
+                                {vehicles.length > 0
                                     ? `${selectedVehicles.length} vehicle${selectedVehicles.length !== 1 ? 's' : ''} selected`
                                     : 'Search results'
                                 }
@@ -140,10 +140,10 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                         <View style={styles.emptyStateContainer}>
                             <View style={styles.emptyStateCard}>
                                 <View style={styles.emptyIconContainer}>
-                                    <MaterialCommunityIcons 
-                                        name="car-off" 
-                                        size={64} 
-                                        color="#CBD5E0" 
+                                    <MaterialCommunityIcons
+                                        name="car-off"
+                                        size={64}
+                                        color="#CBD5E0"
                                     />
                                 </View>
                                 <Text style={styles.emptyStateTitle}>No Cars Available</Text>
@@ -153,7 +153,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                 <Text style={styles.emptyStateSuggestion}>
                                     Please try adjusting your booking dates or contact support for assistance.
                                 </Text>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={styles.tryAgainButton}
                                     onPress={onBack}
                                 >
@@ -179,7 +179,11 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                         </View>
                                     )}
                                     <Image
-                                        source={{ uri: `https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80` }}
+                                        source={{
+                                            uri: vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0
+                                                ? vehicle.vehicle_photos[0].photo
+                                                : 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80'
+                                        }}
                                         style={styles.cabImage}
                                     />
                                     <View style={styles.cabInfo}>
@@ -203,7 +207,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                                     <MaterialCommunityIcons name="account" size={18} color="#666" />
                                                     <Text style={styles.driverHeaderText}>Assigned Driver</Text>
                                                 </View>
-                                                
+
                                                 {assignedDriver ? (
                                                     <View style={styles.driverInfo}>
                                                         <View style={styles.driverAvatar}>
@@ -293,7 +297,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                     <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
                                 </TouchableOpacity>
                             ))}
-                            
+
                             {getAvailableDriversForSelection().length === 0 && (
                                 <View style={styles.emptyState}>
                                     <MaterialCommunityIcons name="account-off" size={48} color="#ccc" />

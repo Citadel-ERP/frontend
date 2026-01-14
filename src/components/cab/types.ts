@@ -58,6 +58,12 @@ export interface Vehicle {
     registration_certificate: string;
     created_at: string;
     updated_at: string;
+    vehicle_photos?: Array<{ // Add this for multiple images
+    id: number;
+    photo: string;
+    created_at: string;
+    updated_at: string;
+  }>;
 }
 
 export interface MyBookingsScreenProps {
