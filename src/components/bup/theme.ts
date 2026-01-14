@@ -10,9 +10,9 @@ export const lightTheme = {
   border: '#E5E7EB',
   white: '#FFFFFF',
   gray: '#6B7280',
-  info: '#3B82F6',
+  info: '#075E54',
   error: '#EF4444',
-  success: '#10B981',
+  success: '#075E54',
   warning: '#F59E0B',
   moduleColors: {
     bup: '#1da1f2',
@@ -31,7 +31,7 @@ export const lightTheme = {
 };
 
 export const darkTheme = {
-  primary: '#1C5CFB',
+  primary: '#075E54',
   primaryBlue: '#1C5CFB',
   background: '#050b18',
   backgroundSecondary: '#111a2d',
