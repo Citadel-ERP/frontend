@@ -43,6 +43,7 @@ import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './EmployeeManagement';
 import Notifications from './Notifications';
 import { ValidationScreen } from './ValidationScreen';
+import DriverManager from './driver_manager/DriverManager';
 
 // Import components
 import AllModulesModal from './dashboard/allModules';
@@ -433,6 +434,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showChatRoom, setShowChatRoom] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
+  const [showDriverManager, setShowDriverManager] = useState(false);
 
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -792,6 +794,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         break;
       case 'employee_management':
         setShowEmployeeManagement(true);
+        break;
+      case 'driver_manager':
+        setShowDriverManager(true);
         break;
       default:
         console.log('Unknown page:', page);
@@ -1224,7 +1229,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (key.includes('cab')) {
       setShowCab(true);
       // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
-    } else if (key.includes('driver')) {
+    } else if (key.includes('driver') && key!="driver_manager") {
       setShowDriver(true);
       // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
@@ -1245,7 +1250,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (key.includes('employee_management')) {
       // setShowEmployeeManagement(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
-    } else {
+    }
+    else if (key.includes('driver_manager') || key.includes('driver manager')) {
+      setShowDriverManager(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+    }
+    else {
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
   };
@@ -1405,7 +1415,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowEmployeeManagement(false);
     setShowChat(false);
     setShowChatRoom(false);
-    setShowValidation(false); // Add this line
+    setShowValidation(false);
+    setShowDriverManager(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -1577,6 +1588,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   if (showNotifications) {
     return (
       <Notifications onBack={handleBackFromPage} isDark={isDark} />
+    );
+  }
+
+  if (showDriverManager) {
+    return (
+      <DriverManager onBack={handleBackFromPage} />
     );
   }
 

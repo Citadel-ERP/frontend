@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,103 +7,84 @@ import {
   Modal,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { MaintenanceLogsModalProps } from '../../types';
-import { styles } from '../../styles';
+import { MaintenanceLogsModalProps } from './types';
+import { styles } from './styles';
+import { BACKEND_URL } from '../../config/config';
 
-export const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
+const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
   isVisible,
   onClose,
   logs,
   formatDate,
+  token,
+  vehicleId,
 }) => {
-  const getFileExtension = (url: string): string => {
-    const parts = url.split('.');
-    return parts[parts.length - 1].toLowerCase();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!token || !vehicleId) return;
+
+    setDownloading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/downloadMaintainanceReport`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ token, vehicle_id: vehicleId }),
+      });
+
+      const text = await response.text();
+      if (text.trim().startsWith('{')) {
+        const data = JSON.parse(text);
+        if (response.ok && data.file_url) {
+          // Download the PDF
+          const downloadResumable = FileSystem.createDownloadResumable(
+            data.file_url,
+            FileSystem.documentDirectory + data.filename,
+            {}
+          );
+
+          const { uri } = await downloadResumable.downloadAsync();
+          
+          // Share the downloaded file
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Maintenance Report',
+            });
+          } else {
+            Alert.alert('Success', 'PDF downloaded successfully');
+          }
+        } else {
+          Alert.alert('Error', data.message || 'Failed to download PDF');
+        }
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      Alert.alert('Error', 'Failed to download PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const getFileIcon = (url: string): "file-pdf-box" | "file-image" | "file-document" => {
+    const extension = url.split('.').pop()?.toLowerCase();
+    if (extension === 'pdf') return 'file-pdf-box';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '')) return 'file-image';
+    return 'file-document';
   };
 
   const getFileName = (url: string): string => {
     const parts = url.split('/');
-    const filename = parts[parts.length - 1];
-    return decodeURIComponent(filename);
-  };
-
-  const getFileIcon = (url: string): "file-pdf-box" | "file-image" | "file-word" | "file-excel" | "file-document" => {
-    const extension = getFileExtension(url);
-    
-    if (extension === 'pdf') return 'file-pdf-box';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension)) return 'file-image';
-    if (['doc', 'docx'].includes(extension)) return 'file-word';
-    if (['xls', 'xlsx'].includes(extension)) return 'file-excel';
-    return 'file-document';
-  };
-
-  const handleDownload = async (documentUrl: string) => {
-    try {
-      const filename = getFileName(documentUrl);
-      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
-
-      // Download the file using fetch
-      const response = await fetch(documentUrl);
-      
-      if (!response.ok) {
-        throw new Error('Download failed');
-      }
-
-      const blob = await response.blob();
-      const fileReaderInstance = new FileReader();
-      
-      fileReaderInstance.readAsDataURL(blob);
-      
-      fileReaderInstance.onload = async () => {
-        const base64data = fileReaderInstance.result as string;
-        const base64 = base64data.split(',')[1];
-        
-        // Write file to cache directory
-        await FileSystem.writeAsStringAsync(fileUri, base64, {
-          encoding: 'base64',
-        });
-
-        // Check if sharing is available
-        const isAvailable = await Sharing.isAvailableAsync();
-        
-        if (isAvailable) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: getMimeType(getFileExtension(documentUrl)),
-            dialogTitle: 'Save or Share Document',
-            UTI: getMimeType(getFileExtension(documentUrl)),
-          });
-        } else {
-          Alert.alert('Success', 'File downloaded successfully');
-        }
-      };
-      
-      fileReaderInstance.onerror = () => {
-        throw new Error('Failed to read file data');
-      };
-    } catch (error) {
-      console.error('Download error:', error);
-      Alert.alert('Error', 'An error occurred while downloading the file');
-    }
-  };
-
-  const getMimeType = (extension: string): string => {
-    const mimeTypes: { [key: string]: string } = {
-      'pdf': 'application/pdf',
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'doc': 'application/msword',
-      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'xls': 'application/vnd.ms-excel',
-      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    };
-    return mimeTypes[extension] || 'application/octet-stream';
+    return decodeURIComponent(parts[parts.length - 1]);
   };
 
   const handleOpenDocument = async (documentUrl: string) => {
@@ -129,7 +110,19 @@ export const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
               <Ionicons name="close" size={24} color="#075E54" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Maintenance Logs</Text>
-            <View style={{ width: 40 }} />
+            {token && vehicleId && (
+              <TouchableOpacity
+                style={styles.downloadButton}
+                onPress={handleDownloadPDF}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <ActivityIndicator size="small" color="#075E54" />
+                ) : (
+                  <MaterialIcons name="download" size={24} color="#075E54" />
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           <ScrollView
@@ -180,11 +173,18 @@ export const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
                         
                         <View style={styles.documentActions}>
                           <TouchableOpacity
-                            style={[styles.documentButton, styles.downloadButton]}
+                            style={styles.viewButton}
                             onPress={() => handleOpenDocument(log.document as string)}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="eye-outline" size={14} color="#ffffffff" />
+                            <Ionicons name="eye-outline" size={14} color="#075E54" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.downloadButton}
+                            onPress={() => handleOpenDocument(log.document as string)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="download-outline" size={14} color="#FFFFFF" />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -205,3 +205,5 @@ export const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
     </Modal>
   );
 };
+
+export default MaintenanceLogsModal;

@@ -1251,7 +1251,7 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#F5F5F5',
         borderRadius: 12,
-        padding: 16,
+        padding: 12,
     },
     documentButtonText: {
         flex: 1,
@@ -1264,8 +1264,11 @@ export const styles = StyleSheet.create({
         justifyContent: 'space-between',
         backgroundColor: '#E8F5E9',
         padding: 12,
-        borderRadius: 12,
+        borderRadius: 8,
         marginTop: 8,
+        width: '82%',
+        marginRight: 12,
+        paddingRight: 30,
     },
     documentRow: {
         flexDirection: 'row',
@@ -1273,7 +1276,7 @@ export const styles = StyleSheet.create({
         flex: 1,
     },
     documentName: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#075E54',
         marginLeft: 8,
         flex: 1,
@@ -1461,5 +1464,63 @@ export const styles = StyleSheet.create({
     },
     previousBookingsContainer: {
         marginTop: 24,
+    },
+    documentSection: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F0F0F0',
+    },
+
+    documentCard: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E8E8E8',
+        display: 'flex',
+        flexDirection: 'row',
+
+    },
+
+    documentTextContainer: {
+        marginLeft: 0,
+        marginTop: 3,
+    },
+
+    documentType: {
+        fontSize: 12,
+        color: '#718096',
+        textTransform: 'uppercase',
+    },
+
+    documentActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    downloadButtonText: {
+        color: '#FFFFFF',
+    },
+    viewButton: {
+        height: 45,
+        marginTop: 9,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#008069',
+    },
+    downloadButton: {
+        backgroundColor: '#008069',
+        borderColor: '#008069',
+        height: 45,
+        marginTop: 9,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        marginLeft: -8,
     },
 });

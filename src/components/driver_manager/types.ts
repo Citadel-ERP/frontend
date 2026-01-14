@@ -152,6 +152,8 @@ export interface MaintenanceLogsModalProps {
   onClose: () => void;
   logs: MaintenanceRecord[];
   formatDate: (dateString: string) => string;
+  token?: string;  
+  vehicleId?: number; 
 }
 
 export interface FuelLogsModalProps {
@@ -159,6 +161,8 @@ export interface FuelLogsModalProps {
   onClose: () => void;
   logs: FuelLog[];
   formatDateTime: (dateString: string) => string;
+  token?: string;  
+  vehicleId?: number; 
 }
 export interface VehicleAssignment {
   id: number;
