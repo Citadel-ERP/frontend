@@ -663,8 +663,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
                                     <BackIcon />
                                 </TouchableOpacity>
-                                <Text style={styles.logoText}>CITADEL</Text>
-                                <View style={{ width: 40 }} />
+                                <View style={styles.headerCenter}>
+                                    <Text style={styles.logoText}>CITADEL</Text>
+                                </View>
+                                <View style={{ width: 2 }} />
                             </View>
                         </View>
 
