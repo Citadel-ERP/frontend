@@ -14,10 +14,32 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// WhatsApp Color Scheme
+const WHATSAPP_COLORS = {
+  primary: '#075E54',
+  primaryLight: '#128C7E',
+  primaryDark: '#054D44',
+  secondary: '#25D366',
+  accent: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F0F2F5',
+  surface: '#FFFFFF',
+  textPrimary: '#1F2937',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+  success: '#25D366',
+  info: '#3B82F6',
+  white: '#FFFFFF',
+  chatBg: '#ECE5DD',
+  incoming: '#FFFFFF',
+  outgoing: '#DCF8C6',
+};
 
 interface LeadDetailsProps {
   lead: Lead;
@@ -65,6 +87,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   }, [token, lead.id]);
 
   const beautifyName = (name: string): string => {
+    if (!name) return '';
     return name
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -75,27 +98,53 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     if (!dateString) return '-';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
-    return d.toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
+    
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 60) {
+      return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      return d.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short'
+      });
+    }
   };
 
-  const getStatusBadgeColor = (status: string): string => {
-    const statusColor = theme.leadStatusColors;
-    
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'active':
       case 'transaction_complete':
-        return statusColor.active;
+        return { icon: 'checkmark-circle', color: WHATSAPP_COLORS.success };
       case 'hold':
       case 'mandate':
-        return statusColor.pending;
+        return { icon: 'time', color: WHATSAPP_COLORS.warning };
       case 'no_requirement':
       case 'closed':
       case 'non_responsive':
-        return statusColor.cold;
+        return { icon: 'close-circle', color: WHATSAPP_COLORS.danger };
       default:
-        return theme.textSecondary;
+        return { icon: 'help-circle', color: WHATSAPP_COLORS.textTertiary };
+    }
+  };
+
+  const getInitials = (name: string): string => {
+    if (!name || name.trim().length === 0) return '?';
+    
+    const nameParts = name.trim().split(/\s+/);
+    
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
     }
   };
 
@@ -109,17 +158,35 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         setLoadingMoreComments(true);
       }
 
-      const response = await fetch(`${BACKEND_URL}/manager/getComments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: leadId,
-          page: page
-        })
-      });
+      // Try both possible endpoints
+      let response;
+      try {
+        // Try endpoint 1
+        response = await fetch(`${BACKEND_URL}/manager/getComments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: leadId,
+            page: page
+          })
+        });
+      } catch (error1) {
+        // Try endpoint 2
+        response = await fetch(`${BACKEND_URL}/employee/getComments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: leadId,
+            page: page
+          })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -147,7 +214,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         setComments(transformedComments);
       }
       
-      setCommentsPagination(data.pagination);
+      setCommentsPagination(data.pagination || null);
     } catch (error) {
       console.error('Error fetching comments:', error);
       Alert.alert('Error', 'Failed to fetch comments. Please try again.');
@@ -163,23 +230,40 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       
       setLoadingCollaborators(true);
 
-      const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: leadId
-        })
-      });
+      // Try both possible endpoints
+      let response;
+      try {
+        // Try endpoint 1
+        response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: leadId
+          })
+        });
+      } catch (error1) {
+        // Try endpoint 2
+        response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: leadId
+          })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      setCollaborators(data.collaborators);
+      setCollaborators(data.collaborators || []);
     } catch (error) {
       console.error('Error fetching collaborators:', error);
       Alert.alert('Error', 'Failed to fetch collaborators. Please try again.');
@@ -206,10 +290,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       }
 
       const data = await response.json();
-      setDefaultComments(data.comments);
+      setDefaultComments(data.comments || []);
     } catch (error) {
       console.error('Error fetching default comments:', error);
-      Alert.alert('Error', 'Failed to fetch default comments. Please try again.');
       setDefaultComments([]);
     } finally {
       setLoadingDefaultComments(false);
@@ -226,20 +309,33 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     try {
       setLoadingPotentialCollaborators(true);
 
-      const response = await fetch(`${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      // Try both possible endpoints
+      let response;
+      try {
+        // Try endpoint 1
+        response = await fetch(`${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+      } catch (error1) {
+        // Try endpoint 2
+        response = await fetch(`${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      setPotentialCollaborators(data.potential_collaborators);
-      setShowPotentialCollaborators(data.potential_collaborators.length > 0);
+      setPotentialCollaborators(data.potential_collaborators || []);
+      setShowPotentialCollaborators(data.potential_collaborators && data.potential_collaborators.length > 0);
     } catch (error) {
       console.error('Error fetching potential collaborators:', error);
       setPotentialCollaborators([]);
@@ -279,17 +375,35 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     try {
       if (!token) return false;
 
-      const response = await fetch(`${BACKEND_URL}/manager/addCollaborators`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: lead.id,
-          email: email
-        })
-      });
+      // Try both possible endpoints
+      let response;
+      try {
+        // Try endpoint 1
+        response = await fetch(`${BACKEND_URL}/manager/addCollaborators`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: lead.id,
+            email: email
+          })
+        });
+      } catch (error1) {
+        // Try endpoint 2
+        response = await fetch(`${BACKEND_URL}/employee/addCollaborators`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: lead.id,
+            email: email
+          })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -310,17 +424,35 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     try {
       if (!token) return false;
 
-      const response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: lead.id,
-          collaborator_id: collaboratorId
-        })
-      });
+      // Try both possible endpoints
+      let response;
+      try {
+        // Try endpoint 1
+        response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: lead.id,
+            collaborator_id: collaboratorId
+          })
+        });
+      } catch (error1) {
+        // Try endpoint 2
+        response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token,
+            lead_id: lead.id,
+            collaborator_id: collaboratorId
+          })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -347,7 +479,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         setSelectedDocuments(result.assets);
         Alert.alert(
           'Files Selected',
-          `${result.assets.length} file(s) selected: ${result.assets.map(doc => doc.name).join(', ')}`
+          `${result.assets.length} file(s) selected`
         );
       }
     } catch (error) {
@@ -377,13 +509,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         });
       }
 
-      const response = await fetch(`${BACKEND_URL}/manager/addComment`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Try both possible endpoints
+      let response;
+      try {
+        // Try endpoint 1
+        response = await fetch(`${BACKEND_URL}/manager/addComment`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      } catch (error1) {
+        // Try endpoint 2
+        response = await fetch(`${BACKEND_URL}/employee/addComment`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -498,388 +644,430 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   };
 
   return (
-    <ScrollView 
-      style={[styles.detailScrollView, { backgroundColor: theme.background }]} 
-      showsVerticalScrollIndicator={false}
-      onScroll={handleCommentsScroll}
-      scrollEventThrottle={16}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={theme.primary}
-        />
-      }
-    >
-
-      {/* Lead Header Card */}
-      <LinearGradient
-        colors={[theme.primary + '20', theme.cardBg]}
-        style={[styles.detailCard]}
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.detailScrollView}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleCommentsScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[WHATSAPP_COLORS.primary]}
+            tintColor={WHATSAPP_COLORS.primary}
+          />
+        }
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.leadHeader}>
+        {/* Lead Header Card - WhatsApp Style */}
+        <View style={styles.leadHeaderCard}>
+          <View style={styles.leadAvatarContainer}>
+            <View style={[styles.leadAvatar, { backgroundColor: '#00d285' }]}>
+              <Text style={styles.leadAvatarText}>{getInitials(lead.name)}</Text>
+            </View>
+          </View>
+          
           <View style={styles.leadInfo}>
-            <View style={styles.leadNameRow}>
-              <Text style={[styles.leadName, { color: theme.text }]}>{lead.name}</Text>
+            <View style={styles.leadHeader}>
+              <Text style={styles.leadName} numberOfLines={1}>
+                {lead.name}
+              </Text>
               {lead.incentive_present && (
-                <TouchableOpacity style={[styles.incentiveBadge, { backgroundColor: theme.success }]}>
-                  <Text style={[styles.incentiveBadgeText, { color: theme.white }]}>💰 Incentive</Text>
-                </TouchableOpacity>
+                <View style={styles.incentiveBadge}>
+                  <FontAwesome name="money" size={14} color={WHATSAPP_COLORS.warning} />
+                  <Text style={styles.incentiveBadgeText}>Incentive</Text>
+                </View>
               )}
             </View>
-            <View style={styles.statusIndicatorRow}>
-              <View style={[styles.statusDot, { backgroundColor: getStatusBadgeColor(lead.status) }]} />
-              <Text style={[styles.statusText, { color: theme.text }]}>{beautifyName(lead.status)}</Text>
-            </View>
-            <Text style={[styles.leadCompany, { color: theme.textSecondary }]}>{lead.company || 'No company'}</Text>
-            <Text style={[styles.leadDate, { color: theme.textLight }]}>Created: {formatDateTime(lead.created_at || lead.createdAt)}</Text>
-            <Text style={[styles.leadDate, { color: theme.textLight }]}>Updated: {formatDateTime(lead.updated_at)}</Text>
-            {lead.assigned_to && (
-              <Text style={[styles.leadAssigned, { color: theme.info }]}>
-                Assigned to: {lead.assigned_to.full_name}
-              </Text>
-            )}
-            <View style={[styles.cityBadge, { backgroundColor: theme.primary + '20' }]}>
-              <Text style={[styles.cityBadgeText, { color: theme.primary }]}>📍 {lead.city}</Text>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-
-      {/* Contact Information Card */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Contact Information</Text>
-        
-        <Text style={[styles.inputLabel, { color: theme.text }]}>Email Addresses ({lead.emails.length})</Text>
-        {lead.emails.map((email, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <Text style={[styles.contactItemText, { color: theme.text }]}>📧 {email.email}</Text>
-          </View>
-        ))}
-
-        <Text style={[styles.inputLabel, { color: theme.text, marginTop: 15 }]}>Phone Numbers ({lead.phone_numbers.length})</Text>
-        {lead.phone_numbers.map((phone, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <Text style={[styles.contactItemText, { color: theme.text }]}>📱 {phone.number}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Lead Management Card */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Lead Management</Text>
-        
-        <View style={styles.managementRow}>
-          <View style={styles.managementItem}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>Status</Text>
-            <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.readOnlyText, { color: theme.text }]}>
+            
+            <View style={styles.leadStatusRow}>
+              <Ionicons 
+                name={getStatusIcon(lead.status).icon as any} 
+                size={16} 
+                color={getStatusIcon(lead.status).color} 
+              />
+              <Text style={styles.leadStatusText}>
                 {beautifyName(lead.status)}
               </Text>
-            </View>
-          </View>
-
-          <View style={styles.managementItem}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>Phase</Text>
-            <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.readOnlyText, { color: theme.text }]}>
-                {beautifyName(lead.phase)}
+              <View style={styles.separator} />
+              <Ionicons name="business" size={14} color={WHATSAPP_COLORS.textTertiary} />
+              <Text style={styles.leadCompany} numberOfLines={1}>
+                {lead.company || 'No company'}
               </Text>
             </View>
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Subphase</Text>
-          <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-            <Text style={[styles.readOnlyText, { color: theme.text }]}>
-              {beautifyName(lead.subphase)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Collaborators Section */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          Collaborators ({collaborators.length})
-        </Text>
-        
-        {loadingCollaborators ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading collaborators...</Text>
-          </View>
-        ) : collaborators.length > 0 ? (
-          collaborators.map((collaborator) => (
-            <View key={collaborator.id} style={[styles.collaboratorItem, { backgroundColor: theme.backgroundSecondary }]}>
-              <View style={styles.collaboratorInfo}>
-                <Text style={[styles.collaboratorName, { color: theme.text }]}>{collaborator.user.full_name}</Text>
-                <Text style={[styles.collaboratorEmail, { color: theme.textSecondary }]}>{collaborator.user.email}</Text>
-                <Text style={[styles.collaboratorRole, { color: theme.textSecondary }]}>
-                  {collaborator.user.designation || collaborator.user.role}
+            
+            <View style={styles.leadMeta}>
+              <View style={styles.leadMetaItem}>
+                <Ionicons name="calendar" size={14} color={WHATSAPP_COLORS.textTertiary} />
+                <Text style={styles.leadMetaText}>
+                  Created: {formatDateTime(lead.created_at || lead.createdAt)}
                 </Text>
               </View>
-              <TouchableOpacity 
-                style={[styles.removeButton, { backgroundColor: theme.error }]}
-                onPress={() => handleRemoveCollaborator(collaborator)}
-              >
-                <Text style={[styles.removeButtonText, { color: theme.white }]}>Remove</Text>
-              </TouchableOpacity>
+              {lead.assigned_to && (
+                <View style={styles.leadMetaItem}>
+                  <Ionicons name="person" size={14} color={WHATSAPP_COLORS.textTertiary} />
+                  <Text style={styles.leadMetaText}>
+                    Assigned: {lead.assigned_to.full_name}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.leadMetaItem}>
+                <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textTertiary} />
+                <Text style={styles.leadMetaText}>
+                  {lead.city}
+                </Text>
+              </View>
             </View>
-          ))
-        ) : (
-          <View style={styles.emptyCollaborators}>
-            <Text style={[styles.emptyCollaboratorsText, { color: theme.textSecondary }]}>No collaborators yet</Text>
           </View>
-        )}
+        </View>
 
-        {/* Add Collaborator Input */}
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Add Collaborator</Text>
-          <View style={{ position: 'relative' }}>
-            <TextInput
-              style={[styles.collaboratorInput, { 
-                backgroundColor: theme.white,
-                borderColor: theme.border,
-                color: theme.text
-              }]}
-              value={newCollaborator}
-              onChangeText={handleCollaboratorInputChange}
-              placeholder="Enter email address..."
-              placeholderTextColor={theme.textSecondary}
-            />
+        {/* Lead Phase Card */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="trending-up" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Lead Progress</Text>
+          </View>
+          
+          <View style={styles.phaseContainer}>
+            <View style={styles.phaseItem}>
+              <MaterialIcons name="layers" size={16} color={WHATSAPP_COLORS.primaryLight} />
+              <View style={styles.phaseContent}>
+                <Text style={styles.phaseLabel}>Phase</Text>
+                <Text style={styles.phaseValue}>{beautifyName(lead.phase)}</Text>
+              </View>
+            </View>
             
-            {showPotentialCollaborators && (
-              <View style={[styles.potentialCollaboratorsList, { 
-                backgroundColor: theme.cardBg,
-                borderColor: theme.border
-              }]}>
-                {loadingPotentialCollaborators ? (
-                  <ActivityIndicator size="small" color={theme.primary} />
-                ) : potentialCollaborators.map((collaborator, index) => (
+            <View style={styles.phaseSeparator}>
+              <MaterialIcons name="arrow-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+            </View>
+            
+            <View style={styles.phaseItem}>
+              <MaterialIcons name="tune" size={16} color={WHATSAPP_COLORS.primaryLight} />
+              <View style={styles.phaseContent}>
+                <Text style={styles.phaseLabel}>Subphase</Text>
+                <Text style={styles.phaseValue}>{beautifyName(lead.subphase)}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Contact Information Card */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="contact-mail" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Contact Information</Text>
+          </View>
+          
+          {/* Emails */}
+          <View style={styles.contactSection}>
+            <Text style={styles.contactSectionTitle}>
+              <MaterialIcons name="email" size={16} color={WHATSAPP_COLORS.primaryLight} />
+              <Text style={styles.contactSectionTitleText}> Email Addresses ({lead.emails.length})</Text>
+            </Text>
+            {lead.emails.length > 0 ? lead.emails.map((email, index) => (
+              <View key={index} style={styles.contactItem}>
+                <Text style={styles.contactItemText}>{email.email}</Text>
+              </View>
+            )) : (
+              <Text style={styles.emptyContactText}>No emails added</Text>
+            )}
+          </View>
+          
+          {/* Phones */}
+          <View style={styles.contactSection}>
+            <Text style={styles.contactSectionTitle}>
+              <MaterialIcons name="phone" size={16} color={WHATSAPP_COLORS.primaryLight} />
+              <Text style={styles.contactSectionTitleText}> Phone Numbers ({lead.phone_numbers.length})</Text>
+            </Text>
+            {lead.phone_numbers.length > 0 ? lead.phone_numbers.map((phone, index) => (
+              <View key={index} style={styles.contactItem}>
+                <Text style={styles.contactItemText}>{phone.number}</Text>
+              </View>
+            )) : (
+              <Text style={styles.emptyContactText}>No phone numbers added</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Collaborators Card */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="people" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>
+              Collaborators ({collaborators.length})
+              {loadingCollaborators && (
+                <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} style={{ marginLeft: 8 }} />
+              )}
+            </Text>
+          </View>
+          
+          {collaborators.length > 0 ? (
+            collaborators.map((collaborator) => (
+              <View key={collaborator.id} style={styles.collaboratorItem}>
+                <View style={styles.collaboratorAvatar}>
+                  <Text style={styles.collaboratorAvatarText}>
+                    {getInitials(collaborator.user.full_name)}
+                  </Text>
+                </View>
+                <View style={styles.collaboratorInfo}>
+                  <Text style={styles.collaboratorName}>{collaborator.user.full_name}</Text>
+                  <Text style={styles.collaboratorEmail}>{collaborator.user.email}</Text>
+                  {collaborator.user.designation && (
+                    <Text style={styles.collaboratorRole}>{collaborator.user.designation}</Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={styles.removeCollaboratorButton}
+                  onPress={() => handleRemoveCollaborator(collaborator)}
+                >
+                  <Ionicons name="close-circle" size={22} color={WHATSAPP_COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="person-add" size={32} color={WHATSAPP_COLORS.textTertiary} />
+              <Text style={styles.emptyStateText}>No collaborators yet</Text>
+            </View>
+          )}
+
+          {/* Add Collaborator */}
+          <View style={styles.addCollaboratorSection}>
+            <Text style={styles.inputLabel}>Add Collaborator</Text>
+            <View style={styles.collaboratorInputContainer}>
+              <TextInput
+                style={styles.collaboratorInput}
+                value={newCollaborator}
+                onChangeText={handleCollaboratorInputChange}
+                placeholder="Search by name or email..."
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                autoCapitalize="none"
+              />
+              {loadingPotentialCollaborators && (
+                <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} style={styles.searchLoading} />
+              )}
+            </View>
+            
+            {/* Search Results */}
+            {showPotentialCollaborators && potentialCollaborators.length > 0 && (
+              <View style={styles.searchResultsContainer}>
+                {potentialCollaborators.map((collaborator, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={[styles.potentialCollaboratorItem, { borderBottomColor: theme.border }]}
+                    style={styles.searchResultItem}
                     onPress={() => handlePotentialCollaboratorSelect(collaborator)}
                   >
-                    <Text style={[styles.potentialCollaboratorName, { color: theme.text }]}>
-                      {collaborator.full_name}
-                    </Text>
-                    <Text style={[styles.potentialCollaboratorEmail, { color: theme.textSecondary }]}>
-                      {collaborator.email}
-                    </Text>
+                    <View style={styles.searchResultAvatar}>
+                      <Text style={styles.searchResultAvatarText}>
+                        {getInitials(collaborator.full_name)}
+                      </Text>
+                    </View>
+                    <View style={styles.searchResultInfo}>
+                      <Text style={styles.searchResultName}>{collaborator.full_name}</Text>
+                      <Text style={styles.searchResultEmail}>{collaborator.email}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handlePotentialCollaboratorSelect(collaborator)}
+                    >
+                      <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.success} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 ))}
               </View>
             )}
+            
+            <TouchableOpacity 
+              style={[styles.addButton, !newCollaborator.trim() && styles.buttonDisabled]} 
+              onPress={handleAddCollaborator}
+              disabled={!newCollaborator.trim()}
+            >
+              <MaterialIcons name="person-add" size={18} color={WHATSAPP_COLORS.white} />
+              <Text style={styles.addButtonText}>Add Collaborator</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Comments Card */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="comment" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>
+              Comments ({comments.length})
+              {commentsPagination && ` of ${commentsPagination.total_items}`}
+            </Text>
           </View>
           
-          <TouchableOpacity 
-            style={[
-              styles.submitButton, 
-              { backgroundColor: theme.primary }
-            ]} 
-            onPress={handleAddCollaborator}
-          >
-            <Text style={[styles.submitButtonText, { color: theme.white }]}>Add Collaborator</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Comments Section */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          Comments ({comments.length}
-          {commentsPagination && ` of ${commentsPagination.total_items}`})
-        </Text>
-        
-        {loadingComments ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.primary} />
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading comments...</Text>
-          </View>
-        ) : comments.length > 0 ? (
-          <>
-            {comments.map((comment) => (
-              <View key={comment.id} style={[styles.commentItem, { 
-                backgroundColor: theme.backgroundSecondary,
-                borderLeftColor: theme.info
-              }]}>
-                <View style={styles.commentHeaderRow}>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Comment By:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{comment.commentBy}</Text>
+          {loadingComments ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+              <Text style={styles.loadingText}>Loading comments...</Text>
+            </View>
+          ) : comments.length > 0 ? (
+            <>
+              {comments.map((comment) => (
+                <View key={comment.id} style={styles.commentItem}>
+                  <View style={styles.commentHeader}>
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarText}>
+                        {getInitials(comment.commentBy)}
+                      </Text>
+                    </View>
+                    <View style={styles.commentInfo}>
+                      <Text style={styles.commentAuthor}>{comment.commentBy}</Text>
+                      <Text style={styles.commentTime}>{formatDateTime(comment.date)}</Text>
+                      <View style={styles.commentPhase}>
+                        <MaterialIcons name="layers" size={12} color={WHATSAPP_COLORS.textTertiary} />
+                        <Text style={styles.commentPhaseText}>
+                          {beautifyName(comment.phase)} • {beautifyName(comment.subphase)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Date:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{formatDateTime(comment.date)}</Text>
+                  
+                  <View style={styles.commentContentContainer}>
+                    <Text style={styles.commentContent}>{comment.content}</Text>
                   </View>
-                </View>
-                <View style={styles.commentHeaderRow}>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Phase:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{beautifyName(comment.phase)}</Text>
-                  </View>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Subphase:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{beautifyName(comment.subphase)}</Text>
-                  </View>
-                </View>
-                <View style={styles.commentContentRow}>
-                  <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Content:</Text>
-                  <Text style={[styles.commentContentText, { 
-                    color: theme.text,
-                    backgroundColor: theme.cardBg
-                  }]}>{comment.content}</Text>
-                </View>
-                {comment.documents && comment.documents.length > 0 && (
-                  <View style={styles.documentsContainer}>
-                    <Text style={[styles.documentsLabel, { color: theme.textSecondary }]}>Attachments:</Text>
-                    {comment.documents.map((doc, index) => (
-                      <TouchableOpacity key={doc.id} style={[styles.fileButton, { backgroundColor: theme.info + '20' }]}>
-                        <Text style={[styles.fileButtonText, { color: theme.info }]}>📎 {doc.document_name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
-
-            {loadingMoreComments && (
-              <View style={styles.loadMoreContainer}>
-                <ActivityIndicator size="small" color={theme.primary} />
-                <Text style={[styles.loadMoreText, { color: theme.textSecondary }]}>Loading more comments...</Text>
-              </View>
-            )}
-
-            {commentsPagination && !commentsPagination.has_next && comments.length > 0 && (
-              <View style={styles.endOfListContainer}>
-                <Text style={[styles.endOfListText, { color: theme.textSecondary }]}>
-                  You've reached the end of the comments
-                </Text>
-              </View>
-            )}
-          </>
-        ) : (
-          <View style={styles.emptyComments}>
-            <Text style={[styles.emptyCommentsText, { color: theme.textSecondary }]}>No comments yet</Text>
-          </View>
-        )}
-
-        {/* Add Comment Section */}
-        <View style={[styles.addCommentSection, { borderTopColor: theme.border }]}>
-          <View style={styles.commentActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, { 
-                borderColor: theme.primary,
-                backgroundColor: theme.primary + '10'
-              }]}
-              onPress={() => {
-                fetchDefaultComments(lead.phase, lead.subphase);
-                setShowDefaultComments(true);
-              }}
-              disabled={loadingDefaultComments}
-            >
-              {loadingDefaultComments ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <Text style={[styles.actionButtonText, { color: theme.primary }]}>Default Comments</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, { 
-                borderColor: theme.primary,
-                backgroundColor: theme.primary + '10'
-              }]} 
-              onPress={handleAttachDocuments}
-            >
-              <Text style={[styles.actionButtonText, { color: theme.primary }]}>📎 Attach ({selectedDocuments.length})</Text>
-            </TouchableOpacity>
-          </View>
-
-          {selectedDocuments.length > 0 && (
-            <View style={[styles.selectedDocumentsContainer, { 
-              backgroundColor: theme.background,
-              borderColor: theme.border
-            }]}>
-              <Text style={[styles.selectedDocumentsTitle, { color: theme.primary }]}>Selected Files:</Text>
-              {selectedDocuments.map((doc, index) => (
-                <View key={index} style={[styles.selectedDocumentItem, { backgroundColor: theme.white }]}>
-                  <Text style={[styles.selectedDocumentName, { color: theme.primary }]} numberOfLines={1}>
-                    📎 {doc.name}
-                  </Text>
-                  <TouchableOpacity 
-                    style={[styles.removeDocumentButton, { backgroundColor: theme.error }]}
-                    onPress={() => handleRemoveDocument(index)}
-                  >
-                    <Text style={[styles.removeDocumentButtonText, { color: theme.white }]}>×</Text>
-                  </TouchableOpacity>
+                  
+                  {comment.documents && comment.documents.length > 0 && (
+                    <View style={styles.commentDocuments}>
+                      <Text style={styles.documentsLabel}>Attachments:</Text>
+                      {comment.documents.map((doc, index) => (
+                        <TouchableOpacity key={doc.id} style={styles.documentItem}>
+                          <MaterialIcons name="insert-drive-file" size={16} color={WHATSAPP_COLORS.info} />
+                          <Text style={styles.documentName} numberOfLines={1}>
+                            {doc.document_name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                 </View>
               ))}
+
+              {loadingMoreComments && (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.loadMoreText}>Loading more comments...</Text>
+                </View>
+              )}
+
+              {commentsPagination && !commentsPagination.has_next && comments.length > 0 && (
+                <View style={styles.endOfListContainer}>
+                  <Text style={styles.endOfListText}>
+                    You've reached the end of the comments
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="comment" size={32} color={WHATSAPP_COLORS.textTertiary} />
+              <Text style={styles.emptyStateText}>No comments yet</Text>
             </View>
           )}
 
-          <TextInput
-            style={[styles.commentInput, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={newComment}
-            onChangeText={setNewComment}
-            placeholder="Add your comment here..."
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            placeholderTextColor={theme.textSecondary}
-          />
+          {/* Add Comment Section */}
+          <View style={styles.addCommentSection}>
+            <View style={styles.commentActions}>
+              <TouchableOpacity
+                style={styles.defaultCommentButton}
+                onPress={() => setShowDefaultComments(true)}
+                disabled={loadingDefaultComments}
+              >
+                <MaterialIcons name="list" size={18} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.defaultCommentButtonText}>Default Comments</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.attachButton}
+                onPress={handleAttachDocuments}
+              >
+                <MaterialIcons name="attach-file" size={18} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.attachButtonText}>
+                  Attach ({selectedDocuments.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-          <TouchableOpacity 
-            style={[
-              styles.submitButton, 
-              addingComment && styles.submitButtonDisabled,
-              { backgroundColor: theme.primary }
-            ]} 
-            onPress={handleAddComment}
-            disabled={addingComment}
-          >
-            {addingComment ? (
-              <ActivityIndicator color={theme.white} size="small" />
-            ) : (
-              <Text style={[styles.submitButtonText, { color: theme.white }]}>Add Comment</Text>
+            {selectedDocuments.length > 0 && (
+              <View style={styles.selectedDocuments}>
+                {selectedDocuments.map((doc, index) => (
+                  <View key={index} style={styles.selectedDocument}>
+                    <MaterialIcons name="insert-drive-file" size={16} color={WHATSAPP_COLORS.info} />
+                    <Text style={styles.selectedDocumentName} numberOfLines={1}>
+                      {doc.name}
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={() => handleRemoveDocument(index)}
+                    >
+                      <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.danger} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             )}
-          </TouchableOpacity>
+
+            <TextInput
+              style={styles.commentInput}
+              value={newComment}
+              onChangeText={setNewComment}
+              placeholder="Type your comment..."
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity 
+              style={[styles.sendButton, (!newComment.trim() || addingComment) && styles.buttonDisabled]} 
+              onPress={handleAddComment}
+              disabled={!newComment.trim() || addingComment}
+            >
+              {addingComment ? (
+                <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+              ) : (
+                <>
+                  <MaterialIcons name="send" size={18} color={WHATSAPP_COLORS.white} />
+                  <Text style={styles.sendButtonText}>Send</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
 
       {/* Default Comments Modal */}
       {showDefaultComments && (
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
-          <View style={[styles.defaultCommentsModal, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Default Comments - {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
-            </Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.defaultCommentsModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Default Comments - {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
+              </Text>
+              <TouchableOpacity 
+                style={styles.closeModalButton}
+                onPress={() => setShowDefaultComments(false)}
+              >
+                <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
             <ScrollView style={styles.defaultCommentsList}>
               {loadingDefaultComments ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={theme.primary} />
-                  <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading default comments...</Text>
+                  <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading default comments...</Text>
                 </View>
               ) : defaultComments.length > 0 ? (
-                defaultComments.map((comment) => (
+                defaultComments.map((comment, index) => (
                   <TouchableOpacity
-                    key={comment.id}
-                    style={[styles.defaultCommentItem, { borderBottomColor: theme.border }]}
+                    key={index}
+                    style={styles.defaultCommentItem}
                     onPress={() => handleDefaultCommentSelect(comment)}
                   >
-                    <Text style={[styles.defaultCommentText, { color: theme.text }]}>
+                    <Text style={styles.defaultCommentText}>
                       {(() => {
                         try {
                           return JSON.parse(comment.data);
@@ -892,309 +1080,554 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                 ))
               ) : (
                 <View style={styles.emptyState}>
-                  <Text style={[styles.emptyStateText, { color: theme.textSecondary }]}>
+                  <MaterialIcons name="list" size={32} color={WHATSAPP_COLORS.textTertiary} />
+                  <Text style={styles.emptyStateText}>
                     No default comments available for this phase/subphase
                   </Text>
                 </View>
               )}
             </ScrollView>
-            <TouchableOpacity 
-              style={[styles.closeModalButton, { backgroundColor: theme.error }]}
-              onPress={() => setShowDefaultComments(false)}
-            >
-              <Text style={[styles.closeModalButtonText, { color: theme.white }]}>Close</Text>
-            </TouchableOpacity>
           </View>
         </View>
       )}
-
-      <View style={{ height: 100 }} />
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
   detailScrollView: {
     flex: 1,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    marginHorizontal: 20,
-    marginTop: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 32,
   },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  detailCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
+  
+  // Lead Header Card
+  leadHeaderCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
     padding: 20,
     borderRadius: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  leadAvatarContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  leadAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leadAvatarText: {
+    color: '#FFF',
+    fontSize: 32,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  leadInfo: {
+    alignItems: 'center',
   },
   leadHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 15,
-  },
-  leadInfo: {
-    flex: 1,
-  },
-  leadNameRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 12,
+    marginBottom: 12,
   },
   leadName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    flex: 1,
+    color: WHATSAPP_COLORS.textPrimary,
+    textAlign: 'center',
   },
   incentiveBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.warning + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+    gap: 4,
   },
   incentiveBadgeText: {
     fontSize: 12,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.warning,
   },
-  statusIndicatorRow: {
+  leadStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    gap: 8,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  statusText: {
+  leadStatusText: {
     fontSize: 14,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  separator: {
+    width: 1,
+    height: 12,
+    backgroundColor: WHATSAPP_COLORS.border,
+    marginHorizontal: 4,
   },
   leadCompany: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  leadDate: {
     fontSize: 14,
-  },
-  leadAssigned: {
-    fontSize: 14,
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  cityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  cityBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 15,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  contactItemContainer: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-  },
-  contactItemText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  managementRow: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 15,
-  },
-  managementItem: {
+    color: WHATSAPP_COLORS.textSecondary,
     flex: 1,
   },
-  readOnlyField: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  leadMeta: {
+    width: '100%',
   },
-  readOnlyText: {
-    fontSize: 16,
-  },
-  inputGroup: {
-    marginBottom: 15,
-  },
-  loadingContainer: {
+  leadMetaItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 20,
+    marginBottom: 6,
+    gap: 8,
   },
-  loadingText: {
-    marginTop: 10,
+  leadMetaText: {
     fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
   },
-  collaboratorItem: {
+  
+  // Detail Cards
+  detailCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  
+  // Phase Container
+  phaseContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  phaseItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  phaseContent: {
+    flex: 1,
+  },
+  phaseLabel: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  phaseValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  phaseSeparator: {
+    paddingHorizontal: 16,
+  },
+  
+  // Contact Section
+  contactSection: {
+    marginBottom: 20,
+  },
+  contactSectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 6,
+  },
+  contactSectionTitleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  contactItem: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderLeftWidth: 3,
+    borderLeftColor: WHATSAPP_COLORS.primary,
+  },
+  contactItemText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  emptyContactText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textTertiary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  
+  // Collaborators
+  collaboratorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  collaboratorAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: WHATSAPP_COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  collaboratorAvatarText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   collaboratorInfo: {
     flex: 1,
   },
   collaboratorName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 2,
   },
   collaboratorEmail: {
-    fontSize: 14,
-    marginTop: 2,
+    fontSize: 13,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 2,
   },
   collaboratorRole: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  removeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  removeButtonText: {
     fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+  },
+  removeCollaboratorButton: {
+    padding: 4,
+  },
+  
+  // Add Collaborator Section
+  addCollaboratorSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.border,
+  },
+  inputLabel: {
+    fontSize: 14,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 8,
   },
-  emptyCollaborators: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  emptyCollaboratorsText: {
-    fontSize: 16,
-    textAlign: 'center',
+  collaboratorInputContainer: {
+    position: 'relative',
   },
   collaboratorInput: {
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 10,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    backgroundColor: WHATSAPP_COLORS.background,
+    paddingRight: 40,
   },
-  potentialCollaboratorsList: {
+  searchLoading: {
     position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
+    right: 12,
+    top: 12,
+  },
+  searchResultsContainer: {
+    marginTop: 8,
     maxHeight: 200,
-    borderWidth: 1,
-    borderRadius: 8,
-    zIndex: 1000,
-    elevation: 5,
   },
-  potentialCollaboratorItem: {
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 12,
-    borderBottomWidth: 1,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderLeftWidth: 3,
+    borderLeftColor: WHATSAPP_COLORS.accent,
   },
-  potentialCollaboratorName: {
+  searchResultAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: WHATSAPP_COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  searchResultAvatarText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultName: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  potentialCollaboratorEmail: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  commentItem: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
-  commentHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  commentMetaItem: {
-    flex: 1,
-    marginRight: 8,
-  },
-  commentLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
     marginBottom: 2,
   },
-  commentValue: {
+  searchResultEmail: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    marginTop: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  addButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
+  },
+  
+  // Comments
+  commentItem: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  commentAvatarText: {
+    color: '#FFF',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  commentContentRow: {
-    marginTop: 12,
+  commentInfo: {
+    flex: 1,
   },
-  commentContentText: {
-    fontSize: 16,
+  commentAuthor: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  commentTime: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+    marginBottom: 4,
+  },
+  commentPhase: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  commentPhaseText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  commentContentContainer: {
+    marginBottom: 12,
+  },
+  commentContent: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
     lineHeight: 22,
-    marginTop: 4,
-    padding: 12,
-    borderRadius: 8,
   },
-  documentsContainer: {
-    marginTop: 12,
+  commentDocuments: {
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    borderTopColor: WHATSAPP_COLORS.border,
   },
   documentsLabel: {
     fontSize: 12,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.textSecondary,
     marginBottom: 8,
   },
-  fileButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  fileButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  emptyComments: {
+  documentItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    marginBottom: 6,
+    gap: 8,
   },
-  emptyCommentsText: {
+  documentName: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+  },
+  
+  // Add Comment Section
+  addCommentSection: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.border,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  defaultCommentButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  },
+  defaultCommentButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.primary,
+  },
+  attachButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  },
+  attachButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.primary,
+  },
+  selectedDocuments: {
+    marginBottom: 16,
+  },
+  selectedDocument: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: WHATSAPP_COLORS.background,
+    marginBottom: 8,
+    gap: 8,
+  },
+  selectedDocumentName: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    backgroundColor: WHATSAPP_COLORS.background,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  sendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: WHATSAPP_COLORS.primary,
+  },
+  sendButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
+  },
+  
+  // Loading States
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
   },
   loadMoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 20,
+    gap: 8,
   },
   loadMoreText: {
-    marginLeft: 10,
     fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
   },
   endOfListContainer: {
     alignItems: 'center',
@@ -1202,137 +1635,80 @@ const styles = StyleSheet.create({
   },
   endOfListText: {
     fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
     fontStyle: 'italic',
   },
-  addCommentSection: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-  },
-  commentActions: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 15,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderRadius: 8,
+  
+  // Empty States
+  emptyState: {
     alignItems: 'center',
+    paddingVertical: 40,
   },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectedDocumentsContainer: {
-    marginBottom: 15,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  selectedDocumentsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  selectedDocumentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  selectedDocumentName: {
-    flex: 1,
-    fontSize: 14,
-  },
-  removeDocumentButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  removeDocumentButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  commentInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
+  emptyStateText: {
     fontSize: 16,
-    marginBottom: 15,
-    textAlignVertical: 'top',
-    minHeight: 100,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginTop: 12,
+    textAlign: 'center',
   },
-  submitButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  
+  // Default Comments Modal
   modalOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    alignItems: 'center',
   },
   defaultCommentsModal: {
+    width: '90%',
+    maxHeight: '80%',
     borderRadius: 16,
-    maxHeight: screenHeight * 0.6,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
   },
-  defaultCommentsList: {
-    maxHeight: screenHeight * 0.4,
-    padding: 10,
-  },
-  defaultCommentItem: {
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-  },
-  defaultCommentText: {
-    fontSize: 16,
-  },
-  closeModalButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    margin: 20,
-  },
-  closeModalButtonText: {
+  modalTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
   },
-  emptyState: {
-    padding: 30,
-    alignItems: 'center',
+  closeModalButton: {
+    padding: 4,
   },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: 'center',
+  defaultCommentsList: {
+    maxHeight: 400,
+    padding: 16,
+  },
+  defaultCommentItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  defaultCommentText: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    lineHeight: 22,
+  },
+  
+  // Bottom Spacing
+  bottomSpacing: {
+    height: 20,
   },
 });
 

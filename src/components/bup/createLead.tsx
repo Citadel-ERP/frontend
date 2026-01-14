@@ -12,6 +12,30 @@ import {
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, FilterOption } from './types';
 import DropdownModal from './dropdownModal';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+
+// WhatsApp Color Scheme
+const WHATSAPP_COLORS = {
+  primary: '#075E54',
+  primaryLight: '#128C7E',
+  primaryDark: '#054D44',
+  secondary: '#25D366',
+  accent: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F0F2F5',
+  surface: '#FFFFFF',
+  textPrimary: '#1F2937',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+  success: '#25D366',
+  info: '#3B82F6',
+  white: '#FFFFFF',
+  chatBg: '#ECE5DD',
+  incoming: '#FFFFFF',
+  outgoing: '#DCF8C6',
+};
 
 interface CreateLeadProps {
   onBack: () => void;
@@ -45,6 +69,8 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -124,17 +150,37 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       .join(' ');
   };
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+  };
+
   const handleAddEmail = () => {
-    if (!newEmail.trim()) {
-      Alert.alert('Error', 'Please enter a valid email');
+    const trimmedEmail = newEmail.trim();
+    
+    if (!trimmedEmail) {
+      setEmailError('Please enter an email address');
       return;
     }
-    if (editingEmails.includes(newEmail.trim())) {
-      Alert.alert('Error', 'This email already exists');
+    
+    if (!validateEmail(trimmedEmail)) {
+      setEmailError('Please enter a valid email address');
       return;
     }
-    setEditingEmails([...editingEmails, newEmail.trim()]);
+    
+    if (editingEmails.includes(trimmedEmail)) {
+      setEmailError('This email already exists');
+      return;
+    }
+    
+    setEditingEmails([...editingEmails, trimmedEmail]);
     setNewEmail('');
+    setEmailError(null);
   };
 
   const handleRemoveEmail = (index: number) => {
@@ -142,16 +188,26 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   };
 
   const handleAddPhone = () => {
-    if (!newPhone.trim()) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+    const trimmedPhone = newPhone.trim();
+    
+    if (!trimmedPhone) {
+      setPhoneError('Please enter a phone number');
       return;
     }
-    if (editingPhones.includes(newPhone.trim())) {
-      Alert.alert('Error', 'This phone number already exists');
+    
+    if (!validatePhone(trimmedPhone)) {
+      setPhoneError('Please enter a valid phone number');
       return;
     }
-    setEditingPhones([...editingPhones, newPhone.trim()]);
+    
+    if (editingPhones.includes(trimmedPhone)) {
+      setPhoneError('This phone number already exists');
+      return;
+    }
+    
+    setEditingPhones([...editingPhones, trimmedPhone]);
     setNewPhone('');
+    setPhoneError(null);
   };
 
   const handleRemovePhone = (index: number) => {
@@ -250,196 +306,212 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   };
 
   return (
-    <ScrollView 
-      style={[styles.detailScrollView, { backgroundColor: theme.background }]} 
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Basic Information Card */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Basic Information</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Lead Name *</Text>
-          <TextInput
-            style={[styles.input, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={formData.name}
-            onChangeText={(text) => setFormData({...formData, name: text})}
-            placeholder="Enter lead name"
-            placeholderTextColor={theme.textSecondary}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Company</Text>
-          <TextInput
-            style={[styles.input, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={formData.company}
-            onChangeText={(text) => setFormData({...formData, company: text})}
-            placeholder="Enter company name (optional)"
-            placeholderTextColor={theme.textSecondary}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>City</Text>
-          <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-            <Text style={[styles.readOnlyText, { color: theme.text }]}>{selectedCity}</Text>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.detailScrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Basic Information */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="person" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Basic Information</Text>
           </View>
-        </View>
-      </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Lead Name *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.name}
+              onChangeText={(text) => setFormData({...formData, name: text})}
+              placeholder="Enter lead name"
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+            />
+          </View>
 
-      {/* Contact Information Card */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Contact Information</Text>
-        
-        <Text style={[styles.subsectionTitle, { color: theme.text }]}>Email Addresses ({editingEmails.length})</Text>
-        {editingEmails.map((email, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <View style={styles.contactItemContent}>
-              <Text style={[styles.contactItemText, { color: theme.text }]}>📧 {email}</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Company</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.company}
+              onChangeText={(text) => setFormData({...formData, company: text})}
+              placeholder="Enter company name (optional)"
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>City</Text>
+            <View style={styles.readOnlyField}>
+              <Ionicons name="location" size={16} color={WHATSAPP_COLORS.textTertiary} style={styles.fieldIcon} />
+              <Text style={styles.readOnlyText}>{selectedCity}</Text>
             </View>
-            <TouchableOpacity 
-              style={[styles.removeContactButton, { backgroundColor: theme.error }]}
-              onPress={() => handleRemoveEmail(index)}
-            >
-              <Text style={[styles.removeContactButtonText, { color: theme.white }]}>×</Text>
-            </TouchableOpacity>
           </View>
-        ))}
-
-        <View style={[styles.addContactContainer, { borderTopColor: theme.border }]}>
-          <TextInput
-            style={[styles.input, { flex: 1, 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={newEmail}
-            onChangeText={setNewEmail}
-            placeholder="Add email..."
-            placeholderTextColor={theme.textSecondary}
-            keyboardType="email-address"
-          />
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddEmail}>
-            <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
-          </TouchableOpacity>
         </View>
 
-        <Text style={[styles.subsectionTitle, { color: theme.text, marginTop: 20 }]}>Phone Numbers ({editingPhones.length})</Text>
-        {editingPhones.map((phone, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <View style={styles.contactItemContent}>
-              <Text style={[styles.contactItemText, { color: theme.text }]}>📱 {phone}</Text>
+        {/* Email Addresses */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="email" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Email Addresses ({editingEmails.length})</Text>
+          </View>
+          
+          {editingEmails.length > 0 ? editingEmails.map((email, index) => (
+            <View key={index} style={styles.contactItemContainer}>
+              <View style={styles.contactItemContent}>
+                <Ionicons name="mail" size={16} color={WHATSAPP_COLORS.primaryLight} style={styles.contactIcon} />
+                <Text style={styles.contactItemText}>{email}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.removeContactButton}
+                onPress={() => handleRemoveEmail(index)}
+              >
+                <Ionicons name="close-circle" size={22} color={WHATSAPP_COLORS.danger} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              style={[styles.removeContactButton, { backgroundColor: theme.error }]}
-              onPress={() => handleRemovePhone(index)}
-            >
-              <Text style={[styles.removeContactButtonText, { color: theme.white }]}>×</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-
-        <View style={[styles.addContactContainer, { borderTopColor: theme.border }]}>
-          <TextInput
-            style={[styles.input, { flex: 1, 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={newPhone}
-            onChangeText={setNewPhone}
-            placeholder="Add phone..."
-            placeholderTextColor={theme.textSecondary}
-            keyboardType="phone-pad"
-          />
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.primary }]} onPress={handleAddPhone}>
-            <Text style={[styles.addButtonText, { color: theme.white }]}>+</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Lead Management Card */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Lead Management</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Status</Text>
-          <TouchableOpacity
-            style={[styles.dropdown, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border
-            }]}
-            onPress={() => setActiveDropdown('status')}
-          >
-            <Text style={[styles.dropdownText, { color: theme.text }]}>
-              {getFilterLabel('status', formData.status)}
-            </Text>
-            <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Phase</Text>
-          <TouchableOpacity
-            style={[styles.dropdown, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border
-            }]}
-            onPress={() => setActiveDropdown('phase')}
-          >
-            <Text style={[styles.dropdownText, { color: theme.text }]}>
-              {getFilterLabel('phase', formData.phase)}
-            </Text>
-            <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Subphase</Text>
-          <TouchableOpacity
-            style={[styles.dropdown, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border
-            }]}
-            onPress={() => setActiveDropdown('subphase')}
-          >
-            <Text style={[styles.dropdownText, { color: theme.text }]}>
-              {getFilterLabel('subphase', formData.subphase)}
-            </Text>
-            <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Create Button */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <TouchableOpacity 
-          style={[styles.createButton, { backgroundColor: theme.success }, loading && styles.buttonDisabled]} 
-          onPress={handleCreate}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={theme.white} size="small" />
-          ) : (
-            <Text style={[styles.createButtonText, { color: theme.white }]}>Create Lead</Text>
+          )) : (
+            <View style={styles.emptyContactContainer}>
+              <Ionicons name="mail-outline" size={24} color={WHATSAPP_COLORS.textTertiary} />
+              <Text style={styles.emptyContactText}>No emails added yet</Text>
+            </View>
           )}
-        </TouchableOpacity>
-      </View>
+
+          <View style={styles.addContactContainer}>
+            <TextInput
+              style={[styles.input, emailError && styles.inputError]}
+              value={newEmail}
+              onChangeText={(text) => {
+                setNewEmail(text);
+                setEmailError(null);
+              }}
+              placeholder="Add email address..."
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddEmail}>
+              <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+          {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+        </View>
+
+        {/* Phone Numbers */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="phone" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Phone Numbers ({editingPhones.length})</Text>
+          </View>
+          
+          {editingPhones.length > 0 ? editingPhones.map((phone, index) => (
+            <View key={index} style={styles.contactItemContainer}>
+              <View style={styles.contactItemContent}>
+                <Ionicons name="call" size={16} color={WHATSAPP_COLORS.primaryLight} style={styles.contactIcon} />
+                <Text style={styles.contactItemText}>{phone}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.removeContactButton}
+                onPress={() => handleRemovePhone(index)}
+              >
+                <Ionicons name="close-circle" size={22} color={WHATSAPP_COLORS.danger} />
+              </TouchableOpacity>
+            </View>
+          )) : (
+            <View style={styles.emptyContactContainer}>
+              <Ionicons name="call-outline" size={24} color={WHATSAPP_COLORS.textTertiary} />
+              <Text style={styles.emptyContactText}>No phone numbers added yet</Text>
+            </View>
+          )}
+
+          <View style={styles.addContactContainer}>
+            <TextInput
+              style={[styles.input, phoneError && styles.inputError]}
+              value={newPhone}
+              onChangeText={(text) => {
+                setNewPhone(text);
+                setPhoneError(null);
+              }}
+              placeholder="Add phone number..."
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              keyboardType="phone-pad"
+            />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddPhone}>
+              <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+          {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+        </View>
+
+        {/* Lead Management */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="settings" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.sectionTitle}>Lead Management</Text>
+          </View>
+          
+          <View style={styles.managementRow}>
+            <View style={styles.managementItem}>
+              <Text style={styles.inputLabel}>Status</Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setActiveDropdown('status')}
+              >
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                  {getFilterLabel('status', formData.status)}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.managementItem}>
+              <Text style={styles.inputLabel}>Phase</Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setActiveDropdown('phase')}
+              >
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                  {getFilterLabel('phase', formData.phase)}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Subphase</Text>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setActiveDropdown('subphase')}
+            >
+              <Text style={styles.dropdownText} numberOfLines={1}>
+                {getFilterLabel('subphase', formData.subphase)}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Create Button */}
+        <View style={styles.detailCard}>
+          <TouchableOpacity 
+            style={[styles.createButton, loading && styles.buttonDisabled]} 
+            onPress={handleCreate}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+            ) : (
+              <>
+                <Ionicons name="person-add" size={20} color={WHATSAPP_COLORS.white} />
+                <Text style={styles.createButtonText}>Create Lead</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
 
       {/* Dropdown Modals */}
       <DropdownModal
@@ -448,7 +520,14 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         options={STATUS_CHOICES}
         onSelect={(value) => setFormData({...formData, status: value as any})}
         title="Select Status"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
       <DropdownModal
         visible={activeDropdown === 'phase'}
@@ -456,7 +535,14 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         options={allPhases}
         onSelect={handlePhaseSelection}
         title="Select Phase"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
       <DropdownModal
         visible={activeDropdown === 'subphase'}
@@ -464,130 +550,211 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         options={allSubphases}
         onSelect={(value) => setFormData({...formData, subphase: value})}
         title="Select Subphase"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  
+  // Scroll View
   detailScrollView: {
     flex: 1,
-    backgroundColor: 'transparent',
   },
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  
+  // Detail Cards
   detailCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    marginBottom: 16,
     padding: 20,
     borderRadius: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
+  },
+  
+  // Section Headers
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 15,
-  },
-  subsectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 10,
+    color: WHATSAPP_COLORS.textPrimary,
   },
+  
+  // Input Groups
   inputGroup: {
     marginBottom: 15,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.textSecondary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  inputError: {
+    borderColor: WHATSAPP_COLORS.danger,
   },
   readOnlyField: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  fieldIcon: {
+    marginRight: 8,
   },
   readOnlyText: {
-    fontSize: 16,
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
   },
-  dropdown: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dropdownText: {
-    fontSize: 16,
-    flex: 1,
-  },
-  dropdownArrow: {
-    fontSize: 14,
-  },
+  
+  // Contact Items
   contactItemContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
     borderLeftWidth: 3,
+    borderLeftColor: WHATSAPP_COLORS.primary,
   },
   contactItemContent: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  contactIcon: {
+    marginRight: 8,
   },
   contactItemText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
   },
   removeContactButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    padding: 4,
+  },
+  
+  // Empty Contact
+  emptyContactContainer: {
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+    flexDirection: 'row',
+    gap: 8,
   },
-  removeContactButtonText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
+  emptyContactText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textTertiary,
   },
+  
+  // Add Contact
   addContactContainer: {
     flexDirection: 'row',
     gap: 8,
-    alignItems: 'flex-end',
-    marginTop: 15,
-    paddingTop: 15,
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.border,
   },
   addButton: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  addButtonText: {
-    fontSize: 20,
-    fontWeight: '600',
+  
+  // Error Text
+  errorText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.danger,
+    marginTop: 4,
+    marginLeft: 4,
   },
-  createButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+  
+  // Management
+  managementRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 20,
+  },
+  managementItem: {
+    flex: 1,
+  },
+  dropdown: {
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  dropdownText: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+    marginRight: 8,
+  },
+  
+  // Create Button
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: WHATSAPP_COLORS.primary,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -595,6 +762,12 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.white,
+  },
+  
+  // Bottom Spacing
+  bottomSpacing: {
+    height: 20,
   },
 });
 

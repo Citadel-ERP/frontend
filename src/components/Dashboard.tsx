@@ -1245,8 +1245,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       // setShowReminder(true); 
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bup') || key.includes('business update')) {
-      // setShowBUP(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowBUP(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('employee_management')) {
       // setShowEmployeeManagement(true);
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
