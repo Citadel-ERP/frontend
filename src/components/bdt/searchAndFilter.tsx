@@ -11,6 +11,26 @@ import { ThemeColors, FilterOption } from './types';
 import DropdownModal from './dropdownModal';
 import { Ionicons } from '@expo/vector-icons';
 
+// WhatsApp Color Scheme
+const WHATSAPP_COLORS = {
+  primary: '#075E54',
+  primaryLight: '#128C7E',
+  primaryDark: '#054D44',
+  secondary: '#25D366',
+  accent: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F0F2F5',
+  surface: '#FFFFFF',
+  textPrimary: '#1F2937',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+  success: '#25D366',
+  info: '#3B82F6',
+  white: '#FFFFFF',
+};
+
 interface SearchAndFilterProps {
   token: string | null;
   onSearch: (query: string) => void;
@@ -59,14 +79,14 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   ];
 
   const tabs = [
-    { id: 'all', label: `All leads (${totalLeads || 0})` },
+    { id: 'all', label: `All (${totalLeads || 0})` },
     { id: 'active', label: `Active (${statusCounts.active || 0})` },
     { id: 'hold', label: `Hold (${statusCounts.hold || 0})` },
     { id: 'mandate', label: `Mandate (${statusCounts.mandate || 0})` },
     { id: 'closed', label: `Closed (${statusCounts.closed || 0})` },
-    { id: 'no-requirement', label: `No Requirement (${statusCounts['no-requirement'] || 0})` },
-    { id: 'transaction-complete', label: `Transaction Complete (${statusCounts['transaction-complete'] || 0})` },
-    { id: 'non-responsive', label: `Non Responsive (${statusCounts['non-responsive'] || 0})` }
+    { id: 'no-requirement', label: `No Req (${statusCounts['no-requirement'] || 0})` },
+    { id: 'transaction-complete', label: `Complete (${statusCounts['transaction-complete'] || 0})` },
+    { id: 'non-responsive', label: `Non-Res (${statusCounts['non-responsive'] || 0})` }
   ];
 
   const handleSearchSubmit = () => {
@@ -154,48 +174,54 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   };
 
   return (
-    <>
-      {/* Search Section */}
+    <View style={styles.container}>
+      {/* Search Section - WhatsApp Style */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color="#017bf9" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search Leads"
+            placeholder="Search leads..."
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearchSubmit}
             returnKeyType="search"
-            placeholderTextColor="#666"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
           />
-          <TouchableOpacity 
-            style={styles.gearButton}
-            onPress={() => setActiveDropdown('filter')}
-          >
-            <Text style={styles.gearIcon}>⚙️</Text>
-          </TouchableOpacity>
+          {searchQuery ? (
+            <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              onPress={() => setActiveDropdown('filter')}
+              style={styles.filterButton}
+            >
+              <Ionicons name="filter" size={20} color={WHATSAPP_COLORS.primary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Status Tabs */}
+      {/* Status Tabs - WhatsApp Style */}
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
-        style={[styles.tabsContainer, { backgroundColor: theme.cardBg }]}
+        style={styles.tabsContainer}
       >
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab.id}
             style={[
               styles.tab, 
-              activeTab === tab.id && [styles.activeTab, { backgroundColor: theme.primary }]
+              activeTab === tab.id && [styles.activeTab, { backgroundColor: WHATSAPP_COLORS.primary }]
             ]}
             onPress={() => handleTabPress(tab.id)}
           >
             <Text style={[
               styles.tabText, 
-              { color: theme.textSecondary },
-              activeTab === tab.id && [styles.activeTabText, { color: theme.white }]
+              { color: WHATSAPP_COLORS.textSecondary },
+              activeTab === tab.id && [styles.activeTabText, { color: WHATSAPP_COLORS.white }]
             ]}>
               {tab.label}
             </Text>
@@ -205,25 +231,31 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
       {/* Active Filter Indicator */}
       {filterBy && filterValue && activeTab !== filterValue && (
-        <View style={[styles.activeFilterContainer, { backgroundColor: theme.info + '20' }]}>
-          <Text style={[styles.activeFilterText, { color: theme.info }]}>
-            {getFilterLabel(filterBy, filterValue)}
-          </Text>
-          <TouchableOpacity onPress={clearFilters}>
-            <Text style={[styles.clearFilterText, { color: theme.error }]}>Clear</Text>
-          </TouchableOpacity>
+        <View style={styles.activeFilterContainer}>
+          <View style={styles.activeFilterBadge}>
+            <Ionicons name="funnel" size={14} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.activeFilterText}>
+              {getFilterLabel(filterBy, filterValue)}
+            </Text>
+            <TouchableOpacity onPress={clearFilters} style={styles.clearFilterButton}>
+              <Ionicons name="close" size={14} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
       {/* Search Mode Indicator */}
       {isSearchMode && (
-        <View style={[styles.searchModeIndicator, { backgroundColor: theme.success + '20' }]}>
-          <Text style={[styles.searchModeText, { color: theme.success }]}>
-            Search results for: "{searchQuery}"
-          </Text>
-          <TouchableOpacity onPress={clearSearch}>
-            <Text style={[styles.clearSearchText, { color: theme.error }]}>Clear Search</Text>
-          </TouchableOpacity>
+        <View style={styles.searchModeIndicator}>
+          <View style={styles.searchModeBadge}>
+            <Ionicons name="search" size={14} color={WHATSAPP_COLORS.success} />
+            <Text style={styles.searchModeText}>
+              Search: "{searchQuery}"
+            </Text>
+            <TouchableOpacity onPress={clearSearch}>
+              <Text style={styles.clearSearchText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -234,7 +266,14 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         options={FILTER_OPTIONS}
         onSelect={handleFilterSelection}
         title="Filter Options"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
 
       <DropdownModal
@@ -248,7 +287,14 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           setActiveDropdown(null);
         }}
         title="Select Status"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
       
       <DropdownModal
@@ -257,7 +303,14 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         options={allPhases}
         onSelect={handlePhaseSelectionForFilter}
         title={filterBy === 'subphase' ? "Select Phase (for Subphase)" : "Select Phase"}
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
       
       <DropdownModal
@@ -270,16 +323,28 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           setActiveDropdown(null);
         }}
         title="Select Subphase"
-        theme={theme}
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
       />
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
   searchContainer: {
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   searchInputWrapper: {
     position: 'relative',
@@ -287,81 +352,104 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   searchInput: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderRadius: 25,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 20,
     paddingHorizontal: 45,
-    paddingVertical: 15,
+    paddingVertical: 12,
     fontSize: 16,
     flex: 1,
-    color: '#333',
+    color: WHATSAPP_COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
   },
   searchIcon: {
     position: 'absolute',
     left: 20,
     zIndex: 1,
-    fontSize: 20,
   },
-  gearButton: {
+  clearButton: {
     position: 'absolute',
     right: 20,
     zIndex: 1,
+    padding: 4,
   },
-  gearIcon: {
-    fontSize: 20,
+  filterButton: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 1,
+    padding: 4,
   },
   tabsContainer: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    maxHeight: 55,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    maxHeight: 50,
   },
   tab: {
     paddingHorizontal: 16,
-    paddingVertical: 5,
+    paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 10,
-    backgroundColor: 'transparent',
+    marginRight: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
   },
   activeTab: {
-    maxHeight: 30, 
+    borderColor: WHATSAPP_COLORS.primary,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '500',
   },
   activeTabText: {
-    color: 'white',
+    fontWeight: '600',
   },
   activeFilterContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  activeFilterBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    backgroundColor: WHATSAPP_COLORS.primary + '10',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: 6,
   },
   activeFilterText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.primary,
   },
-  clearFilterText: {
-    fontSize: 14,
-    fontWeight: '600',
+  clearFilterButton: {
+    marginLeft: 4,
+    padding: 2,
   },
   searchModeIndicator: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  searchModeBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    backgroundColor: WHATSAPP_COLORS.success + '10',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: 6,
   },
   searchModeText: {
     fontSize: 14,
     fontWeight: '500',
+    color: WHATSAPP_COLORS.success,
   },
   clearSearchText: {
     fontSize: 14,
     fontWeight: '500',
+    color: WHATSAPP_COLORS.danger,
+    marginLeft: 8,
   },
 });
 

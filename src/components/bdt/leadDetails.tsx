@@ -1,24 +1,56 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Alert,
   TextInput,
   RefreshControl,
   Dimensions,
+  Modal,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  FlatList,
+  Image,
+  Linking,
+  StatusBar
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+const C = {
+  primary: '#075E54',
+  primaryLight: '#128C7E',
+  primaryDark: '#054D44',
+  secondary: '#25D366',
+  accent: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F0F2F5',
+  surface: '#FFFFFF',
+  textPrimary: '#1F2937',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+  success: '#25D366',
+  chatBg: '#ECE5DD',
+  incoming: '#FFFFFF',
+  outgoing: '#DCF8C6'
+};
+
+interface LeadWithNotes extends Omit<Lead, 'notes'> {
+  notes?: string;
+}
+
 interface LeadDetailsProps {
-  lead: Lead;
+  lead: LeadWithNotes;
   onBack: () => void;
   onEdit: () => void;
   onIncentivePress: () => void;
@@ -28,10 +60,11 @@ interface LeadDetailsProps {
 
 const LeadDetails: React.FC<LeadDetailsProps> = ({
   lead,
+  onBack,
   onEdit,
   onIncentivePress,
   token,
-  theme,
+  theme
 }) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [collaborators, setCollaborators] = useState<CollaboratorData[]>([]);
@@ -40,20 +73,15 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [loadingCollaborators, setLoadingCollaborators] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  
   const [newComment, setNewComment] = useState('');
-  const [newCollaborator, setNewCollaborator] = useState('');
   const [selectedDocuments, setSelectedDocuments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
   const [addingComment, setAddingComment] = useState(false);
-  
   const [showDefaultComments, setShowDefaultComments] = useState(false);
   const [defaultComments, setDefaultComments] = useState<any[]>([]);
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
-  
-  const [potentialCollaborators, setPotentialCollaborators] = useState<any[]>([]);
-  const [showPotentialCollaborators, setShowPotentialCollaborators] = useState(false);
-  const [loadingPotentialCollaborators, setLoadingPotentialCollaborators] = useState(false);
-  const [collaboratorSearchTimeout, setCollaboratorSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+  const modalFlatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (token) {
@@ -63,10 +91,17 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [token, lead.id]);
 
+  useEffect(() => {
+    if (comments.length > 0 && flatListRef.current) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [comments.length]);
+
   const beautifyName = (name: string): string => {
+    if (!name) return '';
     return name
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
   };
 
@@ -75,33 +110,64 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
-  const getStatusBadgeColor = (status: string): string => {
-    const statusColor = theme.leadStatusColors;
-    
-    switch (status) {
-      case 'active':
-      case 'transaction-complete':
-        return statusColor.active;
-      case 'hold':
-      case 'mandate':
-        return statusColor.pending;
-      case 'no-requirement':
-      case 'closed':
-      case 'non-responsive':
-        return statusColor.cold;
-      default:
-        return theme.textSecondary;
+  const formatTime = (dateString?: string): string => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return 'Unknown size';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const truncateFileName = (fileName: string, maxLength: number = 25): string => {
+    if (fileName.length <= maxLength) return fileName;
+    return fileName.substring(0, maxLength - 3) + '...';
+  };
+
+  const handleDownloadFile = async (fileUrl: string, fileName: string) => {
+    try {
+      const supported = await Linking.canOpenURL(fileUrl);
+      if (supported) {
+        await Linking.openURL(fileUrl);
+      } else {
+        Alert.alert(
+          'Notification',
+          'File is Being Uploaded, kindly wait for some time and try again.'
+        );
+      }
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      Alert.alert(
+        'Notification',
+        'File is Being Uploaded, kindly wait for some time and try again.'
+      );
     }
   };
 
-  const fetchComments = async (leadId: number, page: number = 1, append: boolean = false): Promise<void> => {
+  const fetchComments = async (
+    leadId: number,
+    page: number = 1,
+    append: boolean = false
+  ): Promise<void> => {
     try {
       if (!token) return;
-      
       if (!append) {
         setLoadingComments(true);
       } else {
@@ -110,22 +176,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
       const response = await fetch(`${BACKEND_URL}/employee/getComments`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: leadId,
-          page: page
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, lead_id: leadId, page: page })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      
+
       const transformedComments: Comment[] = data.comments.map((apiComment: any) => ({
         id: apiComment.comment.id.toString(),
         commentBy: apiComment.comment.user.full_name,
@@ -134,18 +191,21 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         subphase: apiComment.created_at_subphase,
         content: apiComment.comment.content,
         hasFile: apiComment.comment.documents.length > 0,
-        fileName: apiComment.comment.documents.length > 0 
+        fileName: apiComment.comment.documents.length > 0
           ? apiComment.comment.documents.map((doc: DocumentType) => doc.document_name).join(', ')
           : undefined,
         documents: apiComment.comment.documents
       }));
 
+      const sortedComments = transformedComments.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
       if (append) {
-        setComments(prevComments => [...prevComments, ...transformedComments]);
+        setComments(prev => [...prev, ...sortedComments]);
       } else {
-        setComments(transformedComments);
+        setComments(sortedComments);
       }
-      
       setCommentsPagination(data.pagination);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -159,24 +219,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const fetchCollaborators = async (leadId: number): Promise<void> => {
     try {
       if (!token) return;
-      
       setLoadingCollaborators(true);
-
       const response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: leadId
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, lead_id: leadId })
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setCollaborators(data.collaborators);
     } catch (error) {
@@ -190,20 +239,17 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
     try {
       if (!token) return;
-      
       setLoadingDefaultComments(true);
-
-      const response = await fetch(`${BACKEND_URL}/employee/getDefaultComments?at_phase=${encodeURIComponent(phase)}&at_subphase=${encodeURIComponent(subphase)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `${BACKEND_URL}/employee/getDefaultComments?at_phase=${encodeURIComponent(
+          phase
+        )}&at_subphase=${encodeURIComponent(subphase)}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
         }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setDefaultComments(data.comments);
     } catch (error) {
@@ -215,139 +261,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
-  const fetchPotentialCollaborators = async (query: string): Promise<void> => {
-    if (!query.trim() || !token) {
-      setPotentialCollaborators([]);
-      setShowPotentialCollaborators(false);
-      return;
-    }
-
-    try {
-      setLoadingPotentialCollaborators(true);
-
-      const response = await fetch(`${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setPotentialCollaborators(data.potential_collaborators);
-      setShowPotentialCollaborators(data.potential_collaborators.length > 0);
-    } catch (error) {
-      console.error('Error fetching potential collaborators:', error);
-      setPotentialCollaborators([]);
-      setShowPotentialCollaborators(false);
-    } finally {
-      setLoadingPotentialCollaborators(false);
-    }
-  };
-
-  const handleCollaboratorInputChange = (text: string) => {
-    setNewCollaborator(text);
-    
-    if (collaboratorSearchTimeout) {
-      clearTimeout(collaboratorSearchTimeout);
-    }
-    
-    if (!text.trim()) {
-      setPotentialCollaborators([]);
-      setShowPotentialCollaborators(false);
-      return;
-    }
-    
-    const timeout = setTimeout(() => {
-      fetchPotentialCollaborators(text);
-    }, 500);
-    
-    setCollaboratorSearchTimeout(timeout);
-  };
-
-  const handlePotentialCollaboratorSelect = (collaborator: any) => {
-    setNewCollaborator(collaborator.email);
-    setShowPotentialCollaborators(false);
-    setPotentialCollaborators([]);
-  };
-
-  const addCollaborator = async (email: string): Promise<boolean> => {
-    try {
-      if (!token) return false;
-
-      const response = await fetch(`${BACKEND_URL}/employee/addCollaborators`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: lead.id,
-          email: email
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      await fetchCollaborators(lead.id);
-      Alert.alert('Success', 'Collaborator added successfully!');
-      setNewCollaborator('');
-      return true;
-    } catch (error) {
-      console.error('Error adding collaborator:', error);
-      Alert.alert('Error', 'Failed to add collaborator. Please try again.');
-      return false;
-    }
-  };
-
-  const removeCollaborator = async (collaboratorId: number): Promise<boolean> => {
-    try {
-      if (!token) return false;
-
-      const response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: lead.id,
-          collaborator_id: collaboratorId
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      await fetchCollaborators(lead.id);
-      Alert.alert('Success', 'Collaborator removed successfully!');
-      return true;
-    } catch (error) {
-      console.error('Error removing collaborator:', error);
-      Alert.alert('Error', 'Failed to remove collaborator. Please try again.');
-      return false;
-    }
-  };
-
   const handleAttachDocuments = async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         multiple: true,
-        type: '*/*',
+        type: '*/*'
       });
-
       if (!result.canceled && result.assets) {
         setSelectedDocuments(result.assets);
-        Alert.alert(
-          'Files Selected',
-          `${result.assets.length} file(s) selected: ${result.assets.map(doc => doc.name).join(', ')}`
-        );
       }
     } catch (error) {
       console.error('Error picking documents:', error);
@@ -355,12 +276,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
-  const addCommentToBackend = async (comment: string, documents: DocumentPicker.DocumentPickerAsset[]): Promise<boolean> => {
+  const addCommentToBackend = async (
+    comment: string,
+    documents: DocumentPicker.DocumentPickerAsset[]
+  ): Promise<boolean> => {
     try {
       if (!token) return false;
-
       setAddingComment(true);
-
       const formData = new FormData();
       formData.append('token', token);
       formData.append('lead_id', lead.id.toString());
@@ -371,7 +293,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           formData.append('documents', {
             uri: doc.uri,
             type: doc.mimeType || 'application/octet-stream',
-            name: doc.name,
+            name: doc.name
           } as any);
         });
       }
@@ -379,17 +301,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       const response = await fetch(`${BACKEND_URL}/employee/addComment`, {
         method: 'POST',
         body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      
+
       const newComment: Comment = {
         id: data.lead_comment.comment.id.toString(),
         commentBy: data.lead_comment.comment.user.full_name,
@@ -398,15 +314,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         subphase: data.lead_comment.created_at_subphase,
         content: data.lead_comment.comment.content,
         hasFile: data.lead_comment.comment.documents.length > 0,
-        fileName: data.lead_comment.comment.documents.length > 0 
+        fileName: data.lead_comment.comment.documents.length > 0
           ? data.lead_comment.comment.documents.map((doc: DocumentType) => doc.document_name).join(', ')
           : undefined,
         documents: data.lead_comment.comment.documents
       };
 
-      setComments(prevComments => [newComment, ...prevComments]);
-      
-      Alert.alert('Success', 'Comment added successfully!');
+      setComments(prev => [...prev, newComment]);
       return true;
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -422,41 +336,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       Alert.alert('Error', 'Please enter a comment');
       return;
     }
-
     const success = await addCommentToBackend(newComment.trim(), selectedDocuments);
     if (success) {
       setNewComment('');
       setSelectedDocuments([]);
     }
-  };
-
-  const handleAddCollaborator = async () => {
-    if (!newCollaborator.trim()) {
-      Alert.alert('Error', 'Please enter an email address');
-      return;
-    }
-    
-    const success = await addCollaborator(newCollaborator.trim());
-    if (success) {
-      setNewCollaborator('');
-      setPotentialCollaborators([]);
-      setShowPotentialCollaborators(false);
-    }
-  };
-
-  const handleRemoveCollaborator = (collaborator: CollaboratorData) => {
-    Alert.alert(
-      'Remove Collaborator',
-      `Are you sure you want to remove ${collaborator.user.full_name} from this lead?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: () => removeCollaborator(collaborator.id)
-        }
-      ]
-    );
   };
 
   const handleDefaultCommentSelect = (defaultComment: any) => {
@@ -480,15 +364,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [commentsPagination, loadingMoreComments, lead.id]);
 
-  const handleCommentsScroll = (event: any) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 20;
-    
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
-      handleLoadMoreComments();
-    }
-  };
-
   const handleRefresh = () => {
     setRefreshing(true);
     fetchComments(lead.id, 1);
@@ -496,702 +371,843 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     setRefreshing(false);
   };
 
-  return (
-    <ScrollView 
-      style={[styles.detailScrollView, { backgroundColor: theme.background }]} 
-      showsVerticalScrollIndicator={false}
-      onScroll={handleCommentsScroll}
-      scrollEventThrottle={16}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={theme.primary}
-        />
-      }
-    >
-      {/* Lead Header */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <View style={styles.leadHeader}>
-          <View style={styles.leadInfo}>
-            <View style={styles.leadNameRow}>
-              <Text style={[styles.leadName, { color: theme.text }]}>{lead.name}</Text>
-              <TouchableOpacity style={[styles.incentiveIconButton, { backgroundColor: theme.success }]} onPress={onIncentivePress}>
-                <Text style={[styles.incentiveIconText, { color: theme.white }]}>Incentive</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statusIndicatorRow}>
-              <View style={[styles.statusDot, { backgroundColor: getStatusBadgeColor(lead.status) }]} />
-              <Text style={[styles.statusText, { color: theme.text }]}>{beautifyName(lead.status)}</Text>
-            </View>
-            <Text style={[styles.leadCompany, { color: theme.textSecondary }]}>{lead.company || 'No company'}</Text>
-            <Text style={[styles.leadDate, { color: theme.textLight }]}>Created: {formatDateTime(lead.created_at || lead.createdAt)}</Text>
-            <Text style={[styles.leadDate, { color: theme.textLight }]}>Updated: {formatDateTime(lead.updated_at)}</Text>
-          </View>
-        </View>
-      </View>
+  const renderChatBubble = ({ item }: { item: Comment }) => {
+    const isCurrentUser = item.commentBy !== 'You' && !item.commentBy.includes('Current');
+    const time = formatTime(item.date);
 
-      {/* Contact Information */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Contact Information</Text>
-        
-        <Text style={[styles.inputLabel, { color: theme.text }]}>Email Addresses ({lead.emails.length})</Text>
-        {lead.emails.map((email, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <Text style={[styles.contactItemText, { color: theme.text }]}>📧 {email.email}</Text>
-          </View>
-        ))}
+    return (
+      <View
+        style={[
+          s.chatBubbleContainer,
+          isCurrentUser ? s.currentUserBubbleContainer : s.otherUserBubbleContainer
+        ]}
+      >
+        <View
+          style={[
+            s.chatBubble,
+            isCurrentUser
+              ? [s.currentUserBubble, { backgroundColor: C.outgoing }]
+              : [s.otherUserBubble, { backgroundColor: C.incoming }]
+          ]}
+        >
+          {!isCurrentUser && (
+            <Text style={[s.senderName, { color: C.primary }]}>{item.commentBy}</Text>
+          )}
 
-        <Text style={[styles.inputLabel, { color: theme.text, marginTop: 15 }]}>Phone Numbers ({lead.phone_numbers.length})</Text>
-        {lead.phone_numbers.map((phone, index) => (
-          <View key={index} style={[styles.contactItemContainer, { 
-            backgroundColor: theme.backgroundSecondary,
-            borderLeftColor: theme.info
-          }]}>
-            <Text style={[styles.contactItemText, { color: theme.text }]}>📱 {phone.number}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Lead Management */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Lead Management</Text>
-        
-        <View style={styles.managementRow}>
-          <View style={styles.managementItem}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>Status</Text>
-            <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.readOnlyText, { color: theme.text }]}>
-                {beautifyName(lead.status)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.managementItem}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>Phase</Text>
-            <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.readOnlyText, { color: theme.text }]}>
-                {beautifyName(lead.phase)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Subphase</Text>
-          <View style={[styles.readOnlyField, { backgroundColor: theme.backgroundSecondary }]}>
-            <Text style={[styles.readOnlyText, { color: theme.text }]}>
-              {beautifyName(lead.subphase)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Collaborators */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          Collaborators ({collaborators.length})
-        </Text>
-        
-        {loadingCollaborators ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading collaborators...</Text>
-          </View>
-        ) : collaborators.length > 0 ? (
-          collaborators.map((collaborator) => (
-            <View key={collaborator.id} style={[styles.collaboratorItem, { backgroundColor: theme.backgroundSecondary }]}>
-              <View style={styles.collaboratorInfo}>
-                <Text style={[styles.collaboratorName, { color: theme.text }]}>{collaborator.user.full_name}</Text>
-                <Text style={[styles.collaboratorEmail, { color: theme.textSecondary }]}>{collaborator.user.email}</Text>
-                <Text style={[styles.collaboratorRole, { color: theme.textSecondary }]}>
-                  {collaborator.user.designation || collaborator.user.role}
-                </Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyCollaborators}>
-            <Text style={[styles.emptyCollaboratorsText, { color: theme.textSecondary }]}>No collaborators yet</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Comments */}
-      <View style={[styles.detailCard, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          Comments ({comments.length}
-          {commentsPagination && ` of ${commentsPagination.total_items}`})
-        </Text>
-        
-        {loadingComments ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.primary} />
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading comments...</Text>
-          </View>
-        ) : comments.length > 0 ? (
-          <>
-            {comments.map((comment) => (
-              <View key={comment.id} style={[styles.commentItem, { 
-                backgroundColor: theme.backgroundSecondary,
-                borderLeftColor: theme.info
-              }]}>
-                <View style={styles.commentHeaderRow}>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Comment By:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{comment.commentBy}</Text>
-                  </View>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Date:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{formatDateTime(comment.date)}</Text>
-                  </View>
-                </View>
-                <View style={styles.commentHeaderRow}>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Phase:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{beautifyName(comment.phase)}</Text>
-                  </View>
-                  <View style={styles.commentMetaItem}>
-                    <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Subphase:</Text>
-                    <Text style={[styles.commentValue, { color: theme.text }]}>{beautifyName(comment.subphase)}</Text>
-                  </View>
-                </View>
-                <View style={styles.commentContentRow}>
-                  <Text style={[styles.commentLabel, { color: theme.textSecondary }]}>Content:</Text>
-                  <Text style={[styles.commentContentText, { 
-                    color: theme.text,
-                    backgroundColor: theme.cardBg
-                  }]}>{comment.content}</Text>
-                </View>
-                {comment.documents && comment.documents.length > 0 && (
-                  <View style={styles.documentsContainer}>
-                    <Text style={[styles.documentsLabel, { color: theme.textSecondary }]}>Attachments:</Text>
-                    {comment.documents.map((doc, index) => (
-                      <TouchableOpacity key={doc.id} style={[styles.fileButton, { backgroundColor: theme.info + '20' }]}>
-                        <Text style={[styles.fileButtonText, { color: theme.info }]}>📎 {doc.document_name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
-
-            {loadingMoreComments && (
-              <View style={styles.loadMoreContainer}>
-                <ActivityIndicator size="small" color={theme.primary} />
-                <Text style={[styles.loadMoreText, { color: theme.textSecondary }]}>Loading more comments...</Text>
-              </View>
-            )}
-
-            {commentsPagination && !commentsPagination.has_next && comments.length > 0 && (
-              <View style={styles.endOfListContainer}>
-                <Text style={[styles.endOfListText, { color: theme.textSecondary }]}>
-                  You've reached the end of the comments
-                </Text>
-              </View>
-            )}
-          </>
-        ) : (
-          <View style={styles.emptyComments}>
-            <Text style={[styles.emptyCommentsText, { color: theme.textSecondary }]}>No comments yet</Text>
-          </View>
-        )}
-
-        {/* Add Comment Section */}
-        <View style={[styles.addCommentSection, { borderTopColor: theme.border }]}>
-          <View style={styles.commentActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, { 
-                borderColor: theme.primary,
-                backgroundColor: theme.primary + '10'
-              }]}
-              onPress={() => {
-                fetchDefaultComments(lead.phase, lead.subphase);
-                setShowDefaultComments(true);
-              }}
-              disabled={loadingDefaultComments}
-            >
-              {loadingDefaultComments ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <Text style={[styles.actionButtonText, { color: theme.primary }]}>Default Comments</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, { 
-                borderColor: theme.primary,
-                backgroundColor: theme.primary + '10'
-              }]} 
-              onPress={handleAttachDocuments}
-            >
-              <Text style={[styles.actionButtonText, { color: theme.primary }]}>📎 Attach ({selectedDocuments.length})</Text>
-            </TouchableOpacity>
-          </View>
-
-          {selectedDocuments.length > 0 && (
-            <View style={[styles.selectedDocumentsContainer, { 
-              backgroundColor: theme.background,
-              borderColor: theme.border
-            }]}>
-              <Text style={[styles.selectedDocumentsTitle, { color: theme.primary }]}>Selected Files:</Text>
-              {selectedDocuments.map((doc, index) => (
-                <View key={index} style={[styles.selectedDocumentItem, { backgroundColor: theme.white }]}>
-                  <Text style={[styles.selectedDocumentName, { color: theme.primary }]} numberOfLines={1}>
-                    📎 {doc.name}
-                  </Text>
-                  <TouchableOpacity 
-                    style={[styles.removeDocumentButton, { backgroundColor: theme.error }]}
-                    onPress={() => handleRemoveDocument(index)}
-                  >
-                    <Text style={[styles.removeDocumentButtonText, { color: theme.white }]}>×</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
+          {item.documents && item.documents.length > 0 && (
+            <View style={s.chatAttachments}>
+              {item.documents.map((doc) => {
+                const isImage = doc.document_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                if (isImage) {
+                  return (
+                    <TouchableOpacity
+                      key={doc.id}
+                      style={s.imageAttachment}
+                      onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
+                    >
+                      <Image
+                        source={{ uri: doc.document_url }}
+                        style={s.chatImage}
+                        resizeMode="cover"
+                      />
+                      <View style={s.imageOverlay}>
+                        <Ionicons name="download-outline" size={20} color="#FFF" />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                } else {
+                  return (
+                    <TouchableOpacity
+                      key={doc.id}
+                      style={[
+                        s.documentAttachment,
+                        isCurrentUser
+                          ? s.documentAttachmentOutgoing
+                          : s.documentAttachmentIncoming
+                      ]}
+                      onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
+                    >
+                      <View
+                        style={[
+                          s.documentIconContainer,
+                          isCurrentUser ? s.docIconOutgoing : s.docIconIncoming
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="insert-drive-file"
+                          size={20}
+                          color={isCurrentUser ? C.primary : C.primaryDark}
+                        />
+                      </View>
+                      <View style={s.documentInfo}>
+                        <Text
+                          style={[
+                            s.documentName,
+                            { color: isCurrentUser ? C.primaryDark : C.primary }
+                          ]}
+                        >
+                          {truncateFileName(doc.document_name)}
+                        </Text>
+                        <Text style={[s.documentSize, { color: C.textTertiary }]}>
+                          Tap to download
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="download-outline"
+                        size={18}
+                        color={isCurrentUser ? C.primaryDark : C.primary}
+                      />
+                    </TouchableOpacity>
+                  );
+                }
+              })}
             </View>
           )}
 
-          <TextInput
-            style={[styles.commentInput, { 
-              backgroundColor: theme.white,
-              borderColor: theme.border,
-              color: theme.text
-            }]}
-            value={newComment}
-            onChangeText={setNewComment}
-            placeholder="Add your comment here..."
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            placeholderTextColor={theme.textSecondary}
-          />
+          {item.content && (
+            <Text style={[s.chatMessage, { color: C.textPrimary }]}>{item.content}</Text>
+          )}
 
-          <TouchableOpacity 
-            style={[
-              styles.submitButton, 
-              addingComment && styles.submitButtonDisabled,
-              { backgroundColor: theme.primary }
-            ]} 
-            onPress={handleAddComment}
-            disabled={addingComment}
-          >
-            {addingComment ? (
-              <ActivityIndicator color={theme.white} size="small" />
-            ) : (
-              <Text style={[styles.submitButtonText, { color: theme.white }]}>Add Comment</Text>
+          <View style={s.chatTimestamp}>
+            <Text style={[s.chatTimeText, { color: C.textTertiary }]}>{time}</Text>
+            {isCurrentUser && (
+              <MaterialIcons
+                name="done-all"
+                size={14}
+                color={C.primary}
+                style={s.deliveryIcon}
+              />
             )}
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
+    );
+  };
 
-      {/* Default Comments Modal */}
-      {showDefaultComments && (
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
-          <View style={[styles.defaultCommentsModal, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Default Comments - {beautifyName(lead.phase)} → {beautifyName(lead.subphase)}
-            </Text>
-            <ScrollView style={styles.defaultCommentsList}>
-              {loadingDefaultComments ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={theme.primary} />
-                  <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading default comments...</Text>
-                </View>
-              ) : defaultComments.length > 0 ? (
-                defaultComments.map((comment) => (
-                  <TouchableOpacity
-                    key={comment.id}
-                    style={[styles.defaultCommentItem, { borderBottomColor: theme.border }]}
-                    onPress={() => handleDefaultCommentSelect(comment)}
-                  >
-                    <Text style={[styles.defaultCommentText, { color: theme.text }]}>
-                      {(() => {
-                        try {
-                          return JSON.parse(comment.data);
-                        } catch {
-                          return comment.data;
-                        }
-                      })()}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={[styles.emptyStateText, { color: theme.textSecondary }]}>
-                    No default comments available for this phase/subphase
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-            <TouchableOpacity 
-              style={[styles.closeModalButton, { backgroundColor: theme.error }]}
-              onPress={() => setShowDefaultComments(false)}
-            >
-              <Text style={[styles.closeModalButtonText, { color: theme.white }]}>Close</Text>
+  const ModernHeader = () => (
+    <SafeAreaView style={s.headerSafeArea}>
+      <View style={s.header}>
+        <StatusBar barStyle="light-content" backgroundColor={C.primary} />
+        <View style={s.headerContent}>
+          <TouchableOpacity onPress={onBack} style={s.backButton}>
+            <Ionicons name="chevron-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.headerInfo}
+            onPress={() => setShowLeadDetailsModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={s.avatarContainer}>
+              <View style={s.avatarPlaceholder}>
+                <Text style={s.avatarText}>
+                  {lead.name?.charAt(0)?.toUpperCase() || 'L'}
+                </Text>
+              </View>
+              <View style={s.onlineIndicator} />
+            </View>
+            <View style={s.headerTextContainer}>
+              <Text style={s.headerTitle} numberOfLines={1}>
+                {lead.name || 'Lead'}
+              </Text>
+              <Text style={s.headerSubtitle} numberOfLines={1}>
+                {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={s.headerActions}>
+            <TouchableOpacity onPress={onIncentivePress} style={[s.headerActionButton, s.incentiveButton]}>
+              <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
+              <MaterialIcons name="edit" size={22} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
+      </View>
+    </SafeAreaView>
+  );
+
+  const renderModalSection = ({ item }: { item: string }) => {
+    switch (item) {
+      case 'lead-info':
+        return (
+          <View style={s.infoCard}>
+            <View style={s.infoCardHeader}>
+              <View style={s.infoAvatarContainer}>
+                <View style={s.infoAvatar}>
+                  <Text style={s.infoAvatarText}>
+                    {lead.name?.charAt(0)?.toUpperCase() || 'L'}
+                  </Text>
+                </View>
+              </View>
+              <View style={s.infoHeaderText}>
+                <Text style={s.infoName}>{lead.name || 'Lead'}</Text>
+                {lead.company && <Text style={s.infoCompany}>{lead.company}</Text>}
+              </View>
+            </View>
+            <View style={s.statusBadges}>
+              <View style={[s.statusBadge, { backgroundColor: C.primary + '15' }]}>
+                <Text style={[s.statusBadgeText, { color: C.primary }]}>
+                  {beautifyName(lead.phase)}
+                </Text>
+              </View>
+              <View style={[s.statusBadge, { backgroundColor: C.secondary + '15' }]}>
+                <Text style={[s.statusBadgeText, { color: C.secondary }]}>
+                  {beautifyName(lead.subphase)}
+                </Text>
+              </View>
+              <View style={[s.statusBadge, { backgroundColor: C.accent + '15' }]}>
+                <Text style={[s.statusBadgeText, { color: C.accent }]}>
+                  {beautifyName(lead.status)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        );
+
+      case 'contact-info':
+        return (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Contact Information</Text>
+            {lead.emails.map((email, idx) => (
+              <View key={idx} style={s.detailRow}>
+                <MaterialIcons name="email" size={20} color={C.primary} />
+                <Text style={s.detailValue}>{email.email}</Text>
+                <TouchableOpacity style={s.copyButton}>
+                  <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            {lead.phone_numbers.map((phone, idx) => (
+              <View key={idx} style={s.detailRow}>
+                <MaterialIcons name="phone" size={20} color={C.primary} />
+                <Text style={s.detailValue}>{phone.number}</Text>
+                <TouchableOpacity style={s.copyButton}>
+                  <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        );
+
+      case 'metadata':
+        return (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Metadata</Text>
+            <View style={s.metadataRow}>
+              <MaterialIcons name="calendar-today" size={18} color={C.textTertiary} />
+              <Text style={s.metadataLabel}>Created:</Text>
+              <Text style={s.metadataValue}>
+                {formatDateTime(lead.created_at || lead.createdAt)}
+              </Text>
+            </View>
+          </View>
+        );
+
+      case 'collaborators':
+        return collaborators.length > 0 ? (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Team ({collaborators.length})</Text>
+            </View>
+            <View style={s.collaboratorsGrid}>
+              {collaborators.map((collab) => (
+                <View key={collab.id} style={s.collaboratorItem}>
+                  <View style={s.collaboratorAvatar}>
+                    <Text style={s.collaboratorAvatarText}>
+                      {collab.user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                    </Text>
+                  </View>
+                  <Text style={s.collaboratorName} numberOfLines={1}>
+                    {collab.user.full_name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null;
+
+      case 'notes':
+        return lead.notes ? (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Notes</Text>
+            <View style={s.notesContainer}>
+              <Text style={s.notesText}>{lead.notes}</Text>
+            </View>
+          </View>
+        ) : null;
+
+      default:
+        return null;
+    }
+  };
+
+  const modalSections = [
+    'lead-info',
+    'contact-info',
+    'metadata',
+    ...(collaborators.length > 0 ? ['collaborators'] : []),
+    ...(lead.notes ? ['notes'] : [])
+  ];
+
+  const ContactInfoModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={false}
+      visible={showLeadDetailsModal}
+      onRequestClose={() => setShowLeadDetailsModal(false)}
+    >
+      <SafeAreaView style={s.modalContainer}>
+        <View style={s.modalHeader}>
+          <TouchableOpacity
+            onPress={() => setShowLeadDetailsModal(false)}
+            style={s.modalBackButton}
+          >
+            <Ionicons name="close" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={s.modalTitle}>Lead Details</Text>
+        </View>
+        <FlatList
+          ref={modalFlatListRef}
+          data={modalSections}
+          renderItem={renderModalSection}
+          keyExtractor={(item) => item}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.modalScrollContent}
+          ListFooterComponent={<View style={s.modalBottomSpacing} />}
+        />
+      </SafeAreaView>
+    </Modal>
+  );
+
+  return (
+    <View style={s.mainContainer}>
+      <ModernHeader />
+      <ContactInfoModal />
+
+      <View style={s.chatContainer}>
+        {loadingComments ? (
+          <View style={s.loadingContainer}>
+            <ActivityIndicator size="large" color={C.primary} />
+            <Text style={s.loadingText}>Loading conversations...</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={comments}
+            renderItem={renderChatBubble}
+            keyExtractor={(item) => item.id}
+            inverted={false}
+            onEndReached={handleLoadMoreComments}
+            onEndReachedThreshold={0.1}
+            contentContainerStyle={s.chatListContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[C.primary]}
+                tintColor={C.primary}
+              />
+            }
+            ListHeaderComponent={
+              loadingMoreComments ? (
+                <View style={s.loadMoreContainer}>
+                  <ActivityIndicator size="small" color={C.primary} />
+                </View>
+              ) : null
+            }
+            ListEmptyComponent={
+              <View style={s.emptyChat}>
+                <MaterialIcons name="forum" size={64} color={C.border} />
+                <Text style={s.emptyChatTitle}>No conversations yet</Text>
+                <Text style={s.emptyChatText}>
+                  Start by sending a message or quick reply
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+
+      {selectedDocuments.length > 0 && (
+        <View style={s.selectedFilesPreview}>
+          <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+          <FlatList
+            horizontal
+            data={selectedDocuments}
+            renderItem={({ item: doc, index }) => (
+              <View style={s.selectedDocumentItem}>
+                <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
+                <View style={s.selectedDocumentInfo}>
+                  <Text style={s.selectedDocumentName} numberOfLines={1}>
+                    {truncateFileName(doc.name, 20)}
+                  </Text>
+                  <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
+                  <Ionicons name="close" size={18} color={C.textTertiary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            keyExtractor={(_, idx) => `doc-${idx}`}
+            showsHorizontalScrollIndicator={false}
+          />
+        </View>
       )}
 
-      <View style={{ height: 100 }} />
-    </ScrollView>
+      <SafeAreaView style={s.inputSafeArea}>
+        <View style={s.inputContainer}>
+          <View style={s.inputWrapper}>
+            <View style={s.inputRow}>
+              <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                <Ionicons name="attach" size={22} color={C.primary} />
+                {selectedDocuments.length > 0 && (
+                  <View style={s.fileCounterBadge}>
+                    <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <View style={s.inputField}>
+                <TextInput
+                  style={s.messageInput}
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  placeholder="Type your message..."
+                  multiline
+                  maxLength={1000}
+                  placeholderTextColor={C.textTertiary}
+                  editable={!addingComment}
+                />
+              </View>
+              <TouchableOpacity
+                style={[
+                  s.sendButton,
+                  { backgroundColor: newComment.trim() ? C.primary : C.border }
+                ]}
+                onPress={handleAddComment}
+                disabled={addingComment || !newComment.trim()}
+              >
+                {addingComment ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Ionicons
+                    name="send"
+                    size={18}
+                    color={newComment.trim() ? '#FFF' : C.textTertiary}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+
+      {showDefaultComments && (
+        <View style={s.defaultCommentsOverlay}>
+          <SafeAreaView style={s.defaultCommentsModal}>
+            <View style={s.defaultCommentsHeader}>
+              <Text style={s.defaultCommentsTitle}>Quick Replies</Text>
+              <TouchableOpacity
+                onPress={() => setShowDefaultComments(false)}
+                style={s.closeDefaultCommentsButton}
+              >
+                <Ionicons name="close" size={22} color={C.textTertiary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={defaultComments}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={s.defaultCommentItem}
+                  onPress={() => handleDefaultCommentSelect(item)}
+                >
+                  <Text style={s.defaultCommentText}>
+                    {(() => {
+                      try {
+                        return JSON.parse(item.data);
+                      } catch {
+                        return item.data;
+                      }
+                    })()}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              contentContainerStyle={s.defaultCommentsList}
+            />
+          </SafeAreaView>
+        </View>
+      )}
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
-  detailScrollView: {
-    flex: 1,
+const s = StyleSheet.create({
+  mainContainer: { flex: 1, backgroundColor: C.chatBg },
+  container: { flex: 1, backgroundColor: C.chatBg },
+  headerSafeArea: { backgroundColor: C.primary },
+  header: {
+    backgroundColor: C.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: C.primaryDark
   },
-  detailCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 20,
-    borderRadius: 16,
-  },
-  leadHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 15,
-  },
-  leadInfo: {
-    flex: 1,
-  },
-  leadNameRow: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    height: 60
   },
-  leadName: {
-    fontSize: 24,
-    fontWeight: '700',
-    flex: 1,
-  },
-  incentiveIconButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+  backButton: { padding: 8, marginRight: 8 },
+  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  avatarContainer: { marginRight: 12, position: 'relative' },
+  avatarPlaceholder: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: C.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 90,
+    borderWidth: 2,
+    borderColor: C.primaryDark
   },
-  incentiveIconText: {
-    fontSize: 14,
+  avatarText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: C.success,
+    borderWidth: 2,
+    borderColor: C.primary
+  },
+  headerTextContainer: { flex: 1 },
+  headerTitle: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#FFF',
+    marginBottom: 2
   },
-  statusIndicatorRow: {
+  headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerActionButton: { padding: 8 },
+  incentiveButton: { marginRight: 4 },
+  modalContainer: { flex: 1, backgroundColor: C.background },
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: C.primary
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 14,
+  modalBackButton: { padding: 8, marginRight: 12 },
+  modalTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#FFF',
+    flex: 1
   },
-  leadCompany: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
+  modalScrollContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    flexGrow: 1
   },
-  leadDate: {
-    fontSize: 14,
+  infoCard: {
+    backgroundColor: C.surface,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 20
+  },
+  infoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16
+  },
+  infoAvatarContainer: { marginRight: 16 },
+  infoAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  infoAvatarText: { fontSize: 24, fontWeight: '600', color: '#FFF' },
+  infoHeaderText: { flex: 1 },
+  infoName: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: C.textPrimary,
+    marginBottom: 4
+  },
+  infoCompany: { fontSize: 16, color: C.textSecondary },
+  statusBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  statusBadgeText: { fontSize: 12, fontWeight: '500' },
+  section: {
+    backgroundColor: C.surface,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 20
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 15,
+    color: C.primary,
+    marginBottom: 16
   },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  contactItemContainer: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-  },
-  contactItemText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  managementRow: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 15,
-  },
-  managementItem: {
-    flex: 1,
-  },
-  readOnlyField: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  readOnlyText: {
-    fontSize: 16,
-  },
-  inputGroup: {
-    marginBottom: 15,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-  },
-  collaboratorItem: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  collaboratorInfo: {
-    flex: 1,
-  },
-  collaboratorName: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  collaboratorEmail: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  collaboratorRole: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  emptyCollaborators: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  emptyCollaboratorsText: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  commentItem: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
-  commentHeaderRow: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: 16
   },
-  commentMetaItem: {
-    flex: 1,
-    marginRight: 8,
-  },
-  commentLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  commentValue: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  commentContentRow: {
-    marginTop: 12,
-  },
-  commentContentText: {
-    fontSize: 16,
-    lineHeight: 22,
-    marginTop: 4,
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
     padding: 12,
-    borderRadius: 8,
+    backgroundColor: C.background,
+    borderRadius: 8
   },
-  documentsContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+  detailValue: {
+    fontSize: 15,
+    color: C.textPrimary,
+    marginLeft: 12,
+    flex: 1
   },
-  documentsLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  fileButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  fileButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  emptyComments: {
-    alignItems: 'center',
-    paddingVertical: 30,
-  },
-  emptyCommentsText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadMoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-  },
-  loadMoreText: {
-    marginLeft: 10,
+  copyButton: { padding: 4 },
+  metadataRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  metadataLabel: {
     fontSize: 14,
-  },
-  endOfListContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  endOfListText: {
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  addCommentSection: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-  },
-  commentActions: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 15,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectedDocumentsContainer: {
-    marginBottom: 15,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  selectedDocumentsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  selectedDocumentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  selectedDocumentName: {
-    flex: 1,
-    fontSize: 14,
-  },
-  removeDocumentButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    color: C.textSecondary,
     marginLeft: 8,
+    marginRight: 4
   },
-  removeDocumentButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  commentInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 15,
-    textAlignVertical: 'top',
-    minHeight: 100,
-  },
-  submitButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+  metadataValue: { fontSize: 14, color: C.textPrimary, flex: 1 },
+  collaboratorsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  collaboratorItem: { alignItems: 'center', width: 80 },
+  collaboratorAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.primaryLight,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
+  collaboratorAvatarText: { fontSize: 18, fontWeight: '600', color: '#FFF' },
+  collaboratorName: {
+    fontSize: 12,
+    color: C.textSecondary,
+    textAlign: 'center'
   },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  notesContainer: { backgroundColor: C.background, padding: 16, borderRadius: 8 },
+  notesText: { fontSize: 15, color: C.textPrimary, lineHeight: 22 },
+  chatContainer: { flex: 1, backgroundColor: C.chatBg },
+  chatListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20
   },
-  modalOverlay: {
+  chatBubbleContainer: { marginVertical: 4, maxWidth: '80%' },
+  currentUserBubbleContainer: { alignSelf: 'flex-end' },
+  otherUserBubbleContainer: { alignSelf: 'flex-start' },
+  chatBubble: {
+    padding: 10,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  currentUserBubble: { borderBottomRightRadius: 2 },
+  otherUserBubble: { borderBottomLeftRadius: 2 },
+  senderName: { fontSize: 12, fontWeight: '600', marginBottom: 3 },
+  chatMessage: { fontSize: 15, lineHeight: 20 },
+  chatAttachments: { marginBottom: 6, gap: 6 },
+  imageAttachment: {
+    position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 4
+  },
+  chatImage: { width: 200, height: 150, borderRadius: 8 },
+  imageOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  documentAttachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    gap: 8,
+    marginBottom: 4
+  },
+  documentAttachmentOutgoing: { backgroundColor: 'rgba(7, 94, 84, 0.15)' },
+  documentAttachmentIncoming: { backgroundColor: 'rgba(7, 94, 84, 0.08)' },
+  documentIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  docIconOutgoing: { backgroundColor: 'rgba(255, 255, 255, 0.7)' },
+  docIconIncoming: { backgroundColor: 'rgba(255, 255, 255, 0.9)' },
+  documentInfo: { flex: 1 },
+  documentName: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+  documentSize: { fontSize: 11 },
+  chatTimestamp: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 2
+  },
+  chatTimeText: { fontSize: 10 },
+  deliveryIcon: { marginLeft: 4 },
+  selectedFilesPreview: {
+    backgroundColor: C.surface,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12
+  },
+  selectedFilesTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.textSecondary,
+    marginBottom: 8
+  },
+  selectedFilesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  selectedDocumentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.background,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 180,
+    gap: 8
+  },
+  selectedDocumentInfo: { flex: 1 },
+  selectedDocumentName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: C.textPrimary,
+    marginBottom: 2
+  },
+  selectedDocumentSize: { fontSize: 11, color: C.textTertiary },
+  inputSafeArea: { backgroundColor: C.surface },
+  inputContainer: { borderTopWidth: 1, borderTopColor: C.border },
+  inputWrapper: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  attachmentButton: { padding: 8, marginBottom: 2 },
+  fileCounterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: C.danger,
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  fileCounterText: {
+    fontSize: 10,
+    color: C.surface,
+    fontWeight: '600'
+  },
+  inputField: {
+    flex: 1,
+    backgroundColor: C.background,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 40,
+    maxHeight: 100
+  },
+  messageInput: { fontSize: 15, color: C.textPrimary, padding: 0, maxHeight: 80 },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    gap: 16
+  },
+  loadingText: { fontSize: 16, color: C.textSecondary },
+  loadMoreContainer: { alignItems: 'center', paddingVertical: 16 },
+  emptyChat: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+    gap: 16
+  },
+  emptyChatTitle: { fontSize: 18, fontWeight: '600', color: C.textPrimary },
+  emptyChatText: {
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    maxWidth: 200
+  },
+  defaultCommentsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 20
   },
   defaultCommentsModal: {
+    backgroundColor: C.surface,
     borderRadius: 16,
     maxHeight: screenHeight * 0.6,
+    overflow: 'hidden'
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    padding: 20,
+  defaultCommentsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
+    borderBottomColor: C.border
   },
-  defaultCommentsList: {
-    maxHeight: screenHeight * 0.4,
-    padding: 10,
-  },
+  defaultCommentsTitle: { fontSize: 18, fontWeight: '600', color: C.primary },
+  closeDefaultCommentsButton: { padding: 4 },
+  defaultCommentsList: { paddingHorizontal: 16, paddingVertical: 8 },
   defaultCommentItem: {
-    paddingHorizontal: 15,
-    paddingVertical: 15,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
+    borderBottomColor: C.border
   },
-  defaultCommentText: {
-    fontSize: 16,
-  },
-  closeModalButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    margin: 20,
-  },
-  closeModalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  emptyState: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
+  defaultCommentText: { fontSize: 16, color: C.textPrimary, lineHeight: 22 },
+  modalBottomSpacing: { height: 40 }
 });
 
 export default LeadDetails;
