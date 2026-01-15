@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -23,6 +23,21 @@ interface CreateCarProps {
     onCarCreated: () => void;
 }
 
+interface Office {
+    id: number;
+    name: string;
+    address: {
+        id: number;
+        address: string;
+        city: string;
+        state: string;
+        country: string;
+        zip_code: string;
+    };
+    latitude: number | null;
+    longitude: number | null;
+}
+
 interface CarFormData {
     make: string;
     model: string;
@@ -33,14 +48,15 @@ interface CarFormData {
     fuel_type: string;
     status: string;
     vehicle_type: string;
+    office_id: string; // Changed from office to office_id
     pollution_certificate: Document | null;
     insurance_certificate: Document | null;
     registration_certificate: Document | null;
     photos: Document[];
 }
 
-// Helper function to fetch office ID for city
-const fetchOfficeIdForCity = async (city: string, token: string | null): Promise<number> => {
+// Helper function to fetch all offices
+const fetchAllOffices = async (token: string | null): Promise<Office[]> => {
     try {
         const response = await fetch(`${BACKEND_URL}/manager/getOffices`, {
             method: 'POST',
@@ -48,25 +64,22 @@ const fetchOfficeIdForCity = async (city: string, token: string | null): Promise
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ token, city }),
+            body: JSON.stringify({ token }),
         });
 
         const text = await response.text();
-        console.log('Office response:', text.substring(0, 500));
+        console.log('All offices response:', text.substring(0, 500));
 
         if (text.trim().startsWith('{')) {
             const data = JSON.parse(text);
             if (response.ok && data.offices && data.offices.length > 0) {
-                console.log('Office ID found:', data.offices[0].id);
-                return data.offices[0].id;
-            } else if (response.ok && data.office) {
-                // Handle single office response
-                return data.office.id;
+                console.log('Offices found:', data.offices.length);
+                return data.offices;
             }
         }
-        throw new Error('Office not found for this city');
+        throw new Error('No offices found');
     } catch (error) {
-        console.error('Error fetching office:', error);
+        console.error('Error fetching offices:', error);
         throw error;
     }
 };
@@ -78,6 +91,8 @@ const CreateCar: React.FC<CreateCarProps> = ({
     onCarCreated,
 }) => {
     const [loading, setLoading] = useState(false);
+    const [offices, setOffices] = useState<Office[]>([]);
+    const [loadingOffices, setLoadingOffices] = useState(true);
     const [formData, setFormData] = useState<CarFormData>({
         make: '',
         model: '',
@@ -88,6 +103,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
         fuel_type: 'Petrol',
         status: 'available',
         vehicle_type: 'Sedan',
+        office_id: '', // Changed from office to office_id
         pollution_certificate: null,
         insurance_certificate: null,
         registration_certificate: null,
@@ -97,6 +113,38 @@ const CreateCar: React.FC<CreateCarProps> = ({
     const fuelTypes = ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'CNG'];
     const vehicleTypes = ['Sedan', 'SUV', 'Hatchback', 'MPV', 'Luxury'];
     const statuses = ['available', 'not_available', 'in_maintenance'];
+
+    useEffect(() => {
+        // Fetch all offices on component mount
+        const loadOffices = async () => {
+            try {
+                setLoadingOffices(true);
+                const officesData = await fetchAllOffices(token);
+                setOffices(officesData);
+                
+                // Try to find and pre-select an office based on the city
+                if (city && officesData.length > 0) {
+                    const officeInCity = officesData.find(office => 
+                        office.address.city.toLowerCase().includes(city.toLowerCase()) ||
+                        city.toLowerCase().includes(office.address.city.toLowerCase())
+                    );
+                    if (officeInCity) {
+                        setFormData(prev => ({
+                            ...prev,
+                            office_id: officeInCity.id.toString()
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load offices:', error);
+                Alert.alert('Error', 'Failed to load offices. Please try again.');
+            } finally {
+                setLoadingOffices(false);
+            }
+        };
+
+        loadOffices();
+    }, [token, city]);
 
     const handleDocumentPick = async (type: 'pollution' | 'insurance' | 'registration' | 'photo') => {
         try {
@@ -141,6 +189,11 @@ const CreateCar: React.FC<CreateCarProps> = ({
             return;
         }
 
+        if (!formData.office_id) {
+            Alert.alert('Error', 'Please select an office for the vehicle');
+            return;
+        }
+
         if (!formData.pollution_certificate || !formData.insurance_certificate || !formData.registration_certificate) {
             Alert.alert('Error', 'All certificates are required');
             return;
@@ -153,16 +206,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
         setLoading(true);
         try {
-            // Fetch office ID for the city
-            let officeId: number;
-            try {
-                officeId = await fetchOfficeIdForCity(city, token);
-            } catch (error) {
-                Alert.alert('Error', 'Failed to find office for this city. Please contact administrator.');
-                setLoading(false);
-                return;
-            }
-
             const formDataToSend = new FormData();
             formDataToSend.append('token', token || '');
             formDataToSend.append('make', formData.make);
@@ -174,7 +217,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
             formDataToSend.append('fuel_type', formData.fuel_type);
             formDataToSend.append('status', formData.status);
             formDataToSend.append('vehicle_type', formData.vehicle_type);
-            formDataToSend.append('office', officeId.toString());
+            formDataToSend.append('office', formData.office_id); // Keep as 'office' for backend compatibility
 
             // Append certificates
             if (formData.pollution_certificate) {
@@ -192,7 +235,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                 formDataToSend.append('photos', photo as any);
             });
 
-            console.log('Submitting vehicle creation with office ID:', officeId);
+            console.log('Submitting vehicle creation with office ID:', formData.office_id);
 
             const response = await fetch(`${BACKEND_URL}/manager/createVehicle`, {
                 method: 'POST',
@@ -220,6 +263,10 @@ const CreateCar: React.FC<CreateCarProps> = ({
         } finally {
             setLoading(false);
         }
+    };
+
+    const formatOfficeAddress = (office: Office) => {
+        return `${office.address.address}, ${office.address.city}, ${office.address.state}, ${office.address.country} - ${office.address.zip_code}`;
     };
 
     return (
@@ -392,6 +439,76 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         </View>
                     </View>
 
+                    {/* Office Selection Section */}
+                    <View style={styles.formSection}>
+                        <Text style={styles.sectionTitle}>Office Selection</Text>
+                        <Text style={styles.formLabel}>Select Office *</Text>
+                        
+                        {loadingOffices ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="small" color="#075E54" />
+                                <Text style={styles.loadingText}>Loading offices...</Text>
+                            </View>
+                        ) : offices.length === 0 ? (
+                            <View style={styles.errorContainer}>
+                                <Ionicons name="warning-outline" size={24} color="#FF9500" />
+                                <Text style={styles.errorText}>No offices found. Please contact administrator.</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.officeListContainer}>
+                                {offices.map((office) => (
+                                    <TouchableOpacity
+                                        key={office.id}
+                                        style={[
+                                            styles.officeItem,
+                                            formData.office_id === office.id.toString() && styles.officeItemSelected,
+                                        ]}
+                                        onPress={() => setFormData({ ...formData, office_id: office.id.toString() })}
+                                    >
+                                        <View style={styles.officeRadio}>
+                                            <View style={[
+                                                styles.radioOuter,
+                                                formData.office_id === office.id.toString() && styles.radioOuterSelected,
+                                            ]}>
+                                                {formData.office_id === office.id.toString() && (
+                                                    <View style={styles.radioInner} />
+                                                )}
+                                            </View>
+                                        </View>
+                                        <View style={styles.officeInfo}>
+                                            <Text style={styles.officeName}>
+                                                {office.name || 'Unnamed Office'}
+                                            </Text>
+                                            <Text style={styles.officeAddress} numberOfLines={2}>
+                                                {formatOfficeAddress(office)}
+                                            </Text>
+                                            <Text style={styles.officeCity}>
+                                                {office.address.city}, {office.address.state}
+                                            </Text>
+                                        </View>
+                                        {city && office.address.city.toLowerCase().includes(city.toLowerCase()) && (
+                                            <View style={styles.currentCityBadge}>
+                                                <Text style={styles.currentCityText}>Current City</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
+                        
+                        {formData.office_id && (
+                            <View style={styles.selectedOfficeContainer}>
+                                <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
+                                <Text style={styles.selectedOfficeText}>
+                                    Office Selected: {
+                                        offices.find(o => o.id.toString() === formData.office_id)?.name || 
+                                        offices.find(o => o.id.toString() === formData.office_id)?.address.city
+                                    }
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
                     <View style={styles.formSection}>
                         <Text style={styles.sectionTitle}>Documents</Text>
 
@@ -506,9 +623,9 @@ const CreateCar: React.FC<CreateCarProps> = ({
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                        style={[styles.submitButton, (loading || !formData.office_id) && styles.submitButtonDisabled]}
                         onPress={handleSubmit}
-                        disabled={loading}
+                        disabled={loading || !formData.office_id}
                     >
                         {loading ? (
                             <ActivityIndicator color="#FFFFFF" size="small" />
