@@ -613,16 +613,16 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         translucent
       />
       
-      {viewMode !== 'city-selection' && (
-        <Header
-          title={getHeaderTitle()}
-          {...headerActions}
-          onThemeToggle={toggleDarkMode}
-          isDarkMode={isDarkMode}
-          theme={theme}
-          loading={loading}
-        />
-      )}
+      {viewMode !== 'city-selection' && viewMode !== 'detail' && (
+  <Header
+    title={getHeaderTitle()}
+    {...headerActions}
+    onThemeToggle={toggleDarkMode}
+    isDarkMode={isDarkMode}
+    theme={theme}
+    loading={loading}
+  />
+)}
       
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         {renderContent()}

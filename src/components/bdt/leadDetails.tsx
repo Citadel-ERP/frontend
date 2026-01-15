@@ -10,14 +10,16 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   FlatList,
   Image,
   Linking,
-  StatusBar
+  StatusBar,
+  Keyboard,
+  Animated
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
@@ -80,8 +82,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [defaultComments, setDefaultComments] = useState<any[]>([]);
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const modalFlatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
+  const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (token) {
@@ -96,6 +102,42 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [comments.length]);
+
+  // Keyboard listeners for proper input bar positioning
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setIsKeyboardVisible(true);
+        const height = e.endCoordinates.height;
+        setKeyboardHeight(height);
+        Animated.timing(keyboardHeightAnim, {
+          toValue: height,
+          duration: 250,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setIsKeyboardVisible(false);
+        Animated.timing(keyboardHeightAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: false,
+        }).start(() => {
+          setKeyboardHeight(0);
+        });
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const beautifyName = (name: string): string => {
     if (!name) return '';
@@ -269,6 +311,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       });
       if (!result.canceled && result.assets) {
         setSelectedDocuments(result.assets);
+        // Auto-focus input when files are selected to enable send button
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error picking documents:', error);
@@ -332,14 +376,20 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim()) {
-      Alert.alert('Error', 'Please enter a comment');
+    // Allow sending even if only files are attached (no text)
+    if (!newComment.trim() && selectedDocuments.length === 0) {
+      Alert.alert('Error', 'Please enter a comment or attach a file');
       return;
     }
-    const success = await addCommentToBackend(newComment.trim(), selectedDocuments);
+    
+    const commentText = newComment.trim() || '';
+    const success = await addCommentToBackend(commentText, selectedDocuments);
     if (success) {
       setNewComment('');
       setSelectedDocuments([]);
+      if (isKeyboardVisible) {
+        Keyboard.dismiss();
+      }
     }
   };
 
@@ -348,9 +398,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       const commentText = JSON.parse(defaultComment.data);
       setNewComment(commentText);
       setShowDefaultComments(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     } catch (error) {
       setNewComment(defaultComment.data);
       setShowDefaultComments(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
@@ -369,6 +421,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     fetchComments(lead.id, 1);
     fetchCollaborators(lead.id);
     setRefreshing(false);
+  };
+
+  // Determine if send button should be enabled
+  const isSendEnabled = () => {
+    return newComment.trim().length > 0 || selectedDocuments.length > 0;
   };
 
   const renderChatBubble = ({ item }: { item: Comment }) => {
@@ -687,123 +744,139 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       <ModernHeader />
       <ContactInfoModal />
 
-      <View style={s.chatContainer}>
-        {loadingComments ? (
-          <View style={s.loadingContainer}>
-            <ActivityIndicator size="large" color={C.primary} />
-            <Text style={s.loadingText}>Loading conversations...</Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={comments}
-            renderItem={renderChatBubble}
-            keyExtractor={(item) => item.id}
-            inverted={false}
-            onEndReached={handleLoadMoreComments}
-            onEndReachedThreshold={0.1}
-            contentContainerStyle={s.chatListContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={[C.primary]}
-                tintColor={C.primary}
-              />
-            }
-            ListHeaderComponent={
-              loadingMoreComments ? (
-                <View style={s.loadMoreContainer}>
-                  <ActivityIndicator size="small" color={C.primary} />
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              <View style={s.emptyChat}>
-                <MaterialIcons name="forum" size={64} color={C.border} />
-                <Text style={s.emptyChatTitle}>No conversations yet</Text>
-                <Text style={s.emptyChatText}>
-                  Start by sending a message or quick reply
-                </Text>
-              </View>
-            }
-          />
-        )}
-      </View>
-
-      {selectedDocuments.length > 0 && (
-        <View style={s.selectedFilesPreview}>
-          <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
-          <FlatList
-            horizontal
-            data={selectedDocuments}
-            renderItem={({ item: doc, index }) => (
-              <View style={s.selectedDocumentItem}>
-                <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
-                <View style={s.selectedDocumentInfo}>
-                  <Text style={s.selectedDocumentName} numberOfLines={1}>
-                    {truncateFileName(doc.name, 20)}
-                  </Text>
-                  <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
-                  <Ionicons name="close" size={18} color={C.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            keyExtractor={(_, idx) => `doc-${idx}`}
-            showsHorizontalScrollIndicator={false}
-          />
-        </View>
-      )}
-
-      <SafeAreaView style={s.inputSafeArea}>
-        <View style={s.inputContainer}>
-          <View style={s.inputWrapper}>
-            <View style={s.inputRow}>
-              <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                <Ionicons name="attach" size={22} color={C.primary} />
-                {selectedDocuments.length > 0 && (
-                  <View style={s.fileCounterBadge}>
-                    <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <View style={s.inputField}>
-                <TextInput
-                  style={s.messageInput}
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  placeholder="Type your message..."
-                  multiline
-                  maxLength={1000}
-                  placeholderTextColor={C.textTertiary}
-                  editable={!addingComment}
-                />
-              </View>
-              <TouchableOpacity
-                style={[
-                  s.sendButton,
-                  { backgroundColor: newComment.trim() ? C.primary : C.border }
-                ]}
-                onPress={handleAddComment}
-                disabled={addingComment || !newComment.trim()}
-              >
-                {addingComment ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <Ionicons
-                    name="send"
-                    size={18}
-                    color={newComment.trim() ? '#FFF' : C.textTertiary}
-                  />
-                )}
-              </TouchableOpacity>
+      <KeyboardAvoidingView
+        style={s.keyboardAvoidView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <View style={s.chatContainer}>
+          {loadingComments ? (
+            <View style={s.loadingContainer}>
+              <ActivityIndicator size="large" color={C.primary} />
+              <Text style={s.loadingText}>Loading conversations...</Text>
             </View>
-          </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={comments}
+              renderItem={renderChatBubble}
+              keyExtractor={(item) => item.id}
+              inverted={false}
+              onEndReached={handleLoadMoreComments}
+              onEndReachedThreshold={0.1}
+              contentContainerStyle={s.chatListContent}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={[C.primary]}
+                  tintColor={C.primary}
+                />
+              }
+              ListHeaderComponent={
+                loadingMoreComments ? (
+                  <View style={s.loadMoreContainer}>
+                    <ActivityIndicator size="small" color={C.primary} />
+                  </View>
+                ) : null
+              }
+              ListEmptyComponent={
+                <View style={s.emptyChat}>
+                  <MaterialIcons name="forum" size={64} color={C.border} />
+                  <Text style={s.emptyChatTitle}>No conversations yet</Text>
+                  <Text style={s.emptyChatText}>
+                    Start by sending a message or quick reply
+                  </Text>
+                </View>
+              }
+            />
+          )}
         </View>
-      </SafeAreaView>
+
+        {selectedDocuments.length > 0 && (
+          <View style={s.selectedFilesPreview}>
+            <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+            <FlatList
+              horizontal
+              data={selectedDocuments}
+              renderItem={({ item: doc, index }) => (
+                <View style={s.selectedDocumentItem}>
+                  <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
+                  <View style={s.selectedDocumentInfo}>
+                    <Text style={s.selectedDocumentName} numberOfLines={1}>
+                      {truncateFileName(doc.name, 20)}
+                    </Text>
+                    <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
+                    <Ionicons name="close" size={18} color={C.textTertiary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              keyExtractor={(_, idx) => `doc-${idx}`}
+              showsHorizontalScrollIndicator={false}
+            />
+          </View>
+        )}
+
+        <Animated.View style={[s.inputContainerWrapper, { marginBottom: keyboardHeightAnim }]}>
+          <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
+            <View style={s.inputContainer}>
+              <View style={s.inputWrapper}>
+                <View style={s.inputRow}>
+                  <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                    <Ionicons name="attach" size={22} color={C.primary} />
+                    {selectedDocuments.length > 0 && (
+                      <View style={s.fileCounterBadge}>
+                        <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={s.inputField}>
+                    <TextInput
+                      ref={inputRef}
+                      style={s.messageInput}
+                      value={newComment}
+                      onChangeText={setNewComment}
+                      placeholder="Type your message..."
+                      multiline
+                      maxLength={1000}
+                      placeholderTextColor={C.textTertiary}
+                      editable={!addingComment}
+                      returnKeyType="default"
+                      blurOnSubmit={false}
+                      onSubmitEditing={() => {
+                        if (isSendEnabled()) {
+                          handleAddComment();
+                        }
+                      }}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      s.sendButton,
+                      { backgroundColor: isSendEnabled() ? C.primary : C.border }
+                    ]}
+                    onPress={handleAddComment}
+                    disabled={addingComment || !isSendEnabled()}
+                  >
+                    {addingComment ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <Ionicons
+                        name="send"
+                        size={18}
+                        color={isSendEnabled() ? '#FFF' : C.textTertiary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </SafeAreaView>
+        </Animated.View>
+      </KeyboardAvoidingView>
 
       {showDefaultComments && (
         <View style={s.defaultCommentsOverlay}>
@@ -848,6 +921,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 const s = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: C.chatBg },
   container: { flex: 1, backgroundColor: C.chatBg },
+  keyboardAvoidView: { flex: 1 },
   headerSafeArea: { backgroundColor: C.primary },
   header: {
     backgroundColor: C.primary,
@@ -1111,11 +1185,16 @@ const s = StyleSheet.create({
     marginBottom: 2
   },
   selectedDocumentSize: { fontSize: 11, color: C.textTertiary },
+  inputContainerWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.surface
+  },
   inputSafeArea: { backgroundColor: C.surface },
-  inputContainer: { borderTopWidth: 1, borderTopColor: C.border },
-  inputWrapper: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  inputContainer: { backgroundColor: C.surface },
+  inputWrapper: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 20 : 8 },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  attachmentButton: { padding: 8, marginBottom: 2 },
+  attachmentButton: { padding: 8, marginBottom: 2, position: 'relative' },
   fileCounterBadge: {
     position: 'absolute',
     top: -4,
@@ -1125,7 +1204,8 @@ const s = StyleSheet.create({
     width: 18,
     height: 18,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    zIndex: 1
   },
   fileCounterText: {
     fontSize: 10,
@@ -1140,16 +1220,17 @@ const s = StyleSheet.create({
     borderColor: C.border,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    minHeight: 40,
+    minHeight: 30,
     maxHeight: 100
   },
   messageInput: { fontSize: 15, color: C.textPrimary, padding: 0, maxHeight: 80 },
   sendButton: {
     width: 40,
-    height: 40,
+    height: 20,
     borderRadius: 20,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    
   },
   loadingContainer: {
     flex: 1,
