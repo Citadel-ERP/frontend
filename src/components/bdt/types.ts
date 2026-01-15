@@ -103,6 +103,7 @@ export interface Comment {
   hasFile?: boolean; 
   fileName?: string; 
   documents?: DocumentType[];
+  employeeId: string;
 }
 
 export interface CollaboratorData {

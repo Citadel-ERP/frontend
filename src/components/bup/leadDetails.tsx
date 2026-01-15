@@ -16,8 +16,12 @@ import {
   Linking,
   StatusBar,
   Platform,
+  Keyboard,
+  KeyboardEvent,
+  Animated,
   KeyboardAvoidingView
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
@@ -80,14 +84,76 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
   const [incentiveData, setIncentiveData] = useState<any>(null);
   const [loadingIncentive, setLoadingIncentive] = useState(false);
+  const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
   const flatListRef = useRef<FlatList>(null);
   const modalFlatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
+  const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user_data');
+        if (userData) {
+          const parsedData = JSON.parse(userData);
+          setCurrentUserEmployeeId(parsedData.employee_id);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
+
+  // Handle keyboard events to fix the Android padding issue
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      handleKeyboardShow
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      handleKeyboardHide
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const handleKeyboardShow = (event: KeyboardEvent) => {
+    setIsKeyboardVisible(true);
+    if (Platform.OS === 'android') {
+      // On Android, we'll manually animate the keyboard height
+      Animated.timing(keyboardHeightAnim, {
+        toValue: event.endCoordinates.height,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  const handleKeyboardHide = () => {
+    setIsKeyboardVisible(false);
+    if (Platform.OS === 'android') {
+      // On Android, immediately set keyboard height to 0 to avoid the extra padding issue
+      Animated.timing(keyboardHeightAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   useEffect(() => {
     if (token) {
       fetchComments(lead.id, 1);
       fetchCollaborators(lead.id);
-      fetchDefaultComments(lead.phase, lead.subphase);
+      // fetchDefaultComments(lead.phase, lead.subphase);
       if (lead.incentive_present) {
         fetchIncentiveData();
       }
@@ -137,11 +203,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-    
+
     if (compareDate.getTime() === compareToday.getTime()) {
       return 'Today';
     } else if (compareDate.getTime() === compareYesterday.getTime()) {
@@ -198,14 +264,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const fetchIncentiveData = async (): Promise<void> => {
     try {
       if (!token || !lead.incentive_present) return;
-      
+
       setLoadingIncentive(true);
-      const response = await fetch(`${BACKEND_URL}/employee/getIncentiveDetails`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getIncentive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token: token, 
-          lead_id: lead.id 
+        body: JSON.stringify({
+          token: token,
+          lead_id: lead.id
         })
       });
 
@@ -222,7 +288,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
   const handleIncentivePress = () => {
     if (!lead.incentive_present) return;
-    
+
     if (loadingIncentive) {
       Alert.alert('Loading', 'Fetching incentive details...');
       return;
@@ -262,7 +328,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           body: JSON.stringify({ token: token, lead_id: leadId, page: page })
         });
       } catch (error1) {
-        response = await fetch(`${BACKEND_URL}/employee/getComments`, {
+        response = await fetch(`${BACKEND_URL}/manager/getComments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: token, lead_id: leadId, page: page })
@@ -275,6 +341,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       const transformedComments: Comment[] = data.comments.map((apiComment: any) => ({
         id: apiComment.comment.id.toString(),
         commentBy: apiComment.comment.user.full_name,
+        employeeId: apiComment.comment.user.employee_id,
         date: apiComment.comment.created_at,
         phase: apiComment.created_at_phase,
         subphase: apiComment.created_at_subphase,
@@ -318,7 +385,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           body: JSON.stringify({ token: token, lead_id: leadId })
         });
       } catch (error1) {
-        response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
+        response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: token, lead_id: leadId })
@@ -336,31 +403,31 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
-  const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
-    try {
-      if (!token) return;
-      setLoadingDefaultComments(true);
+  // const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
+  //   try {
+  //     if (!token) return;
+  //     setLoadingDefaultComments(true);
 
-      const response = await fetch(
-        `${BACKEND_URL}/employee/getDefaultComments?at_phase=${encodeURIComponent(
-          phase
-        )}&at_subphase=${encodeURIComponent(subphase)}`,
-        {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+  //     const response = await fetch(
+  //       `${BACKEND_URL}/manager/getDefaultComments?at_phase=${encodeURIComponent(
+  //         phase
+  //       )}&at_subphase=${encodeURIComponent(subphase)}`,
+  //       {
+  //         method: 'GET',
+  //         headers: { 'Content-Type': 'application/json' }
+  //       }
+  //     );
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      setDefaultComments(data.comments || []);
-    } catch (error) {
-      console.error('Error fetching default comments:', error);
-      setDefaultComments([]);
-    } finally {
-      setLoadingDefaultComments(false);
-    }
-  };
+  //     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  //     const data = await response.json();
+  //     setDefaultComments(data.comments || []);
+  //   } catch (error) {
+  //     console.error('Error fetching default comments:', error);
+  //     setDefaultComments([]);
+  //   } finally {
+  //     setLoadingDefaultComments(false);
+  //   }
+  // };
 
   const handleAttachDocuments = async (): Promise<void> => {
     try {
@@ -407,7 +474,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } catch (error1) {
-        response = await fetch(`${BACKEND_URL}/employee/addComment`, {
+        response = await fetch(`${BACKEND_URL}/manager/addComment`, {
           method: 'POST',
           body: formData,
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -420,6 +487,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       const newComment: Comment = {
         id: data.lead_comment.comment.id.toString(),
         commentBy: data.lead_comment.comment.user.full_name,
+        employeeId: data.lead_comment.comment.user.employee_id,
         date: data.lead_comment.comment.created_at,
         phase: data.lead_comment.created_at_phase,
         subphase: data.lead_comment.created_at_subphase,
@@ -522,33 +590,40 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       );
     }
-    
+
     const comment = item.data;
     const time = formatTime(comment.date);
+    const isCurrentUser = comment.employeeId === currentUserEmployeeId;
 
     return (
-      <View style={s.messageRow}>
-        <View style={s.otherAvatar}>
-          <Ionicons name="person-circle-outline" size={32} color="#999" />
-        </View>
-        <View style={s.messageBubble}>
-          <View style={s.senderHeader}>
-            <Text style={s.senderName}>{comment.commentBy}</Text>
-          </View>
-          
+      <View style={[
+        s.messageRow,
+        isCurrentUser ? s.messageRowRight : s.messageRowLeft
+      ]}>
+
+        <View style={[
+          s.messageBubble,
+          isCurrentUser ? s.currentUserBubble : s.otherUserBubble
+        ]}>
+          {!isCurrentUser && (
+            <View style={s.senderHeader}>
+              <Text style={s.senderName}>{comment.commentBy}</Text>
+            </View>
+          )}
+
           {comment.documents && comment.documents.length > 0 && (
             <View style={s.documentsContainer}>
               {comment.documents.map((doc: DocumentType) => {
                 const isImage = doc.document_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                 if (isImage) {
                   return (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       key={doc.id}
                       style={s.imageWrapper}
                       onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
                     >
-                      <Image 
-                        source={{ uri: doc.document_url }} 
+                      <Image
+                        source={{ uri: doc.document_url }}
                         style={s.commentImage}
                         resizeMode="cover"
                       />
@@ -580,17 +655,21 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               })}
             </View>
           )}
-          
+
           {comment.content && (
             <Text style={s.messageText}>
               {comment.content}
             </Text>
           )}
-          
+
           <View style={s.messageFooter}>
             <Text style={s.messageTime}>{time}</Text>
+            {isCurrentUser && (
+              <Ionicons name="checkmark-done" size={14} color={C.primary} style={s.deliveryIcon} />
+            )}
           </View>
         </View>
+
       </View>
     );
   };
@@ -632,9 +711,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             <TouchableOpacity style={s.headerActionButton}>
               <MaterialIcons name="receipt" size={22} color="#FFF" />
             </TouchableOpacity>
-            
+
             {lead.incentive_present && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[s.headerActionButton, s.incentiveButton]}
                 onPress={handleIncentivePress}
                 disabled={loadingIncentive}
@@ -646,7 +725,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                 )}
               </TouchableOpacity>
             )}
-            
+
             <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
               <MaterialIcons name="edit" size={22} color="#FFF" />
             </TouchableOpacity>
@@ -793,27 +872,28 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      <SafeAreaView style={s.modalSafeArea}>
-        <View style={s.modalHeader}>
-          <TouchableOpacity
-            onPress={() => setShowLeadDetailsModal(false)}
-            style={s.modalBackButton}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={s.modalTitle}>Lead Details</Text>
-          <View style={s.modalRightPlaceholder} />
-        </View>
-        <FlatList
-          ref={modalFlatListRef}
-          data={modalSections}
-          renderItem={renderModalSection}
-          keyExtractor={(item) => item}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.modalScrollContent}
-          ListFooterComponent={<View style={s.modalBottomSpacing} />}
-        />
-      </SafeAreaView>
+      <View style={s.modalHeader}>
+        <TouchableOpacity
+          onPress={() => setShowLeadDetailsModal(false)}
+          style={s.modalBackButton}
+        >
+          <View style={s.backIcon}>
+            <View style={s.backArrow} />
+            <Text style={s.backText}>Back</Text>
+          </View>
+        </TouchableOpacity>
+        <Text style={s.modalTitle}>Lead Details</Text>
+        <View style={s.modalRightPlaceholder} />
+      </View>
+      <FlatList
+        ref={modalFlatListRef}
+        data={modalSections}
+        renderItem={renderModalSection}
+        keyExtractor={(item) => item}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.modalScrollContent}
+        ListFooterComponent={<View style={s.modalBottomSpacing} />}
+      />
     </Modal>
   );
 
@@ -822,128 +902,257 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       <ModernHeader />
       <ContactInfoModal />
 
-      <View style={s.chatContainer}>
-        {loadingComments ? (
-          <View style={s.loadingContainer}>
-            <ActivityIndicator size="large" color={C.primary} />
-            <Text style={s.loadingText}>Loading conversations...</Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={getProcessedComments()}
-            renderItem={renderChatItem}
-            keyExtractor={(item) => item.id}
-            inverted={false}
-            onEndReached={handleLoadMoreComments}
-            onEndReachedThreshold={0.1}
-            contentContainerStyle={s.chatListContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={[C.primary]}
-                tintColor={C.primary}
-              />
-            }
-            ListHeaderComponent={
-              loadingMoreComments ? (
-                <View style={s.loadMoreContainer}>
-                  <ActivityIndicator size="small" color={C.primary} />
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              <View style={s.emptyChat}>
-                <MaterialIcons name="forum" size={64} color={C.border} />
-                <Text style={s.emptyChatTitle}>No conversations yet</Text>
-                <Text style={s.emptyChatText}>
-                  Start by sending a message or quick reply
-                </Text>
+      {/* Android-specific keyboard handling to avoid the extra padding issue */}
+      {Platform.OS === 'android' ? (
+        <View style={s.androidContainer}>
+          <View style={s.chatContainer}>
+            {loadingComments ? (
+              <View style={s.loadingContainer}>
+                <ActivityIndicator size="large" color={C.primary} />
+                <Text style={s.loadingText}>Loading conversations...</Text>
               </View>
-            }
-          />
-        )}
-      </View>
-
-      {selectedDocuments.length > 0 && (
-        <View style={s.selectedFilesPreview}>
-          <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
-          <FlatList
-            horizontal
-            data={selectedDocuments}
-            renderItem={({ item: doc, index }) => (
-              <View style={s.selectedDocumentItem}>
-                <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
-                <View style={s.selectedDocumentInfo}>
-                  <Text style={s.selectedDocumentName} numberOfLines={1}>
-                    {truncateFileName(doc.name, 20)}
-                  </Text>
-                  <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
-                  <Ionicons name="close" size={18} color={C.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            keyExtractor={(_, idx) => `doc-${idx}`}
-            showsHorizontalScrollIndicator={false}
-          />
-        </View>
-      )}
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={s.keyboardAvoidingView}
-      >
-        <SafeAreaView style={s.inputSafeArea}>
-          <View style={s.inputContainer}>
-            <View style={s.inputWrapper}>
-              <View style={s.inputRow}>
-                <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                  <Ionicons name="attach" size={22} color={C.primary} />
-                  {selectedDocuments.length > 0 && (
-                    <View style={s.fileCounterBadge}>
-                      <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <View style={s.inputField}>
-                  <TextInput
-                    style={s.messageInput}
-                    value={newComment}
-                    onChangeText={setNewComment}
-                    placeholder="Type your message..."
-                    multiline
-                    maxLength={1000}
-                    placeholderTextColor={C.textTertiary}
-                    editable={!addingComment}
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={getProcessedComments()}
+                renderItem={renderChatItem}
+                keyExtractor={(item) => item.id}
+                inverted={false}
+                onEndReached={handleLoadMoreComments}
+                onEndReachedThreshold={0.1}
+                contentContainerStyle={s.chatListContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[C.primary]}
+                    tintColor={C.primary}
                   />
+                }
+                ListHeaderComponent={
+                  loadingMoreComments ? (
+                    <View style={s.loadMoreContainer}>
+                      <ActivityIndicator size="small" color={C.primary} />
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  <View style={s.emptyChat}>
+                    <MaterialIcons name="forum" size={64} color={C.border} />
+                    <Text style={s.emptyChatTitle}>No conversations yet</Text>
+                    <Text style={s.emptyChatText}>
+                      Start by sending a message or quick reply
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+
+          {selectedDocuments.length > 0 && (
+            <View style={s.selectedFilesPreview}>
+              <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+              <FlatList
+                horizontal
+                data={selectedDocuments}
+                renderItem={({ item: doc, index }) => (
+                  <View style={s.selectedDocumentItem}>
+                    <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
+                    <View style={s.selectedDocumentInfo}>
+                      <Text style={s.selectedDocumentName} numberOfLines={1}>
+                        {truncateFileName(doc.name, 20)}
+                      </Text>
+                      <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
+                      <Ionicons name="close" size={18} color={C.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(_, idx) => `doc-${idx}`}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+
+          <Animated.View style={[s.androidInputContainer, { marginBottom: keyboardHeightAnim }]}>
+            <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
+              <View style={s.inputContainer}>
+                <View style={s.inputWrapper}>
+                  <View style={s.inputRow}>
+                    <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                      <Ionicons name="attach" size={22} color={C.primary} />
+                      {selectedDocuments.length > 0 && (
+                        <View style={s.fileCounterBadge}>
+                          <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    <View style={s.inputField}>
+                      <TextInput
+                        ref={inputRef}
+                        style={s.messageInput}
+                        value={newComment}
+                        onChangeText={setNewComment}
+                        placeholder="Type your message..."
+                        multiline
+                        maxLength={1000}
+                        placeholderTextColor={C.textTertiary}
+                        editable={!addingComment}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        s.sendButton,
+                        { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                      ]}
+                      onPress={handleAddComment}
+                      disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                    >
+                      {addingComment ? (
+                        <ActivityIndicator color="#FFF" size="small" />
+                      ) : (
+                        <Ionicons
+                          name="send"
+                          size={18}
+                          color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <TouchableOpacity
-                  style={[
-                    s.sendButton,
-                    { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
-                  ]}
-                  onPress={handleAddComment}
-                  disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-                >
-                  {addingComment ? (
-                    <ActivityIndicator color="#FFF" size="small" />
-                  ) : (
-                    <Ionicons
-                      name="send"
-                      size={18}
-                      color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+              </View>
+            </SafeAreaView>
+          </Animated.View>
+        </View>
+      ) : (
+        // iOS - Use standard KeyboardAvoidingView
+        <KeyboardAvoidingView
+          style={s.iosContainer}
+          behavior="padding"
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View style={s.chatContainer}>
+            {loadingComments ? (
+              <View style={s.loadingContainer}>
+                <ActivityIndicator size="large" color={C.primary} />
+                <Text style={s.loadingText}>Loading conversations...</Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={getProcessedComments()}
+                renderItem={renderChatItem}
+                keyExtractor={(item) => item.id}
+                inverted={false}
+                onEndReached={handleLoadMoreComments}
+                onEndReachedThreshold={0.1}
+                contentContainerStyle={s.chatListContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[C.primary]}
+                    tintColor={C.primary}
+                  />
+                }
+                ListHeaderComponent={
+                  loadingMoreComments ? (
+                    <View style={s.loadMoreContainer}>
+                      <ActivityIndicator size="small" color={C.primary} />
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  <View style={s.emptyChat}>
+                    <MaterialIcons name="forum" size={64} color={C.border} />
+                    <Text style={s.emptyChatTitle}>No conversations yet</Text>
+                    <Text style={s.emptyChatText}>
+                      Start by sending a message or quick reply
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+
+          {selectedDocuments.length > 0 && (
+            <View style={s.selectedFilesPreview}>
+              <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+              <FlatList
+                horizontal
+                data={selectedDocuments}
+                renderItem={({ item: doc, index }) => (
+                  <View style={s.selectedDocumentItem}>
+                    <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
+                    <View style={s.selectedDocumentInfo}>
+                      <Text style={s.selectedDocumentName} numberOfLines={1}>
+                        {truncateFileName(doc.name, 20)}
+                      </Text>
+                      <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
+                      <Ionicons name="close" size={18} color={C.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(_, idx) => `doc-${idx}`}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+
+          <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
+            <View style={s.inputContainer}>
+              <View style={s.inputWrapper}>
+                <View style={s.inputRow}>
+                  <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                    <Ionicons name="attach" size={22} color={C.primary} />
+                    {selectedDocuments.length > 0 && (
+                      <View style={s.fileCounterBadge}>
+                        <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={s.inputField}>
+                    <TextInput
+                      ref={inputRef}
+                      style={s.messageInput}
+                      value={newComment}
+                      onChangeText={setNewComment}
+                      placeholder="Type your message..."
+                      multiline
+                      maxLength={1000}
+                      placeholderTextColor={C.textTertiary}
+                      editable={!addingComment}
                     />
-                  )}
-                </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      s.sendButton,
+                      { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                    ]}
+                    onPress={handleAddComment}
+                    disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                  >
+                    {addingComment ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <Ionicons
+                        name="send"
+                        size={18}
+                        color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      )}
 
       {showDefaultComments && (
         <View style={s.defaultCommentsOverlay}>
@@ -986,13 +1195,29 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 };
 
 const s = StyleSheet.create({
-  mainContainer: { 
-    flex: 1, 
-    backgroundColor: C.chatBg 
+  mainContainer: {
+    flex: 1,
+    backgroundColor: C.chatBg
   },
-  
+
+  // Android-specific container
+  androidContainer: {
+    flex: 1,
+  },
+
+  // iOS-specific container
+  iosContainer: {
+    flex: 1,
+  },
+
+  androidInputContainer: {
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.surface,
+  },
+
   // Header Styles - Fixed Safe Area
-  headerSafeArea: { 
+  headerSafeArea: {
     backgroundColor: C.primary,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
@@ -1075,10 +1300,10 @@ const s = StyleSheet.create({
   incentiveButton: {
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
   },
-  
+
   // Modal Safe Area Styles
-  modalSafeArea: { 
-    flex: 1, 
+  modalSafeArea: {
+    flex: 1,
     backgroundColor: C.background,
     paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight,
   },
@@ -1088,9 +1313,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: C.primary,
-    height: 60,
+    height: 70,
   },
-  modalBackButton: { 
+  modalBackButton: {
     padding: 8,
     marginRight: 12,
   },
@@ -1109,7 +1334,7 @@ const s = StyleSheet.create({
     paddingVertical: 16,
     flexGrow: 1,
   },
-  
+
   // Info Card Styles
   infoCard: {
     backgroundColor: C.surface,
@@ -1122,8 +1347,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  infoAvatarContainer: { 
-    marginRight: 16 
+  infoAvatarContainer: {
+    marginRight: 16
   },
   infoAvatar: {
     width: 60,
@@ -1133,13 +1358,13 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoAvatarText: { 
-    fontSize: 24, 
-    fontWeight: '600', 
-    color: '#FFF' 
+  infoAvatarText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#FFF'
   },
-  infoHeaderText: { 
-    flex: 1 
+  infoHeaderText: {
+    flex: 1
   },
   infoName: {
     fontSize: 22,
@@ -1147,25 +1372,25 @@ const s = StyleSheet.create({
     color: C.textPrimary,
     marginBottom: 4,
   },
-  infoCompany: { 
-    fontSize: 16, 
-    color: C.textSecondary 
+  infoCompany: {
+    fontSize: 16,
+    color: C.textSecondary
   },
-  statusBadges: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 8 
+  statusBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
   },
-  statusBadge: { 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 20 
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20
   },
-  statusBadgeText: { 
-    fontSize: 12, 
-    fontWeight: '500' 
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '500'
   },
-  
+
   // Section Styles
   section: {
     backgroundColor: C.surface,
@@ -1199,12 +1424,12 @@ const s = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
-  copyButton: { 
-    padding: 4 
+  copyButton: {
+    padding: 4
   },
-  metadataRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  metadataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
     paddingVertical: 4,
   },
@@ -1215,10 +1440,10 @@ const s = StyleSheet.create({
     marginRight: 4,
     minWidth: 100,
   },
-  metadataValue: { 
-    fontSize: 14, 
-    color: C.textPrimary, 
-    flex: 1 
+  metadataValue: {
+    fontSize: 14,
+    color: C.textPrimary,
+    flex: 1
   },
   emptyText: {
     fontSize: 14,
@@ -1227,14 +1452,14 @@ const s = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 12,
   },
-  collaboratorsGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 12 
+  collaboratorsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12
   },
-  collaboratorItem: { 
-    alignItems: 'center', 
-    width: 80 
+  collaboratorItem: {
+    alignItems: 'center',
+    width: 80
   },
   collaboratorAvatar: {
     width: 48,
@@ -1245,21 +1470,21 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  collaboratorAvatarText: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: '#FFF' 
+  collaboratorAvatarText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFF'
   },
   collaboratorName: {
     fontSize: 12,
     color: C.textSecondary,
     textAlign: 'center',
   },
-  
+
   // Chat Container
-  chatContainer: { 
-    flex: 1, 
-    backgroundColor: C.chatBg 
+  chatContainer: {
+    flex: 1,
+    backgroundColor: C.chatBg
   },
   chatListContent: {
     paddingHorizontal: 8,
@@ -1267,7 +1492,7 @@ const s = StyleSheet.create({
     paddingBottom: 20,
     flexGrow: 1,
   },
-  
+
   // Date Separator (HR Style)
   dateSeparatorContainer: {
     alignItems: 'center',
@@ -1284,35 +1509,51 @@ const s = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
-  
-  // Message Alignment Styles (HR style - always left-aligned)
+
+  // Message Alignment Styles
   messageRow: {
     flexDirection: 'row',
     marginBottom: 8,
     paddingHorizontal: 8,
+    alignItems: 'flex-start',
+  },
+  messageRowLeft: {
     justifyContent: 'flex-start',
   },
-  
-  // Avatar
+  messageRowRight: {
+    justifyContent: 'flex-end',
+  },
+
+  // Avatars
   otherAvatar: {
     marginRight: 8,
     alignSelf: 'flex-start',
   },
-  
-  // Message Bubble (HR Style - all same style)
+  currentUserAvatar: {
+    marginLeft: 8,
+    alignSelf: 'flex-start',
+  },
+
+  // Message Bubbles
   messageBubble: {
-    maxWidth: '80%',
+    maxWidth: '70%',
     borderRadius: 12,
     padding: 12,
-    backgroundColor: C.incoming,
-    borderBottomLeftRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
-  
+  currentUserBubble: {
+    backgroundColor: C.outgoing,
+    borderBottomRightRadius: 4,
+  },
+  otherUserBubble: {
+    backgroundColor: C.incoming,
+    borderBottomLeftRadius: 4,
+  },
+
   // Sender Header
   senderHeader: {
     marginBottom: 4,
@@ -1323,14 +1564,14 @@ const s = StyleSheet.create({
     color: C.primary,
     marginBottom: 2,
   },
-  
+
   // Message Text Styles
   messageText: {
     fontSize: 16,
     color: C.textPrimary,
     lineHeight: 22,
   },
-  
+
   // Documents Container
   documentsContainer: {
     marginBottom: 8,
@@ -1385,11 +1626,11 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: C.textSecondary,
   },
-  
+
   // Message Footer
   messageFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 4,
   },
@@ -1397,7 +1638,10 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: C.textTertiary,
   },
-  
+  deliveryIcon: {
+    marginLeft: 4,
+  },
+
   // Selected Files Preview
   selectedFilesPreview: {
     backgroundColor: C.surface,
@@ -1422,8 +1666,8 @@ const s = StyleSheet.create({
     minWidth: 180,
     gap: 8,
   },
-  selectedDocumentInfo: { 
-    flex: 1 
+  selectedDocumentInfo: {
+    flex: 1
   },
   selectedDocumentName: {
     fontSize: 13,
@@ -1431,35 +1675,31 @@ const s = StyleSheet.create({
     color: C.textPrimary,
     marginBottom: 2,
   },
-  selectedDocumentSize: { 
-    fontSize: 11, 
-    color: C.textTertiary 
+  selectedDocumentSize: {
+    fontSize: 11,
+    color: C.textTertiary
   },
-  
-  // Keyboard Avoiding
-  keyboardAvoidingView: { 
-    flex: 0,
-  },
-  inputSafeArea: { 
+
+  // Input Area
+  inputSafeArea: {
     backgroundColor: C.surface,
   },
-  inputContainer: { 
-    borderTopWidth: 1, 
-    borderTopColor: C.border,
+  inputContainer: {
     backgroundColor: C.surface,
+    paddingBottom: Platform.OS === 'ios' ? 0 : 10,
   },
-  inputWrapper: { 
-    paddingHorizontal: 16, 
-    paddingTop: 8, 
-    paddingBottom: 12,
+  inputWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
-  inputRow: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-end', 
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: 10,
   },
-  attachmentButton: { 
-    padding: 8, 
+  attachmentButton: {
+    padding: 8,
     position: 'relative',
   },
   fileCounterBadge: {
@@ -1489,10 +1729,10 @@ const s = StyleSheet.create({
     minHeight: 40,
     maxHeight: 100,
   },
-  messageInput: { 
-    fontSize: 15, 
-    color: C.textPrimary, 
-    padding: 0, 
+  messageInput: {
+    fontSize: 15,
+    color: C.textPrimary,
+    padding: 0,
     maxHeight: 80,
     textAlignVertical: 'center',
   },
@@ -1503,7 +1743,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   // Loading States
   loadingContainer: {
     flex: 1,
@@ -1511,13 +1751,13 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
-  loadingText: { 
-    fontSize: 16, 
-    color: C.textSecondary 
+  loadingText: {
+    fontSize: 16,
+    color: C.textSecondary
   },
-  loadMoreContainer: { 
-    alignItems: 'center', 
-    paddingVertical: 16 
+  loadMoreContainer: {
+    alignItems: 'center',
+    paddingVertical: 16
   },
   emptyChat: {
     flex: 1,
@@ -1526,10 +1766,10 @@ const s = StyleSheet.create({
     paddingVertical: 100,
     gap: 16,
   },
-  emptyChatTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: C.textPrimary 
+  emptyChatTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: C.textPrimary
   },
   emptyChatText: {
     fontSize: 14,
@@ -1537,7 +1777,7 @@ const s = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 200,
   },
-  
+
   // Default Comments
   defaultCommentsOverlay: {
     position: 'absolute',
@@ -1564,17 +1804,17 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  defaultCommentsTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: C.primary 
+  defaultCommentsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: C.primary
   },
-  closeDefaultCommentsButton: { 
-    padding: 4 
+  closeDefaultCommentsButton: {
+    padding: 4
   },
-  defaultCommentsList: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 8 
+  defaultCommentsList: {
+    paddingHorizontal: 16,
+    paddingVertical: 8
   },
   defaultCommentItem: {
     paddingVertical: 16,
@@ -1582,14 +1822,19 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  defaultCommentText: { 
-    fontSize: 16, 
-    color: C.textPrimary, 
-    lineHeight: 22 
+  defaultCommentText: {
+    fontSize: 16,
+    color: C.textPrimary,
+    lineHeight: 22
   },
-  
-  modalBottomSpacing: { 
-    height: 40 
+
+  modalBottomSpacing: {
+    height: 40
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
 });
 

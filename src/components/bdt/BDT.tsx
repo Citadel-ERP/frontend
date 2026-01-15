@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -47,17 +47,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
 
-  const theme: ThemeColors = isDarkMode ? darkTheme : lightTheme;
-
-  // Handle Android back button
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleBackPress();
-      return true; // Prevent default behavior
-    });
-
-    return () => backHandler.remove();
-  }, [viewMode, isEditMode]);
+  // Memoize theme
+  const theme: ThemeColors = useMemo(() => isDarkMode ? darkTheme : lightTheme, [isDarkMode]);
 
   useEffect(() => {
     const checkDarkMode = async () => {
@@ -83,21 +74,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     getToken();
   }, []);
 
-  useEffect(() => {
-    if (token) {
-      fetchLeads(1);
-      fetchPhases();
-      fetchStatusCounts();
-    }
-  }, [token]);
-
-  const toggleDarkMode = async () => {
-    const newDarkMode = !isDarkMode;
-    setIsDarkMode(newDarkMode);
-    await AsyncStorage.setItem('dark_mode', newDarkMode.toString());
-  };
-
-  const fetchStatusCounts = async (): Promise<void> => {
+  const fetchStatusCounts = useCallback(async (): Promise<void> => {
     try {
       if (!token) return;
       const response = await fetch(`${BACKEND_URL}/employee/getLeadStatusCounts`, {
@@ -116,9 +93,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       console.error('Error fetching status counts:', error);
       setStatusCounts({});
     }
-  };
+  }, [token]);
 
-  const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
+  const fetchLeads = useCallback(async (page: number = 1, append: boolean = false): Promise<void> => {
     try {
       if (!token) return;
       if (!append) {
@@ -162,9 +139,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  };
+  }, [token]);
 
-  const fetchPhases = async (): Promise<void> => {
+  const fetchPhases = useCallback(async (): Promise<void> => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getAllPhases`, {
         method: 'GET',
@@ -187,9 +164,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       console.error('Error fetching phases:', error);
       setAllPhases([]);
     }
-  };
+  }, []);
 
-  const fetchSubphases = async (phase: string): Promise<void> => {
+  const fetchSubphases = useCallback(async (phase: string): Promise<void> => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
         method: 'GET',
@@ -212,9 +189,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       console.error('Error fetching subphases:', error);
       setAllSubphases([]);
     }
-  };
+  }, []);
 
-  const searchLeads = async (query: string): Promise<void> => {
+  const searchLeads = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) {
       setIsSearchMode(false);
       fetchLeads(1);
@@ -247,23 +224,37 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchLeads]);
 
-  const handleSearch = (query: string) => {
+  useEffect(() => {
+    if (token) {
+      fetchLeads(1);
+      fetchPhases();
+      fetchStatusCounts();
+    }
+  }, [token, fetchLeads, fetchPhases, fetchStatusCounts]);
+
+  const toggleDarkMode = useCallback(async () => {
+    const newDarkMode = !isDarkMode;
+    setIsDarkMode(newDarkMode);
+    await AsyncStorage.setItem('dark_mode', newDarkMode.toString());
+  }, [isDarkMode]);
+
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     searchLeads(query);
-  };
+  }, [searchLeads]);
 
-  const handleFilter = (filterBy: string, filterValue: string) => {
+  const handleFilter = useCallback((filterBy: string, filterValue: string) => {
     setFilterBy(filterBy);
     setFilterValue(filterValue);
-  };
+  }, []);
 
   const handleLoadMore = useCallback(() => {
     if (pagination && pagination.has_next && !loadingMore && !isSearchMode) {
       fetchLeads(pagination.current_page + 1, true);
     }
-  }, [pagination, loadingMore, isSearchMode]);
+  }, [pagination, loadingMore, isSearchMode, fetchLeads]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -272,53 +263,66 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } else {
       fetchLeads(1);
     }
-  }, [isSearchMode, searchQuery]);
+  }, [isSearchMode, searchQuery, searchLeads, fetchLeads]);
 
-  const handleLeadPress = (lead: Lead) => {
+  const handleLeadPress = useCallback((lead: Lead) => {
     setSelectedLead({ ...lead });
     setViewMode('detail');
     setIsEditMode(false);
-  };
+  }, []);
 
-  const handleIncentivePress = () => {
+  const handleIncentivePress = useCallback(() => {
     if (selectedLead) {
       setViewMode('incentive');
     }
-  };
+  }, [selectedLead]);
 
-  // Updated back press handler with proper navigation flow
-  const handleBackPress = () => {
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      let matchesFilter = true;
+      if (filterBy && filterValue) {
+        if (filterBy === 'status') {
+          matchesFilter = lead.status === filterValue;
+        } else if (filterBy === 'phase') {
+          matchesFilter = lead.phase === filterValue;
+        } else if (filterBy === 'subphase') {
+          matchesFilter = lead.subphase === filterValue;
+        }
+      }
+      return matchesFilter;
+    });
+  }, [leads, filterBy, filterValue]);
+
+  const handleBackPress = useCallback(() => {
     if (viewMode === 'incentive') {
-      // From incentive -> go back to lead details
       setViewMode('detail');
       setIsEditMode(false);
     } else if (viewMode === 'detail' && isEditMode) {
-      // From edit mode -> go back to lead details (view mode)
       setIsEditMode(false);
     } else if (viewMode === 'detail' && !isEditMode) {
-      // From lead details -> go back to list
       setViewMode('list');
       setSelectedLead(null);
-      fetchLeads(1); // Refresh leads when going back to list
+      fetchLeads(1);
     } else if (viewMode === 'list') {
-      // From list -> exit the BDT component
       onBack();
     }
-  };
+  }, [viewMode, isEditMode, fetchLeads, onBack]);
 
-  const handleBackToList = () => {
-    setViewMode('list');
-    setSelectedLead(null);
-    setIsEditMode(false);
-    setPendingLeadUpdate(null);
-    fetchLeads(1);
-  };
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBackPress();
+      return true;
+    });
 
-  const handleEditPress = () => {
+    return () => backHandler.remove();
+  }, [handleBackPress]);
+
+  const handleEditPress = useCallback(() => {
     setIsEditMode(true);
-  };
+  }, []);
 
-  const updateLead = async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
+  const updateLead = useCallback(async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
       setLoading(true);
@@ -363,9 +367,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, selectedLead]);
 
-  const handleSaveLead = async (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => {
+  const handleSaveLead = useCallback(async (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => {
     if (updatedLead.phase === 'post_property_finalization' && updatedLead.subphase === 'raise_invoice') {
       setPendingLeadUpdate({
         leadData: updatedLead,
@@ -379,9 +383,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         setIsEditMode(false);
       }
     }
-  };
+  }, [updateLead]);
 
-  const handleInvoiceCreated = async () => {
+  const handleInvoiceCreated = useCallback(async () => {
     if (pendingLeadUpdate && selectedLead) {
       const success = await updateLead(pendingLeadUpdate.leadData, pendingLeadUpdate.editingEmails, pendingLeadUpdate.editingPhones);
       if (success) {
@@ -390,12 +394,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         setShowInvoiceForm(false);
       }
     }
-  };
+  }, [pendingLeadUpdate, selectedLead, updateLead]);
 
-  const handleInvoiceCancel = () => {
+  const handleInvoiceCancel = useCallback(() => {
     setPendingLeadUpdate(null);
     setShowInvoiceForm(false);
-  };
+  }, []);
 
   const getHeaderTitle = () => {
     if (viewMode === 'incentive') return 'Incentive Checklist';
@@ -410,7 +414,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           onBack={handleBackPress}
           leadId={selectedLead.id}
           leadName={selectedLead.name}
-          hideHeader={false} // Changed to false to show header
+          hideHeader={false}
         />
       );
     }
@@ -452,19 +456,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           statusCounts={statusCounts}
         />
         <LeadsList
-          leads={leads.filter(lead => {
-            let matchesFilter = true;
-            if (filterBy && filterValue) {
-              if (filterBy === 'status') {
-                matchesFilter = lead.status === filterValue;
-              } else if (filterBy === 'phase') {
-                matchesFilter = lead.phase === filterValue;
-              } else if (filterBy === 'subphase') {
-                matchesFilter = lead.subphase === filterValue;
-              }
-            }
-            return matchesFilter;
-          })}
+          leads={filteredLeads}
           onLeadPress={handleLeadPress}
           loading={loading}
           loadingMore={loadingMore}
@@ -486,7 +478,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-      
+
       {viewMode === 'list' && (
         <Header
           title={getHeaderTitle()}
@@ -498,11 +490,11 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           loading={loading}
         />
       )}
-      
+
       <View style={[styles.contentContainer, { paddingBottom: insets.bottom }]}>
         {renderContent()}
       </View>
-      
+
       {selectedLead && (
         <CreateInvoice
           visible={showInvoiceForm}

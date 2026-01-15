@@ -866,14 +866,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    height: 60,
+    height: 100,
   },
   backButton: {
     padding: 8,
     marginRight: 8,
+    marginTop:25
   },
   headerTextContainer: {
     flex: 1,
+    marginTop: 25,
   },
   headerTitle: {
     fontSize: 18,
@@ -888,6 +890,7 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 25,
   },
   saveHeaderButton: {
     paddingHorizontal: 16,

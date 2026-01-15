@@ -38,6 +38,7 @@
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-task-manager": "~14.0.9",
+    "expo-video-thumbnails": "~10.0.8",
     "expo-web-browser": "~15.0.7",
     "lucide-react": "^0.542.0",
     "metro-resolver": "^0.82.3",
@@ -56,8 +57,7 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-view-shot": "^4.0.3",
     "react-native-web": "^0.21.0",
-    "rn-wave-bottom-bar": "^2.2.36",
-    "expo-video-thumbnails": "~10.0.8"
+    "rn-wave-bottom-bar": "^2.2.36"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

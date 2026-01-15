@@ -261,6 +261,7 @@ const LeadsList: React.FC<LeadsListProps> = ({
 
 const styles = StyleSheet.create({
   listContainer: {
+    // marginTop: 16,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },

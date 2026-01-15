@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,22 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+interface LeadWithNotes extends Omit<Lead, 'notes'> {
+  notes?: string;
+}
+
+interface LeadDetailsProps {
+  lead: LeadWithNotes;
+  onBack: () => void;
+  onEdit: () => void;
+  onIncentivePress: () => void;
+  token: string | null;
+  theme: ThemeColors;
+}
 
 const C = {
   primary: '#075E54',
@@ -47,20 +61,7 @@ const C = {
   outgoing: '#DCF8C6'
 };
 
-interface LeadWithNotes extends Omit<Lead, 'notes'> {
-  notes?: string;
-}
-
-interface LeadDetailsProps {
-  lead: LeadWithNotes;
-  onBack: () => void;
-  onEdit: () => void;
-  onIncentivePress: () => void;
-  token: string | null;
-  theme: ThemeColors;
-}
-
-const LeadDetails: React.FC<LeadDetailsProps> = ({
+const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   lead,
   onBack,
   onEdit,
@@ -68,6 +69,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   token,
   theme
 }) => {
+  // State declarations
   const [comments, setComments] = useState<Comment[]>([]);
   const [collaborators, setCollaborators] = useState<CollaboratorData[]>([]);
   const [commentsPagination, setCommentsPagination] = useState<Pagination | null>(null);
@@ -82,15 +84,22 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [defaultComments, setDefaultComments] = useState<any[]>([]);
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
+  
+  // Refs
   const flatListRef = useRef<FlatList>(null);
+  const hasLoadedInitially = useRef(false);
   const modalFlatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
+  // Get keyboard behavior based on platform
+  const keyboardBehavior = useMemo(() => Platform.OS === 'ios' ? 'padding' : 'height', []);
+
+  // Effects
   useEffect(() => {
-    if (token) {
+    if (token && !hasLoadedInitially.current) {
+      hasLoadedInitially.current = true;
       fetchComments(lead.id, 1);
       fetchCollaborators(lead.id);
       fetchDefaultComments(lead.phase, lead.subphase);
@@ -103,51 +112,31 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [comments.length]);
 
-  // Keyboard listeners for proper input bar positioning
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        setIsKeyboardVisible(true);
-        const height = e.endCoordinates.height;
-        setKeyboardHeight(height);
-        Animated.timing(keyboardHeightAnim, {
-          toValue: height,
-          duration: 250,
-          useNativeDriver: false,
-        }).start();
+    const fetchCurrentUser = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user_data');
+        if (userData) {
+          const parsedData = JSON.parse(userData);
+          setCurrentUserEmployeeId(parsedData.employee_id);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
       }
-    );
-
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setIsKeyboardVisible(false);
-        Animated.timing(keyboardHeightAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: false,
-        }).start(() => {
-          setKeyboardHeight(0);
-        });
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
     };
+    fetchCurrentUser();
   }, []);
 
-  const beautifyName = (name: string): string => {
+  // Helper functions
+  const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
     return name
       .split('_')
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
-  };
+  }, []);
 
-  const formatDateTime = (dateString?: string): string => {
+  const formatDateTime = useCallback((dateString?: string): string => {
     if (!dateString) return '-';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
@@ -158,9 +147,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
+  }, []);
 
-  const formatTime = (dateString?: string): string => {
+  const formatTime = useCallback((dateString?: string): string => {
     if (!dateString) return '';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '';
@@ -169,21 +158,21 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       minute: '2-digit',
       hour12: false
     });
-  };
+  }, []);
 
-  const formatFileSize = (bytes?: number): string => {
+  const formatFileSize = useCallback((bytes?: number): string => {
     if (!bytes) return 'Unknown size';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
+  }, []);
 
-  const truncateFileName = (fileName: string, maxLength: number = 25): string => {
+  const truncateFileName = useCallback((fileName: string, maxLength: number = 25): string => {
     if (fileName.length <= maxLength) return fileName;
     return fileName.substring(0, maxLength - 3) + '...';
-  };
+  }, []);
 
-  const handleDownloadFile = async (fileUrl: string, fileName: string) => {
+  const handleDownloadFile = useCallback(async (fileUrl: string, fileName: string) => {
     try {
       const supported = await Linking.canOpenURL(fileUrl);
       if (supported) {
@@ -201,9 +190,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         'File is Being Uploaded, kindly wait for some time and try again.'
       );
     }
-  };
+  }, []);
 
-  const fetchComments = async (
+  // API functions
+  const fetchComments = useCallback(async (
     leadId: number,
     page: number = 1,
     append: boolean = false
@@ -228,6 +218,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       const transformedComments: Comment[] = data.comments.map((apiComment: any) => ({
         id: apiComment.comment.id.toString(),
         commentBy: apiComment.comment.user.full_name,
+        employeeId: apiComment.comment.user.employee_id,
         date: apiComment.comment.created_at,
         phase: apiComment.created_at_phase,
         subphase: apiComment.created_at_subphase,
@@ -256,9 +247,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       setLoadingComments(false);
       setLoadingMoreComments(false);
     }
-  };
+  }, [token]);
 
-  const fetchCollaborators = async (leadId: number): Promise<void> => {
+  const fetchCollaborators = useCallback(async (leadId: number): Promise<void> => {
     try {
       if (!token) return;
       setLoadingCollaborators(true);
@@ -276,9 +267,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     } finally {
       setLoadingCollaborators(false);
     }
-  };
+  }, [token]);
 
-  const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
+  const fetchDefaultComments = useCallback(async (phase: string, subphase: string): Promise<void> => {
     try {
       if (!token) return;
       setLoadingDefaultComments(true);
@@ -301,9 +292,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     } finally {
       setLoadingDefaultComments(false);
     }
-  };
+  }, [token]);
 
-  const handleAttachDocuments = async (): Promise<void> => {
+  const handleAttachDocuments = useCallback(async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         multiple: true,
@@ -311,16 +302,15 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       });
       if (!result.canceled && result.assets) {
         setSelectedDocuments(result.assets);
-        // Auto-focus input when files are selected to enable send button
         setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error picking documents:', error);
       Alert.alert('Error', 'Failed to pick documents. Please try again.');
     }
-  };
+  }, []);
 
-  const addCommentToBackend = async (
+  const addCommentToBackend = useCallback(async (
     comment: string,
     documents: DocumentPicker.DocumentPickerAsset[]
   ): Promise<boolean> => {
@@ -350,9 +340,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
 
-      const newComment: Comment = {
+      const newCommentItem: Comment = {
         id: data.lead_comment.comment.id.toString(),
         commentBy: data.lead_comment.comment.user.full_name,
+        employeeId: data.lead_comment.comment.user.employee_id,
         date: data.lead_comment.comment.created_at,
         phase: data.lead_comment.created_at_phase,
         subphase: data.lead_comment.created_at_subphase,
@@ -364,7 +355,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         documents: data.lead_comment.comment.documents
       };
 
-      setComments(prev => [...prev, newComment]);
+      setComments(prev => [...prev, newCommentItem]);
       return true;
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -373,27 +364,23 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     } finally {
       setAddingComment(false);
     }
-  };
+  }, [token, lead.id]);
 
-  const handleAddComment = async () => {
-    // Allow sending even if only files are attached (no text)
+  const handleAddComment = useCallback(async () => {
     if (!newComment.trim() && selectedDocuments.length === 0) {
       Alert.alert('Error', 'Please enter a comment or attach a file');
       return;
     }
-    
+
     const commentText = newComment.trim() || '';
     const success = await addCommentToBackend(commentText, selectedDocuments);
     if (success) {
       setNewComment('');
       setSelectedDocuments([]);
-      if (isKeyboardVisible) {
-        Keyboard.dismiss();
-      }
     }
-  };
+  }, [newComment, selectedDocuments, addCommentToBackend]);
 
-  const handleDefaultCommentSelect = (defaultComment: any) => {
+  const handleDefaultCommentSelect = useCallback((defaultComment: any) => {
     try {
       const commentText = JSON.parse(defaultComment.data);
       setNewComment(commentText);
@@ -404,32 +391,32 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       setShowDefaultComments(false);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  };
+  }, []);
 
-  const handleRemoveDocument = (index: number) => {
+  const handleRemoveDocument = useCallback((index: number) => {
     setSelectedDocuments(prevDocs => prevDocs.filter((_, i) => i !== index));
-  };
+  }, []);
 
   const handleLoadMoreComments = useCallback(() => {
     if (commentsPagination && commentsPagination.has_next && !loadingMoreComments) {
       fetchComments(lead.id, commentsPagination.current_page + 1, true);
     }
-  }, [commentsPagination, loadingMoreComments, lead.id]);
+  }, [commentsPagination, loadingMoreComments, lead.id, fetchComments]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
     fetchComments(lead.id, 1);
     fetchCollaborators(lead.id);
     setRefreshing(false);
-  };
+  }, [lead.id, fetchComments, fetchCollaborators]);
 
-  // Determine if send button should be enabled
-  const isSendEnabled = () => {
+  const isSendEnabled = useCallback(() => {
     return newComment.trim().length > 0 || selectedDocuments.length > 0;
-  };
+  }, [newComment, selectedDocuments]);
 
-  const renderChatBubble = ({ item }: { item: Comment }) => {
-    const isCurrentUser = item.commentBy !== 'You' && !item.commentBy.includes('Current');
+  // Memoized render functions
+  const renderChatBubble = useCallback(({ item }: { item: Comment }) => {
+    const isCurrentUser = item.employeeId === currentUserEmployeeId;
     const time = formatTime(item.date);
 
     return (
@@ -450,7 +437,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           {!isCurrentUser && (
             <Text style={[s.senderName, { color: C.primary }]}>{item.commentBy}</Text>
           )}
-
           {item.documents && item.documents.length > 0 && (
             <View style={s.chatAttachments}>
               {item.documents.map((doc) => {
@@ -520,11 +506,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               })}
             </View>
           )}
-
           {item.content && (
             <Text style={[s.chatMessage, { color: C.textPrimary }]}>{item.content}</Text>
           )}
-
           <View style={s.chatTimestamp}>
             <Text style={[s.chatTimeText, { color: C.textTertiary }]}>{time}</Text>
             {isCurrentUser && (
@@ -539,9 +523,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       </View>
     );
-  };
+  }, [currentUserEmployeeId, formatTime, handleDownloadFile, truncateFileName]);
 
-  const ModernHeader = () => (
+  const ModernHeader = useMemo(() => (
     <SafeAreaView style={s.headerSafeArea}>
       <View style={s.header}>
         <StatusBar barStyle="light-content" backgroundColor={C.primary} />
@@ -584,9 +568,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       </View>
     </SafeAreaView>
-  );
+  ), [onBack, onIncentivePress, onEdit, lead, beautifyName]);
 
-  const renderModalSection = ({ item }: { item: string }) => {
+  const renderModalSection = useCallback(({ item }: { item: string }) => {
     switch (item) {
       case 'lead-info':
         return (
@@ -699,17 +683,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       default:
         return null;
     }
-  };
+  }, [lead, collaborators, beautifyName, formatDateTime]);
 
-  const modalSections = [
-    'lead-info',
-    'contact-info',
-    'metadata',
-    ...(collaborators.length > 0 ? ['collaborators'] : []),
-    ...(lead.notes ? ['notes'] : [])
-  ];
+  const modalSections = useMemo(() => {
+    const sections = ['lead-info', 'contact-info', 'metadata'];
+    if (collaborators.length > 0) sections.push('collaborators');
+    if (lead.notes) sections.push('notes');
+    return sections;
+  }, [collaborators.length, lead.notes]);
 
-  const ContactInfoModal = () => (
+  const ContactInfoModal = useMemo(() => (
     <Modal
       animationType="slide"
       transparent={false}
@@ -737,17 +720,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         />
       </SafeAreaView>
     </Modal>
-  );
+  ), [showLeadDetailsModal, modalSections, renderModalSection]);
 
   return (
     <View style={s.mainContainer}>
-      <ModernHeader />
-      <ContactInfoModal />
+      {ModernHeader}
+      {ContactInfoModal}
 
       <KeyboardAvoidingView
         style={s.keyboardAvoidView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={keyboardBehavior}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        enabled
       >
         <View style={s.chatContainer}>
           {loadingComments ? (
@@ -820,7 +804,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </View>
         )}
 
-        <Animated.View style={[s.inputContainerWrapper, { marginBottom: keyboardHeightAnim }]}>
+        <View style={s.inputContainerWrapper}>
           <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
             <View style={s.inputContainer}>
               <View style={s.inputWrapper}>
@@ -875,7 +859,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               </View>
             </View>
           </SafeAreaView>
-        </Animated.View>
+        </View>
       </KeyboardAvoidingView>
 
       {showDefaultComments && (
@@ -916,9 +900,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       )}
     </View>
   );
-};
+});
+
+LeadDetails.displayName = 'LeadDetails';
 
 const s = StyleSheet.create({
+  // ... (keep all your existing styles exactly as they are)
   mainContainer: { flex: 1, backgroundColor: C.chatBg },
   container: { flex: 1, backgroundColor: C.chatBg },
   keyboardAvoidView: { flex: 1 },
@@ -1226,11 +1213,10 @@ const s = StyleSheet.create({
   messageInput: { fontSize: 15, color: C.textPrimary, padding: 0, maxHeight: 80 },
   sendButton: {
     width: 40,
-    height: 20,
+    height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    
   },
   loadingContainer: {
     flex: 1,

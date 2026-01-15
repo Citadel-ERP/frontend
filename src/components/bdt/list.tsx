@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -47,7 +47,84 @@ interface LeadsListProps {
   isDarkMode: boolean;
 }
 
-const LeadsList: React.FC<LeadsListProps> = ({
+// Move these outside component to prevent recreation
+const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+
+const beautifyName = (name: string): string => {
+  if (!name) return '';
+  return name
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const getInitials = (name: string): string => {
+  if (!name || name.trim().length === 0) return '?';
+  
+  const nameParts = name.trim().split(/\s+/);
+  
+  if (nameParts.length === 1) {
+    return nameParts[0].charAt(0).toUpperCase();
+  } else {
+    return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
+  }
+};
+
+const getAvatarColor = (name: string): string => {
+  if (!name) return avatarColors[0];
+  
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
+
+const formatDateTime = (dateString?: string): string => {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '-';
+  
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 60) {
+    return `${diffMins}m ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  } else if (diffDays < 7) {
+    return `${diffDays}d ago`;
+  } else {
+    return d.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short'
+    });
+  }
+};
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'active':
+    case 'transaction-complete':
+      return { icon: 'checkmark-circle', color: WHATSAPP_COLORS.success };
+    case 'hold':
+    case 'mandate':
+      return { icon: 'time', color: WHATSAPP_COLORS.warning };
+    case 'no-requirement':
+    case 'closed':
+    case 'non-responsive':
+      return { icon: 'close-circle', color: WHATSAPP_COLORS.danger };
+    default:
+      return { icon: 'help-circle', color: WHATSAPP_COLORS.textTertiary };
+  }
+};
+
+const LeadsList: React.FC<LeadsListProps> = React.memo(({
   leads,
   onLeadPress,
   loading,
@@ -58,83 +135,8 @@ const LeadsList: React.FC<LeadsListProps> = ({
   theme,
   isDarkMode,
 }) => {
-  const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
-
-  const beautifyName = (name: string): string => {
-    if (!name) return '';
-    return name
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-  };
-
-  const getInitials = (name: string): string => {
-    if (!name || name.trim().length === 0) return '?';
-    
-    const nameParts = name.trim().split(/\s+/);
-    
-    if (nameParts.length === 1) {
-      return nameParts[0].charAt(0).toUpperCase();
-    } else {
-      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
-    }
-  };
-
-  const getAvatarColor = (name: string): string => {
-    if (!name) return avatarColors[0];
-    
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    
-    const index = Math.abs(hash) % avatarColors.length;
-    return avatarColors[index];
-  };
-
-  const formatDateTime = (dateString?: string): string => {
-    if (!dateString) return '-';
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return '-';
-    
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 60) {
-      return `${diffMins}m ago`;
-    } else if (diffHours < 24) {
-      return `${diffHours}h ago`;
-    } else if (diffDays < 7) {
-      return `${diffDays}d ago`;
-    } else {
-      return d.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short'
-      });
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active':
-      case 'transaction-complete':
-        return { icon: 'checkmark-circle', color: WHATSAPP_COLORS.success };
-      case 'hold':
-      case 'mandate':
-        return { icon: 'time', color: WHATSAPP_COLORS.warning };
-      case 'no-requirement':
-      case 'closed':
-      case 'non-responsive':
-        return { icon: 'close-circle', color: WHATSAPP_COLORS.danger };
-      default:
-        return { icon: 'help-circle', color: WHATSAPP_COLORS.textTertiary };
-    }
-  };
-
-  const renderLeadItem = ({ item: lead }: { item: Lead }) => {
+  // Memoize the render function
+  const renderLeadItem = useCallback(({ item: lead }: { item: Lead }) => {
     const avatarColor = getAvatarColor(lead.name);
     const initials = getInitials(lead.name);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
@@ -190,7 +192,30 @@ const LeadsList: React.FC<LeadsListProps> = ({
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [onLeadPress]);
+
+  // Memoize keyExtractor
+  const keyExtractor = useCallback((item: Lead) => item.id.toString(), []);
+
+  // Memoize RefreshControl
+  const refreshControl = useMemo(() => (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      colors={[WHATSAPP_COLORS.primary]}
+      tintColor={WHATSAPP_COLORS.primary}
+    />
+  ), [refreshing, onRefresh]);
+
+  // Memoize ListFooterComponent
+  const listFooter = useMemo(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.loadMoreContainer}>
+        <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+      </View>
+    );
+  }, [loadingMore]);
 
   if (loading && leads.length === 0) {
     return (
@@ -217,29 +242,23 @@ const LeadsList: React.FC<LeadsListProps> = ({
     <FlatList
       data={leads}
       renderItem={renderLeadItem}
-      keyExtractor={(item) => item.id.toString()}
+      keyExtractor={keyExtractor}
       showsVerticalScrollIndicator={false}
       onEndReached={onLoadMore}
       onEndReachedThreshold={0.1}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[WHATSAPP_COLORS.primary]}
-          tintColor={WHATSAPP_COLORS.primary}
-        />
-      }
+      refreshControl={refreshControl}
       contentContainerStyle={styles.listContainer}
-      ListFooterComponent={
-        loadingMore ? (
-          <View style={styles.loadMoreContainer}>
-            <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-          </View>
-        ) : null
-      }
+      ListFooterComponent={listFooter}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      updateCellsBatchingPeriod={50}
+      initialNumToRender={10}
+      windowSize={10}
     />
   );
-};
+});
+
+LeadsList.displayName = 'LeadsList';
 
 const styles = StyleSheet.create({
   listContainer: {

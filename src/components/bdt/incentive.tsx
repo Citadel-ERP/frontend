@@ -454,6 +454,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
   const BackIcon = () => (
     <View style={styles.backIcon}>
       <View style={styles.backArrow} />
+      <Text style={styles.backText}>Back</Text>
     </View>
   );
 
@@ -466,8 +467,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
       style={styles.greenHeader}
     >
       <View style={styles.greenHeaderContent}>
-        {/* <Text style={styles.greenHeaderTitle}>Incentive Checklist</Text> */}
-        {/* <Text style={styles.greenHeaderSubtitle}>Lead: {leadName}</Text> */}
       </View>
     </LinearGradient>
   );
@@ -1001,7 +1000,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    marginTop:50
+    marginTop:30
   },
   // ADDED: Style for header when using green header
   headerWithGreen: {
@@ -1020,7 +1019,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   greenHeaderContent: {
-    marginTop: 20,
+    marginTop: 0,
   },
   greenHeaderTitle: {
     fontSize: fontSize.xxl,
@@ -1039,10 +1038,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
   backIcon: {
-    width: 24,
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
   },
   backArrow: {
     width: 12,
@@ -1053,11 +1054,12 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-45deg' }],
   },
   headerTitle: {
-    fontSize: fontSize.xl,
+    // fontSize: fontSize.xl,
     fontWeight: '600',
     color: colors.white,
     flex: 1,
     textAlign: 'center',
+    fontSize: 20,
   },
   headerSpacer: {
     width: 40,
@@ -1286,6 +1288,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
   calculationRow: {
     flexDirection: 'row',

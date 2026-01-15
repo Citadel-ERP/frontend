@@ -321,6 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     maxHeight: 55,
+    // marginBottom: 15,
   },
   tab: {
     paddingHorizontal: 16,
@@ -328,6 +329,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 10,
     backgroundColor: 'transparent',
+    height: 40,
   },
   activeTab: {
     maxHeight: 30, 

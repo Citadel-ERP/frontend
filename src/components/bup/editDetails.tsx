@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
-import { ThemeColors, Lead, FilterOption } from './types';
+import { ThemeColors, Lead, FilterOption, AssignedTo } from './types';
 import DropdownModal from './dropdownModal';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -61,6 +61,30 @@ interface Collaborator {
   updated_at: string;
 }
 
+// Debounce hook for search
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
 const EditLead: React.FC<EditLeadProps> = ({
   lead,
   onBack,
@@ -80,7 +104,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'collaborator' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'collaborator' | 'assigned' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [allEmployees, setAllEmployees] = useState<FilterOption[]>([]);
@@ -91,7 +115,14 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [potentialCollaborators, setPotentialCollaborators] = useState<FilterOption[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+  
+  // Assigned person states
+  const [assignedToSearch, setAssignedToSearch] = useState('');
+  const [assignedToResults, setAssignedToResults] = useState<AssignedTo[]>([]);
+  const [assignedToLoading, setAssignedToLoading] = useState(false);
+  
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -109,8 +140,23 @@ const EditLead: React.FC<EditLeadProps> = ({
     if (editedLead.phase) {
       fetchSubphasesForPhase(editedLead.phase);
     }
-    // Removed: fetchCollaborators() call on load
   }, []);
+
+  useEffect(() => {
+    if (debouncedSearchQuery.length >= 2) {
+      searchPotentialCollaborators(debouncedSearchQuery);
+    } else {
+      setPotentialCollaborators([]);
+    }
+  }, [debouncedSearchQuery]);
+
+  useEffect(() => {
+    if (debouncedAssignedSearch.length >= 2) {
+      searchAssignedToUsers(debouncedAssignedSearch);
+    } else {
+      setAssignedToResults([]);
+    }
+  }, [debouncedAssignedSearch]);
 
   const ModernHeader = () => (
     <SafeAreaView style={styles.header}>
@@ -201,7 +247,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/employee/getPotentialCollaborators?query=`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getPotentialCollaborators?query=`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -232,7 +278,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       if (!token || !lead.id) return;
       
       setLoadingCollaborators(true);
-      const response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -268,7 +314,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
       setSearchLoading(true);
       const response = await fetch(
-        `${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+        `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
         {
           method: 'GET',
           headers: {
@@ -290,12 +336,44 @@ const EditLead: React.FC<EditLeadProps> = ({
       }));
 
       setPotentialCollaborators(options);
-      setHasSearched(true);
     } catch (error) {
       console.error('Error searching collaborators:', error);
       setPotentialCollaborators([]);
     } finally {
       setSearchLoading(false);
+    }
+  };
+
+  const searchAssignedToUsers = async (query: string) => {
+    try {
+      if (!token || query.length < 2) {
+        setAssignedToResults([]);
+        return;
+      }
+
+      setAssignedToLoading(true);
+      const response = await fetch(
+        `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      setAssignedToResults(data.potential_collaborators);
+    } catch (error) {
+      console.error('Error searching assignable users:', error);
+      setAssignedToResults([]);
+    } finally {
+      setAssignedToLoading(false);
     }
   };
 
@@ -312,7 +390,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       }
       
       setLoadingCollaborators(true);
-      const response = await fetch(`${BACKEND_URL}/employee/addCollaborators`, {
+      const response = await fetch(`${BACKEND_URL}/manager/addCollaborators`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -357,7 +435,7 @@ const EditLead: React.FC<EditLeadProps> = ({
             style: 'destructive',
             onPress: async () => {
               setLoadingCollaborators(true);
-              const response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
+              const response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -387,6 +465,17 @@ const EditLead: React.FC<EditLeadProps> = ({
     } finally {
       setLoadingCollaborators(false);
     }
+  };
+
+  const handleAssignToUser = (user: AssignedTo) => {
+    setEditedLead({...editedLead, assigned_to: user});
+    setActiveDropdown(null);
+    setAssignedToSearch('');
+    setAssignedToResults([]);
+  };
+
+  const clearAssignedTo = () => {
+    setEditedLead({...editedLead, assigned_to: null});
   };
 
   const beautifyName = (name: string): string => {
@@ -497,10 +586,9 @@ const EditLead: React.FC<EditLeadProps> = ({
     return employee?.label || email;
   };
 
-  const handleSearchFocus = () => {
-    if (!hasSearched && !loadingCollaborators) {
-      fetchCollaborators();
-    }
+  const getAssignedToLabel = (): string => {
+    if (!editedLead.assigned_to) return 'Unassigned';
+    return editedLead.assigned_to.full_name || `${editedLead.assigned_to.first_name} ${editedLead.assigned_to.last_name}`;
   };
 
   return (
@@ -547,6 +635,39 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Text style={styles.readOnlyText}>{selectedCity}</Text>
             </View>
           </View>
+
+          {/* Assigned To Section - NEW */}
+          <View style={styles.inputGroup}>
+            <View style={styles.assignedToHeader}>
+              <Text style={styles.inputLabel}>Assigned To</Text>
+              {editedLead.assigned_to && (
+                <TouchableOpacity onPress={clearAssignedTo} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={16} color={MODERN_COLORS.danger} />
+                  <Text style={styles.clearButtonText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setActiveDropdown('assigned')}
+            >
+              <View style={styles.assignedToContent}>
+                {editedLead.assigned_to ? (
+                  <>
+                    <Ionicons name="person" size={18} color={MODERN_COLORS.primary} />
+                    <Text style={styles.assignedToText} numberOfLines={1}>
+                      {getAssignedToLabel()}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.dropdownText} numberOfLines={1}>
+                    Select assignee...
+                  </Text>
+                )}
+              </View>
+              <MaterialIcons name="arrow-drop-down" size={24} color={MODERN_COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Email Addresses */}
@@ -578,7 +699,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={[styles.input, emailError && styles.inputError]}
+              style={[styles.input, emailError && styles.inputError, {width: '83%'}]}
               value={newEmail}
               onChangeText={(text) => {
                 setNewEmail(text);
@@ -626,7 +747,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={[styles.input, phoneError && styles.inputError]}
+              style={[styles.input, phoneError && styles.inputError, {width: '83%'}]}
               value={newPhone}
               onChangeText={(text) => {
                 setNewPhone(text);
@@ -687,16 +808,8 @@ const EditLead: React.FC<EditLeadProps> = ({
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
-                onChangeText={(text) => {
-                  setSearchQuery(text);
-                  if (text.length >= 2) {
-                    searchPotentialCollaborators(text);
-                  } else {
-                    setPotentialCollaborators([]);
-                  }
-                }}
-                onFocus={handleSearchFocus}
-                placeholder="Search by name or email..."
+                onChangeText={setSearchQuery}
+                placeholder="Type at least 2 characters to search..."
                 placeholderTextColor={MODERN_COLORS.textTertiary}
                 autoCapitalize="none"
               />
@@ -737,18 +850,6 @@ const EditLead: React.FC<EditLeadProps> = ({
                 ))
               }
             </View>
-          )}
-
-          {/* Browse All Employees */}
-          {searchQuery.length < 2 && potentialCollaborators.length === 0 && (
-            <TouchableOpacity
-              style={styles.addCollaboratorButton}
-              onPress={() => setActiveDropdown('collaborator')}
-              disabled={loadingCollaborators}
-            >
-              <MaterialIcons name="person-add" size={20} color={MODERN_COLORS.primary} />
-              <Text style={styles.addCollaboratorText}>Browse All Employees</Text>
-            </TouchableOpacity>
           )}
         </View>
 
@@ -892,6 +993,105 @@ const EditLead: React.FC<EditLeadProps> = ({
           border: MODERN_COLORS.border,
         }}
       />
+      
+      {/* Assigned To Dropdown Modal */}
+      {activeDropdown === 'assigned' && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assign Lead To</Text>
+              <TouchableOpacity onPress={() => setActiveDropdown(null)}>
+                <Ionicons name="close" size={24} color={MODERN_COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.searchInputContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={assignedToSearch}
+                onChangeText={setAssignedToSearch}
+                placeholder="Search employees..."
+                placeholderTextColor={MODERN_COLORS.textTertiary}
+                autoCapitalize="none"
+              />
+              {assignedToLoading && (
+                <ActivityIndicator size="small" color={MODERN_COLORS.primary} style={styles.searchLoading} />
+              )}
+            </View>
+            
+            <ScrollView style={styles.modalScrollView}>
+              {/* Clear assignment option */}
+              <TouchableOpacity
+                style={styles.searchResultItem}
+                onPress={clearAssignedTo}
+              >
+                <View style={styles.searchResultContent}>
+                  <Ionicons name="person-remove" size={18} color={MODERN_COLORS.danger} />
+                  <Text style={[styles.searchResultText, { color: MODERN_COLORS.danger }]}>
+                    Unassign / Clear
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              
+              {/* Current assigned user if exists */}
+              {editedLead.assigned_to && (
+                <View style={[styles.searchResultItem, styles.currentAssignedItem]}>
+                  <View style={styles.searchResultContent}>
+                    <Ionicons name="person-add" size={18} color={MODERN_COLORS.success} />
+                    <View>
+                      <Text style={[styles.searchResultText, { color: MODERN_COLORS.success, fontWeight: '600' }]}>
+                        Current: {getAssignedToLabel()}
+                      </Text>
+                      <Text style={styles.assignedToEmail}>
+                        {editedLead.assigned_to.email}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+              
+              {/* Search results */}
+              {assignedToResults.length > 0 ? (
+                assignedToResults.map((user) => (
+                  <TouchableOpacity
+                    key={user.email}
+                    style={[
+                      styles.searchResultItem,
+                      editedLead.assigned_to?.email === user.email && styles.selectedItem
+                    ]}
+                    onPress={() => handleAssignToUser(user)}
+                  >
+                    <View style={styles.searchResultContent}>
+                      <Ionicons 
+                        name="person" 
+                        size={18} 
+                        color={editedLead.assigned_to?.email === user.email ? MODERN_COLORS.success : MODERN_COLORS.primary} 
+                      />
+                      <View style={styles.assignedToUserInfo}>
+                        <Text style={styles.searchResultText} numberOfLines={1}>
+                          {user.full_name || `${user.first_name} ${user.last_name}`}
+                        </Text>
+                        <Text style={styles.assignedToEmail} numberOfLines={1}>
+                          {user.email}
+                        </Text>
+                      </View>
+                    </View>
+                    {editedLead.assigned_to?.email === user.email && (
+                      <Ionicons name="checkmark-circle" size={22} color={MODERN_COLORS.success} />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                assignedToSearch.length >= 2 && !assignedToLoading && (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No users found</Text>
+                  </View>
+                )
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -1009,6 +1209,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: MODERN_COLORS.textPrimary,
     backgroundColor: MODERN_COLORS.background,
+    width: '100%',
   },
   inputError: {
     borderColor: MODERN_COLORS.danger,
@@ -1024,6 +1225,56 @@ const styles = StyleSheet.create({
   readOnlyText: {
     fontSize: 15,
     color: MODERN_COLORS.textPrimary,
+  },
+  
+  // Assigned To Section
+  assignedToHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: MODERN_COLORS.background,
+  },
+  clearButtonText: {
+    fontSize: 12,
+    color: MODERN_COLORS.danger,
+    fontWeight: '500',
+  },
+  assignedToContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  assignedToText: {
+    fontSize: 15,
+    color: MODERN_COLORS.textPrimary,
+    flex: 1,
+  },
+  assignedToUserInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  assignedToEmail: {
+    fontSize: 12,
+    color: MODERN_COLORS.textTertiary,
+    marginTop: 2,
+  },
+  selectedItem: {
+    backgroundColor: MODERN_COLORS.primary + '10',
+    borderLeftWidth: 3,
+    borderLeftColor: MODERN_COLORS.primary,
+  },
+  currentAssignedItem: {
+    borderLeftWidth: 3,
+    borderLeftColor: MODERN_COLORS.success,
   },
   
   // Contact Items
@@ -1060,6 +1311,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: MODERN_COLORS.border,
+    width: '100%',
   },
   addButton: {
     width: 40,
@@ -1219,6 +1471,45 @@ const styles = StyleSheet.create({
   // Bottom Spacing
   bottomSpacing: {
     height: 20,
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: MODERN_COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: MODERN_COLORS.textPrimary,
+  },
+  modalScrollView: {
+    maxHeight: 400,
   },
 });
 
