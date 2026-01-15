@@ -178,4 +178,4 @@ export interface VehicleAssignment {
   updated_at: string;
 }
 
-export type ViewType = 'main' | 'vehicle-detail' | 'booking-detail' | 'update-vehicle';
+export type ViewType = 'main' | 'vehicle-detail' | 'booking-detail' | 'update-vehicle' | 'create-vehicle';

@@ -39,6 +39,38 @@ interface CarFormData {
     photos: Document[];
 }
 
+// Helper function to fetch office ID for city
+const fetchOfficeIdForCity = async (city: string, token: string | null): Promise<number> => {
+    try {
+        const response = await fetch(`${BACKEND_URL}/manager/getOffices`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ token, city }),
+        });
+
+        const text = await response.text();
+        console.log('Office response:', text.substring(0, 500));
+
+        if (text.trim().startsWith('{')) {
+            const data = JSON.parse(text);
+            if (response.ok && data.offices && data.offices.length > 0) {
+                console.log('Office ID found:', data.offices[0].id);
+                return data.offices[0].id;
+            } else if (response.ok && data.office) {
+                // Handle single office response
+                return data.office.id;
+            }
+        }
+        throw new Error('Office not found for this city');
+    } catch (error) {
+        console.error('Error fetching office:', error);
+        throw error;
+    }
+};
+
 const CreateCar: React.FC<CreateCarProps> = ({
     token,
     city,
@@ -114,8 +146,23 @@ const CreateCar: React.FC<CreateCarProps> = ({
             return;
         }
 
+        if (formData.photos.length === 0) {
+            Alert.alert('Error', 'At least one photo is required');
+            return;
+        }
+
         setLoading(true);
         try {
+            // Fetch office ID for the city
+            let officeId: number;
+            try {
+                officeId = await fetchOfficeIdForCity(city, token);
+            } catch (error) {
+                Alert.alert('Error', 'Failed to find office for this city. Please contact administrator.');
+                setLoading(false);
+                return;
+            }
+
             const formDataToSend = new FormData();
             formDataToSend.append('token', token || '');
             formDataToSend.append('make', formData.make);
@@ -127,7 +174,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
             formDataToSend.append('fuel_type', formData.fuel_type);
             formDataToSend.append('status', formData.status);
             formDataToSend.append('vehicle_type', formData.vehicle_type);
-            formDataToSend.append('current_location', city);
+            formDataToSend.append('office', officeId.toString());
 
             // Append certificates
             if (formData.pollution_certificate) {
@@ -145,15 +192,16 @@ const CreateCar: React.FC<CreateCarProps> = ({
                 formDataToSend.append('photos', photo as any);
             });
 
+            console.log('Submitting vehicle creation with office ID:', officeId);
+
             const response = await fetch(`${BACKEND_URL}/manager/createVehicle`, {
                 method: 'POST',
                 body: formDataToSend,
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
             });
 
             const text = await response.text();
+            console.log('Create vehicle response:', text.substring(0, 500));
+
             if (text.trim().startsWith('{')) {
                 const data = JSON.parse(text);
                 if (response.ok) {
@@ -168,7 +216,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
             }
         } catch (error) {
             console.error('Error creating vehicle:', error);
-            Alert.alert('Error', 'Network error occurred');
+            Alert.alert('Error', 'Network error occurred. Please check your connection.');
         } finally {
             setLoading(false);
         }
@@ -206,6 +254,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 value={formData.make}
                                 onChangeText={(text) => setFormData({ ...formData, make: text })}
                                 placeholder="e.g., Toyota, Honda"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -216,6 +265,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 value={formData.model}
                                 onChangeText={(text) => setFormData({ ...formData, model: text })}
                                 placeholder="e.g., Camry, Civic"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -227,6 +277,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 onChangeText={(text) => setFormData({ ...formData, year: text })}
                                 placeholder="e.g., 2023"
                                 keyboardType="numeric"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -238,6 +289,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 onChangeText={(text) => setFormData({ ...formData, license_plate: text })}
                                 placeholder="e.g., MH01AB1234"
                                 autoCapitalize="characters"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -248,6 +300,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 value={formData.color}
                                 onChangeText={(text) => setFormData({ ...formData, color: text })}
                                 placeholder="e.g., White, Black"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -259,6 +312,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 onChangeText={(text) => setFormData({ ...formData, seating_capacity: text })}
                                 placeholder="4"
                                 keyboardType="numeric"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -419,6 +473,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
                     <View style={styles.formSection}>
                         <Text style={styles.sectionTitle}>Photos</Text>
+                        <Text style={styles.formLabel}>Vehicle Photos (Minimum 1 required) *</Text>
                         <TouchableOpacity
                             style={styles.photoButton}
                             onPress={() => handleDocumentPick('photo')}

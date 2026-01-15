@@ -7,10 +7,9 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { FuelLogsModalProps } from './types';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
@@ -43,31 +42,27 @@ export const FuelLogsModal: React.FC<FuelLogsModalProps> = ({
       if (text.trim().startsWith('{')) {
         const data = JSON.parse(text);
         if (response.ok && data.file_url) {
-          try {
-            const downloadResumable = FileSystem.createDownloadResumable(
-              data.file_url,
-              FileSystem.documentDirectory + data.filename,
-              {}
+          // Open the file URL directly in browser for download
+          const canOpen = await Linking.canOpenURL(data.file_url);
+          if (canOpen) {
+            await Linking.openURL(data.file_url);
+          } else {
+            Alert.alert(
+              'Download Report',
+              `Report is available at: ${data.file_url}`,
+              [
+                { text: 'Copy URL', onPress: () => {
+                  console.log('URL to copy:', data.file_url);
+                }},
+                { text: 'OK' }
+              ]
             );
-
-            const { uri } = await downloadResumable.downloadAsync();
-            
-            const isAvailable = await Sharing.isAvailableAsync();
-            if (isAvailable) {
-              await Sharing.shareAsync(uri, {
-                mimeType: 'application/pdf',
-                dialogTitle: 'Fuel Logs Report',
-              });
-            } else {
-              Alert.alert('Success', 'PDF downloaded successfully');
-            }
-          } catch (error) {
-            console.error('Error downloading PDF:', error);
-            Alert.alert('Error', 'Failed to download PDF');
           }
         } else {
-          Alert.alert('Error', data.message || 'Failed to download PDF');
+          Alert.alert('Error', data.message || 'Failed to generate PDF');
         }
+      } else {
+        Alert.alert('Error', 'Invalid response from server');
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
