@@ -56,18 +56,22 @@ export interface Vehicle {
     city: string;
     state: string;
   };
-  image_url?: string; // Add this line for single image URL
-  images?: Array<{ // Add this for multiple images
+  image_url?: string;
+  images?: Array<{
     id: number;
     url: string;
     is_primary: boolean;
   }>;
-  vehicle_photos?: Array<{ // Add this for multiple images
+  vehicle_photos?: Array<{
     id: number;
     photo: string;
     created_at: string;
     updated_at: string;
   }>;
+  // Add these certificate fields
+  pollution_certificate?: string | null;
+  insurance_certificate?: string | null;
+  registration_certificate?: string | null;
 }
 
 export interface Booking {
@@ -174,4 +178,4 @@ export interface VehicleAssignment {
   updated_at: string;
 }
 
-export type ViewType = 'main' | 'vehicle-detail' | 'booking-detail';
+export type ViewType = 'main' | 'vehicle-detail' | 'booking-detail' | 'update-vehicle';

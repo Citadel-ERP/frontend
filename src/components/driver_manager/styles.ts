@@ -2,6 +2,7 @@ import { StyleSheet, Platform, Dimensions } from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 40;
+const IMAGE_SLOT_WIDTH = (screenWidth - 80) / 3;
 
 export const styles = StyleSheet.create({
     // ==================== APP CONTAINER & LAYOUT ====================
@@ -74,7 +75,7 @@ export const styles = StyleSheet.create({
     headerCenter: {
         flex: 1,
         alignItems: 'center',
-        marginRight: 60,
+        marginRight: 20,
     },
     logoText: {
         color: 'white',
@@ -775,12 +776,12 @@ export const styles = StyleSheet.create({
     documentInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         backgroundColor: '#E8F5E9',
         padding: 12,
         borderRadius: 8,
         marginTop: 8,
-        width: '82%',
+        width: '75%',
         marginRight: 12,
         paddingRight: 30,
     },
@@ -851,16 +852,6 @@ export const styles = StyleSheet.create({
     searchContainer: {
         marginTop: 8,
     },
-    // searchInput: {
-    //     backgroundColor: '#fff',
-    //     borderWidth: 1,
-    //     borderColor: '#e0e0e0',
-    //     borderRadius: 12,
-    //     paddingHorizontal: 15,
-    //     paddingVertical: 12,
-    //     fontSize: 15,
-    //     color: '#333',
-    // },
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1123,32 +1114,6 @@ export const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#008069',
     },
-    // downloadButton: {
-    //     backgroundColor: '#008069',
-    //     borderColor: '#008069',
-    //     height: 45,
-    //     width: 45,
-    //     flexDirection: 'row',
-    //     alignItems: 'center',
-    //     justifyContent: 'center',
-    //     borderRadius: 8,
-    //     marginLeft: 8,
-    // },
-
-    // ==================== LOADING & EMPTY STATES ====================
-    // loadingContainer: {
-    //     flex: 1,
-    //     justifyContent: 'center',
-    //     alignItems: 'center',
-    //     paddingVertical: 60,
-    //     backgroundColor: '#f5f5f5',
-    // },
-    // loadingText: {
-    //     fontSize: 16,
-    //     color: '#666',
-    //     marginTop: 12,
-    //     fontWeight: '500',
-    // },
     emptyStateContainer: {
         alignItems: 'center',
         paddingVertical: 60,
@@ -1306,23 +1271,6 @@ export const styles = StyleSheet.create({
         borderColor: '#075E54',
         gap: 12,
     },
-    // documentButton: {
-    //     flexDirection: 'row',
-    //     alignItems: 'center',
-    //     backgroundColor: '#F5F5F5',
-    //     borderRadius: 12,
-    //     padding: 16,
-    //     borderWidth: 1.5,
-    //     borderColor: '#E0E0E0',
-    //     borderStyle: 'dashed',
-    //     gap: 12,
-    // },
-    // documentButtonText: {
-    //     fontSize: 16,
-    //     color: '#075E54',
-    //     fontWeight: '500',
-    //     flex: 1,
-    // },
     photoButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1387,5 +1335,356 @@ export const styles = StyleSheet.create({
         fontSize: 18,
         color: '#FFFFFF',
         fontWeight: '600',
+    },
+    scrollView: {
+        flex: 1,
+    },
+    section: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 20,
+        marginHorizontal: 16,
+        marginTop: 16,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    photoScrollContent: {
+        paddingVertical: 8,
+    },
+    photoSlot: {
+        width: IMAGE_SLOT_WIDTH,
+        height: IMAGE_SLOT_WIDTH,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#E0E0E0',
+        borderStyle: 'dashed',
+        marginRight: 12,
+        overflow: 'hidden',
+        backgroundColor: '#F8F9FA',
+        position: 'relative',
+    },
+    emptyPhotoSlot: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F8F9FA',
+    },
+    photoImage: {
+        width: '100%',
+        height: '100%',
+    },
+    removePhotoButton: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1,
+    },
+    addPhotoText: {
+        fontSize: 12,
+        color: '#008069',
+        marginTop: 4,
+        fontWeight: '500',
+    },
+    inputGroup: {
+        marginBottom: 16,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    input: {
+        backgroundColor: '#F8F9FA',
+        borderWidth: 1.5,
+        borderColor: '#E0E0E0',
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        fontSize: 16,
+        color: '#333',
+    },
+    row: {
+        flexDirection: 'row',
+    },
+    documentIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        backgroundColor: '#E8F5E9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    documentTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 2,
+    },
+    documentSubtitle: {
+        fontSize: 13,
+        color: '#666',
+    },
+    buttonContainer: {
+        paddingHorizontal: 16,
+        marginTop: 24,
+        marginBottom: 30,
+    },
+    updateButtonDisabled: {
+        backgroundColor: '#A0A0A0',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    updateVehicleHeader: {
+        backgroundColor: '#075E54',
+        paddingTop: Platform.OS === 'ios' ? 50 : 40,
+        paddingBottom: 16,
+        paddingHorizontal: 16,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    updateVehicleHeaderContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    updateVehicleHeaderTitleContainer: {
+        flex: 1,
+        textAlign: 'center',
+        alignItems: 'center',
+    },
+    updateVehicleHeaderTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        marginBottom: 2,
+    },
+    updateVehicleHeaderSubtitle: {
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.8)',
+    },
+    headerSpacer: {
+        width: 40,
+    },
+    updateVehicleScrollContent: {
+        paddingBottom: 100,
+    },
+    updateVehicleSection: {
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 16,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    sectionHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    updateVehicleSectionIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#E8F5E9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    updateVehicleSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1A1A1A',
+        marginBottom: 2,
+    },
+    updateVehicleSectionSubtitle: {
+        fontSize: 13,
+        color: '#666',
+    },
+    photoIndexBadge: {
+        position: 'absolute',
+        bottom: 6,
+        left: 6,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    photoIndexText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    photoSlotNumber: {
+        position: 'absolute',
+        bottom: 8,
+        fontSize: 10,
+        color: '#999',
+        fontWeight: '600',
+    },
+    halfWidth: {
+        flex: 1,
+    },
+    required: {
+        color: '#FF3B30',
+    },
+    inputWrapper: {
+        backgroundColor: '#F8F9FA',
+        borderWidth: 1.5,
+        borderColor: '#E0E0E0',
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    updateVehicleDocumentIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        backgroundColor: '#E8F5E9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 14,
+    },
+    updateVehicleDocumentTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 4,
+    },
+    updateVehicleDocumentSubtitle: {
+        fontSize: 13,
+        color: '#666',
+    },
+    updateVehicleBottomContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+        borderTopWidth: 1,
+        borderTopColor: '#E0E0E0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    documentsContainer: {
+        gap: 12,
+    },
+
+    documentDownloadButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F7FAFC',
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+
+    documentIconWrapper: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+
+    noDocumentsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 32,
+        paddingHorizontal: 16,
+    },
+
+    noDocumentsText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#718096',
+        marginTop: 12,
+    },
+
+    noDocumentsSubtext: {
+        fontSize: 14,
+        color: '#A0AEC0',
+        marginTop: 4,
+        textAlign: 'center',
+    },
+    documentPreviewContainer: {
+        marginBottom: 12,
+    },
+
+    documentNameContainer: {
+        marginTop: 4,
+    },
+
+    documentNameText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: '#075E54',
+        marginBottom: 2,
+    },
+
+    documentStatusText: {
+        fontSize: 11,
+        color: '#666',
+        fontStyle: 'italic',
+    },
+
+    documentActionIcon: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 8,
+    },
+
+    // Update this existing style:
+    updateVehicleDocumentButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 8,
+        borderWidth: 1.5,
+        borderColor: '#E0E0E0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
 });
