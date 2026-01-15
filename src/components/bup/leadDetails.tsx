@@ -78,6 +78,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [defaultComments, setDefaultComments] = useState<any[]>([]);
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
+  const [incentiveData, setIncentiveData] = useState<any>(null);
+  const [loadingIncentive, setLoadingIncentive] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const modalFlatListRef = useRef<FlatList>(null);
 
@@ -86,6 +88,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       fetchComments(lead.id, 1);
       fetchCollaborators(lead.id);
       fetchDefaultComments(lead.phase, lead.subphase);
+      if (lead.incentive_present) {
+        fetchIncentiveData();
+      }
     }
   }, [token, lead.id]);
 
@@ -127,6 +132,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     });
   };
 
+  const formatWhatsAppDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    
+    if (compareDate.getTime() === compareToday.getTime()) {
+      return 'Today';
+    } else if (compareDate.getTime() === compareYesterday.getTime()) {
+      return 'Yesterday';
+    } else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+      return date.toLocaleDateString('en-US', { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  };
+
   const formatFileSize = (bytes?: number): string => {
     if (!bytes) return 'Unknown size';
     if (bytes < 1024) return bytes + ' B';
@@ -166,6 +192,52 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         'Notification',
         'File is Being Uploaded, kindly wait for some time and try again.'
       );
+    }
+  };
+
+  const fetchIncentiveData = async (): Promise<void> => {
+    try {
+      if (!token || !lead.incentive_present) return;
+      
+      setLoadingIncentive(true);
+      const response = await fetch(`${BACKEND_URL}/employee/getIncentiveDetails`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: token, 
+          lead_id: lead.id 
+        })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      setIncentiveData(data.incentive || null);
+    } catch (error) {
+      console.error('Error fetching incentive data:', error);
+      setIncentiveData(null);
+    } finally {
+      setLoadingIncentive(false);
+    }
+  };
+
+  const handleIncentivePress = () => {
+    if (!lead.incentive_present) return;
+    
+    if (loadingIncentive) {
+      Alert.alert('Loading', 'Fetching incentive details...');
+      return;
+    }
+
+    if (incentiveData) {
+      Alert.alert(
+        'Incentive Details',
+        `Amount: ₹${incentiveData.amount || '0'}\n` +
+        `Status: ${incentiveData.status || 'Pending'}\n` +
+        `Date: ${formatDateTime(incentiveData.created_at)}\n` +
+        `Notes: ${incentiveData.notes || 'No additional notes'}`
+      );
+    } else {
+      Alert.alert('Incentive', 'No incentive data available for this lead.');
     }
   };
 
@@ -407,46 +479,77 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     setRefreshing(true);
     fetchComments(lead.id, 1);
     fetchCollaborators(lead.id);
+    if (lead.incentive_present) {
+      fetchIncentiveData();
+    }
     setRefreshing(false);
   };
 
-  const renderChatBubble = ({ item }: { item: Comment }) => {
-    const isCurrentUser = item.commentBy !== 'You' && !item.commentBy.includes('Current');
-    const time = formatTime(item.date);
+  const getProcessedComments = () => {
+    if (!comments || comments.length === 0) return [];
+    const processed: any[] = [];
+    let lastDate = '';
+    const sortedComments = [...comments].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    sortedComments.forEach((comment, index) => {
+      const commentDate = formatWhatsAppDate(comment.date);
+      if (commentDate !== lastDate) {
+        processed.push({
+          type: 'dateSeparator',
+          id: `date-${commentDate}-${index}`,
+          date: commentDate,
+          originalDate: comment.date
+        });
+        lastDate = commentDate;
+      }
+      processed.push({
+        type: 'comment',
+        id: comment.id,
+        data: comment
+      });
+    });
+    return processed;
+  };
+
+  const renderChatItem = ({ item }: { item: any }) => {
+    if (item.type === 'dateSeparator') {
+      return (
+        <View style={s.dateSeparatorContainer}>
+          <View style={s.dateSeparatorBubble}>
+            <Text style={s.dateSeparatorText}>{item.date}</Text>
+          </View>
+        </View>
+      );
+    }
+    
+    const comment = item.data;
+    const time = formatTime(comment.date);
 
     return (
-      <View
-        style={[
-          s.chatBubbleContainer,
-          isCurrentUser ? s.currentUserBubbleContainer : s.otherUserBubbleContainer
-        ]}
-      >
-        <View
-          style={[
-            s.chatBubble,
-            isCurrentUser
-              ? [s.currentUserBubble, { backgroundColor: C.outgoing }]
-              : [s.otherUserBubble, { backgroundColor: C.incoming }]
-          ]}
-        >
-          {!isCurrentUser && (
-            <Text style={[s.senderName, { color: C.primary }]}>{item.commentBy}</Text>
-          )}
-
-          {item.documents && item.documents.length > 0 && (
-            <View style={s.chatAttachments}>
-              {item.documents.map((doc) => {
+      <View style={s.messageRow}>
+        <View style={s.otherAvatar}>
+          <Ionicons name="person-circle-outline" size={32} color="#999" />
+        </View>
+        <View style={s.messageBubble}>
+          <View style={s.senderHeader}>
+            <Text style={s.senderName}>{comment.commentBy}</Text>
+          </View>
+          
+          {comment.documents && comment.documents.length > 0 && (
+            <View style={s.documentsContainer}>
+              {comment.documents.map((doc: DocumentType) => {
                 const isImage = doc.document_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                 if (isImage) {
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity 
                       key={doc.id}
-                      style={s.imageAttachment}
+                      style={s.imageWrapper}
                       onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
                     >
-                      <Image
-                        source={{ uri: doc.document_url }}
-                        style={s.chatImage}
+                      <Image 
+                        source={{ uri: doc.document_url }} 
+                        style={s.commentImage}
                         resizeMode="cover"
                       />
                       <View style={s.imageOverlay}>
@@ -458,65 +561,34 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                   return (
                     <TouchableOpacity
                       key={doc.id}
-                      style={[
-                        s.documentAttachment,
-                        isCurrentUser
-                          ? s.documentAttachmentOutgoing
-                          : s.documentAttachmentIncoming
-                      ]}
+                      style={s.documentItem}
                       onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
                     >
-                      <View
-                        style={[
-                          s.documentIconContainer,
-                          isCurrentUser ? s.docIconOutgoing : s.docIconIncoming
-                        ]}
-                      >
-                        <MaterialIcons
-                          name="insert-drive-file"
-                          size={20}
-                          color={isCurrentUser ? C.primary : C.primaryDark}
-                        />
+                      <View style={s.documentIconContainer}>
+                        <Ionicons name="document-text" size={24} color={C.primary} />
                       </View>
                       <View style={s.documentInfo}>
-                        <Text
-                          style={[
-                            s.documentName,
-                            { color: isCurrentUser ? C.primaryDark : C.primary }
-                          ]}
-                        >
+                        <Text style={s.documentName} numberOfLines={1}>
                           {truncateFileName(doc.document_name)}
                         </Text>
-                        <Text style={[s.documentSize, { color: C.textTertiary }]}>
-                          Tap to download
-                        </Text>
+                        <Text style={s.documentSize}>Tap to download</Text>
                       </View>
-                      <Ionicons
-                        name="download-outline"
-                        size={18}
-                        color={isCurrentUser ? C.primaryDark : C.primary}
-                      />
+                      <Ionicons name="download-outline" size={20} color={C.primary} />
                     </TouchableOpacity>
                   );
                 }
               })}
             </View>
           )}
-
-          {item.content && (
-            <Text style={[s.chatMessage, { color: C.textPrimary }]}>{item.content}</Text>
+          
+          {comment.content && (
+            <Text style={s.messageText}>
+              {comment.content}
+            </Text>
           )}
-
-          <View style={s.chatTimestamp}>
-            <Text style={[s.chatTimeText, { color: C.textTertiary }]}>{time}</Text>
-            {isCurrentUser && (
-              <MaterialIcons
-                name="done-all"
-                size={14}
-                color={C.primary}
-                style={s.deliveryIcon}
-              />
-            )}
+          
+          <View style={s.messageFooter}>
+            <Text style={s.messageTime}>{time}</Text>
           </View>
         </View>
       </View>
@@ -562,8 +634,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </TouchableOpacity>
             
             {lead.incentive_present && (
-              <TouchableOpacity style={[s.headerActionButton, s.incentiveButton]}>
-                <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+              <TouchableOpacity 
+                style={[s.headerActionButton, s.incentiveButton]}
+                onPress={handleIncentivePress}
+                disabled={loadingIncentive}
+              >
+                {loadingIncentive ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+                )}
               </TouchableOpacity>
             )}
             
@@ -713,15 +793,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      <SafeAreaView style={s.modalContainer}>
+      <SafeAreaView style={s.modalSafeArea}>
         <View style={s.modalHeader}>
           <TouchableOpacity
             onPress={() => setShowLeadDetailsModal(false)}
             style={s.modalBackButton}
           >
-            <Ionicons name="close" size={24} color="#FFF" />
+            <Ionicons name="arrow-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={s.modalTitle}>Lead Details</Text>
+          <View style={s.modalRightPlaceholder} />
         </View>
         <FlatList
           ref={modalFlatListRef}
@@ -750,8 +831,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         ) : (
           <FlatList
             ref={flatListRef}
-            data={comments}
-            renderItem={renderChatBubble}
+            data={getProcessedComments()}
+            renderItem={renderChatItem}
             keyExtractor={(item) => item.id}
             inverted={false}
             onEndReached={handleLoadMoreComments}
@@ -905,11 +986,15 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 };
 
 const s = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: C.chatBg },
-  container: { flex: 1, backgroundColor: C.chatBg },
+  mainContainer: { 
+    flex: 1, 
+    backgroundColor: C.chatBg 
+  },
   
+  // Header Styles - Fixed Safe Area
   headerSafeArea: { 
     backgroundColor: C.primary,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
     backgroundColor: C.primary,
@@ -944,10 +1029,10 @@ const s = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 12,
+    marginHorizontal: 8,
   },
   avatarContainer: {
-    marginRight: 12,
+    marginRight: 8,
   },
   avatarPlaceholder: {
     width: 36,
@@ -991,7 +1076,12 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
   },
   
-  modalContainer: { flex: 1, backgroundColor: C.background },
+  // Modal Safe Area Styles
+  modalSafeArea: { 
+    flex: 1, 
+    backgroundColor: C.background,
+    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight,
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1000,12 +1090,19 @@ const s = StyleSheet.create({
     backgroundColor: C.primary,
     height: 60,
   },
-  modalBackButton: { padding: 8, marginRight: 12 },
+  modalBackButton: { 
+    padding: 8,
+    marginRight: 12,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFF',
     flex: 1,
+    textAlign: 'center',
+  },
+  modalRightPlaceholder: {
+    width: 40,
   },
   modalScrollContent: {
     paddingHorizontal: 16,
@@ -1013,6 +1110,7 @@ const s = StyleSheet.create({
     flexGrow: 1,
   },
   
+  // Info Card Styles
   infoCard: {
     backgroundColor: C.surface,
     marginBottom: 16,
@@ -1024,7 +1122,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  infoAvatarContainer: { marginRight: 16 },
+  infoAvatarContainer: { 
+    marginRight: 16 
+  },
   infoAvatar: {
     width: 60,
     height: 60,
@@ -1033,19 +1133,40 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoAvatarText: { fontSize: 24, fontWeight: '600', color: '#FFF' },
-  infoHeaderText: { flex: 1 },
+  infoAvatarText: { 
+    fontSize: 24, 
+    fontWeight: '600', 
+    color: '#FFF' 
+  },
+  infoHeaderText: { 
+    flex: 1 
+  },
   infoName: {
     fontSize: 22,
     fontWeight: '600',
     color: C.textPrimary,
     marginBottom: 4,
   },
-  infoCompany: { fontSize: 16, color: C.textSecondary },
-  statusBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  statusBadgeText: { fontSize: 12, fontWeight: '500' },
+  infoCompany: { 
+    fontSize: 16, 
+    color: C.textSecondary 
+  },
+  statusBadges: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 8 
+  },
+  statusBadge: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 20 
+  },
+  statusBadgeText: { 
+    fontSize: 12, 
+    fontWeight: '500' 
+  },
   
+  // Section Styles
   section: {
     backgroundColor: C.surface,
     marginBottom: 12,
@@ -1078,7 +1199,9 @@ const s = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
-  copyButton: { padding: 4 },
+  copyButton: { 
+    padding: 4 
+  },
   metadataRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -1092,7 +1215,11 @@ const s = StyleSheet.create({
     marginRight: 4,
     minWidth: 100,
   },
-  metadataValue: { fontSize: 14, color: C.textPrimary, flex: 1 },
+  metadataValue: { 
+    fontSize: 14, 
+    color: C.textPrimary, 
+    flex: 1 
+  },
   emptyText: {
     fontSize: 14,
     color: C.textTertiary,
@@ -1100,8 +1227,15 @@ const s = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 12,
   },
-  collaboratorsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  collaboratorItem: { alignItems: 'center', width: 80 },
+  collaboratorsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 12 
+  },
+  collaboratorItem: { 
+    alignItems: 'center', 
+    width: 80 
+  },
   collaboratorAvatar: {
     width: 48,
     height: 48,
@@ -1111,44 +1245,107 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  collaboratorAvatarText: { fontSize: 18, fontWeight: '600', color: '#FFF' },
+  collaboratorAvatarText: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: '#FFF' 
+  },
   collaboratorName: {
     fontSize: 12,
     color: C.textSecondary,
     textAlign: 'center',
   },
   
-  chatContainer: { flex: 1, backgroundColor: C.chatBg },
+  // Chat Container
+  chatContainer: { 
+    flex: 1, 
+    backgroundColor: C.chatBg 
+  },
   chatListContent: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingHorizontal: 8,
+    paddingTop: 8,
     paddingBottom: 20,
     flexGrow: 1,
   },
-  chatBubbleContainer: { marginVertical: 4, maxWidth: '80%' },
-  currentUserBubbleContainer: { alignSelf: 'flex-end' },
-  otherUserBubbleContainer: { alignSelf: 'flex-start' },
-  chatBubble: {
-    padding: 10,
+  
+  // Date Separator (HR Style)
+  dateSeparatorContainer: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateSeparatorBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 12,
+  },
+  dateSeparatorText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  
+  // Message Alignment Styles (HR style - always left-aligned)
+  messageRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    paddingHorizontal: 8,
+    justifyContent: 'flex-start',
+  },
+  
+  // Avatar
+  otherAvatar: {
+    marginRight: 8,
+    alignSelf: 'flex-start',
+  },
+  
+  // Message Bubble (HR Style - all same style)
+  messageBubble: {
+    maxWidth: '80%',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: C.incoming,
+    borderBottomLeftRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
-  currentUserBubble: { borderBottomRightRadius: 2 },
-  otherUserBubble: { borderBottomLeftRadius: 2 },
-  senderName: { fontSize: 12, fontWeight: '600', marginBottom: 3 },
-  chatMessage: { fontSize: 15, lineHeight: 20 },
-  chatAttachments: { marginBottom: 6, gap: 6 },
-  imageAttachment: {
-    position: 'relative',
-    borderRadius: 8,
-    overflow: 'hidden',
+  
+  // Sender Header
+  senderHeader: {
     marginBottom: 4,
   },
-  chatImage: { width: 200, height: 150, borderRadius: 8 },
+  senderName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.primary,
+    marginBottom: 2,
+  },
+  
+  // Message Text Styles
+  messageText: {
+    fontSize: 16,
+    color: C.textPrimary,
+    lineHeight: 22,
+  },
+  
+  // Documents Container
+  documentsContainer: {
+    marginBottom: 8,
+    gap: 8,
+  },
+  imageWrapper: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  commentImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 12,
+  },
   imageOverlay: {
     position: 'absolute',
     top: 0,
@@ -1159,37 +1356,49 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  documentAttachment: {
+  documentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
-    gap: 8,
-    marginBottom: 4,
+    backgroundColor: 'rgba(7, 94, 84, 0.1)',
+    padding: 12,
+    borderRadius: 12,
+    gap: 12,
   },
-  documentAttachmentOutgoing: { backgroundColor: 'rgba(7, 94, 84, 0.15)' },
-  documentAttachmentIncoming: { backgroundColor: 'rgba(7, 94, 84, 0.08)' },
   documentIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  docIconOutgoing: { backgroundColor: 'rgba(255, 255, 255, 0.7)' },
-  docIconIncoming: { backgroundColor: 'rgba(255, 255, 255, 0.9)' },
-  documentInfo: { flex: 1 },
-  documentName: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
-  documentSize: { fontSize: 11 },
-  chatTimestamp: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 2,
+  documentInfo: {
+    flex: 1,
   },
-  chatTimeText: { fontSize: 10 },
-  deliveryIcon: { marginLeft: 4 },
+  documentName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.textPrimary,
+    marginBottom: 2,
+  },
+  documentSize: {
+    fontSize: 12,
+    color: C.textSecondary,
+  },
   
+  // Message Footer
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  messageTime: {
+    fontSize: 11,
+    color: C.textTertiary,
+  },
+  
+  // Selected Files Preview
   selectedFilesPreview: {
     backgroundColor: C.surface,
     borderTopWidth: 1,
@@ -1213,15 +1422,21 @@ const s = StyleSheet.create({
     minWidth: 180,
     gap: 8,
   },
-  selectedDocumentInfo: { flex: 1 },
+  selectedDocumentInfo: { 
+    flex: 1 
+  },
   selectedDocumentName: {
     fontSize: 13,
     fontWeight: '500',
     color: C.textPrimary,
     marginBottom: 2,
   },
-  selectedDocumentSize: { fontSize: 11, color: C.textTertiary },
+  selectedDocumentSize: { 
+    fontSize: 11, 
+    color: C.textTertiary 
+  },
   
+  // Keyboard Avoiding
   keyboardAvoidingView: { 
     flex: 0,
   },
@@ -1289,14 +1504,21 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   
+  // Loading States
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
   },
-  loadingText: { fontSize: 16, color: C.textSecondary },
-  loadMoreContainer: { alignItems: 'center', paddingVertical: 16 },
+  loadingText: { 
+    fontSize: 16, 
+    color: C.textSecondary 
+  },
+  loadMoreContainer: { 
+    alignItems: 'center', 
+    paddingVertical: 16 
+  },
   emptyChat: {
     flex: 1,
     alignItems: 'center',
@@ -1304,7 +1526,11 @@ const s = StyleSheet.create({
     paddingVertical: 100,
     gap: 16,
   },
-  emptyChatTitle: { fontSize: 18, fontWeight: '600', color: C.textPrimary },
+  emptyChatTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: C.textPrimary 
+  },
   emptyChatText: {
     fontSize: 14,
     color: C.textSecondary,
@@ -1312,6 +1538,7 @@ const s = StyleSheet.create({
     maxWidth: 200,
   },
   
+  // Default Comments
   defaultCommentsOverlay: {
     position: 'absolute',
     top: 0,
@@ -1337,18 +1564,33 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  defaultCommentsTitle: { fontSize: 18, fontWeight: '600', color: C.primary },
-  closeDefaultCommentsButton: { padding: 4 },
-  defaultCommentsList: { paddingHorizontal: 16, paddingVertical: 8 },
+  defaultCommentsTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: C.primary 
+  },
+  closeDefaultCommentsButton: { 
+    padding: 4 
+  },
+  defaultCommentsList: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 8 
+  },
   defaultCommentItem: {
     paddingVertical: 16,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  defaultCommentText: { fontSize: 16, color: C.textPrimary, lineHeight: 22 },
+  defaultCommentText: { 
+    fontSize: 16, 
+    color: C.textPrimary, 
+    lineHeight: 22 
+  },
   
-  modalBottomSpacing: { height: 40 },
+  modalBottomSpacing: { 
+    height: 40 
+  },
 });
 
 export default LeadDetails;

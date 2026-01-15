@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption } from './types';
@@ -89,6 +91,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [potentialCollaborators, setPotentialCollaborators] = useState<FilterOption[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -106,7 +109,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     if (editedLead.phase) {
       fetchSubphasesForPhase(editedLead.phase);
     }
-    fetchCollaborators();
+    // Removed: fetchCollaborators() call on load
   }, []);
 
   const ModernHeader = () => (
@@ -287,6 +290,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       }));
 
       setPotentialCollaborators(options);
+      setHasSearched(true);
     } catch (error) {
       console.error('Error searching collaborators:', error);
       setPotentialCollaborators([]);
@@ -326,6 +330,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         throw new Error(data.message || 'Failed to add collaborator');
       }
 
+      // Refresh collaborators list after adding
       await fetchCollaborators();
       setSearchQuery('');
       setPotentialCollaborators([]);
@@ -490,6 +495,12 @@ const EditLead: React.FC<EditLeadProps> = ({
   const getEmployeeNameByEmail = (email: string): string => {
     const employee = allEmployees.find(emp => emp.value === email);
     return employee?.label || email;
+  };
+
+  const handleSearchFocus = () => {
+    if (!hasSearched && !loadingCollaborators) {
+      fetchCollaborators();
+    }
   };
 
   return (
@@ -684,6 +695,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                     setPotentialCollaborators([]);
                   }
                 }}
+                onFocus={handleSearchFocus}
                 placeholder="Search by name or email..."
                 placeholderTextColor={MODERN_COLORS.textTertiary}
                 autoCapitalize="none"
@@ -900,6 +912,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   headerContent: {
     flexDirection: 'row',
