@@ -15,6 +15,8 @@ import {
     Platform,
     Linking
 } from 'react-native';
+import CreateCar from './createCar';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -73,6 +75,7 @@ interface UpdateVehicleForm {
     existing_rc_document?: string | null;
     existing_insurance_document?: string | null;
 }
+
 
 const Vehicles: React.FC<VehiclesProps> = ({
     token,
@@ -1410,8 +1413,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 <TouchableOpacity
                                     style={{ padding: 8 }}
                                     onPress={() => {
-                                        // Navigate to create car screen
-                                        // You would implement this navigation
+                                        setCurrentView('create-vehicle');
                                     }}
                                 >
                                     <MaterialIcons name="add" size={24} color="#fff" />
@@ -1503,15 +1505,22 @@ const Vehicles: React.FC<VehiclesProps> = ({
     );
 
     const renderContent = () => {
-        switch (currentView) {
-            case 'vehicle-detail':
-                return renderVehicleDetailPage();
-            case 'update-vehicle':
-                return renderUpdateVehiclePage();
-            default:
-                return renderMainView();
-        }
-    };
+    switch (currentView) {
+        case 'vehicle-detail':
+            return renderVehicleDetailPage();
+        case 'update-vehicle':
+            return renderUpdateVehiclePage();
+        case 'create-vehicle':
+            return <CreateCar 
+                token={token} 
+                city={city} 
+                onBack={() => setCurrentView('main')} 
+                onCarCreated={fetchVehicles}
+            />;
+        default:
+            return renderMainView();
+    }
+};
 
     return (
         <>

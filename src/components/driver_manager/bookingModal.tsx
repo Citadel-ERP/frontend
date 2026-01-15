@@ -176,12 +176,23 @@ const BookingModal: React.FC<BookingModalProps> = ({
                     style={styles.keyboardAvoidingView}
                 >
                     <View style={styles.modalContainer}>
+                        {/* WhatsApp-style Header */}
                         <View style={styles.modalHeader}>
-                            <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                                <Ionicons name="close" size={24} color="#075E54" />
+                            <View style={styles.headerLeft}>
+                               <TouchableOpacity style={styles.backButton} onPress={onClose}>
+                                    <View style={styles.backIcon}>
+                                        <View style={styles.backArrow} />
+                                        {/* <Text style={styles.backText}>Back</Text> */}
+                                    </View>
+                                </TouchableOpacity>
+                                <View style={styles.headerTitleContainer}>
+                                    <Text style={styles.modalTitle}>New Booking</Text>
+                                    <Text style={styles.modalSubtitle}>Create a new trip booking</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity style={styles.headerIconButton} onPress={onClose}>
+                                <Ionicons name="close" size={22} color="#FFFFFF" />
                             </TouchableOpacity>
-                            <Text style={styles.modalTitle}>Create Booking</Text>
-                            <View style={{ width: 40 }} />
                         </View>
 
                         <ScrollView
@@ -189,223 +200,306 @@ const BookingModal: React.FC<BookingModalProps> = ({
                             contentContainerStyle={styles.modalScrollContent}
                             keyboardShouldPersistTaps="handled"
                         >
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Start Location *</Text>
-                                <View style={styles.inputContainer}>
-                                    <MaterialCommunityIcons
-                                        name="map-marker"
-                                        size={20}
-                                        color="#075E54"
-                                        style={styles.inputIcon}
-                                    />
-                                    <TextInput
-                                        style={styles.textInput}
-                                        value={formData.startLocation}
-                                        onChangeText={(text) => setFormData({ ...formData, startLocation: text })}
-                                        placeholder="Enter pickup location"
-                                        placeholderTextColor="#888"
-                                    />
+                            {/* Location Section */}
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <MaterialCommunityIcons name="map-marker-path" size={20} color="#008069" />
+                                    <Text style={styles.sectionTitle}>Trip Details</Text>
                                 </View>
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>End Location *</Text>
-                                <View style={styles.inputContainer}>
-                                    <MaterialCommunityIcons
-                                        name="map-marker-check"
-                                        size={20}
-                                        color="#075E54"
-                                        style={styles.inputIcon}
-                                    />
-                                    <TextInput
-                                        style={styles.textInput}
-                                        value={formData.endLocation}
-                                        onChangeText={(text) => setFormData({ ...formData, endLocation: text })}
-                                        placeholder="Enter drop location"
-                                        placeholderTextColor="#888"
-                                    />
-                                </View>
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Start Date & Time *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateTimeInput}
-                                    onPress={() => setShowStartDatePicker(true)}
-                                >
-                                    <MaterialIcons name="date-range" size={20} color="#075E54" />
-                                    <Text style={styles.dateTimeText}>
-                                        {formatDateTime(formData.startTime)}
-                                    </Text>
-                                </TouchableOpacity>
-                                {showStartDatePicker && (
-                                    <DateTimePicker
-                                        value={formData.startTime}
-                                        mode="datetime"
-                                        display="default"
-                                        onChange={(event, selectedDate) => {
-                                            setShowStartDatePicker(false);
-                                            if (selectedDate) {
-                                                setFormData({ ...formData, startTime: selectedDate });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>End Date & Time *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateTimeInput}
-                                    onPress={() => setShowEndDatePicker(true)}
-                                >
-                                    <MaterialIcons name="date-range" size={20} color="#075E54" />
-                                    <Text style={styles.dateTimeText}>
-                                        {formatDateTime(formData.endTime)}
-                                    </Text>
-                                </TouchableOpacity>
-                                {showEndDatePicker && (
-                                    <DateTimePicker
-                                        value={formData.endTime}
-                                        mode="datetime"
-                                        display="default"
-                                        onChange={(event, selectedDate) => {
-                                            setShowEndDatePicker(false);
-                                            if (selectedDate) {
-                                                setFormData({ ...formData, endTime: selectedDate });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Purpose *</Text>
-                                <View style={styles.inputContainer}>
-                                    <MaterialCommunityIcons
-                                        name="information"
-                                        size={20}
-                                        color="#075E54"
-                                        style={styles.inputIcon}
-                                    />
-                                    <TextInput
-                                        style={[styles.textInput, { minHeight: 80 }]}
-                                        value={formData.purpose}
-                                        onChangeText={(text) => setFormData({ ...formData, purpose: text })}
-                                        placeholder="Enter purpose of trip"
-                                        placeholderTextColor="#888"
-                                        multiline
-                                        numberOfLines={3}
-                                        textAlignVertical="top"
-                                    />
-                                </View>
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Grace Period (hours)</Text>
-                                <View style={styles.inputContainer}>
-                                    <MaterialCommunityIcons
-                                        name="timer"
-                                        size={20}
-                                        color="#075E54"
-                                        style={styles.inputIcon}
-                                    />
-                                    <TextInput
-                                        style={styles.textInput}
-                                        value={formData.gracePeriod}
-                                        onChangeText={(text) => setFormData({ ...formData, gracePeriod: text })}
-                                        placeholder="1"
-                                        placeholderTextColor="#888"
-                                        keyboardType="numeric"
-                                    />
-                                </View>
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.formLabel}>Book For (Optional)</Text>
-                                {formData.bookingFor ? (
-                                    <View style={styles.selectedUser}>
-                                        <View style={styles.userAvatar}>
-                                            <Text style={styles.userAvatarText}>
-                                                {formData.bookingFor.full_name.split(' ').map(n => n[0]).join('')}
-                                            </Text>
-                                        </View>
-                                        <View style={styles.userInfo}>
-                                            <Text style={styles.userName}>{formData.bookingFor.full_name}</Text>
-                                            <Text style={styles.userEmail}>{formData.bookingFor.email}</Text>
-                                        </View>
-                                        <TouchableOpacity
-                                            onPress={() => setFormData({ ...formData, bookingFor: null })}
-                                        >
-                                            <MaterialIcons name="close" size={24} color="#FF3B30" />
-                                        </TouchableOpacity>
+                                
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>Start Location</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
                                     </View>
-                                ) : (
-                                    <>
-                                        <TouchableOpacity
-                                            style={styles.searchButton}
-                                            onPress={() => setShowUserSuggestions(!showUserSuggestions)}
-                                        >
-                                            <MaterialIcons name="person-search" size={20} color="#075E54" />
-                                            <Text style={styles.searchButtonText}>Search employee</Text>
-                                        </TouchableOpacity>
-                                        {showUserSuggestions && (
-                                            <View style={styles.searchContainer}>
-                                                <TextInput
-                                                    style={styles.searchInput}
-                                                    placeholder="Search by name or email"
-                                                    value={userSearchQuery}
-                                                    onChangeText={setUserSearchQuery}
-                                                    placeholderTextColor="#888"
-                                                />
-                                                {userResults.length > 0 && (
-                                                    <ScrollView style={styles.resultsList}>
-                                                        {userResults.map((user) => (
-                                                            <TouchableOpacity
-                                                                key={user.employee_id}
-                                                                style={styles.userResult}
-                                                                onPress={() => {
-                                                                    setFormData({ ...formData, bookingFor: user });
-                                                                    setShowUserSuggestions(false);
-                                                                    setUserSearchQuery('');
-                                                                }}
-                                                            >
-                                                                <View style={styles.resultAvatar}>
-                                                                    <Text style={styles.resultAvatarText}>
-                                                                        {user.full_name.split(' ').map(n => n[0]).join('')}
-                                                                    </Text>
-                                                                </View>
-                                                                <View style={styles.resultInfo}>
-                                                                    <Text style={styles.resultName}>{user.full_name}</Text>
-                                                                    <Text style={styles.resultEmail}>{user.email}</Text>
-                                                                </View>
-                                                            </TouchableOpacity>
-                                                        ))}
-                                                    </ScrollView>
-                                                )}
-                                            </View>
-                                        )}
-                                    </>
-                                )}
+                                    <View style={styles.inputContainer}>
+                                        <MaterialCommunityIcons
+                                            name="map-marker-outline"
+                                            size={20}
+                                            color="#008069"
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.textInput}
+                                            value={formData.startLocation}
+                                            onChangeText={(text) => setFormData({ ...formData, startLocation: text })}
+                                            placeholder="Where are you starting from?"
+                                            placeholderTextColor="#8E8E93"
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>End Location</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
+                                    </View>
+                                    <View style={styles.inputContainer}>
+                                        <MaterialCommunityIcons
+                                            name="map-marker-check-outline"
+                                            size={20}
+                                            color="#008069"
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.textInput}
+                                            value={formData.endLocation}
+                                            onChangeText={(text) => setFormData({ ...formData, endLocation: text })}
+                                            placeholder="Where are you going?"
+                                            placeholderTextColor="#8E8E93"
+                                        />
+                                    </View>
+                                </View>
                             </View>
 
-                            <View style={styles.modalButtons}>
+                            {/* Date & Time Section */}
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <MaterialIcons name="date-range" size={20} color="#008069" />
+                                    <Text style={styles.sectionTitle}>Date & Time</Text>
+                                </View>
+                                
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>Start Time</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.dateTimeButton}
+                                        onPress={() => setShowStartDatePicker(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <MaterialIcons name="access-time" size={20} color="#008069" />
+                                        <Text style={styles.dateTimeButtonText}>
+                                            {formatDateTime(formData.startTime)}
+                                        </Text>
+                                        <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" />
+                                    </TouchableOpacity>
+                                    {showStartDatePicker && (
+                                        <DateTimePicker
+                                            value={formData.startTime}
+                                            mode="datetime"
+                                            display="default"
+                                            onChange={(event, selectedDate) => {
+                                                setShowStartDatePicker(false);
+                                                if (selectedDate) {
+                                                    setFormData({ ...formData, startTime: selectedDate });
+                                                }
+                                            }}
+                                        />
+                                    )}
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>End Time</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.dateTimeButton}
+                                        onPress={() => setShowEndDatePicker(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <MaterialIcons name="access-time" size={20} color="#008069" />
+                                        <Text style={styles.dateTimeButtonText}>
+                                            {formatDateTime(formData.endTime)}
+                                        </Text>
+                                        <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" />
+                                    </TouchableOpacity>
+                                    {showEndDatePicker && (
+                                        <DateTimePicker
+                                            value={formData.endTime}
+                                            mode="datetime"
+                                            display="default"
+                                            onChange={(event, selectedDate) => {
+                                                setShowEndDatePicker(false);
+                                                if (selectedDate) {
+                                                    setFormData({ ...formData, endTime: selectedDate });
+                                                }
+                                            }}
+                                        />
+                                    )}
+                                </View>
+                            </View>
+
+                            {/* Purpose Section */}
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <MaterialCommunityIcons name="text-box-outline" size={20} color="#008069" />
+                                    <Text style={styles.sectionTitle}>Trip Purpose</Text>
+                                </View>
+                                
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>Purpose</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
+                                    </View>
+                                    <View style={styles.textAreaContainer}>
+                                        <TextInput
+                                            style={styles.textAreaInput}
+                                            value={formData.purpose}
+                                            onChangeText={(text) => setFormData({ ...formData, purpose: text })}
+                                            placeholder="What's the purpose of this trip?"
+                                            placeholderTextColor="#8E8E93"
+                                            multiline
+                                            numberOfLines={4}
+                                            textAlignVertical="top"
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>Grace Period</Text>
+                                        <Text style={styles.optionalText}>(Optional)</Text>
+                                    </View>
+                                    <View style={styles.inputContainer}>
+                                        <MaterialCommunityIcons
+                                            name="timer-outline"
+                                            size={20}
+                                            color="#008069"
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.textInput}
+                                            value={formData.gracePeriod}
+                                            onChangeText={(text) => setFormData({ ...formData, gracePeriod: text })}
+                                            placeholder="1 hour"
+                                            placeholderTextColor="#8E8E93"
+                                            keyboardType="numeric"
+                                        />
+                                        <Text style={styles.inputUnit}>hours</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* Book For Section */}
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <MaterialIcons name="person-outline" size={20} color="#008069" />
+                                    <Text style={styles.sectionTitle}>Booking For</Text>
+                                </View>
+                                
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.formLabel}>Employee</Text>
+                                        <Text style={styles.optionalText}>(Optional)</Text>
+                                    </View>
+                                    
+                                    {formData.bookingFor ? (
+                                        <View style={styles.selectedUserCard}>
+                                            <View style={styles.selectedUserContent}>
+                                                <View style={styles.selectedUserAvatar}>
+                                                    <Text style={styles.selectedUserAvatarText}>
+                                                        {formData.bookingFor.full_name.split(' ').map(n => n[0]).join('')}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.selectedUserInfo}>
+                                                    <Text style={styles.selectedUserName}>{formData.bookingFor.full_name}</Text>
+                                                    <Text style={styles.selectedUserEmail}>{formData.bookingFor.email}</Text>
+                                                </View>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.removeUserButton}
+                                                onPress={() => setFormData({ ...formData, bookingFor: null })}
+                                            >
+                                                <MaterialIcons name="close" size={18} color="#FF3B30" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        <>
+                                            <TouchableOpacity
+                                                style={styles.searchButton}
+                                                onPress={() => setShowUserSuggestions(!showUserSuggestions)}
+                                                activeOpacity={0.7}
+                                            >
+                                                <MaterialIcons name="person-search" size={20} color="#008069" />
+                                                <Text style={styles.searchButtonText}>Search employee</Text>
+                                                <MaterialIcons name="search" size={20} color="#C7C7CC" />
+                                            </TouchableOpacity>
+                                            
+                                            {showUserSuggestions && (
+                                                <View style={styles.searchContainer}>
+                                                    <View style={styles.searchInputContainer}>
+                                                        <MaterialIcons name="search" size={20} color="#8E8E93" />
+                                                        <TextInput
+                                                            style={styles.searchInput}
+                                                            placeholder="Search by name or email"
+                                                            value={userSearchQuery}
+                                                            onChangeText={setUserSearchQuery}
+                                                            placeholderTextColor="#8E8E93"
+                                                            autoFocus
+                                                        />
+                                                        {userSearchQuery.length > 0 && (
+                                                            <TouchableOpacity onPress={() => setUserSearchQuery('')}>
+                                                                <MaterialIcons name="close" size={20} color="#8E8E93" />
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
+                                                    
+                                                    {userResults.length > 0 ? (
+                                                        <ScrollView style={styles.resultsList}>
+                                                            {userResults.map((user) => (
+                                                                <TouchableOpacity
+                                                                    key={user.employee_id}
+                                                                    style={styles.userResult}
+                                                                    onPress={() => {
+                                                                        setFormData({ ...formData, bookingFor: user });
+                                                                        setShowUserSuggestions(false);
+                                                                        setUserSearchQuery('');
+                                                                    }}
+                                                                    activeOpacity={0.7}
+                                                                >
+                                                                    <View style={styles.resultAvatar}>
+                                                                        <Text style={styles.resultAvatarText}>
+                                                                            {user.full_name.split(' ').map(n => n[0]).join('')}
+                                                                        </Text>
+                                                                    </View>
+                                                                    <View style={styles.resultInfo}>
+                                                                        <Text style={styles.resultName}>{user.full_name}</Text>
+                                                                        <Text style={styles.resultEmail}>{user.email}</Text>
+                                                                    </View>
+                                                                    <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" />
+                                                                </TouchableOpacity>
+                                                            ))}
+                                                        </ScrollView>
+                                                    ) : userSearchQuery.length >= 2 ? (
+                                                        <View style={styles.noResults}>
+                                                            <MaterialIcons name="person-off" size={40} color="#C7C7CC" />
+                                                            <Text style={styles.noResultsText}>No employees found</Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+                                            )}
+                                        </>
+                                    )}
+                                </View>
+                            </View>
+
+                            {/* Action Buttons */}
+                            <View style={styles.modalActions}>
                                 <TouchableOpacity
-                                    style={styles.modalCancelButton}
+                                    style={styles.cancelButton}
                                     onPress={onClose}
                                     disabled={loading}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={styles.modalCancelText}>Cancel</Text>
+                                    <Text style={styles.cancelButtonText}>Cancel</Text>
                                 </TouchableOpacity>
+                                
                                 <TouchableOpacity
-                                    style={[styles.modalSubmitButton, loading && styles.modalSubmitButtonDisabled]}
+                                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
                                     onPress={handleSubmit}
                                     disabled={loading}
+                                    activeOpacity={0.7}
                                 >
                                     {loading ? (
                                         <ActivityIndicator color="#FFFFFF" size="small" />
                                     ) : (
-                                        <Text style={styles.modalSubmitText}>Create Booking</Text>
+                                        <>
+                                            <MaterialIcons name="check-circle-outline" size={20} color="#FFFFFF" />
+                                            <Text style={styles.submitButtonText}>Create Booking</Text>
+                                        </>
                                     )}
                                 </TouchableOpacity>
                             </View>

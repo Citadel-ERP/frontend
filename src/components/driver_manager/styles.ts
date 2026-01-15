@@ -8,7 +8,7 @@ export const styles = StyleSheet.create({
     // ==================== APP CONTAINER & LAYOUT ====================
     screenContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F0F2F5',
     },
     container: {
         flex: 1,
@@ -16,7 +16,7 @@ export const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F0F2F5',
     },
     scrollContent: {
         flexGrow: 1,
@@ -100,7 +100,7 @@ export const styles = StyleSheet.create({
     // ==================== CITY SELECTION ====================
     searchBox: {
         padding: 20,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F0F2F5',
     },
     searchInputWrapper: {
         position: 'relative',
@@ -109,8 +109,8 @@ export const styles = StyleSheet.create({
     },
     searchInput: {
         backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#e0e0e0',
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
         borderRadius: 25,
         paddingHorizontal: 45,
         paddingVertical: 15,
@@ -182,29 +182,29 @@ export const styles = StyleSheet.create({
 
     // ==================== BACK BUTTONS ====================
     backIcon: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,  // Increase from 4 to 8 for more space
+},
     backArrow: {
-        width: 12,
-        height: 12,
-        borderLeftWidth: 2,
-        borderTopWidth: 2,
-        borderColor: '#fff',
-        transform: [{ rotate: '-45deg' }],
-    },
+    width: 14,
+    height: 14,
+    borderLeftWidth: 3,
+    borderTopWidth: 3,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+},
     backText: {
-        color: '#fff',
-        fontSize: 14,
-        marginLeft: 2,
-        fontWeight: '500',
-    },
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,  // More space from arrow
+    fontWeight: '600',  // Bolder
+},
     detailHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#075E54',
+        backgroundColor: '#008069',
         paddingHorizontal: 16,
         paddingTop: Platform.OS === 'ios' ? 50 : 40,
         paddingBottom: 12,
@@ -259,7 +259,7 @@ export const styles = StyleSheet.create({
     },
     activeTabButton: {
         backgroundColor: '#E8F5E9',
-        borderBottomColor: '#075E54',
+        borderBottomColor: '#008069',
     },
     tabText: {
         fontSize: 14,
@@ -268,7 +268,7 @@ export const styles = StyleSheet.create({
         marginLeft: 8,
     },
     activeTabText: {
-        color: '#075E54',
+        color: '#008069',
         fontWeight: '600',
     },
 
@@ -284,7 +284,7 @@ export const styles = StyleSheet.create({
         elevation: 3,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
     },
     cabImage: {
         width: '100%',
@@ -349,7 +349,7 @@ export const styles = StyleSheet.create({
     // ==================== VEHICLE DETAIL ====================
     detailPageContainer: {
         flex: 1,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F0F2F5',
     },
     detailPageContent: {
         paddingHorizontal: 16,
@@ -438,7 +438,7 @@ export const styles = StyleSheet.create({
     vehiclePlateText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#075E54',
+        color: '#008069',
         marginBottom: 8,
     },
     vehicleMeta: {
@@ -457,7 +457,7 @@ export const styles = StyleSheet.create({
     },
     metaChipText: {
         fontSize: 12,
-        color: '#075E54',
+        color: '#008069',
         fontWeight: '500',
     },
 
@@ -524,8 +524,8 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     statusOptionSelected: {
-        backgroundColor: '#075E54',
-        borderColor: '#075E54',
+        backgroundColor: '#008069',
+        borderColor: '#008069',
     },
     statusOptionText: {
         fontSize: 12,
@@ -575,7 +575,7 @@ export const styles = StyleSheet.create({
     },
     actionButtonText: {
         fontSize: 12,
-        color: '#075E54',
+        color: '#008069',
         marginTop: 4,
         textAlign: 'center',
     },
@@ -690,51 +690,106 @@ export const styles = StyleSheet.create({
 
     // ==================== FORM ELEMENTS ====================
     formGroup: {
-        marginBottom: 16,
+        marginBottom: 20,
+    },
+    labelContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
     },
     formLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#333',
-        marginBottom: 8,
+        color: '#333333',
+    },
+    requiredStar: {
+        color: '#FF3B30',
+        fontSize: 14,
+        marginLeft: 2,
+    },
+    optionalText: {
+        fontSize: 12,
+        color: '#8E8E93',
+        marginLeft: 4,
+        fontStyle: 'italic',
     },
     inputContainer: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        backgroundColor: '#f8f9fa',
-        borderRadius: 12,
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 10,
         paddingHorizontal: 12,
-        borderWidth: 1.5,
-        borderColor: '#e0e0e0',
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
     },
     textInput: {
         flex: 1,
-        padding: 14,
+        paddingVertical: 12,
         fontSize: 15,
-        color: '#333',
-        minHeight: 48,
+        color: '#333333',
+        minHeight: 44,
     },
     inputIcon: {
-        marginTop: 14,
         marginRight: 8,
     },
+    inputUnit: {
+        fontSize: 14,
+        color: '#8E8E93',
+        marginLeft: 8,
+    },
+    
+    // Date Time Inputs (Updated for WhatsApp style)
     dateTimeInput: {
         flex: 1,
-        backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#e0e0e0',
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 12,
+        backgroundColor: '#F8F9FA',
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         flexDirection: 'row',
         alignItems: 'center',
     },
     dateTimeText: {
         fontSize: 14,
-        color: '#333',
-        marginLeft: 8,
+        color: '#333333',
+        marginLeft: 12,
         fontWeight: '500',
     },
+    
+    // WhatsApp-style date time button
+    dateTimeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
+    },
+    dateTimeButtonText: {
+        flex: 1,
+        fontSize: 15,
+        color: '#333333',
+        marginLeft: 12,
+    },
+    
+    // Text Area (Updated)
+    textAreaContainer: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
+    },
+    textAreaInput: {
+        padding: 16,
+        fontSize: 15,
+        color: '#333333',
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    
     descriptionInput: {
         flex: 1,
         padding: 16,
@@ -743,11 +798,12 @@ export const styles = StyleSheet.create({
         minHeight: 100,
         textAlignVertical: 'top',
     },
+    
     dateButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F5F5F5',
-        borderRadius: 12,
+        backgroundColor: '#F8F9FA',
+        borderRadius: 10,
         padding: 16,
     },
     dateButtonText: {
@@ -756,7 +812,7 @@ export const styles = StyleSheet.create({
         color: '#000000',
     },
     dateButtonPlaceholder: {
-        color: '#888',
+        color: '#8E8E93',
     },
     buttonIcon: {
         marginRight: 8,
@@ -764,7 +820,7 @@ export const styles = StyleSheet.create({
     documentButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F9FA',
         borderRadius: 12,
         padding: 12,
     },
@@ -792,7 +848,7 @@ export const styles = StyleSheet.create({
     },
     documentName: {
         fontSize: 12,
-        color: '#075E54',
+        color: '#008069',
         marginLeft: 8,
         flex: 1,
     },
@@ -800,58 +856,90 @@ export const styles = StyleSheet.create({
         padding: 4,
     },
 
-    // ==================== BOOKING MODAL SPECIFIC ====================
-    selectedUser: {
+    // ==================== BOOKING MODAL SPECIFIC (UPDATED) ====================
+    // WhatsApp-style selected user
+    selectedUserCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(1,123,249,0.1)',
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        borderRadius: 12,
-        marginBottom: 15,
+        justifyContent: 'space-between',
+        backgroundColor: '#E8F5E9',
+        borderRadius: 10,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#D1E7DD',
     },
-    userAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#ff5e7a',
+    selectedUserContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    selectedUserAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#008069',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
-    userAvatarText: {
-        color: '#fff',
+    selectedUserAvatarText: {
+        color: '#FFFFFF',
         fontWeight: '600',
-        fontSize: 14,
+        fontSize: 16,
     },
-    userInfo: {
+    selectedUserInfo: {
         flex: 1,
     },
-    userName: {
-        color: '#008069',
-        fontWeight: '600',
+    selectedUserName: {
         fontSize: 15,
+        fontWeight: '600',
+        color: '#008069',
+        marginBottom: 2,
     },
-    userEmail: {
-        color: '#666',
-        fontSize: 12,
-        marginTop: 2,
+    selectedUserEmail: {
+        fontSize: 13,
+        color: '#666666',
     },
+    removeUserButton: {
+        padding: 8,
+    },
+    
+    // WhatsApp-style search
     searchButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F5F5F5',
-        borderRadius: 12,
-        padding: 12,
-        gap: 8,
+        justifyContent: 'space-between',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
+        borderStyle: 'dashed',
     },
     searchButtonText: {
-        fontSize: 16,
-        color: '#000000',
+        flex: 1,
+        fontSize: 15,
+        color: '#333333',
+        marginLeft: 12,
     },
+    
+    // WhatsApp-style search container
     searchContainer: {
-        marginTop: 8,
+        marginTop: 12,
     },
+    searchInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
+        marginBottom: 8,
+    },
+    
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -865,91 +953,153 @@ export const styles = StyleSheet.create({
         color: '#666',
         fontSize: 14,
     },
+    
+    // WhatsApp-style results list
     resultsList: {
         maxHeight: 200,
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#e0e0e0',
-        borderRadius: 12,
-        marginTop: 8,
+        borderColor: '#E9EDEF',
     },
     userResult: {
-        padding: 12,
         flexDirection: 'row',
         alignItems: 'center',
+        padding: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        borderBottomColor: '#F0F0F0',
     },
     resultAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#ff5e7a',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#25D366',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
     resultAvatarText: {
-        color: '#fff',
+        color: '#FFFFFF',
         fontWeight: '600',
-        fontSize: 13,
+        fontSize: 14,
     },
     resultInfo: {
         flex: 1,
     },
     resultName: {
-        fontWeight: '600',
-        color: '#333',
         fontSize: 14,
+        fontWeight: '600',
+        color: '#333333',
+        marginBottom: 2,
     },
     resultEmail: {
         fontSize: 12,
-        color: '#666',
-        marginTop: 2,
+        color: '#8E8E93',
     },
+    
+    // WhatsApp-style no results
     noResults: {
-        padding: 20,
-        backgroundColor: '#f8f8f8',
-        borderRadius: 12,
-        marginTop: 8,
         alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
     },
     noResultsText: {
-        color: '#666',
         fontSize: 14,
+        color: '#8E8E93',
+        marginTop: 8,
     },
 
-    // ==================== MODAL STYLES ====================
+    // ==================== MODAL STYLES (UPDATED) ====================
+    // WhatsApp-style modal overlay
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        justifyContent: 'flex-end',
     },
     keyboardAvoidingView: {
         width: '100%',
-        alignItems: 'center',
     },
+    
+    // WhatsApp-style modal container
     modalContainer: {
-        backgroundColor: 'white',
-        borderRadius: 10,
-        width: '90%',
-        maxHeight: Dimensions.get('window').height * 0.8,
-        overflow: 'hidden',
-        marginTop: Platform.OS === 'ios' ? 40 : 20,
+        backgroundColor: '#F0F2F5',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: screenHeight * 0.9,
+        width: '100%',
     },
-    modalScrollContent: {
-        padding: 20,
-        paddingTop: 10,
-    },
+    
+    // WhatsApp-style modal header
     modalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
+        backgroundColor: '#008069',
+        paddingTop: Platform.OS === 'ios' ? 20 : 40,
+        paddingBottom: 16,
+        paddingHorizontal: 16,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
     },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    headerTitleContainer: {
+        flex: 1,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        marginBottom: 2,
+    },
+    modalSubtitle: {
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.8)',
+    },
+    headerIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 8,
+    },
+    
+    modalScrollContent: {
+        paddingBottom: 30,
+    },
+    
+    // WhatsApp-style section
+    section: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        marginHorizontal: 16,
+        marginTop: 16,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    
+    // Modal close button (legacy)
     modalCloseButton: {
         width: 40,
         height: 40,
@@ -958,11 +1108,7 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#075E54',
-    },
+    
     downloadButton: {
         width: 40,
         height: 40,
@@ -971,6 +1117,57 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    
+    // WhatsApp-style action buttons
+    modalActions: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 24,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    },
+    cancelButton: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 14,
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: '#E9EDEF',
+        marginRight: 8,
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#666666',
+    },
+    submitButton: {
+        flex: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#008069',
+        paddingVertical: 14,
+        borderRadius: 25,
+        gap: 8,
+        shadowColor: '#008069',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    submitButtonDisabled: {
+        backgroundColor: '#A0D9B4',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    submitButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    
+    // Legacy modal buttons (keeping for compatibility)
     modalButtons: {
         flexDirection: 'row',
         gap: 12,
@@ -983,7 +1180,7 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
     },
     modalCancelText: {
         fontSize: 16,
@@ -992,7 +1189,7 @@ export const styles = StyleSheet.create({
     },
     modalSubmitButton: {
         flex: 1,
-        backgroundColor: '#075E54',
+        backgroundColor: '#008069',
         padding: 16,
         borderRadius: 12,
         alignItems: 'center',
@@ -1000,7 +1197,7 @@ export const styles = StyleSheet.create({
         minHeight: 52,
     },
     modalSubmitButtonDisabled: {
-        backgroundColor: '#CCCCCC',
+        backgroundColor: '#A0D9B4',
     },
     modalSubmitText: {
         fontSize: 16,
@@ -1015,7 +1212,7 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
     },
     logHeader: {
         flexDirection: 'row',
@@ -1031,7 +1228,7 @@ export const styles = StyleSheet.create({
     logCost: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#075E54',
+        color: '#008069',
     },
     logDate: {
         fontSize: 12,
@@ -1063,7 +1260,7 @@ export const styles = StyleSheet.create({
     fuelDetails: {
         flexDirection: 'row',
         justifyContent: 'center',
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F9FA',
         padding: 12,
         borderRadius: 8,
         marginBottom: 12,
@@ -1076,7 +1273,7 @@ export const styles = StyleSheet.create({
     fuelDetailValue: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#075E54',
+        color: '#008069',
     },
     documentSection: {
         marginTop: 12,
@@ -1118,7 +1315,7 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 60,
         paddingHorizontal: 20,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F0F2F5',
     },
     emptyIconCircle: {
         width: 100,
@@ -1222,7 +1419,7 @@ export const styles = StyleSheet.create({
     formInput: {
         backgroundColor: '#F8F9FA',
         borderWidth: 1.5,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -1239,15 +1436,15 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 20,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F9FA',
         borderWidth: 1.5,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         minWidth: 100,
         alignItems: 'center',
     },
     optionButtonSelected: {
         backgroundColor: '#E8F5E9',
-        borderColor: '#075E54',
+        borderColor: '#008069',
     },
     optionButtonText: {
         fontSize: 14,
@@ -1255,7 +1452,7 @@ export const styles = StyleSheet.create({
         color: '#666',
     },
     optionButtonTextSelected: {
-        color: '#075E54',
+        color: '#008069',
         fontWeight: '600',
     },
     documentGroup: {
@@ -1268,25 +1465,25 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 12,
         borderWidth: 1.5,
-        borderColor: '#075E54',
+        borderColor: '#008069',
         gap: 12,
     },
     photoButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F9FA',
         borderRadius: 12,
         padding: 16,
         borderWidth: 1.5,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         borderStyle: 'dashed',
         gap: 12,
         marginBottom: 12,
     },
     photoButtonText: {
         fontSize: 16,
-        color: '#075E54',
+        color: '#008069',
         fontWeight: '500',
     },
     photosContainer: {
@@ -1300,7 +1497,7 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 12,
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         gap: 12,
     },
     photoName: {
@@ -1308,49 +1505,11 @@ export const styles = StyleSheet.create({
         color: '#333',
         flex: 1,
     },
-    submitButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#075E54',
-        borderRadius: 12,
-        paddingVertical: 18,
-        paddingHorizontal: 24,
-        marginHorizontal: 16,
-        marginBottom: 32,
-        marginTop: 8,
-        gap: 12,
-        shadowColor: '#075E54',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    submitButtonDisabled: {
-        backgroundColor: '#A0A0A0',
-        shadowOpacity: 0,
-        elevation: 0,
-    },
-    submitButtonText: {
-        fontSize: 18,
-        color: '#FFFFFF',
-        fontWeight: '600',
-    },
+    
     scrollView: {
         flex: 1,
     },
-    section: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 20,
-        marginHorizontal: 16,
-        marginTop: 16,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
+    
     photoScrollContent: {
         paddingVertical: 8,
     },
@@ -1359,7 +1518,7 @@ export const styles = StyleSheet.create({
         height: IMAGE_SLOT_WIDTH,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         borderStyle: 'dashed',
         marginRight: 12,
         overflow: 'hidden',
@@ -1406,7 +1565,7 @@ export const styles = StyleSheet.create({
     input: {
         backgroundColor: '#F8F9FA',
         borderWidth: 1.5,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         borderRadius: 10,
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -1446,7 +1605,7 @@ export const styles = StyleSheet.create({
         elevation: 0,
     },
     updateVehicleHeader: {
-        backgroundColor: '#075E54',
+        backgroundColor: '#008069',
         paddingTop: Platform.OS === 'ios' ? 50 : 40,
         paddingBottom: 16,
         paddingHorizontal: 16,
@@ -1553,7 +1712,7 @@ export const styles = StyleSheet.create({
     inputWrapper: {
         backgroundColor: '#F8F9FA',
         borderWidth: 1.5,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         borderRadius: 12,
         overflow: 'hidden',
     },
@@ -1586,7 +1745,7 @@ export const styles = StyleSheet.create({
         paddingTop: 16,
         paddingBottom: Platform.OS === 'ios' ? 34 : 16,
         borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
+        borderTopColor: '#E9EDEF',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,
@@ -1600,11 +1759,11 @@ export const styles = StyleSheet.create({
     documentDownloadButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F7FAFC',
+        backgroundColor: '#F8F9FA',
         borderRadius: 12,
         padding: 16,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#E9EDEF',
     },
 
     documentIconWrapper: {
@@ -1653,7 +1812,7 @@ export const styles = StyleSheet.create({
     documentNameText: {
         fontSize: 13,
         fontWeight: '500',
-        color: '#075E54',
+        color: '#008069',
         marginBottom: 2,
     },
 
@@ -1680,7 +1839,7 @@ export const styles = StyleSheet.create({
         padding: 16,
         marginBottom: 8,
         borderWidth: 1.5,
-        borderColor: '#E0E0E0',
+        borderColor: '#E9EDEF',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
