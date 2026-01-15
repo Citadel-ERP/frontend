@@ -15,7 +15,8 @@ import {
   Image,
   Linking,
   StatusBar,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
@@ -140,9 +141,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
   const getInitials = (name: string): string => {
     if (!name || name.trim().length === 0) return '?';
-    
     const nameParts = name.trim().split(/\s+/);
-    
     if (nameParts.length === 1) {
       return nameParts[0].charAt(0).toUpperCase();
     } else {
@@ -177,24 +176,20 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   ): Promise<void> => {
     try {
       if (!token) return;
-      
       if (!append) {
         setLoadingComments(true);
       } else {
         setLoadingMoreComments(true);
       }
 
-      // Try both possible endpoints
       let response;
       try {
-        // Try endpoint 1
         response = await fetch(`${BACKEND_URL}/manager/getComments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: token, lead_id: leadId, page: page })
         });
       } catch (error1) {
-        // Try endpoint 2
         response = await fetch(`${BACKEND_URL}/employee/getComments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -243,17 +238,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       if (!token) return;
       setLoadingCollaborators(true);
 
-      // Try both possible endpoints
       let response;
       try {
-        // Try endpoint 1
         response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: token, lead_id: leadId })
         });
       } catch (error1) {
-        // Try endpoint 2
         response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -335,17 +327,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         });
       }
 
-      // Try both possible endpoints
       let response;
       try {
-        // Try endpoint 1
         response = await fetch(`${BACKEND_URL}/manager/addComment`, {
           method: 'POST',
           body: formData,
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } catch (error1) {
-        // Try endpoint 2
         response = await fetch(`${BACKEND_URL}/employee/addComment`, {
           method: 'POST',
           body: formData,
@@ -382,8 +371,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim()) {
-      Alert.alert('Error', 'Please enter a comment');
+    if (!newComment.trim() && selectedDocuments.length === 0) {
+      Alert.alert('Error', 'Please enter a message or attach a file');
       return;
     }
     const success = await addCommentToBackend(newComment.trim(), selectedDocuments);
@@ -568,19 +557,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </TouchableOpacity>
 
           <View style={s.headerActions}>
-            {/* Invoice Icon */}
             <TouchableOpacity style={s.headerActionButton}>
               <MaterialIcons name="receipt" size={22} color="#FFF" />
             </TouchableOpacity>
             
-            {/* Incentive Icon - Only show if lead has incentive */}
             {lead.incentive_present && (
               <TouchableOpacity style={[s.headerActionButton, s.incentiveButton]}>
                 <MaterialIcons name="monetization-on" size={22} color="#FFF" />
               </TouchableOpacity>
             )}
             
-            {/* Edit Icon */}
             <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
               <MaterialIcons name="edit" size={22} color="#FFF" />
             </TouchableOpacity>
@@ -826,52 +812,57 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       )}
 
-      <SafeAreaView style={s.inputSafeArea}>
-        <View style={s.inputContainer}>
-          <View style={s.inputWrapper}>
-            <View style={s.inputRow}>
-              <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                <Ionicons name="attach" size={22} color={C.primary} />
-                {selectedDocuments.length > 0 && (
-                  <View style={s.fileCounterBadge}>
-                    <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <View style={s.inputField}>
-                <TextInput
-                  style={s.messageInput}
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  placeholder="Type your message..."
-                  multiline
-                  maxLength={1000}
-                  placeholderTextColor={C.textTertiary}
-                  editable={!addingComment}
-                />
-              </View>
-              <TouchableOpacity
-                style={[
-                  s.sendButton,
-                  { backgroundColor: newComment.trim() ? C.primary : C.border }
-                ]}
-                onPress={handleAddComment}
-                disabled={addingComment || !newComment.trim()}
-              >
-                {addingComment ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <Ionicons
-                    name="send"
-                    size={18}
-                    color={newComment.trim() ? '#FFF' : C.textTertiary}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={s.keyboardAvoidingView}
+      >
+        <SafeAreaView style={s.inputSafeArea}>
+          <View style={s.inputContainer}>
+            <View style={s.inputWrapper}>
+              <View style={s.inputRow}>
+                <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                  <Ionicons name="attach" size={22} color={C.primary} />
+                  {selectedDocuments.length > 0 && (
+                    <View style={s.fileCounterBadge}>
+                      <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <View style={s.inputField}>
+                  <TextInput
+                    style={s.messageInput}
+                    value={newComment}
+                    onChangeText={setNewComment}
+                    placeholder="Type your message..."
+                    multiline
+                    maxLength={1000}
+                    placeholderTextColor={C.textTertiary}
+                    editable={!addingComment}
                   />
-                )}
-              </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    s.sendButton,
+                    { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                  ]}
+                  onPress={handleAddComment}
+                  disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                >
+                  {addingComment ? (
+                    <ActivityIndicator color="#FFF" size="small" />
+                  ) : (
+                    <Ionicons
+                      name="send"
+                      size={18}
+                      color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                    />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
 
       {showDefaultComments && (
         <View style={s.defaultCommentsOverlay}>
@@ -917,7 +908,6 @@ const s = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: C.chatBg },
   container: { flex: 1, backgroundColor: C.chatBg },
   
-  // Header Styles
   headerSafeArea: { 
     backgroundColor: C.primary,
   },
@@ -1001,7 +991,6 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
   },
   
-  // Modal Styles
   modalContainer: { flex: 1, backgroundColor: C.background },
   modalHeader: {
     flexDirection: 'row',
@@ -1024,7 +1013,6 @@ const s = StyleSheet.create({
     flexGrow: 1,
   },
   
-  // Info Card Styles
   infoCard: {
     backgroundColor: C.surface,
     marginBottom: 16,
@@ -1058,7 +1046,6 @@ const s = StyleSheet.create({
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   statusBadgeText: { fontSize: 12, fontWeight: '500' },
   
-  // Section Styles
   section: {
     backgroundColor: C.surface,
     marginBottom: 12,
@@ -1131,7 +1118,6 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
   
-  // Chat Styles
   chatContainer: { flex: 1, backgroundColor: C.chatBg },
   chatListContent: {
     paddingHorizontal: 16,
@@ -1204,7 +1190,6 @@ const s = StyleSheet.create({
   chatTimeText: { fontSize: 10 },
   deliveryIcon: { marginLeft: 4 },
   
-  // Selected Files Preview
   selectedFilesPreview: {
     backgroundColor: C.surface,
     borderTopWidth: 1,
@@ -1237,10 +1222,11 @@ const s = StyleSheet.create({
   },
   selectedDocumentSize: { fontSize: 11, color: C.textTertiary },
   
-  // Input Area
+  keyboardAvoidingView: { 
+    flex: 0,
+  },
   inputSafeArea: { 
     backgroundColor: C.surface,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0,
   },
   inputContainer: { 
     borderTopWidth: 1, 
@@ -1303,7 +1289,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   
-  // Loading States
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -1327,7 +1312,6 @@ const s = StyleSheet.create({
     maxWidth: 200,
   },
   
-  // Default Comments Modal
   defaultCommentsOverlay: {
     position: 'absolute',
     top: 0,
@@ -1364,7 +1348,6 @@ const s = StyleSheet.create({
   },
   defaultCommentText: { fontSize: 16, color: C.textPrimary, lineHeight: 22 },
   
-  // Bottom Spacing
   modalBottomSpacing: { height: 40 },
 });
 
