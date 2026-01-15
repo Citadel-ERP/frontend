@@ -156,9 +156,9 @@ const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
                   </View>
 
                   {log.document && (
-                    <View style={styles.documentSection}>
-                      <View style={styles.documentCard}>
-                        <View style={styles.documentInfo}>
+                    <View style={[styles.documentSection]}>
+                      <View style={[styles.documentCard]}>
+                        <View style={[styles.documentInfo, { width: '80%' }]}>
                           <MaterialCommunityIcons 
                             name={getFileIcon(log.document)} 
                             size={24} 
@@ -178,13 +178,6 @@ const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
                             activeOpacity={0.7}
                           >
                             <Ionicons name="eye-outline" size={14} color="#075E54" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.downloadButton}
-                            onPress={() => handleOpenDocument(log.document as string)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="download-outline" size={14} color="#FFFFFF" />
                           </TouchableOpacity>
                         </View>
                       </View>

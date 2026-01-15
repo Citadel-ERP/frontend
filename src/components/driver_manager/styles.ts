@@ -1299,6 +1299,7 @@ export const styles = StyleSheet.create({
     documentActions: {
         flexDirection: 'row',
         gap: 8,
+        marginTop: 8,
     },
     viewButton: {
         height: 45,
