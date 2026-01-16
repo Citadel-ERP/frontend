@@ -16,7 +16,7 @@ export const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        backgroundColor: '#F0F2F5',
+        backgroundColor: '#e7e6e5',
     },
     scrollContent: {
         flexGrow: 1,
@@ -100,7 +100,7 @@ export const styles = StyleSheet.create({
     // ==================== CITY SELECTION ====================
     searchBox: {
         padding: 20,
-        backgroundColor: '#F0F2F5',
+        backgroundColor: '#e7e6e5',
     },
     searchInputWrapper: {
         position: 'relative',
@@ -235,7 +235,7 @@ export const styles = StyleSheet.create({
     // ==================== TABS ====================
     tabContainer: {
         flexDirection: 'row',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#e7e6e5',
         marginTop: -20,
         marginHorizontal: 16,
         borderRadius: 12,
@@ -349,7 +349,7 @@ export const styles = StyleSheet.create({
     // ==================== VEHICLE DETAIL ====================
     detailPageContainer: {
         flex: 1,
-        backgroundColor: '#F0F2F5',
+        backgroundColor: '#e7e6e5',
     },
     detailPageContent: {
         paddingHorizontal: 16,
@@ -862,7 +862,7 @@ export const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#E8F5E9',
+        backgroundColor: '#e7e6e5',
         borderRadius: 10,
         padding: 12,
         borderWidth: 1,
@@ -1026,7 +1026,7 @@ export const styles = StyleSheet.create({
     
     // WhatsApp-style modal container
     modalContainer: {
-        backgroundColor: '#F0F2F5',
+        backgroundColor: '#e7e6e5',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         maxHeight: screenHeight * 0.9,

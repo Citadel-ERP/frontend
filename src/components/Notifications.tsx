@@ -61,7 +61,7 @@ const whatsappColors = {
     shadow: 'rgba(0, 0, 0, 0.3)',
   },
   light: {
-    background: '#F0F2F5',
+    background: '#e7e6e5',
     card: '#FFFFFF',
     cardHover: '#F5F6F6',
     text: '#111B21',

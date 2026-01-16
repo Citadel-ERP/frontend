@@ -55,7 +55,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
       warning: '#FFB347',
     },
     light: {
-      background: '#FFFFFF',
+      background: '#e7e6e5',
       card: '#F0F2F5',
       text: '#111B21',
       textSecondary: '#667781',

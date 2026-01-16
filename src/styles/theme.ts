@@ -9,8 +9,8 @@ export const colors = {
   errorLight: '#F8D7DA',
   errorDark: '#842029',
 
-  background: '#FFFFFF',
-  backgroundSecondary: '#F8F9FA',
+  background: '#e7e6e5',
+  backgroundSecondary: '#f5f1ec',
 
   text: '#2F3349',
   textSecondary: '#6C7293',
