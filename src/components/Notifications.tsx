@@ -74,12 +74,73 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showDisabledMessage, setShowDisabledMessage] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
 
+  // Load notification setting on mount
+  useEffect(() => {
+    loadNotificationSetting();
+  }, []);
+
+  const loadNotificationSetting = async () => {
+    try {
+      const storedSetting = await AsyncStorage.getItem('notifications_enabled');
+      if (storedSetting !== null) {
+        const enabled = storedSetting === 'true';
+        setNotificationsEnabled(enabled);
+        setShowDisabledMessage(!enabled);
+        
+        // Update notification handler based on setting
+        if (Platform.OS !== 'web') {
+          ExpoNotifications.setNotificationHandler({
+            handleNotification: async () => ({
+              shouldShowAlert: enabled,
+              shouldPlaySound: enabled,
+              shouldSetBadge: enabled,
+              shouldShowBanner: enabled,
+              shouldShowList: enabled,
+            }),
+          });
+        }
+        
+        // If notifications are enabled, proceed with normal initialization
+        if (enabled) {
+          requestNotificationPermissions();
+          fetchNotifications();
+        } else {
+          // If disabled, set loading to false but don't fetch notifications
+          setLoading(false);
+          // Clear any existing badge count
+          updateIOSBadgeCount(0);
+          if (onBadgeUpdate) onBadgeUpdate(0);
+        }
+      } else {
+        // Default to enabled if not set
+        setNotificationsEnabled(true);
+        setShowDisabledMessage(false);
+        requestNotificationPermissions();
+        fetchNotifications();
+      }
+    } catch (error) {
+      console.error('Error loading notification setting:', error);
+      // Default to enabled on error
+      setNotificationsEnabled(true);
+      requestNotificationPermissions();
+      fetchNotifications();
+    }
+    
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const updateIOSBadgeCount = async (count: number) => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'ios' && notificationsEnabled) {
       try {
         await ExpoNotifications.setBadgeCountAsync(count);
         console.log(`✅ iOS badge count updated to: ${count}`);
@@ -90,11 +151,19 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       } catch (error) {
         console.error('❌ Error updating iOS badge count:', error);
       }
+    } else if (Platform.OS === 'ios' && !notificationsEnabled) {
+      // Clear badge if notifications are disabled
+      try {
+        await ExpoNotifications.setBadgeCountAsync(0);
+        await ExpoNotifications.dismissAllNotificationsAsync();
+      } catch (error) {
+        console.error('Error clearing iOS badge:', error);
+      }
     }
   };
 
   const requestNotificationPermissions = async () => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'ios' && notificationsEnabled) {
       try {
         const { status } = await ExpoNotifications.requestPermissionsAsync({
           ios: { allowAlert: true, allowBadge: true, allowSound: true },
@@ -111,24 +180,16 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   };
 
   useEffect(() => {
-    requestNotificationPermissions();
-    fetchNotifications();
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  useEffect(() => {
-    const unreadCount = notifications.filter(n => !n.Read).length;
-    onBadgeUpdate?.(unreadCount);
-    updateIOSBadgeCount(unreadCount);
-    console.log(`📱 Total: ${notifications.length}, Unread: ${unreadCount}`);
-    if (notifications.length > 0) {
-      saveReadStatusLocally();
+    if (notificationsEnabled) {
+      const unreadCount = notifications.filter(n => !n.Read).length;
+      onBadgeUpdate?.(unreadCount);
+      updateIOSBadgeCount(unreadCount);
+      console.log(`📱 Total: ${notifications.length}, Unread: ${unreadCount}`);
+      if (notifications.length > 0) {
+        saveReadStatusLocally();
+      }
     }
-  }, [notifications]);
+  }, [notifications, notificationsEnabled]);
 
   const saveReadStatusLocally = async () => {
     try {
@@ -302,6 +363,8 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   };
 
   const handleMarkAsRead = async (id: string) => {
+    if (!notificationsEnabled) return;
+    
     try {
       const token = await AsyncStorage.getItem('token_2');
       if (!token) return;
@@ -327,6 +390,8 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   };
 
   const markAllNotificationsAsRead = async () => {
+    if (!notificationsEnabled) return;
+    
     const unreadNotifications = notifications.filter(n => !n.Read);
     if (unreadNotifications.length === 0) {
       console.log('✅ No unread notifications to mark');
@@ -406,12 +471,19 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   };
 
   const onRefresh = async () => {
+    if (!notificationsEnabled) {
+      setRefreshing(false);
+      return;
+    }
+    
     setRefreshing(true);
     await fetchNotifications();
     setRefreshing(false);
   };
 
   const handleNotificationPress = (notification: Notification) => {
+    if (!notificationsEnabled) return;
+    
     if (!notification.Read) {
       handleMarkAsRead(notification.id);
     }
@@ -481,13 +553,16 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
 
     return (
       <Animated.View style={[s.notifContainer, { opacity: itemOpacity, transform: [{ scale: itemScale }] }]}>
-        <View style={[s.notifCard, { backgroundColor: notification.Read ? currentColors.card : currentColors.unreadBg }]}>
+        <View style={[s.notifCard, { 
+          backgroundColor: notification.Read ? currentColors.card : currentColors.unreadBg,
+          opacity: notificationsEnabled ? 1 : 0.6 
+        }]}>
           <TouchableOpacity
             style={s.notifContent}
             onPress={() => !isDeleting && handleNotificationPress(notification)}
             activeOpacity={0.6}
             delayPressIn={50}
-            disabled={isDeleting}
+            disabled={isDeleting || !notificationsEnabled}
           >
             <View style={[s.iconBox, { backgroundColor: `${notificationColor}20` }]}>
               <Ionicons name={notification.icon as any} size={22} color={notificationColor} />
@@ -495,7 +570,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
 
             <View style={s.notifText}>
               <View style={s.titleRow}>
-                <Text style={[s.title, { color: currentColors.text, fontWeight: notification.Read ? '400' : '600' }]} numberOfLines={1}>
+                <Text style={[s.title, { 
+                  color: currentColors.text, 
+                  fontWeight: notification.Read ? '400' : '600' 
+                }]} numberOfLines={1}>
                   {notification.title}
                 </Text>
                 <Text style={[s.time, { color: currentColors.textTertiary, fontWeight: notification.Read ? '400' : '500' }]}>
@@ -505,13 +583,18 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
               <Text style={[s.msg, { color: notification.Read ? currentColors.textSecondary : currentColors.text }]} numberOfLines={2}>
                 {notification.message}
               </Text>
+              {!notificationsEnabled && (
+                <Text style={[s.disabledText, { color: currentColors.textTertiary }]}>
+                  Notifications are disabled in settings
+                </Text>
+              )}
             </View>
 
             <TouchableOpacity style={s.delBtn} onPress={onDeletePress} disabled={isDeleting} activeOpacity={0.6}>
               <Ionicons name="trash-outline" size={20} color={currentColors.textTertiary} />
             </TouchableOpacity>
 
-            {!notification.Read && (
+            {!notification.Read && notificationsEnabled && (
               <View style={s.unreadBox}>
                 <View style={[s.dot, { backgroundColor: currentColors.primary }]} />
               </View>
@@ -561,9 +644,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
           </View>
           
           <TouchableOpacity 
-            style={[s.markAllBtn, { opacity: unreadCount === 0 ? 0.4 : 1 }]}
+            style={[s.markAllBtn, { 
+              opacity: unreadCount === 0 || !notificationsEnabled ? 0.4 : 1 
+            }]}
             onPress={markAllNotificationsAsRead}
-            disabled={unreadCount === 0}
+            disabled={unreadCount === 0 || !notificationsEnabled}
             activeOpacity={0.6}
           >
             <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
@@ -572,7 +657,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         {notifications.length > 0 && (
           <View style={s.hdrStats}>
             <Text style={[s.hdrStatsText, { color: isDark ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.85)" }]}>
-              {unreadCount > 0 ? `${unreadCount} new` : 'All caught up'} • {notifications.length} total
+              {notificationsEnabled 
+                ? (unreadCount > 0 ? `${unreadCount} new` : 'All caught up') 
+                : 'Notifications disabled'}
+              {' • '}{notifications.length} total
             </Text>
           </View>
         )}
@@ -593,10 +681,42 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
               tintColor={currentColors.primary}
               colors={[currentColors.primary]}
               progressBackgroundColor={currentColors.card}
+              enabled={notificationsEnabled}
             />
           }
         >
-          {loading ? (
+          {showDisabledMessage ? (
+            <Animated.View style={[s.empty, { opacity: fadeAnim }]}>
+              <View style={[s.emptyIconBox, { 
+                backgroundColor: currentColors.card,
+                borderWidth: 2,
+                borderColor: currentColors.warning + '30'
+              }]}>
+                <Ionicons name="notifications-off-outline" size={56} color={currentColors.warning} />
+              </View>
+              <Text style={[s.emptyTitle, { color: currentColors.text }]}>Notifications Disabled</Text>
+              <Text style={[s.emptyMsg, { 
+                color: currentColors.textSecondary,
+                textAlign: 'center',
+                marginHorizontal: 20
+              }]}>
+                Notifications are currently turned off in your settings.{'\n\n'}
+                You can enable them in Settings → Notifications to receive alerts and updates.
+              </Text>
+              <TouchableOpacity 
+                style={[s.enableButton, { 
+                  backgroundColor: currentColors.primary,
+                  marginTop: 20
+                }]}
+                onPress={onBack}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.enableButtonText, { color: '#FFFFFF' }]}>
+                  Go to Settings
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ) : loading ? (
             <View style={s.empty}>
               <Animated.View style={[s.loading, { opacity: fadeAnim }]}>
                 <Ionicons name="notifications-outline" size={56} color={currentColors.textSecondary} />
@@ -791,6 +911,7 @@ const s = StyleSheet.create({
   title: { fontSize: 16, flex: 1, marginRight: 8, letterSpacing: 0.2 },
   time: { fontSize: 13, letterSpacing: 0.1 },
   msg: { fontSize: 14, lineHeight: 20, letterSpacing: 0.1 },
+  disabledText: { fontSize: 11, marginTop: 4, fontStyle: 'italic' },
   unreadBox: { marginLeft: 8, justifyContent: 'flex-start', marginTop: 4 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, paddingHorizontal: 40 },
@@ -799,6 +920,8 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 22, fontWeight: '600', marginBottom: 12, letterSpacing: 0.2 },
   emptyMsg: { fontSize: 15, textAlign: 'center', lineHeight: 22, letterSpacing: 0.1 },
   bottomSpace: { height: 40 },
+  enableButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, marginTop: 20 },
+  enableButtonText: { fontSize: 16, fontWeight: '600' },
   modalOverlay: { flex: 1 },
   modalOverlayTouch: { flex: 1, justifyContent: 'flex-end' },
   modalBox: { maxHeight: height * 0.75, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden',
