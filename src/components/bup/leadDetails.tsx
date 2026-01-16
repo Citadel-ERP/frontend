@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -88,9 +88,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-
+  const [selectedAssignedTo, setSelectedAssignedTo] = useState<string | null>(null);
+  const [assignedToOptions, setAssignedToOptions] = useState<Array<{ id: string, name: string }>>([]);
   const flatListRef = useRef<FlatList>(null);
   const modalFlatListRef = useRef<FlatList>(null);
+  const hasLoadedInitially = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
@@ -151,10 +153,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   };
 
   useEffect(() => {
-    if (token) {
+    if (token && !hasLoadedInitially.current) {
+      hasLoadedInitially.current = true;
       fetchComments(lead.id, 1);
       fetchCollaborators(lead.id);
-      // fetchDefaultComments(lead.phase, lead.subphase);
+      fetchAssignedToOptions();
       if (lead.incentive_present) {
         fetchIncentiveData();
       }
@@ -167,15 +170,15 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [comments.length]);
 
-  const beautifyName = (name: string): string => {
+  const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
     return name
       .split('_')
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
-  };
+  }, []);
 
-  const formatDateTime = (dateString?: string): string => {
+  const formatDateTime = useCallback((dateString?: string): string => {
     if (!dateString) return '-';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
@@ -186,9 +189,34 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
+  }, []);
+
+  const fetchAssignedToOptions = async () => {
+    try {
+      if (!token) return;
+
+      const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+
+      // Assuming backend returns array of users with employee_id, first_name, last_name
+      const options = data.users.map((user: any) => ({
+        id: user.employee_id,
+        name: user.full_name || `${user.first_name} ${user.last_name}`.trim()
+      }));
+
+      setAssignedToOptions(options);
+    } catch (error) {
+      console.error('Error fetching assigned to options:', error);
+    }
   };
 
-  const formatTime = (dateString?: string): string => {
+  const formatTime = useCallback((dateString?: string): string => {
     if (!dateString) return '';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '';
@@ -197,18 +225,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       minute: '2-digit',
       hour12: false
     });
-  };
+  }, []);
 
-  const formatWhatsAppDate = (dateString: string): string => {
+  const formatWhatsAppDate = useCallback((dateString: string): string => {
     const date = new Date(dateString);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
     const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-
     if (compareDate.getTime() === compareToday.getTime()) {
       return 'Today';
     } else if (compareDate.getTime() === compareYesterday.getTime()) {
@@ -218,7 +244,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     } else {
       return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
     }
-  };
+  }, []);
 
   const formatFileSize = (bytes?: number): string => {
     if (!bytes) return 'Unknown size';
@@ -404,32 +430,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
-  // const fetchDefaultComments = async (phase: string, subphase: string): Promise<void> => {
-  //   try {
-  //     if (!token) return;
-  //     setLoadingDefaultComments(true);
-
-  //     const response = await fetch(
-  //       `${BACKEND_URL}/manager/getDefaultComments?at_phase=${encodeURIComponent(
-  //         phase
-  //       )}&at_subphase=${encodeURIComponent(subphase)}`,
-  //       {
-  //         method: 'GET',
-  //         headers: { 'Content-Type': 'application/json' }
-  //       }
-  //     );
-
-  //     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-  //     const data = await response.json();
-  //     setDefaultComments(data.comments || []);
-  //   } catch (error) {
-  //     console.error('Error fetching default comments:', error);
-  //     setDefaultComments([]);
-  //   } finally {
-  //     setLoadingDefaultComments(false);
-  //   }
-  // };
-
   const handleAttachDocuments = async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -554,7 +554,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     setRefreshing(false);
   };
 
-  const getProcessedComments = () => {
+  const getProcessedComments = useCallback(() => {
     if (!comments || comments.length === 0) return [];
     const processed: any[] = [];
     let lastDate = '';
@@ -579,9 +579,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       });
     });
     return processed;
-  };
+  }, [comments, formatWhatsAppDate]);
 
-  const renderChatItem = ({ item }: { item: any }) => {
+  const renderChatItem = useCallback(({ item }: { item: any }) => {
     if (item.type === 'dateSeparator') {
       return (
         <View style={s.dateSeparatorContainer}>
@@ -673,10 +673,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
       </View>
     );
-  };
+  }, [currentUserEmployeeId, formatTime, handleDownloadFile, truncateFileName]);
 
-  const ModernHeader = () => (
+  const ModernHeader = useMemo(() => (
     <SafeAreaView style={s.headerSafeArea}>
+
       <View style={s.header}>
         <StatusBar barStyle="light-content" backgroundColor={C.primary} />
         <View style={s.headerContent}>
@@ -734,9 +735,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       </View>
     </SafeAreaView>
-  );
+  ), [onBack, onEdit, handleIncentivePress, loadingIncentive, lead, beautifyName, getInitials]);
 
-  const renderModalSection = ({ item }: { item: string }) => {
+  const renderModalSection = useCallback(({ item }: { item: string }) => {
+
     switch (item) {
       case 'lead-info':
         return (
@@ -818,7 +820,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               <View style={s.metadataRow}>
                 <MaterialIcons name="person" size={18} color={C.textTertiary} />
                 <Text style={s.metadataLabel}>Assigned to:</Text>
-                <Text style={s.metadataValue}>{lead.assigned_to.full_name}</Text>
+                <Text style={s.metadataValue}>
+                  {lead.assigned_to.first_name} {lead.assigned_to.last_name}
+                  {lead.assigned_to.full_name && lead.assigned_to.full_name !== `${lead.assigned_to.first_name} ${lead.assigned_to.last_name}`
+                    ? ` (${lead.assigned_to.full_name})`
+                    : ''}
+                </Text>
               </View>
             )}
             {lead.city && (
@@ -857,16 +864,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       default:
         return null;
     }
-  };
+  }, [lead, collaborators, beautifyName, formatDateTime, getInitials]);
 
-  const modalSections = [
+  const modalSections = useMemo(() => [
     'lead-info',
     'contact-info',
     'metadata',
     ...(collaborators.length > 0 ? ['collaborators'] : [])
-  ];
+  ], [collaborators.length]);
 
-  const ContactInfoModal = () => (
+  const ContactInfoModal = useMemo(() => (
     <Modal
       animationType="slide"
       transparent={false}
@@ -896,12 +903,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         ListFooterComponent={<View style={s.modalBottomSpacing} />}
       />
     </Modal>
-  );
+  ), [showLeadDetailsModal, modalSections, renderModalSection]);
 
   return (
     <View style={s.mainContainer}>
-      <ModernHeader />
-      <ContactInfoModal />
+      {ModernHeader}
+      {ContactInfoModal}
 
       {/* Android-specific keyboard handling to avoid the extra padding issue */}
       {Platform.OS === 'android' ? (
@@ -1217,14 +1224,12 @@ const s = StyleSheet.create({
     backgroundColor: C.surface,
   },
 
-  // Header Styles - Fixed Safe Area
   headerSafeArea: {
     backgroundColor: C.primary,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? 0 : 0,
   },
   header: {
     backgroundColor: C.primary,
-    height: 60,
     borderBottomWidth: 1,
     borderBottomColor: C.primaryDark,
   },
@@ -1233,7 +1238,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: '100%',
+    paddingVertical: 12,
+    minHeight: 60,
   },
   backButton: {
     padding: 8,

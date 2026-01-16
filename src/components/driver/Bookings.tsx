@@ -42,13 +42,17 @@ type ExtendedBooking = Booking & {
 const BookingCard: React.FC<{
     booking: ExtendedBooking;
     index: number;
-    onUpdateStatus: (bookingId: number, status: string, reason?: string) => void;
+    onUpdateStatus: (assignmentId: number, status: string, reason?: string, odometerStartReading?: string, odometerEndReading?: string) => void;
     updating: boolean;
 }> = ({ booking, index, onUpdateStatus, updating }) => {
     const slideAnim = useRef(new Animated.Value(30)).current;
     const [selectedStatus, setSelectedStatus] = useState(booking.status);
     const [showCancellationInput, setShowCancellationInput] = useState(false);
+    const [showOdometerStartInput, setShowOdometerStartInput] = useState(false);
+    const [showOdometerEndInput, setShowOdometerEndInput] = useState(false);
     const [cancellationReason, setCancellationReason] = useState('');
+    const [odometerStartReading, setOdometerStartReading] = useState('');
+    const [odometerEndReading, setOdometerEndReading] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
 
     useEffect(() => {
@@ -62,20 +66,64 @@ const BookingCard: React.FC<{
 
     const handleStatusChange = (status: string) => {
         setSelectedStatus(status);
+        
+        // Reset all input states
+        setShowCancellationInput(false);
+        setShowOdometerStartInput(false);
+        setShowOdometerEndInput(false);
+        setCancellationReason('');
+        setOdometerStartReading('');
+        setOdometerEndReading('');
+        
+        // Show appropriate input based on status
         if (status === 'cancelled') {
             setShowCancellationInput(true);
-        } else {
-            setShowCancellationInput(false);
-            setCancellationReason('');
+        } else if (status === 'in-progress') {
+            setShowOdometerStartInput(true);
+        } else if (status === 'completed') {
+            setShowOdometerEndInput(true);
         }
     };
 
+    const validateOdometerReading = (reading: string) => {
+        const numReading = parseInt(reading);
+        return !isNaN(numReading) && numReading >= 0;
+    };
+
     const handleUpdateStatus = async () => {
+        // Validation for cancellation
         if (selectedStatus === 'cancelled' && !cancellationReason.trim()) {
             Alert.alert('Error', 'Please provide a reason for cancellation');
             return;
         }
-        if (selectedStatus === booking.status && selectedStatus !== 'cancelled') {
+        
+        // Validation for in-progress status
+        if (selectedStatus === 'in-progress') {
+            if (!odometerStartReading.trim()) {
+                Alert.alert('Error', 'Please enter odometer start reading');
+                return;
+            }
+            if (!validateOdometerReading(odometerStartReading)) {
+                Alert.alert('Error', 'Please enter a valid odometer reading (non-negative number)');
+                return;
+            }
+        }
+        
+        // Validation for completed status
+        if (selectedStatus === 'completed') {
+            if (!odometerEndReading.trim()) {
+                Alert.alert('Error', 'Please enter odometer end reading');
+                return;
+            }
+            if (!validateOdometerReading(odometerEndReading)) {
+                Alert.alert('Error', 'Please enter a valid odometer reading (non-negative number)');
+                return;
+            }
+        }
+        
+        // Check if status is the same (excluding statuses that require additional input)
+        if (selectedStatus === booking.status && selectedStatus !== 'cancelled' && 
+            selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
             Alert.alert('Info', 'Status is already set to ' + selectedStatus);
             return;
         }
@@ -88,10 +136,22 @@ const BookingCard: React.FC<{
         }
 
         setIsUpdating(true);
-        await onUpdateStatus(assignmentId, selectedStatus, cancellationReason);
+        await onUpdateStatus(
+            assignmentId, 
+            selectedStatus, 
+            cancellationReason,
+            selectedStatus === 'in-progress' ? odometerStartReading : undefined,
+            selectedStatus === 'completed' ? odometerEndReading : undefined
+        );
         setIsUpdating(false);
+        
+        // Reset all inputs
         setShowCancellationInput(false);
+        setShowOdometerStartInput(false);
+        setShowOdometerEndInput(false);
         setCancellationReason('');
+        setOdometerStartReading('');
+        setOdometerEndReading('');
     };
 
     const assignments = booking.vehicle_assignments || [];
@@ -160,6 +220,11 @@ const BookingCard: React.FC<{
 
             {/* Footer - Date & Time */}
             <View style={styles.bookingCardFooter}>
+                <View>
+                    <Text>
+                        Start:
+                    </Text>
+                </View>
                 <View style={styles.dateTimeInfo}>
                     <MaterialCommunityIcons name="calendar" size={16} color="#666" />
                     <Text style={styles.dateTimeInfoText}>
@@ -181,9 +246,14 @@ const BookingCard: React.FC<{
                 </View>
             </View>
 
-            {/* End Date & Time Section - Matching Cab Booking file */}
+            {/* End Date & Time Section */}
             {booking.end_time && (
                 <View style={[styles.bookingCardFooter, { paddingTop: 8, borderTopWidth: 0 }]}>
+                    <View style={{ marginRight: 6 }}>
+                        <Text>
+                            End:
+                        </Text>
+                    </View>
                     <View style={styles.dateTimeInfo}>
                         <MaterialCommunityIcons name="calendar" size={16} color="#666" />
                         <Text style={styles.dateTimeInfoText}>
@@ -258,6 +328,48 @@ const BookingCard: React.FC<{
                                 textAlignVertical="top"
                             />
                         </View>
+                    </View>
+                )}
+
+                {/* Odometer Start Reading Input (for in-progress status) */}
+                {showOdometerStartInput && (
+                    <View style={{ marginTop: 12 }}>
+                        <View style={styles.inputContainer}>
+                            <MaterialCommunityIcons name="speedometer" size={20} color="#00d285" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.textInput}
+                                value={odometerStartReading}
+                                onChangeText={setOdometerStartReading}
+                                placeholder="Enter odometer start reading (km/miles)"
+                                placeholderTextColor="#888"
+                                keyboardType="numeric"
+                                maxLength={10}
+                            />
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
+                            Enter the current odometer reading when starting the trip
+                        </Text>
+                    </View>
+                )}
+
+                {/* Odometer End Reading Input (for completed status) */}
+                {showOdometerEndInput && (
+                    <View style={{ marginTop: 12 }}>
+                        <View style={styles.inputContainer}>
+                            <MaterialCommunityIcons name="speedometer" size={20} color="#4A90E2" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.textInput}
+                                value={odometerEndReading}
+                                onChangeText={setOdometerEndReading}
+                                placeholder="Enter odometer end reading (km/miles)"
+                                placeholderTextColor="#888"
+                                keyboardType="numeric"
+                                maxLength={10}
+                            />
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
+                            Enter the odometer reading when completing the trip
+                        </Text>
                     </View>
                 )}
 
@@ -360,17 +472,36 @@ const Bookings: React.FC<BookingsProps> = ({
         }
     };
 
-    const updateBookingStatus = async (assignmentId: number, status: string, reason?: string) => {
+    const updateBookingStatus = async (
+        assignmentId: number, 
+        status: string, 
+        reason?: string, 
+        odometerStartReading?: string, 
+        odometerEndReading?: string
+    ) => {
         setUpdating(true);
         try {
             const requestBody: any = {
                 token,
-                assignment_id: assignmentId,  // Changed from booking_id
+                assignment_id: assignmentId,
                 status: status,
             };
+            
+            // Add cancellation reason if applicable
             if (status === 'cancelled' && reason) {
                 requestBody.reason_of_cancellation = reason;
             }
+            
+            // Add odometer start reading for in-progress status
+            if (status === 'in-progress' && odometerStartReading) {
+                requestBody.odometer_start_reading = odometerStartReading;
+            }
+            
+            // Add odometer end reading for completed status
+            if (status === 'completed' && odometerEndReading) {
+                requestBody.odometer_end_reading = odometerEndReading;
+            }
+            
             const response = await fetch(`${BACKEND_URL}/employee/updateCarBookings`, {
                 method: 'POST',
                 headers: {
@@ -379,6 +510,7 @@ const Bookings: React.FC<BookingsProps> = ({
                 },
                 body: JSON.stringify(requestBody),
             });
+            
             const text = await response.text();
             if (text.trim().startsWith('{')) {
                 try {

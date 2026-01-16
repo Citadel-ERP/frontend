@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -151,12 +153,10 @@ const EditLead: React.FC<EditLeadProps> = ({
   }, [debouncedSearchQuery]);
 
   useEffect(() => {
-    if (debouncedAssignedSearch.length >= 2) {
+    if (activeDropdown === 'assigned') {
       searchAssignedToUsers(debouncedAssignedSearch);
-    } else {
-      setAssignedToResults([]);
     }
-  }, [debouncedAssignedSearch]);
+  }, [debouncedAssignedSearch, activeDropdown]);
 
   const ModernHeader = () => (
     <SafeAreaView style={styles.header}>
@@ -346,29 +346,53 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const searchAssignedToUsers = async (query: string) => {
     try {
-      if (!token || query.length < 2) {
+      if (!token) {
         setAssignedToResults([]);
         return;
       }
-
+      
       setAssignedToLoading(true);
-      const response = await fetch(
-        `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
-        {
-          method: 'GET',
+      
+      // If query is empty, fetch all users
+      if (query.length === 0) {
+        const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-          }
+          },
+          body: JSON.stringify({ token })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
+        setAssignedToResults(data.users || []);
+        return;
       }
-
-      const data = await response.json();
       
-      setAssignedToResults(data.potential_collaborators);
+      // If query has at least 2 characters, search
+      if (query.length >= 2) {
+        const response = await fetch(
+          `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setAssignedToResults(data.potential_collaborators);
+      } else {
+        setAssignedToResults([]);
+      }
     } catch (error) {
       console.error('Error searching assignable users:', error);
       setAssignedToResults([]);
@@ -472,10 +496,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     setActiveDropdown(null);
     setAssignedToSearch('');
     setAssignedToResults([]);
-  };
-
-  const clearAssignedTo = () => {
-    setEditedLead({...editedLead, assigned_to: null});
   };
 
   const beautifyName = (name: string): string => {
@@ -640,12 +660,6 @@ const EditLead: React.FC<EditLeadProps> = ({
           <View style={styles.inputGroup}>
             <View style={styles.assignedToHeader}>
               <Text style={styles.inputLabel}>Assigned To</Text>
-              {editedLead.assigned_to && (
-                <TouchableOpacity onPress={clearAssignedTo} style={styles.clearButton}>
-                  <Ionicons name="close-circle" size={16} color={MODERN_COLORS.danger} />
-                  <Text style={styles.clearButtonText}>Clear</Text>
-                </TouchableOpacity>
-              )}
             </View>
             <TouchableOpacity
               style={styles.dropdown}
@@ -1020,19 +1034,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             
             <ScrollView style={styles.modalScrollView}>
-              {/* Clear assignment option */}
-              <TouchableOpacity
-                style={styles.searchResultItem}
-                onPress={clearAssignedTo}
-              >
-                <View style={styles.searchResultContent}>
-                  <Ionicons name="person-remove" size={18} color={MODERN_COLORS.danger} />
-                  <Text style={[styles.searchResultText, { color: MODERN_COLORS.danger }]}>
-                    Unassign / Clear
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              
               {/* Current assigned user if exists */}
               {editedLead.assigned_to && (
                 <View style={[styles.searchResultItem, styles.currentAssignedItem]}>
@@ -1082,7 +1083,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                   </TouchableOpacity>
                 ))
               ) : (
-                assignedToSearch.length >= 2 && !assignedToLoading && (
+                !assignedToLoading && assignedToResults.length === 0 && (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>No users found</Text>
                   </View>
@@ -1232,20 +1233,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: MODERN_COLORS.background,
-  },
-  clearButtonText: {
-    fontSize: 12,
-    color: MODERN_COLORS.danger,
-    fontWeight: '500',
   },
   assignedToContent: {
     flexDirection: 'row',

@@ -107,6 +107,13 @@ export interface Comment {
   employeeId?: string;
 }
 
+export interface AssignedToOption {
+  value: string; // employee_id
+  label: string; // first_name last_name
+  first_name: string;
+  last_name: string;
+}
+
 export interface CollaboratorData {
   id: number;
   user: CommentUser;

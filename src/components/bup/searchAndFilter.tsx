@@ -18,6 +18,7 @@ interface SearchAndFilterProps {
   theme: ThemeColors;
   allPhases: FilterOption[];
   allSubphases: FilterOption[];
+  allAssignedTo: FilterOption[];
   fetchSubphases: (phase: string) => Promise<void>;
   selectedCity: string;
   onCreateLead: () => void;
@@ -33,6 +34,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   allPhases,
   allSubphases,
   fetchSubphases,
+  allAssignedTo,
   selectedCity,
   onCreateLead,
   onBack,
@@ -43,7 +45,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   const [filterBy, setFilterBy] = useState('');
   const [filterValue, setFilterValue] = useState('');
   const [selectedPhase, setSelectedPhase] = useState('');
-  const [activeDropdown, setActiveDropdown] = useState<'filter' | 'status' | 'filter-phase' | 'filter-subphase' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'filter' | 'status' | 'filter-phase' | 'filter-subphase' | 'assigned-to' | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
 
@@ -61,7 +63,8 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     { value: '', label: 'All Leads' },
     { value: 'status', label: 'Filter by Status' },
     { value: 'phase', label: 'Filter by Phase' },
-    { value: 'subphase', label: 'Filter by Subphase' }
+    { value: 'subphase', label: 'Filter by Subphase' },
+    { value: 'assigned_to', label: 'Filter by Assigned To' }
   ];
 
   const tabs = [
@@ -96,6 +99,8 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           if (allPhases.length > 0) {
             setActiveDropdown('filter-phase');
           }
+        } else if (filterType === 'assigned_to') {
+          setActiveDropdown('assigned-to'); // ADD THIS
         }
       }, 300);
     }
@@ -128,6 +133,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       case 'status': choices = STATUS_CHOICES; break;
       case 'phase': choices = allPhases; break;
       case 'subphase': choices = allSubphases; break;
+      case 'assigned_to': choices = allAssignedTo; break; // ADD THIS LINE
     }
     const option = choices.find(choice => choice.value === value);
     return option ? option.label : beautifyName(value);
@@ -149,7 +155,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   const handleTabPress = (tabId: string) => {
     setActiveTab(tabId);
-    
+
     if (tabId === 'all') {
       clearFilters();
     } else {
@@ -174,7 +180,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             returnKeyType="search"
             placeholderTextColor="#666"
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.gearButton}
             onPress={() => setActiveDropdown('filter')}
           >
@@ -184,8 +190,8 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       </View>
 
       {/* Status Tabs */}
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         style={[styles.tabsContainer, { backgroundColor: theme.cardBg }]}
       >
@@ -193,13 +199,13 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           <TouchableOpacity
             key={tab.id}
             style={[
-              styles.tab, 
+              styles.tab,
               activeTab === tab.id && [styles.activeTab, { backgroundColor: theme.primary }]
             ]}
             onPress={() => handleTabPress(tab.id)}
           >
             <Text style={[
-              styles.tabText, 
+              styles.tabText,
               { color: theme.textSecondary },
               activeTab === tab.id && [styles.activeTabText, { color: theme.white }]
             ]}>
@@ -256,7 +262,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         title="Select Status"
         theme={theme}
       />
-      
+
       <DropdownModal
         visible={activeDropdown === 'filter-phase'}
         onClose={() => setActiveDropdown(null)}
@@ -265,7 +271,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         title={filterBy === 'subphase' ? "Select Phase (for Subphase)" : "Select Phase"}
         theme={theme}
       />
-      
+
       <DropdownModal
         visible={activeDropdown === 'filter-subphase'}
         onClose={() => setActiveDropdown(null)}
@@ -276,6 +282,18 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           setActiveDropdown(null);
         }}
         title="Select Subphase"
+        theme={theme}
+      />
+      <DropdownModal
+        visible={activeDropdown === 'assigned-to'}
+        onClose={() => setActiveDropdown(null)}
+        options={allAssignedTo}
+        onSelect={(value) => {
+          setFilterValue(value);
+          onFilter('assigned_to', value);
+          setActiveDropdown(null);
+        }}
+        title="Select Assigned To"
         theme={theme}
       />
     </>
@@ -332,7 +350,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   activeTab: {
-    maxHeight: 30, 
+    maxHeight: 30,
   },
   tabText: {
     fontSize: 14,

@@ -27,7 +27,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [token, setToken] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  
+
   // State for list view
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,19 +40,20 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const [filterValue, setFilterValue] = useState('');
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  const [allAssignedTo, setAllAssignedTo] = useState<FilterOption[]>([]);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
-  
+
   // State for detail view
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isEditMode, setIsEditMode] = useState(false); // ADDED THIS LINE
-  
+
   // Calculate totalLeads from statusCounts
   const totalLeads = useMemo(() => {
     if (!statusCounts || Object.keys(statusCounts).length === 0) {
       return 0;
     }
     return Object.values(statusCounts).reduce(
-      (sum, count) => sum + (Number(count) || 0), 
+      (sum, count) => sum + (Number(count) || 0),
       0
     );
   }, [statusCounts]);
@@ -69,6 +70,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         matchesFilter = lead.phase === filterValue;
       } else if (filterBy === 'subphase') {
         matchesFilter = lead.subphase === filterValue;
+      } else if (filterBy === 'assigned_to') {
+        matchesFilter = lead.assigned_to?.employee_id === filterValue;
       }
     }
     return matchesFilter;
@@ -135,6 +138,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     if (token && selectedCity && viewMode === 'list') {
       fetchLeads(1);
       fetchPhases();
+       fetchAssignedToOptions();
       fetchStatusCounts();
     }
   }, [token, selectedCity, viewMode]);
@@ -148,9 +152,9 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           token,
-          city: selectedCity 
+          city: selectedCity
         })
       });
       if (!response.ok) {
@@ -204,7 +208,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
-      
+
       const transformedLeads = data.leads.map((lead: any) => ({
         ...lead,
         createdAt: lead.created_at,
@@ -217,7 +221,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       } else {
         setLeads(transformedLeads);
       }
-      
+
       setPagination(data.pagination || null);
       setIsSearchMode(false);
     } catch (error) {
@@ -284,6 +288,38 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     }
   };
 
+
+  const fetchAssignedToOptions = async (): Promise<void> => {
+    try {
+      if (!token) return;
+
+      const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ token })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Transform users data into FilterOption format
+      const options = data.users.map((user: any) => ({
+        value: user.employee_id,
+        label: `${user.first_name} ${user.last_name}`
+      }));
+
+      setAllAssignedTo(options);
+    } catch (error) {
+      console.error('Error fetching assigned to options:', error);
+      setAllAssignedTo([]);
+    }
+  };
+
   const searchLeads = async (query: string): Promise<void> => {
     if (!query.trim()) {
       setIsSearchMode(false);
@@ -307,7 +343,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
-      
+
       const transformedLeads = data.leads.map((lead: any) => ({
         ...lead,
         createdAt: lead.created_at,
@@ -393,12 +429,12 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     try {
       if (!token || !selectedLead) return false;
       setLoading(true);
-      
+
       const updatePayload: any = {
         token: token,
         lead_id: selectedLead.id
       };
-      
+
       if (emails.length > 0) updatePayload.emails = emails;
       if (phones.length > 0) updatePayload.phone_numbers = phones;
       if (leadData.name !== undefined) updatePayload.name = leadData.name;
@@ -407,7 +443,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
       if (leadData.city !== undefined) updatePayload.city = leadData.city;
-      
+
       const response = await fetch(`${BACKEND_URL}/manager/updateLead`, {
         method: 'POST',
         headers: {
@@ -415,12 +451,12 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         },
         body: JSON.stringify(updatePayload)
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       const updatedLead = {
         ...data.lead,
@@ -428,14 +464,14 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         collaborators: [],
         comments: []
       };
-      
+
       setSelectedLead(updatedLead);
-      setLeads(prevLeads => 
-        prevLeads.map(lead => 
+      setLeads(prevLeads =>
+        prevLeads.map(lead =>
           lead.id === selectedLead.id ? updatedLead : lead
         )
       );
-      
+
       Alert.alert('Success', 'Lead updated successfully!');
       return true;
     } catch (error: any) {
@@ -489,7 +525,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         );
       case 'detail':
         if (!selectedLead) return null;
-        
+
         if (isEditMode) {
           return (
             <EditLead
@@ -503,7 +539,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             />
           );
         }
-        
+
         return (
           <LeadDetails
             lead={selectedLead}
@@ -524,6 +560,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
               theme={theme}
               allPhases={allPhases}
               allSubphases={allSubphases}
+              allAssignedTo={allAssignedTo}
               fetchSubphases={fetchSubphases}
               selectedCity={selectedCity}
               onCreateLead={handleCreateLead}
@@ -553,15 +590,15 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const getHeaderActions = () => {
     if (viewMode === 'city-selection') {
-      return { 
-        showBackButton: true, 
+      return {
+        showBackButton: true,
         onBack: onBack,
-        showThemeToggle: true 
+        showThemeToggle: true
       };
     }
     if (viewMode === 'list') {
-      return { 
-        showBackButton: true, 
+      return {
+        showBackButton: true,
         onBack: handleBackToCitySelection,
         showAddButton: true,
         onAddPress: handleCreateLead,
@@ -571,16 +608,16 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     }
     if (viewMode === 'detail') {
       if (isEditMode) {
-        return { 
-          showBackButton: true, 
+        return {
+          showBackButton: true,
           onBack: () => setIsEditMode(false),
           showSaveButton: true,
-          onSavePress: () => {}, // Save is handled in EditLead component
+          onSavePress: () => { }, // Save is handled in EditLead component
           showThemeToggle: true,
         };
       }
-      return { 
-        showBackButton: true, 
+      return {
+        showBackButton: true,
         onBack: handleBackToList,
         showEditButton: true,
         onEdit: handleEditPress,
@@ -588,16 +625,16 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       };
     }
     if (viewMode === 'create') {
-      return { 
-        showBackButton: true, 
+      return {
+        showBackButton: true,
         onBack: handleBackToList,
         showSaveButton: true,
-        onSavePress: () => {}, // Save is handled in CreateLead component
+        onSavePress: () => { }, // Save is handled in CreateLead component
         showThemeToggle: true,
       };
     }
-    return { 
-      showBackButton: true, 
+    return {
+      showBackButton: true,
       onBack: onBack,
       showThemeToggle: true,
     };
@@ -612,18 +649,18 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-      
+
       {viewMode !== 'city-selection' && viewMode !== 'detail' && (
-  <Header
-    title={getHeaderTitle()}
-    {...headerActions}
-    onThemeToggle={toggleDarkMode}
-    isDarkMode={isDarkMode}
-    theme={theme}
-    loading={loading}
-  />
-)}
-      
+        <Header
+          title={getHeaderTitle()}
+          {...headerActions}
+          onThemeToggle={toggleDarkMode}
+          isDarkMode={isDarkMode}
+          theme={theme}
+          loading={loading}
+        />
+      )}
+
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         {renderContent()}
       </View>
