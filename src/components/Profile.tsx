@@ -241,8 +241,8 @@ interface EditProfileSectionProps {
   selectedDate: Date;
   showDatePicker: boolean;
   formatDisplayDate: (dateString: string) => string;
-  firstNameInputRef: React.RefObject<TextInput>;
-  lastNameInputRef: React.RefObject<TextInput>;
+  firstNameInputRef: React.RefObject<TextInput | null>;
+  lastNameInputRef: React.RefObject<TextInput | null>;
   handleSave: () => void;
   saving: boolean;
   setIsEditing: (value: boolean) => void;
@@ -268,7 +268,7 @@ const EditProfileSection: React.FC<EditProfileSectionProps> = React.memo(({
   populateFormData
 }) => {
   const colors = {
-    background: '#FFFFFF',
+    background: '#e7e6e5',
     headerBackground: '#008069',
     text: '#000000',
     textSecondary: '#667781',
@@ -278,7 +278,7 @@ const EditProfileSection: React.FC<EditProfileSectionProps> = React.memo(({
     icon: '#8696A0',
     iconActive: '#008069',
     danger: '#FF3B30',
-    modalBackground: '#F7F8FA',
+    modalBackground: '#e7e6e5',
     emptyState: '#8696A0',
   };
 
@@ -469,7 +469,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
   // WhatsApp-like colors
   const colors = {
-    background: '#FFFFFF',
+    background: '#e7e6e5',
     headerBackground: '#008069',
     text: '#000000',
     textSecondary: '#667781',
@@ -479,7 +479,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     icon: '#8696A0',
     iconActive: '#008069',
     danger: '#FF3B30',
-    modalBackground: '#F7F8FA',
+    modalBackground: '#e7e6e5',
     emptyState: '#8696A0',
   };
 
@@ -1230,7 +1230,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
               </View>
             </View>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]}
               onPress={handleDownloadIDCard}
               disabled={downloading}
@@ -1246,7 +1246,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                   </Text>
                 </>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         );
       case 'assets':

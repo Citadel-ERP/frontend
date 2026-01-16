@@ -133,7 +133,7 @@ const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) =
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#e7e6e5',
   },
   scrollContainer: {
     flex: 1,
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#e7e6e5',
   },
   searchInputWrapper: {
     position: 'relative',

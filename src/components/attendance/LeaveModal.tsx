@@ -27,7 +27,7 @@ const colors = {
   white: '#FFFFFF',
   text: '#111827',
   textSecondary: '#6b7280',
-  background: '#f3f4f6',
+  background: '#e7e6e5',
   backgroundSecondary: '#F5F5F5',
   border: '#e5e7eb',
   success: '#10b981',

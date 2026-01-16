@@ -833,29 +833,29 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         </View>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Transaction Details</Text>
-          <View style={styles.infoRow}>
+          <View style={[styles.infoRow, styles.dividerRow]}>
             <Text style={styles.infoLabel}>Gross Income:</Text>
             <Text style={styles.infoValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
           </View>
           {incentiveData.referral_amt > 0 && (
-            <View style={styles.infoRow}>
+            <View style={[styles.infoRow, styles.dividerRow]}>
               <Text style={styles.infoLabel}>Referral Amount:</Text>
               <Text style={styles.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
             </View>
           )}
           {incentiveData.goodwill > 0 && (
-            <View style={styles.infoRow}>
+            <View style={[styles.infoRow, styles.dividerRow]}>
               <Text style={styles.infoLabel}>Goodwill:</Text>
               <Text style={styles.infoValue}>{formatCurrency(incentiveData.goodwill)}</Text>
             </View>
           )}
           {incentiveData.bdt_expenses > 0 && (
-            <View style={styles.infoRow}>
+            <View style={[styles.infoRow, styles.dividerRow]}>
               <Text style={styles.infoLabel}>BD Expenses:</Text>
               <Text style={styles.infoValue}>{formatCurrency(incentiveData.bdt_expenses)}</Text>
             </View>
           )}
-          <View style={styles.infoRow}>
+          <View style={[styles.infoRow, styles.dividerRow]}>
             <Text style={styles.infoLabel}>Deal Type:</Text>
             <View style={incentiveData.intercity_deals ? styles.intercityBadgeYes : styles.intercityBadgeNo}>
               <Text style={incentiveData.intercity_deals ? styles.intercityTextYes : styles.intercityTextNo}>
@@ -1300,6 +1300,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  // ADDED: Divider row style for Transaction Details
+  dividerRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.sm,
   },
   calculationLabel: {
     fontSize: fontSize.sm,

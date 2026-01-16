@@ -469,7 +469,7 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: '#e7e6e5',
   },
   scrollContainer: {
     flex: 1,
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   filterContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#e7e6e5',
     paddingHorizontal: 20,
     paddingVertical: 20,
     borderBottomWidth: 1,

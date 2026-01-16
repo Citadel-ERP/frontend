@@ -398,7 +398,7 @@ const LeaveScreen: React.FC<LeaveScreenProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#e7e6e5',
   },
   scrollContainer: {
     flex: 1,

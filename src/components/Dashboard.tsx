@@ -169,7 +169,7 @@ interface ApiResponse {
 
 // Theme Colors
 const lightColors = {
-  primary: '#FFFFFF',
+  primary: '#e7e6e5',
   backgroundSecondary: '#F8F9FA',
   white: '#FFFFFF',
   text: '#1A1A1A',
@@ -272,7 +272,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             styles.menuContainer,
             {
               transform: [{ translateX: slideAnim }],
-              backgroundColor: isDark ? '#111B21' : '#FFFFFF',
+              backgroundColor: isDark ? '#111B21' : '#e7e6e5',
             },
           ]}
         >
@@ -462,8 +462,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // New dashboard theme mapping
   const theme = {
-    bgColor: isDark ? '#050b18' : '#f8f9fa',
-    cardBg: isDark ? '#111a2d' : '#ffffff',
+    bgColor: isDark ? '#050b18' : '#ece5dd',
+    cardBg: isDark ? '#111a2d' : '#f6f6f6',
     textMain: isDark ? '#ffffff' : '#333333',
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: isDark ? '#008069' : '#008069',
@@ -1236,11 +1236,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowBDT(true);
       // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
-      // setShowMedical(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowMedical(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('scout')) {
-      // setShowScoutBoy(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowScoutBoy(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('reminder')) {
       setShowReminder(true); 
       // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
@@ -1248,8 +1248,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowBUP(true);
       // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('employee_management')) {
-      // setShowEmployeeManagement(true);
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowEmployeeManagement(true);
+      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
     else if (key.includes('driver_manager') || key.includes('driver manager')) {
       setShowDriverManager(true);
@@ -1824,7 +1824,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               {
                 opacity: circleScale,
                 transform: [{ scale: circleScale }],
-                backgroundColor: isDark ? '#f8f9fa' : '#050b18',
+                backgroundColor: isDark ? '#e7e6e5' : '#050b18',
               },
             ]}
           />

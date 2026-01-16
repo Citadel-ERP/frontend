@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     },
     screenContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#e7e6e5',
     },
     safeArea: {
         flex: 1,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#e7e6e5',
     },
     scrollContent: {
         flexGrow: 1,

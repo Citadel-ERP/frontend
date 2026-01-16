@@ -315,7 +315,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
 const styles = StyleSheet.create({
     screenContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#e7e6e5',
     },
     scrollContainer: {
         flex: 1,
