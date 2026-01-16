@@ -100,7 +100,7 @@ export interface MaintenanceRecord {
   logged_by: AssignedEmployee;
   start_date: string;
   end_date: string;
-  document ?: string | null;
+  document?: string | null;
 }
 
 export interface FuelLog {
@@ -156,8 +156,8 @@ export interface MaintenanceLogsModalProps {
   onClose: () => void;
   logs: MaintenanceRecord[];
   formatDate: (dateString: string) => string;
-  token?: string;  
-  vehicleId?: number; 
+  token?: string;
+  vehicleId?: number;
 }
 
 export interface FuelLogsModalProps {
@@ -165,8 +165,8 @@ export interface FuelLogsModalProps {
   onClose: () => void;
   logs: FuelLog[];
   formatDateTime: (dateString: string) => string;
-  token?: string;  
-  vehicleId?: number; 
+  token?: string;
+  vehicleId?: number;
 }
 export interface VehicleAssignment {
   id: number;
@@ -177,5 +177,13 @@ export interface VehicleAssignment {
   created_at: string;
   updated_at: string;
 }
-
+export interface Driver {
+  id: number;
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  profile_picture: string | null;
+}
 export type ViewType = 'main' | 'vehicle-detail' | 'booking-detail' | 'update-vehicle' | 'create-vehicle';

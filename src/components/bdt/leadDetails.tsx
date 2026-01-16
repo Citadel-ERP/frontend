@@ -160,6 +160,31 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
     });
   }, []);
 
+  // WhatsApp-style date formatting
+  const formatWhatsAppDate = useCallback((dateString: string): string => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Normalize dates to compare only dates (ignore time)
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+    if (compareDate.getTime() === compareToday.getTime()) {
+      return 'Today';
+    } else if (compareDate.getTime() === compareYesterday.getTime()) {
+      return 'Yesterday';
+    } else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+      // Within the last week, show day name
+      return date.toLocaleDateString('en-US', { weekday: 'short' });
+    } else {
+      // Older than a week, show full date
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  }, []);
+
   const formatFileSize = useCallback((bytes?: number): string => {
     if (!bytes) return 'Unknown size';
     if (bytes < 1024) return bytes + ' B';
@@ -170,6 +195,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   const truncateFileName = useCallback((fileName: string, maxLength: number = 25): string => {
     if (fileName.length <= maxLength) return fileName;
     return fileName.substring(0, maxLength - 3) + '...';
+  }, []);
+
+  const getInitials = useCallback((name: string): string => {
+    if (!name || name.trim().length === 0) return '?';
+    const nameParts = name.trim().split(/\s+/);
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
+    }
   }, []);
 
   const handleDownloadFile = useCallback(async (fileUrl: string, fileName: string) => {
@@ -191,6 +226,43 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       );
     }
   }, []);
+
+  // Process comments to include date separators
+  const getProcessedComments = useCallback(() => {
+    if (!comments || comments.length === 0) return [];
+    
+    const processed: any[] = [];
+    let lastDate = '';
+    
+    // Sort comments by date (oldest to newest)
+    const sortedComments = [...comments].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    
+    sortedComments.forEach((comment, index) => {
+      const commentDate = formatWhatsAppDate(comment.date);
+      
+      // Add date separator if this is the first comment or date has changed
+      if (commentDate !== lastDate) {
+        processed.push({
+          type: 'dateSeparator',
+          id: `date-${commentDate}-${index}`,
+          date: commentDate,
+          originalDate: comment.date
+        });
+        lastDate = commentDate;
+      }
+      
+      // Add the comment
+      processed.push({
+        type: 'comment',
+        id: comment.id,
+        data: comment
+      });
+    });
+    
+    return processed;
+  }, [comments, formatWhatsAppDate]);
 
   // API functions
   const fetchComments = useCallback(async (
@@ -414,8 +486,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
     return newComment.trim().length > 0 || selectedDocuments.length > 0;
   }, [newComment, selectedDocuments]);
 
-  // Memoized render functions
-  const renderChatBubble = useCallback(({ item }: { item: Comment }) => {
+  // Render functions for chat items
+  const renderDateSeparator = useCallback(({ item }: { item: any }) => {
+    return (
+      <View style={s.dateSeparatorContainer}>
+        <View style={s.dateSeparatorBubble}>
+          <Text style={s.dateSeparatorText}>{item.date}</Text>
+        </View>
+      </View>
+    );
+  }, []);
+
+  const renderCommentItem = useCallback(({ item }: { item: Comment }) => {
     const isCurrentUser = item.employeeId === currentUserEmployeeId;
     const time = formatTime(item.date);
 
@@ -525,6 +607,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
     );
   }, [currentUserEmployeeId, formatTime, handleDownloadFile, truncateFileName]);
 
+  const renderChatItem = useCallback(({ item }: { item: any }) => {
+    if (item.type === 'dateSeparator') {
+      return renderDateSeparator({ item });
+    } else {
+      return renderCommentItem({ item: item.data });
+    }
+  }, [renderDateSeparator, renderCommentItem]);
+
   const ModernHeader = useMemo(() => (
     <SafeAreaView style={s.headerSafeArea}>
       <View style={s.header}>
@@ -542,7 +632,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
             <View style={s.avatarContainer}>
               <View style={s.avatarPlaceholder}>
                 <Text style={s.avatarText}>
-                  {lead.name?.charAt(0)?.toUpperCase() || 'L'}
+                  {getInitials(lead.name || 'L')}
                 </Text>
               </View>
               <View style={s.onlineIndicator} />
@@ -568,7 +658,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
         </View>
       </View>
     </SafeAreaView>
-  ), [onBack, onIncentivePress, onEdit, lead, beautifyName]);
+  ), [onBack, onIncentivePress, onEdit, lead, beautifyName, getInitials]);
 
   const renderModalSection = useCallback(({ item }: { item: string }) => {
     switch (item) {
@@ -579,7 +669,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
               <View style={s.infoAvatarContainer}>
                 <View style={s.infoAvatar}>
                   <Text style={s.infoAvatarText}>
-                    {lead.name?.charAt(0)?.toUpperCase() || 'L'}
+                    {getInitials(lead.name || 'L')}
                   </Text>
                 </View>
               </View>
@@ -658,7 +748,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
                 <View key={collab.id} style={s.collaboratorItem}>
                   <View style={s.collaboratorAvatar}>
                     <Text style={s.collaboratorAvatarText}>
-                      {collab.user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                      {getInitials(collab.user.full_name || 'U')}
                     </Text>
                   </View>
                   <Text style={s.collaboratorName} numberOfLines={1}>
@@ -683,7 +773,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       default:
         return null;
     }
-  }, [lead, collaborators, beautifyName, formatDateTime]);
+  }, [lead, collaborators, beautifyName, formatDateTime, getInitials]);
 
   const modalSections = useMemo(() => {
     const sections = ['lead-info', 'contact-info', 'metadata'];
@@ -742,8 +832,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           ) : (
             <FlatList
               ref={flatListRef}
-              data={comments}
-              renderItem={renderChatBubble}
+              data={getProcessedComments()}
+              renderItem={renderChatItem}
               keyExtractor={(item) => item.id}
               inverted={false}
               onEndReached={handleLoadMoreComments}
@@ -1072,8 +1162,8 @@ const s = StyleSheet.create({
   notesText: { fontSize: 15, color: C.textPrimary, lineHeight: 22 },
   chatContainer: { flex: 1, backgroundColor: C.chatBg },
   chatListContent: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingHorizontal: 8,
+    paddingTop: 8,
     paddingBottom: 20
   },
   chatBubbleContainer: { marginVertical: 4, maxWidth: '80%' },
@@ -1274,7 +1364,24 @@ const s = StyleSheet.create({
     borderBottomColor: C.border
   },
   defaultCommentText: { fontSize: 16, color: C.textPrimary, lineHeight: 22 },
-  modalBottomSpacing: { height: 40 }
+  modalBottomSpacing: { height: 40 },
+  
+  // New styles for date separators
+  dateSeparatorContainer: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateSeparatorBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  dateSeparatorText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
 });
 
 export default LeadDetails;

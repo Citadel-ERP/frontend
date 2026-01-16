@@ -10,7 +10,7 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
-  SafeAreaView,
+  // SafeAreaView,
   FlatList,
   Image,
   Linking,
@@ -26,6 +26,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 

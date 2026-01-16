@@ -23,6 +23,259 @@ export const styles = StyleSheet.create({
         paddingBottom: 100,
     },
 
+    sectionDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    marginBottom: 16,
+},
+
+vehicleListContainer: {
+    gap: 12,
+    marginTop: 12,
+},
+
+driverListContainer: {
+    gap: 12,
+    marginTop: 12,
+},
+
+vehicleCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+},
+
+driverCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    flex: 1,
+},
+
+selectedIconContainer: {
+    position: 'absolute',
+    top: '50%',
+    right: 12,
+    transform: [{ translateY: -14 }],
+},
+
+driverEmail: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+},
+
+// ==================== IMPROVED BUTTON STYLES ====================
+modalActionsFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+},
+
+backButtonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#008069',
+    gap: 8,
+    minWidth: 120,
+},
+
+backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#008069',
+},
+
+nextButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#008069',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 10,
+    shadowColor: '#008069',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+},
+
+nextButtonDisabled: {
+    backgroundColor: '#B0D9CB',
+    shadowOpacity: 0,
+    elevation: 0,
+},
+
+nextButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+},
+
+confirmButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#008069',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 10,
+    shadowColor: '#008069',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 5,
+},
+
+confirmButtonDisabled: {
+    backgroundColor: '#B0D9CB',
+    shadowOpacity: 0,
+    elevation: 0,
+},
+
+confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+},
+
+// Update existing vehicleCard style
+vehicleCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E9EDEF',
+    overflow: 'hidden',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    transition: 'all 0.2s ease',
+},
+
+selectedCard: {
+    borderColor: '#008069',
+    backgroundColor: '#F0FFF4',
+    shadowColor: '#008069',
+    shadowOpacity: 0.15,
+    elevation: 4,
+},
+
+// Update existing driverCard style
+driverCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E9EDEF',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+},
+
+driverAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#008069',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    shadowColor: '#008069',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+},
+
+driverAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 20,
+    letterSpacing: 1,
+},
+
+driverInfo: {
+    flex: 1,
+    paddingRight: 40,
+},
+
+driverName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 4,
+    letterSpacing: 0.3,
+},
+
+driverMeta: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 2,
+},
+
+// Enhanced empty state
+emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+},
+
+emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F0FFF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#C6E9D8',
+},
+
+emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+},
+
+emptyStateText: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+},
+
     // ==================== HEADERS ====================
     header: {
         position: 'relative',
@@ -182,24 +435,24 @@ export const styles = StyleSheet.create({
 
     // ==================== BACK BUTTONS ====================
     backIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,  // Increase from 4 to 8 for more space
-},
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,  // Increase from 4 to 8 for more space
+    },
     backArrow: {
-    width: 14,
-    height: 14,
-    borderLeftWidth: 3,
-    borderTopWidth: 3,
-    borderColor: '#fff',
-    transform: [{ rotate: '-45deg' }],
-},
+        width: 14,
+        height: 14,
+        borderLeftWidth: 3,
+        borderTopWidth: 3,
+        borderColor: '#fff',
+        transform: [{ rotate: '-45deg' }],
+    },
     backText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 2,  // More space from arrow
-    fontWeight: '600',  // Bolder
-},
+        color: '#fff',
+        fontSize: 14,
+        marginLeft: 2,  // More space from arrow
+        fontWeight: '600',  // Bolder
+    },
     detailHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -737,7 +990,7 @@ export const styles = StyleSheet.create({
         color: '#8E8E93',
         marginLeft: 8,
     },
-    
+
     // Date Time Inputs (Updated for WhatsApp style)
     dateTimeInput: {
         flex: 1,
@@ -756,7 +1009,7 @@ export const styles = StyleSheet.create({
         marginLeft: 12,
         fontWeight: '500',
     },
-    
+
     // WhatsApp-style date time button
     dateTimeButton: {
         flexDirection: 'row',
@@ -774,7 +1027,7 @@ export const styles = StyleSheet.create({
         color: '#333333',
         marginLeft: 12,
     },
-    
+
     // Text Area (Updated)
     textAreaContainer: {
         backgroundColor: '#F8F9FA',
@@ -789,7 +1042,7 @@ export const styles = StyleSheet.create({
         minHeight: 100,
         textAlignVertical: 'top',
     },
-    
+
     descriptionInput: {
         flex: 1,
         padding: 16,
@@ -798,7 +1051,7 @@ export const styles = StyleSheet.create({
         minHeight: 100,
         textAlignVertical: 'top',
     },
-    
+
     dateButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -903,7 +1156,7 @@ export const styles = StyleSheet.create({
     removeUserButton: {
         padding: 8,
     },
-    
+
     // WhatsApp-style search
     searchButton: {
         flexDirection: 'row',
@@ -923,7 +1176,7 @@ export const styles = StyleSheet.create({
         color: '#333333',
         marginLeft: 12,
     },
-    
+
     // WhatsApp-style search container
     searchContainer: {
         marginTop: 12,
@@ -939,7 +1192,7 @@ export const styles = StyleSheet.create({
         borderColor: '#E9EDEF',
         marginBottom: 8,
     },
-    
+
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -953,7 +1206,7 @@ export const styles = StyleSheet.create({
         color: '#666',
         fontSize: 14,
     },
-    
+
     // WhatsApp-style results list
     resultsList: {
         maxHeight: 200,
@@ -996,7 +1249,7 @@ export const styles = StyleSheet.create({
         fontSize: 12,
         color: '#8E8E93',
     },
-    
+
     // WhatsApp-style no results
     noResults: {
         alignItems: 'center',
@@ -1023,7 +1276,7 @@ export const styles = StyleSheet.create({
     keyboardAvoidingView: {
         width: '100%',
     },
-    
+
     // WhatsApp-style modal container
     modalContainer: {
         backgroundColor: '#F0F2F5',
@@ -1032,7 +1285,7 @@ export const styles = StyleSheet.create({
         maxHeight: screenHeight * 0.9,
         width: '100%',
     },
-    
+
     // WhatsApp-style modal header
     modalHeader: {
         flexDirection: 'row',
@@ -1072,11 +1325,11 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
         marginLeft: 8,
     },
-    
+
     modalScrollContent: {
         paddingBottom: 30,
     },
-    
+
     // WhatsApp-style section
     section: {
         backgroundColor: '#FFFFFF',
@@ -1098,7 +1351,7 @@ export const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#F0F0F0',
     },
-    
+
     // Modal close button (legacy)
     modalCloseButton: {
         width: 40,
@@ -1108,7 +1361,7 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    
+
     downloadButton: {
         width: 40,
         height: 40,
@@ -1117,7 +1370,7 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    
+
     // WhatsApp-style action buttons
     modalActions: {
         flexDirection: 'row',
@@ -1135,6 +1388,7 @@ export const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E9EDEF',
         marginRight: 8,
+        width: '30%',
     },
     cancelButtonText: {
         fontSize: 16,
@@ -1166,7 +1420,7 @@ export const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#FFFFFF',
     },
-    
+
     // Legacy modal buttons (keeping for compatibility)
     modalButtons: {
         flexDirection: 'row',
@@ -1312,21 +1566,6 @@ export const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#008069',
     },
-    emptyStateContainer: {
-        alignItems: 'center',
-        paddingVertical: 60,
-        paddingHorizontal: 20,
-        backgroundColor: '#F0F2F5',
-    },
-    emptyIconCircle: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#E8F5E9',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-    },
     emptyStateCard: {
         backgroundColor: '#fff',
         borderRadius: 20,
@@ -1349,19 +1588,7 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 24,
     },
-    emptyStateTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    emptyStateText: {
-        fontSize: 15,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 22,
-    },
+    
     emptyStateSubtext: {
         fontSize: 14,
         color: '#999',
@@ -1506,11 +1733,11 @@ export const styles = StyleSheet.create({
         color: '#333',
         flex: 1,
     },
-    
+
     scrollView: {
         flex: 1,
     },
-    
+
     photoScrollContent: {
         paddingVertical: 8,
     },
@@ -1958,4 +2185,89 @@ export const styles = StyleSheet.create({
         color: '#2E7D32',
         fontWeight: '500',
     },
+    stepIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 20,
+        paddingHorizontal: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    stepItem: {
+        alignItems: 'center',
+    },
+    stepCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#f0f0f0',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    stepCircleActive: {
+        backgroundColor: '#008069',
+    },
+    stepNumber: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#999',
+    },
+    stepNumberActive: {
+        color: '#FFFFFF',
+    },
+    stepLabel: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '500',
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: '#f0f0f0',
+        marginHorizontal: 8,
+    },
+
+    // Vehicle Card Styles
+    
+    
+
+    vehicleImagePlaceholder: {
+        width: 80,
+        height: 80,
+        borderRadius: 8,
+        backgroundColor: '#f0f0f0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    vehicleDetails: {
+        flex: 1,
+        marginLeft: 12,
+        justifyContent: 'center',
+    },
+
+    vehicleSpecs: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    specBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 128, 105, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        gap: 4,
+    },
+
+    selectedIcon: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+    },
+
+    // Driver Card Styles
+    
 });
