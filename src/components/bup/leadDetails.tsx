@@ -38,7 +38,7 @@ const C = {
   accent: '#10B981',
   danger: '#EF4444',
   warning: '#F59E0B',
-  background: '#e7e6e5',
+  background: '#f0f0f0',
   surface: '#FFFFFF',
   textPrimary: '#1F2937',
   textSecondary: '#6B7280',
@@ -131,7 +131,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const handleKeyboardShow = (event: KeyboardEvent) => {
     setIsKeyboardVisible(true);
     if (Platform.OS === 'android') {
-      // On Android, we'll manually animate the keyboard height
       Animated.timing(keyboardHeightAnim, {
         toValue: event.endCoordinates.height,
         duration: 250,
@@ -143,7 +142,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const handleKeyboardHide = () => {
     setIsKeyboardVisible(false);
     if (Platform.OS === 'android') {
-      // On Android, immediately set keyboard height to 0 to avoid the extra padding issue
       Animated.timing(keyboardHeightAnim, {
         toValue: 0,
         duration: 250,
@@ -677,61 +675,55 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
   const ModernHeader = useMemo(() => (
     <SafeAreaView style={s.headerSafeArea}>
-
       <View style={s.header}>
-        <StatusBar barStyle="light-content" backgroundColor={C.primary} />
-        <View style={s.headerContent}>
-          <TouchableOpacity onPress={onBack} style={s.backButton}>
-            <View style={s.backIcon}>
-              <View style={s.backArrow} />
-            </View>
-          </TouchableOpacity>
+        <TouchableOpacity onPress={onBack} style={s.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={s.headerInfo}
-            onPress={() => setShowLeadDetailsModal(true)}
-            activeOpacity={0.7}
-          >
-            <View style={s.avatarContainer}>
-              <View style={s.avatarPlaceholder}>
-                <Text style={s.avatarText}>
-                  {getInitials(lead.name)}
-                </Text>
-              </View>
-            </View>
-            <View style={s.headerTextContainer}>
-              <Text style={s.headerTitle} numberOfLines={1}>
-                {lead.name || 'Lead'}
-              </Text>
-              <Text style={s.headerSubtitle} numberOfLines={1}>
-                {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
+        <TouchableOpacity
+          style={s.headerInfo}
+          onPress={() => setShowLeadDetailsModal(true)}
+          activeOpacity={0.7}
+        >
+          <View style={s.avatarContainer}>
+            <View style={s.avatarPlaceholder}>
+              <Text style={s.avatarText}>
+                {getInitials(lead.name)}
               </Text>
             </View>
-          </TouchableOpacity>
-
-          <View style={s.headerActions}>
-            <TouchableOpacity style={s.headerActionButton}>
-              <MaterialIcons name="receipt" size={22} color="#FFF" />
-            </TouchableOpacity>
-
-            {lead.incentive_present && (
-              <TouchableOpacity
-                style={[s.headerActionButton, s.incentiveButton]}
-                onPress={handleIncentivePress}
-                disabled={loadingIncentive}
-              >
-                {loadingIncentive ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <MaterialIcons name="monetization-on" size={22} color="#FFF" />
-                )}
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
-              <MaterialIcons name="edit" size={22} color="#FFF" />
-            </TouchableOpacity>
           </View>
+          <View style={s.headerTextContainer}>
+            <Text style={s.headerTitle} numberOfLines={1}>
+              {lead.name || 'Lead'}
+            </Text>
+            <Text style={s.headerSubtitle} numberOfLines={1}>
+              {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={s.headerActions}>
+          <TouchableOpacity style={s.headerActionButton}>
+            <MaterialIcons name="receipt" size={22} color="#FFF" />
+          </TouchableOpacity>
+
+          {lead.incentive_present && (
+            <TouchableOpacity
+              style={[s.headerActionButton, s.incentiveButton]}
+              onPress={handleIncentivePress}
+              disabled={loadingIncentive}
+            >
+              {loadingIncentive ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+              )}
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
+            <MaterialIcons name="edit" size={22} color="#FFF" />
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -880,28 +872,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      <View style={s.modalHeader}>
-        <TouchableOpacity
-          onPress={() => setShowLeadDetailsModal(false)}
-          style={s.modalBackButton}
-        >
-          <View style={s.backIcon}>
-            <View style={s.backArrow} />
-            <Text style={s.backText}>Back</Text>
-          </View>
-        </TouchableOpacity>
-        <Text style={s.modalTitle}>Lead Details</Text>
-        <View style={s.modalRightPlaceholder} />
-      </View>
-      <FlatList
-        ref={modalFlatListRef}
-        data={modalSections}
-        renderItem={renderModalSection}
-        keyExtractor={(item) => item}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.modalScrollContent}
-        ListFooterComponent={<View style={s.modalBottomSpacing} />}
-      />
+      <SafeAreaView style={s.modalSafeArea}>
+        <View style={s.modalHeader}>
+          <TouchableOpacity
+            onPress={() => setShowLeadDetailsModal(false)}
+            style={s.modalBackButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={s.modalTitle}>Lead Details</Text>
+          <View style={s.modalRightPlaceholder} />
+        </View>
+        <FlatList
+          ref={modalFlatListRef}
+          data={modalSections}
+          renderItem={renderModalSection}
+          keyExtractor={(item) => item}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.modalScrollContent}
+          ListFooterComponent={<View style={s.modalBottomSpacing} />}
+        />
+      </SafeAreaView>
     </Modal>
   ), [showLeadDetailsModal, modalSections, renderModalSection]);
 
@@ -910,7 +901,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       {ModernHeader}
       {ContactInfoModal}
 
-      {/* Android-specific keyboard handling to avoid the extra padding issue */}
       {Platform.OS === 'android' ? (
         <View style={s.androidContainer}>
           <View style={s.chatContainer}>
@@ -987,59 +977,56 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <Animated.View style={[s.androidInputContainer, { marginBottom: keyboardHeightAnim }]}>
             <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
               <View style={s.inputContainer}>
-                <View style={s.inputWrapper}>
-                  <View style={s.inputRow}>
-                    <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                      <Ionicons name="attach" size={22} color={C.primary} />
-                      {selectedDocuments.length > 0 && (
-                        <View style={s.fileCounterBadge}>
-                          <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    <View style={s.inputField}>
-                      <TextInput
-                        ref={inputRef}
-                        style={s.messageInput}
-                        value={newComment}
-                        onChangeText={setNewComment}
-                        placeholder="Type your message..."
-                        multiline
-                        maxLength={1000}
-                        placeholderTextColor={C.textTertiary}
-                        editable={!addingComment}
-                      />
-                    </View>
-                    <TouchableOpacity
-                      style={[
-                        s.sendButton,
-                        { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
-                      ]}
-                      onPress={handleAddComment}
-                      disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-                    >
-                      {addingComment ? (
-                        <ActivityIndicator color="#FFF" size="small" />
-                      ) : (
-                        <Ionicons
-                          name="send"
-                          size={18}
-                          color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
-                        />
-                      )}
-                    </TouchableOpacity>
+                <View style={s.inputRow}>
+                  <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                    <Ionicons name="attach" size={22} color={C.primary} />
+                    {selectedDocuments.length > 0 && (
+                      <View style={s.fileCounterBadge}>
+                        <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={s.inputField}>
+                    <TextInput
+                      ref={inputRef}
+                      style={s.messageInput}
+                      value={newComment}
+                      onChangeText={setNewComment}
+                      placeholder="Type your message..."
+                      multiline
+                      maxLength={1000}
+                      placeholderTextColor={C.textTertiary}
+                      editable={!addingComment}
+                    />
                   </View>
+                  <TouchableOpacity
+                    style={[
+                      s.sendButton,
+                      { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                    ]}
+                    onPress={handleAddComment}
+                    disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                  >
+                    {addingComment ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <Ionicons
+                        name="send"
+                        size={18}
+                        color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                      />
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
             </SafeAreaView>
           </Animated.View>
         </View>
       ) : (
-        // iOS - Use standard KeyboardAvoidingView
         <KeyboardAvoidingView
           style={s.iosContainer}
           behavior="padding"
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
           <View style={s.chatContainer}>
             {loadingComments ? (
@@ -1114,48 +1101,46 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
           <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
             <View style={s.inputContainer}>
-              <View style={s.inputWrapper}>
-                <View style={s.inputRow}>
-                  <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                    <Ionicons name="attach" size={22} color={C.primary} />
-                    {selectedDocuments.length > 0 && (
-                      <View style={s.fileCounterBadge}>
-                        <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <View style={s.inputField}>
-                    <TextInput
-                      ref={inputRef}
-                      style={s.messageInput}
-                      value={newComment}
-                      onChangeText={setNewComment}
-                      placeholder="Type your message..."
-                      multiline
-                      maxLength={1000}
-                      placeholderTextColor={C.textTertiary}
-                      editable={!addingComment}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      s.sendButton,
-                      { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
-                    ]}
-                    onPress={handleAddComment}
-                    disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-                  >
-                    {addingComment ? (
-                      <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                      <Ionicons
-                        name="send"
-                        size={18}
-                        color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
-                      />
-                    )}
-                  </TouchableOpacity>
+              <View style={s.inputRow}>
+                <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                  <Ionicons name="attach" size={22} color={C.primary} />
+                  {selectedDocuments.length > 0 && (
+                    <View style={s.fileCounterBadge}>
+                      <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <View style={s.inputField}>
+                  <TextInput
+                    ref={inputRef}
+                    style={s.messageInput}
+                    value={newComment}
+                    onChangeText={setNewComment}
+                    placeholder="Type your message..."
+                    multiline
+                    maxLength={1000}
+                    placeholderTextColor={C.textTertiary}
+                    editable={!addingComment}
+                  />
                 </View>
+                <TouchableOpacity
+                  style={[
+                    s.sendButton,
+                    { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                  ]}
+                  onPress={handleAddComment}
+                  disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                >
+                  {addingComment ? (
+                    <ActivityIndicator color="#FFF" size="small" />
+                  ) : (
+                    <Ionicons
+                      name="send"
+                      size={18}
+                      color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                    />
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
           </SafeAreaView>
@@ -1228,11 +1213,11 @@ const s = StyleSheet.create({
     backgroundColor: C.primary,
     paddingTop: Platform.OS === 'android' ? 0 : 0,
   },
-  header: {
-    backgroundColor: C.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: C.primaryDark,
-  },
+  // header: {
+  //   backgroundColor: C.primary,
+  //   borderBottomWidth: 1,
+  //   borderBottomColor: C.primaryDark,
+  // },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1241,42 +1226,39 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     minHeight: 60,
   },
-  backButton: {
-    padding: 8,
-    minWidth: 40,
-  },
-  backIcon: {
+  header: {
+    backgroundColor: C.primary,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.primaryDark,
   },
-  backArrow: {
-    width: 10,
-    height: 10,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#FFF',
-    transform: [{ rotate: '-45deg' }],
+  backButton: {
+    padding: 6,
+    marginRight: 8,
   },
   headerInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 8,
   },
   avatarContainer: {
-    marginRight: 8,
+    marginRight: 10,
   },
   avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: C.primary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   headerTextContainer: {
@@ -1286,22 +1268,20 @@ const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 80,
-    justifyContent: 'flex-end',
-    gap: 8,
+    gap: 4,
   },
   headerActionButton: {
     padding: 6,
-    borderRadius: 6,
+    borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   incentiveButton: {
@@ -1312,22 +1292,21 @@ const s = StyleSheet.create({
   modalSafeArea: {
     flex: 1,
     backgroundColor: C.background,
-    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     backgroundColor: C.primary,
-    height: 70,
+    height: 56,
   },
   modalBackButton: {
-    padding: 8,
-    marginRight: 12,
+    padding: 6,
+    marginRight: 8,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
     flex: 1,
@@ -1337,36 +1316,36 @@ const s = StyleSheet.create({
     width: 40,
   },
   modalScrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     flexGrow: 1,
   },
 
   // Info Card Styles
   infoCard: {
     backgroundColor: C.surface,
-    marginBottom: 16,
-    borderRadius: 12,
-    padding: 20,
+    marginBottom: 12,
+    borderRadius: 8,
+    padding: 16,
   },
   infoCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   infoAvatarContainer: {
-    marginRight: 16
+    marginRight: 12
   },
   infoAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: C.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   infoAvatarText: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '600',
     color: '#FFF'
   },
@@ -1374,61 +1353,61 @@ const s = StyleSheet.create({
     flex: 1
   },
   infoName: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '600',
     color: C.textPrimary,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   infoCompany: {
-    fontSize: 16,
+    fontSize: 14,
     color: C.textSecondary
   },
   statusBadges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8
+    gap: 6
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16
   },
   statusBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500'
   },
 
   // Section Styles
   section: {
     backgroundColor: C.surface,
-    marginBottom: 12,
-    borderRadius: 12,
-    padding: 20,
+    marginBottom: 10,
+    borderRadius: 8,
+    padding: 16,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: C.primary,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    padding: 12,
+    marginBottom: 10,
+    padding: 10,
     backgroundColor: C.background,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   detailValue: {
-    fontSize: 15,
+    fontSize: 14,
     color: C.textPrimary,
-    marginLeft: 12,
+    marginLeft: 10,
     flex: 1,
   },
   copyButton: {
@@ -1437,53 +1416,53 @@ const s = StyleSheet.create({
   metadataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     paddingVertical: 4,
   },
   metadataLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: C.textSecondary,
     marginLeft: 8,
     marginRight: 4,
-    minWidth: 100,
+    minWidth: 90,
   },
   metadataValue: {
-    fontSize: 14,
+    fontSize: 13,
     color: C.textPrimary,
     flex: 1
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     color: C.textTertiary,
     fontStyle: 'italic',
     textAlign: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   collaboratorsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12
+    gap: 10
   },
   collaboratorItem: {
     alignItems: 'center',
-    width: 80
+    width: 70
   },
   collaboratorAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: C.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   collaboratorAvatarText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFF'
   },
   collaboratorName: {
-    fontSize: 12,
+    fontSize: 11,
     color: C.textSecondary,
     textAlign: 'center',
   },
@@ -1494,25 +1473,25 @@ const s = StyleSheet.create({
     backgroundColor: C.chatBg
   },
   chatListContent: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    paddingBottom: 10,
     flexGrow: 1,
   },
 
   // Date Separator (HR Style)
   dateSeparatorContainer: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 10,
   },
   dateSeparatorBubble: {
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   dateSeparatorText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
     fontWeight: '500',
   },
@@ -1520,8 +1499,8 @@ const s = StyleSheet.create({
   // Message Alignment Styles
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 8,
-    paddingHorizontal: 8,
+    marginBottom: 6,
+    paddingHorizontal: 6,
     alignItems: 'flex-start',
   },
   messageRowLeft: {
@@ -1531,68 +1510,58 @@ const s = StyleSheet.create({
     justifyContent: 'flex-end',
   },
 
-  // Avatars
-  otherAvatar: {
-    marginRight: 8,
-    alignSelf: 'flex-start',
-  },
-  currentUserAvatar: {
-    marginLeft: 8,
-    alignSelf: 'flex-start',
-  },
-
   // Message Bubbles
   messageBubble: {
-    maxWidth: '70%',
-    borderRadius: 12,
-    padding: 12,
+    maxWidth: '75%',
+    borderRadius: 10,
+    padding: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    elevation: 1,
   },
   currentUserBubble: {
     backgroundColor: C.outgoing,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 3,
   },
   otherUserBubble: {
     backgroundColor: C.incoming,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 3,
   },
 
   // Sender Header
   senderHeader: {
-    marginBottom: 4,
+    marginBottom: 3,
   },
   senderName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: C.primary,
-    marginBottom: 2,
+    marginBottom: 1,
   },
 
   // Message Text Styles
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     color: C.textPrimary,
-    lineHeight: 22,
+    lineHeight: 20,
   },
 
   // Documents Container
   documentsContainer: {
-    marginBottom: 8,
-    gap: 8,
+    marginBottom: 6,
+    gap: 6,
   },
   imageWrapper: {
     position: 'relative',
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   commentImage: {
-    width: 200,
-    height: 150,
-    borderRadius: 12,
+    width: 180,
+    height: 130,
+    borderRadius: 8,
   },
   imageOverlay: {
     position: 'absolute',
@@ -1608,14 +1577,14 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(7, 94, 84, 0.1)',
-    padding: 12,
-    borderRadius: 12,
-    gap: 12,
+    padding: 10,
+    borderRadius: 8,
+    gap: 10,
   },
   documentIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1624,13 +1593,13 @@ const s = StyleSheet.create({
     flex: 1,
   },
   documentName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: C.textPrimary,
     marginBottom: 2,
   },
   documentSize: {
-    fontSize: 12,
+    fontSize: 11,
     color: C.textSecondary,
   },
 
@@ -1639,14 +1608,14 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
   messageTime: {
-    fontSize: 11,
+    fontSize: 10,
     color: C.textTertiary,
   },
   deliveryIcon: {
-    marginLeft: 4,
+    marginLeft: 3,
   },
 
   // Selected Files Preview
@@ -1654,36 +1623,37 @@ const s = StyleSheet.create({
     backgroundColor: C.surface,
     borderTopWidth: 1,
     borderTopColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   selectedFilesTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: C.textSecondary,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   selectedDocumentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: C.background,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    minWidth: 180,
-    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 160,
+    gap: 6,
+    marginRight: 8,
   },
   selectedDocumentInfo: {
     flex: 1
   },
   selectedDocumentName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: C.textPrimary,
     marginBottom: 2,
   },
   selectedDocumentSize: {
-    fontSize: 11,
+    fontSize: 10,
     color: C.textTertiary
   },
 
@@ -1693,20 +1663,18 @@ const s = StyleSheet.create({
   },
   inputContainer: {
     backgroundColor: C.surface,
-    paddingBottom: Platform.OS === 'ios' ? 0 : 10,
-  },
-  inputWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
+    gap: 8,
   },
   attachmentButton: {
-    padding: 8,
+    padding: 6,
     position: 'relative',
   },
   fileCounterBadge: {
@@ -1714,41 +1682,42 @@ const s = StyleSheet.create({
     top: -4,
     right: -4,
     backgroundColor: C.danger,
-    borderRadius: 10,
-    width: 18,
-    height: 18,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fileCounterText: {
-    fontSize: 10,
+    fontSize: 9,
     color: C.surface,
     fontWeight: '600',
   },
   inputField: {
     flex: 1,
     backgroundColor: C.background,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minHeight: 40,
-    maxHeight: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
+    maxHeight: 80,
   },
   messageInput: {
-    fontSize: 15,
+    fontSize: 14,
     color: C.textPrimary,
     padding: 0,
-    maxHeight: 80,
+    maxHeight: 72,
     textAlignVertical: 'center',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 4,
   },
 
   // Loading States
@@ -1756,33 +1725,33 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 15,
     color: C.textSecondary
   },
   loadMoreContainer: {
     alignItems: 'center',
-    paddingVertical: 16
+    paddingVertical: 12
   },
   emptyChat: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 100,
-    gap: 16,
+    paddingVertical: 80,
+    gap: 12,
   },
   emptyChatTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: C.textPrimary
   },
   emptyChatText: {
-    fontSize: 14,
+    fontSize: 13,
     color: C.textSecondary,
     textAlign: 'center',
-    maxWidth: 200,
+    maxWidth: 180,
   },
 
   // Default Comments
@@ -1794,11 +1763,11 @@ const s = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   defaultCommentsModal: {
     backgroundColor: C.surface,
-    borderRadius: 16,
+    borderRadius: 12,
     maxHeight: screenHeight * 0.6,
     overflow: 'hidden',
   },
@@ -1806,13 +1775,13 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
   defaultCommentsTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: C.primary
   },
@@ -1820,28 +1789,23 @@ const s = StyleSheet.create({
     padding: 4
   },
   defaultCommentsList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8
   },
   defaultCommentItem: {
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
   defaultCommentText: {
-    fontSize: 16,
+    fontSize: 15,
     color: C.textPrimary,
-    lineHeight: 22
+    lineHeight: 20
   },
 
   modalBottomSpacing: {
-    height: 40
-  },
-  backText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 2,
+    height: 30
   },
 });
 

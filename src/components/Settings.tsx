@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,9 +35,49 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(isDark);
   const [appVersion] = useState('1.0.0');
-  const [messagePreview, setMessagePreview] = useState(true);
 
   const isWeb = Platform.OS === 'web';
+
+  // Load notification setting on component mount
+  useEffect(() => {
+    loadNotificationSetting();
+  }, []);
+
+  const loadNotificationSetting = async () => {
+    try {
+      const storedSetting = await AsyncStorage.getItem('notifications_enabled');
+      if (storedSetting !== null) {
+        setNotificationsEnabled(storedSetting === 'true');
+      } else {
+        // Default to true if not set
+        await AsyncStorage.setItem('notifications_enabled', 'true');
+        setNotificationsEnabled(true);
+      }
+    } catch (error) {
+      console.error('Error loading notification setting:', error);
+      setNotificationsEnabled(true); // Default to enabled on error
+    }
+  };
+
+  const handleNotificationToggle = async (value: boolean) => {
+    try {
+      setNotificationsEnabled(value);
+      await AsyncStorage.setItem('notifications_enabled', value.toString());
+      
+      // Show confirmation message
+      Alert.alert(
+        'Notifications ' + (value ? 'Enabled' : 'Disabled'),
+        'Notification settings have been updated. ' + 
+        (value ? 'You will receive notifications as usual.' : 'You will no longer receive any notifications.'),
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error saving notification setting:', error);
+      // Revert UI state on error
+      setNotificationsEnabled(!value);
+      Alert.alert('Error', 'Failed to update notification settings. Please try again.');
+    }
+  };
 
   // WhatsApp-style colors
   const whatsappColors = {
@@ -274,17 +314,9 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
               {renderSettingItem({
                 icon: "notifications-outline",
                 title: "Notifications",
-                subtitle: "Message, group & call tones",
-                onPress: () => showComingSoon('Notifications'),
-                rightComponent: renderSwitch(notificationsEnabled, setNotificationsEnabled),
-                showChevron: false,
-              })}
-              {renderSettingItem({
-                icon: "eye-outline",
-                title: "Message Preview",
-                subtitle: "Show message preview in notifications",
-                onPress: () => setMessagePreview(!messagePreview),
-                rightComponent: renderSwitch(messagePreview, setMessagePreview),
+                subtitle: "Enable or disable all notifications",
+                onPress: () => handleNotificationToggle(!notificationsEnabled),
+                rightComponent: renderSwitch(notificationsEnabled, handleNotificationToggle),
                 showChevron: false,
               })}
             </>
