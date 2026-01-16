@@ -181,6 +181,31 @@ const BookingCard: React.FC<{
                 </View>
             </View>
 
+            {/* End Date & Time Section - Matching Cab Booking file */}
+            {booking.end_time && (
+                <View style={[styles.bookingCardFooter, { paddingTop: 8, borderTopWidth: 0 }]}>
+                    <View style={styles.dateTimeInfo}>
+                        <MaterialCommunityIcons name="calendar" size={16} color="#666" />
+                        <Text style={styles.dateTimeInfoText}>
+                            {new Date(booking.end_time).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                            })}
+                        </Text>
+                    </View>
+                    <View style={styles.dateTimeInfo}>
+                        <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
+                        <Text style={styles.dateTimeInfoText}>
+                            {new Date(booking.end_time).toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            })}
+                        </Text>
+                    </View>
+                </View>
+            )}
+
             {/* Status Update Section */}
             <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>
