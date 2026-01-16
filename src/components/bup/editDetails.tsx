@@ -769,7 +769,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         <View style={styles.detailCard}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="people" size={20} color={MODERN_COLORS.primary} />
-            <Text style={styles.sectionTitle}>Collaborators ({collaborators.length})</Text>
+            <Text style={styles.sectionTitle}>Colleague ({collaborators.length})</Text>
             {loadingCollaborators && (
               <ActivityIndicator size="small" color={MODERN_COLORS.primary} style={{ marginLeft: 8 }} />
             )}
@@ -777,7 +777,7 @@ const EditLead: React.FC<EditLeadProps> = ({
           
           {collaborators.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No collaborators added yet</Text>
+              <Text style={styles.emptyStateText}>No Colleague added yet</Text>
             </View>
           ) : (
             collaborators.map((collaborator) => (
@@ -802,7 +802,7 @@ const EditLead: React.FC<EditLeadProps> = ({
             ))
           )}
 
-          {/* Add Collaborator Input */}
+          {/* Add Colleague Input */}
           <View style={styles.addContactContainer}>
             <View style={styles.searchInputContainer}>
               <TextInput
@@ -983,7 +983,7 @@ const EditLead: React.FC<EditLeadProps> = ({
           await addCollaborator(email);
           setActiveDropdown(null);
         }}
-        title="Add Collaborator"
+        title="Add Colleague"
         theme={{
           ...theme,
           primary: MODERN_COLORS.primary,
