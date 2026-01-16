@@ -12,48 +12,46 @@ import { BACKEND_URL } from '../config/config';
 const TOKEN_KEY = 'token_2';
 
 const colors = {
-  primary: '#161b34',
-  primaryLight: '#2a3150',
-  accent: '#007AFF',
+  primary: '#008069', // WhatsApp green
+  primaryLight: '#25D366',
+  accent: '#007AFF', // iOS blue
   surface: '#FFFFFF',
-  background: '#F7FAFC',
-  text: '#1a202c',
-  textSecondary: '#5f6368',
-  textTertiary: '#A0AEC0',
-  divider: '#E5E5EA',
-  error: '#DC3545',
-  success: '#34C759',
-  blue: '#007AFF',
-  green: '#34C759',
-  orange: '#FF9500',
-  purple: '#AF52DE',
-  pink: '#FF2D55',
-  yellow: '#FFCC00',
+  background: '#F0F2F5', // WhatsApp chat background
+  text: '#111B21', // WhatsApp dark text
+  textSecondary: '#667781', // WhatsApp secondary text
+  textTertiary: '#8696A0',
+  divider: '#E9EDEF', // WhatsApp subtle divider
+  error: '#F44336',
+  success: '#4CAF50',
+  blue: '#0084FF',
+  green: '#00A884', // WhatsApp green variant
+  orange: '#FF6B35',
+  purple: '#7B1FA2',
+  pink: '#E91E63',
+  yellow: '#FFC107',
 };
 
 const BackIcon = () => (
   <View style={styles.backIcon}>
-    <View style={styles.backArrow} />
+    <Text style={styles.backArrow}>‹</Text>
   </View>
 );
 
 const EditIcon = () => (
   <View style={styles.iconContainer}>
-    <View style={styles.editIconPencil} />
-    <View style={styles.editIconLine} />
+    <Text style={styles.editIcon}>✏️</Text>
   </View>
 );
 
 const DeleteIcon = () => (
   <View style={styles.iconContainer}>
-    <View style={styles.deleteIconLine1} />
-    <View style={styles.deleteIconLine2} />
+    <Text style={styles.deleteIcon}>🗑️</Text>
   </View>
 );
 
 const DropdownIcon = () => (
   <View style={styles.dropdownIcon}>
-    <View style={styles.dropdownArrow} />
+    <Text style={styles.dropdownArrow}>▼</Text>
   </View>
 );
 
@@ -251,7 +249,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setSelectedHour('12');
     setSelectedMinute('00');
     setSelectedPeriod('AM');
-    setSelectedColor('');
+    setSelectedColor(colors.blue);
     setSelectedDate(null);
     setShowTimePicker(false);
     setSelectedEmployees([]);
@@ -447,8 +445,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
       const result = await response.json();
 
-      if (response.ok && result.data) {
-        setReminders(reminders.map(r => r.id === selectedReminder.id ? result.data : r));
+     if (response.ok && result.data) {
+  setReminders(reminders.map(r => r.id === selectedReminder.id ? result.data : r));
+        setSelectedReminder(result.data); // ✅ Add this line to update the selected reminder
         setShowCreateModal(false);
         setShowDetailModal(false);
         resetForm();
@@ -524,6 +523,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setSelectedPeriod(time12.period);
     
     setSelectedColor(getColorValue(selectedReminder.color));
+    
     setIsEditMode(true);
     setShowDetailModal(false);
     setShowCreateModal(true);
@@ -545,10 +545,11 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       Alert.alert('Invalid Date', 'Cannot create reminder for past dates');
       return;
     }
-
+    setSelectedColor(colors.blue);
     setSelectedDate(dateObj);
     setDate(formatDateToYYYYMMDD(dateObj));
     setShowCreateModal(true);
+    
   };
 
   const formatDate = (dateString: string): string => {
@@ -569,8 +570,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
     
+    
     return { daysInMonth, startingDayOfWeek, year, month };
   };
+  
 
   const getRemindersForDate = (dateObj: Date) => {
     const dateStr = formatDateToYYYYMMDD(dateObj);
@@ -613,6 +616,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           onPress={() => {
             if (dayReminders.length > 0) {
               setSelectedDate(date);
+              setViewMode('agenda');
             } else {
               openCreateModalForDate(date);
             }
@@ -645,7 +649,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     return (
       <ScrollView style={styles.monthView} showsVerticalScrollIndicator={false}>
         <View style={styles.weekDaysRow}>
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => (
             <View key={idx} style={styles.weekDayCell}>
               <Text style={styles.weekDayText}>{day}</Text>
             </View>
@@ -659,11 +663,20 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
   const AgendaView = () => {
     let displayReminders = filteredReminders;
-    
-    if (selectedDate) {
-      const selectedDateStr = formatDateToYYYYMMDD(selectedDate);
-      displayReminders = filteredReminders.filter(r => r.reminder_date.split('T')[0] === selectedDateStr);
-    }
+
+if (selectedDate) {
+  const selectedDateStr = formatDateToYYYYMMDD(selectedDate);
+  displayReminders = filteredReminders.filter(r => r.reminder_date.split('T')[0] === selectedDateStr);
+} else if (viewMode === 'agenda') {
+  // Filter by current month when no specific date is selected
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  
+  displayReminders = filteredReminders.filter(r => {
+    const reminderDate = new Date(r.reminder_date);
+    return reminderDate.getFullYear() === year && reminderDate.getMonth() === month;
+  });
+}
 
     const sortedReminders = [...displayReminders].sort((a, b) => {
       const dateA = new Date(`${a.reminder_date.split('T')[0]}T${a.reminder_time}`);
@@ -694,6 +707,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
             >
               <Text style={styles.backToAllButtonText}>← All Reminders</Text>
             </TouchableOpacity>
+            <Text style={styles.selectedDateText}>
+              {formatDate(formatDateToYYYYMMDD(selectedDate))}
+            </Text>
           </View>
         )}
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -702,7 +718,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               <Text style={styles.emptyStateIcon}>📅</Text>
               <Text style={styles.emptyStateTitle}>No Reminders</Text>
               <Text style={styles.emptyStateSubtitle}>
-                {selectedDate ? 'No reminders for this date' : 'Tap any date to create one'}
+                {selectedDate ? 'No reminders for this date' : 'Tap + to add a new reminder'}
               </Text>
             </View>
           ) : (
@@ -719,7 +735,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.addReminderButtonText}>+ Add</Text>
+                    <Text style={styles.addReminderButtonText}>+</Text>
                   </TouchableOpacity>
                 </View>
                 {groupedReminders[dateKey].map((reminder) => (
@@ -732,12 +748,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                     <View style={[styles.agendaItemAccent, { backgroundColor: getColorValue(reminder.color) }]} />
                     <View style={styles.agendaItemContent}>
                       <View style={styles.agendaItemHeader}>
-                        <Text style={[
-                          styles.agendaItemTitle,
-                          reminder.is_completed && styles.agendaItemTitleCompleted
-                        ]}>
-                          {reminder.title}
-                        </Text>
+                        <View style={styles.agendaItemTimeContainer}>
+                          <Text style={styles.agendaItemTime}>{formatTime(reminder.reminder_time)}</Text>
+                        </View>
                         <View style={styles.agendaItemActions}>
                           <TouchableOpacity
                             onPress={(e) => {
@@ -762,16 +775,23 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                           </TouchableOpacity>
                         </View>
                       </View>
-                      <Text style={styles.agendaItemTime}>{formatTime(reminder.reminder_time)}</Text>
+                      <Text style={[
+                        styles.agendaItemTitle,
+                        reminder.is_completed && styles.agendaItemTitleCompleted
+                      ]}>
+                        {reminder.title}
+                      </Text>
                       {reminder.description && (
                         <Text style={styles.agendaItemDesc} numberOfLines={2}>
                           {reminder.description}
                         </Text>
                       )}
                       {reminder.also_share_with.length > 0 && (
-                        <Text style={styles.agendaItemShared}>
-                          Shared with {reminder.also_share_with.length} {reminder.also_share_with.length === 1 ? 'person' : 'people'}
-                        </Text>
+                        <View style={styles.sharedWithContainer}>
+                          <Text style={styles.agendaItemShared}>
+                            👥 Shared with {reminder.also_share_with.length}
+                          </Text>
+                        </View>
                       )}
                       <TouchableOpacity
                         style={styles.completeButton}
@@ -809,88 +829,118 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Calendar</Text>
-        <TouchableOpacity
-          style={styles.searchButton}
-          onPress={() => setShowSearch(!showSearch)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.searchButtonIcon}>🔍</Text>
-        </TouchableOpacity>
-      </View>
-
-      {showSearch && (
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search reminders"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={colors.textTertiary}
-          />
-        </View>
-      )}
-
-      <View style={styles.toolbar}>
-        <View style={styles.monthNavigation}>
-          <TouchableOpacity onPress={() => changeMonth(-1)} activeOpacity={0.7} style={styles.navButton}>
-            <Text style={styles.navArrow}>‹</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={goToToday} activeOpacity={0.7}>
-            <Text style={styles.monthYearText}>
-              {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => changeMonth(1)} activeOpacity={0.7} style={styles.navButton}>
-            <Text style={styles.navArrow}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.viewToggle}>
-          <TouchableOpacity
-            style={[styles.viewToggleButton, viewMode === 'month' && styles.viewToggleButtonActive]}
-            onPress={() => {
-              setViewMode('month');
-              setSelectedDate(null);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.viewToggleText, viewMode === 'month' && styles.viewToggleTextActive]}>
-              Month
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewToggleButton, viewMode === 'agenda' && styles.viewToggleButtonActive]}
-            onPress={() => setViewMode('agenda')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.viewToggleText, viewMode === 'agenda' && styles.viewToggleTextActive]}>
-              Agenda
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+      {/* Main Content Container with proper safe area handling */}
+      <View style={[styles.contentContainer, ]}>
+        {/* Header with WhatsApp feel */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <BackIcon />
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Reminder</Text>
+              <View style={styles.viewToggle}>
+                <TouchableOpacity
+                  style={[styles.viewToggleButton, viewMode === 'month' && styles.viewToggleButtonActive]}
+                  onPress={() => {
+                    setViewMode('month');
+                    setSelectedDate(null);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.viewToggleText, viewMode === 'month' && styles.viewToggleTextActive]}>
+                    Month
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.viewToggleDivider} />
+                <TouchableOpacity
+                  style={[styles.viewToggleButton, viewMode === 'agenda' && styles.viewToggleButtonActive]}
+                  onPress={() => setViewMode('agenda')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.viewToggleText, viewMode === 'agenda' && styles.viewToggleTextActive]}>
+                    Agenda
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={() => setShowSearch(!showSearch)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.searchButtonIcon}>🔍</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          <>
-            {viewMode === 'month' && <MonthView />}
-            {(viewMode === 'agenda' || selectedDate) && <AgendaView />}
-          </>
+        </View>
+
+        {showSearch && (
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search reminders..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor={colors.textTertiary}
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchButton}>
+                <Text style={styles.clearSearchButtonText}>✕</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         )}
+
+        {/* Calendar Navigation with Google Calendar feel */}
+        <View style={styles.calendarHeader}>
+          <View style={styles.monthNavigation}>
+            <TouchableOpacity onPress={() => changeMonth(-1)} activeOpacity={0.7} style={styles.navButton}>
+              <Text style={styles.navArrow}>‹</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={goToToday} activeOpacity={0.7} style={styles.todayButton}>
+              <Text style={styles.todayButtonText}>Today</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => changeMonth(1)} activeOpacity={0.7} style={styles.navButton}>
+              <Text style={styles.navArrow}>›</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.monthYearText}>
+            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </Text>
+        </View>
+
+        <View style={styles.content}>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading reminders...</Text>
+            </View>
+          ) : (
+            <>
+              {viewMode === 'month' && <MonthView />}
+              {(viewMode === 'agenda' || selectedDate) && <AgendaView />}
+            </>
+          )}
+        </View>
       </View>
 
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={[styles.fab, { bottom: insets.bottom > 0 ? insets.bottom + 20 : 20 }]}
+        onPress={() => {
+          setSelectedDate(null);
+          setShowCreateModal(true);
+        }}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
+      {/* Detail Modal */}
       <Modal
         visible={showDetailModal}
         animationType="slide"
@@ -903,7 +953,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               <TouchableOpacity onPress={() => setShowDetailModal(false)} activeOpacity={0.7}>
                 <Text style={styles.modalHeaderButton}>Done</Text>
               </TouchableOpacity>
-              <Text style={styles.modalHeaderTitle}>Reminder Details</Text>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalHeaderTitle}>Reminder Details</Text>
+              </View>
               <View style={styles.modalHeaderActions}>
                 <TouchableOpacity onPress={openEditMode} activeOpacity={0.7} style={styles.editButton}>
                   <Text style={styles.modalHeaderEdit}>Edit</Text>
@@ -917,17 +969,18 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               </View>
             </View>
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={[styles.modalColorBar, { backgroundColor: getColorValue(selectedReminder.color) }]} />
-              <Text style={styles.modalTitle}>{selectedReminder.title}</Text>
-              
-              <View style={styles.modalSection}>
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalIcon}>📅</Text>
-                  <Text style={styles.modalText}>{formatDate(selectedReminder.reminder_date)}</Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalIcon}>🕐</Text>
-                  <Text style={styles.modalText}>{formatTime(selectedReminder.reminder_time)}</Text>
+              <View style={styles.modalTopSection}>
+                <View style={[styles.modalColorIndicator, { backgroundColor: getColorValue(selectedReminder.color) }]} />
+                <Text style={styles.modalTitle}>{selectedReminder.title}</Text>
+                <View style={styles.modalDateTimeContainer}>
+                  <View style={styles.modalDateTimeItem}>
+                    <Text style={styles.modalIcon}>📅</Text>
+                    <Text style={styles.modalText}>{formatDate(selectedReminder.reminder_date)}</Text>
+                  </View>
+                  <View style={styles.modalDateTimeItem}>
+                    <Text style={styles.modalIcon}>🕐</Text>
+                    <Text style={styles.modalText}>{formatTime(selectedReminder.reminder_time)}</Text>
+                  </View>
                 </View>
               </View>
 
@@ -942,7 +995,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 <View style={styles.modalSection}>
                   <Text style={styles.modalLabel}>Shared With</Text>
                   {selectedReminder.also_share_with.map((empId, idx) => (
-                    <Text key={idx} style={styles.modalText}>• {empId}</Text>
+                    <View key={idx} style={styles.sharedWithItem}>
+                      <Text style={styles.sharedWithDot}>•</Text>
+                      <Text style={styles.modalText}>{empId}</Text>
+                    </View>
                   ))}
                 </View>
               )}
@@ -974,6 +1030,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
         )}
       </Modal>
 
+      {/* Create/Edit Modal - RESTORED TITLE DROPDOWN */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
@@ -1000,8 +1057,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               disabled={submitting} 
               activeOpacity={0.7}
             >
-              <Text style={[styles.modalHeaderButton, styles.modalHeaderButtonPrimary]}>
-                {submitting ? 'Saving...' : isEditMode ? 'Update' : 'Add'}
+              <Text style={[styles.modalHeaderButton, styles.modalHeaderButtonPrimary, submitting && styles.modalHeaderButtonDisabled]}>
+                {submitting ? 'Saving...' : isEditMode ? 'Save' : 'Add'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1012,82 +1069,94 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
           >
-            
-            <View style={styles.typeSection}>
-              <Text style={styles.sectionTitle}>Type</Text>
-              <TouchableOpacity
-                style={styles.typeDropdownButton}
-                onPress={() => setShowTypeDropdown(!showTypeDropdown)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.typeDropdownContent}>
-                  {selectedType ? (
-                    <>
-                      <Text style={styles.typeDropdownIcon}>
-                        {reminderTypes.find(t => t.value === selectedType)?.icon}
-                      </Text>
-                      <Text style={styles.typeDropdownText}>
-                        {selectedType === 'other' && customType.trim() 
-                          ? customType 
-                          : reminderTypes.find(t => t.value === selectedType)?.label}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text style={styles.typeDropdownPlaceholder}>Select reminder type</Text>
-                  )}
-                </View>
-                <DropdownIcon />
-              </TouchableOpacity>
-
-              {showTypeDropdown && (
-                <View style={styles.typeDropdownList}>
-                  <ScrollView style={styles.typeDropdownScroll} nestedScrollEnabled={true}>
-                    {reminderTypes.map((type) => (
-                      <TouchableOpacity
-                        key={type.value}
-                        style={[
-                          styles.typeDropdownItem,
-                          selectedType === type.value && styles.typeDropdownItemActive
-                        ]}
-                        onPress={() => {
-                          setSelectedType(type.value);
-                          if (type.value !== 'other') {
-                            setCustomType('');
-                          }
-                          setShowTypeDropdown(false);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.typeDropdownItemIcon}>{type.icon}</Text>
-                        <Text style={[
-                          styles.typeDropdownItemText,
-                          selectedType === type.value && styles.typeDropdownItemTextActive
-                        ]}>
-                          {type.label}
-                        </Text>
-                        {selectedType === type.value && (
-                          <Text style={styles.typeDropdownItemCheck}>✓</Text>
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {selectedType === 'other' && !showTypeDropdown && (
+            <View style={styles.modalForm}>
+              {/* Title Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Title</Text>
                 <TextInput
-                  style={styles.customTypeInput}
-                  placeholder="Enter custom type"
-                  value={customType}
-                  onChangeText={setCustomType}
+                  style={styles.inputField}
+                  placeholder="Add a title"
+                  value={title}
+                  onChangeText={setTitle}
                   placeholderTextColor={colors.textTertiary}
-                  autoFocus
                 />
-              )}
-            </View>
+              </View>
 
-            <View style={styles.inputGroup}>
-              <View style={styles.inputRow}>
+              {/* Type Dropdown - RESTORED */}
+              <View style={styles.typeSection}>
+                <Text style={styles.sectionTitle}>Type</Text>
+                <TouchableOpacity
+                  style={styles.typeDropdownButton}
+                  onPress={() => setShowTypeDropdown(!showTypeDropdown)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.typeDropdownContent}>
+                    {selectedType ? (
+                      <>
+                        <Text style={styles.typeDropdownIcon}>
+                          {reminderTypes.find(t => t.value === selectedType)?.icon}
+                        </Text>
+                        <Text style={styles.typeDropdownText}>
+                          {selectedType === 'other' && customType.trim() 
+                            ? customType 
+                            : reminderTypes.find(t => t.value === selectedType)?.label}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.typeDropdownPlaceholder}>Select reminder type</Text>
+                    )}
+                  </View>
+                  <DropdownIcon />
+                </TouchableOpacity>
+
+                {showTypeDropdown && (
+                  <View style={styles.typeDropdownList}>
+                    <ScrollView style={styles.typeDropdownScroll} nestedScrollEnabled={true}>
+                      {reminderTypes.map((type) => (
+                        <TouchableOpacity
+                          key={type.value}
+                          style={[
+                            styles.typeDropdownItem,
+                            selectedType === type.value && styles.typeDropdownItemActive
+                          ]}
+                          onPress={() => {
+                            setSelectedType(type.value);
+                            if (type.value !== 'other') {
+                              setCustomType('');
+                            }
+                            setShowTypeDropdown(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.typeDropdownItemIcon}>{type.icon}</Text>
+                          <Text style={[
+                            styles.typeDropdownItemText,
+                            selectedType === type.value && styles.typeDropdownItemTextActive
+                          ]}>
+                            {type.label}
+                          </Text>
+                          {selectedType === type.value && (
+                            <Text style={styles.typeDropdownItemCheck}>✓</Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {selectedType === 'other' && !showTypeDropdown && (
+                  <TextInput
+                    style={styles.customTypeInput}
+                    placeholder="Enter custom type"
+                    value={customType}
+                    onChangeText={setCustomType}
+                    placeholderTextColor={colors.textTertiary}
+                    autoFocus
+                  />
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Date</Text>
                 <TextInput
                   style={styles.inputField}
@@ -1099,26 +1168,24 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 />
               </View>
 
-              <View style={styles.inputDivider} />
-
-              <TouchableOpacity
-                style={styles.inputRow}
-                onPress={() => setShowTimePicker(!showTimePicker)}
-                activeOpacity={0.7}
-              >
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Time</Text>
-                <Text style={styles.inputValue}>
-                  {selectedHour}:{selectedMinute} {selectedPeriod}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.timeInputButton}
+                  onPress={() => setShowTimePicker(!showTimePicker)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.timeInputText}>
+                    {selectedHour}:{selectedMinute} {selectedPeriod}
+                  </Text>
+                  <Text style={styles.timeInputArrow}>▼</Text>
+                </TouchableOpacity>
 
-              {showTimePicker && (
-                <View style={styles.timePickerContainer}>
-                  <View style={styles.timePickerRow}>
-                    <View style={styles.timePickerColumn}>
-                      <Text style={styles.timePickerLabel}>Hour</Text>
+                {showTimePicker && (
+                  <View style={styles.timePickerContainer}>
+                    <View style={styles.timePickerRow}>
                       <ScrollView 
-                        style={styles.timePickerScroll} 
+                        style={styles.timePickerColumn}
                         showsVerticalScrollIndicator={false}
                         nestedScrollEnabled={true}
                       >
@@ -1129,10 +1196,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                               styles.timePickerOption,
                               selectedHour === hour && styles.timePickerOptionActive
                             ]}
-                            onPress={() => {
-                              setSelectedHour(hour);
-                              setShowTimePicker(false);
-                            }}
+                            onPress={() => setSelectedHour(hour)}
                             activeOpacity={0.7}
                           >
                             <Text style={[
@@ -1144,26 +1208,20 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
-                    </View>
 
-                    <View style={styles.timePickerColumn}>
-                      <Text style={styles.timePickerLabel}>Min</Text>
                       <ScrollView 
-                        style={styles.timePickerScroll} 
+                        style={styles.timePickerColumn}
                         showsVerticalScrollIndicator={false}
                         nestedScrollEnabled={true}
                       >
-                        {minutes.map(minute => (
+                        {minutes.filter((_, i) => i % 5 === 0).map(minute => (
                           <TouchableOpacity
                             key={minute}
                             style={[
                               styles.timePickerOption,
                               selectedMinute === minute && styles.timePickerOptionActive
                             ]}
-                            onPress={() => {
-                              setSelectedMinute(minute);
-                              setShowTimePicker(false);
-                            }}
+                            onPress={() => setSelectedMinute(minute)}
                             activeOpacity={0.7}
                           >
                             <Text style={[
@@ -1175,12 +1233,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
-                    </View>
 
-                    <View style={styles.timePickerColumn}>
-                      <Text style={styles.timePickerLabel}>Period</Text>
                       <ScrollView 
-                        style={styles.timePickerScroll} 
+                        style={styles.timePickerColumn}
                         showsVerticalScrollIndicator={false}
                         nestedScrollEnabled={true}
                       >
@@ -1191,10 +1246,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                               styles.timePickerOption,
                               selectedPeriod === period && styles.timePickerOptionActive
                             ]}
-                            onPress={() => {
-                              setSelectedPeriod(period);
-                              setShowTimePicker(false);
-                            }}
+                            onPress={() => setSelectedPeriod(period)}
                             activeOpacity={0.7}
                           >
                             <Text style={[
@@ -1207,115 +1259,124 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                         ))}
                       </ScrollView>
                     </View>
+                    <TouchableOpacity
+                      style={styles.timePickerDoneButton}
+                      onPress={() => setShowTimePicker(false)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.timePickerDoneButtonText}>Done</Text>
+                    </TouchableOpacity>
                   </View>
-                </View>
-              )}
-
-              <View style={styles.inputDivider} />
-
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Notes</Text>
+                )}
               </View>
-              <TextInput
-                style={styles.inputTextArea}
-                placeholder="Add notes"
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                placeholderTextColor={colors.textTertiary}
-              />
-            </View>
 
-            <View style={styles.employeeSection}>
-              <Text style={styles.sectionTitle}>Share With Employees</Text>
-              
-              {selectedEmployees.length > 0 && (
-                <View style={styles.selectedEmployeesContainer}>
-                  {selectedEmployees.map((emp) => (
-                    <View key={emp.employee_id} style={styles.employeeChip}>
-                      <Text style={styles.employeeChipText}>{emp.full_name}</Text>
-                      <TouchableOpacity
-                        onPress={() => removeEmployee(emp.employee_id)}
-                        activeOpacity={0.7}
-                        style={styles.employeeChipRemove}
-                      >
-                        <Text style={styles.employeeChipRemoveText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={styles.inputTextArea}
+                  placeholder="Add notes..."
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  numberOfLines={4}
+                  placeholderTextColor={colors.textTertiary}
+                />
+              </View>
+
+              <View style={styles.colorPickerSection}>
+                <Text style={styles.sectionTitle}>Color</Text>
+                <View style={styles.colorPickerRow}>
+                  {eventColors.map(color => (
+                    <TouchableOpacity
+                      key={color.name}
+                      style={[
+                        styles.colorOption,
+                        { backgroundColor: color.value },
+                        selectedColor === color.value && styles.colorOptionSelected
+                      ]}
+                      onPress={() => setSelectedColor(color.value)}
+                      activeOpacity={0.7}
+                    />
                   ))}
                 </View>
-              )}
+              </View>
 
-              <TouchableOpacity
-                style={styles.addEmployeeButton}
-                onPress={() => setShowEmployeeSearch(!showEmployeeSearch)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.addEmployeeButtonText}>+ Add Employee</Text>
-              </TouchableOpacity>
-
-              {showEmployeeSearch && (
-                <View style={styles.employeeSearchContainer}>
-                  <TextInput
-                    style={styles.employeeSearchInput}
-                    placeholder="Search by name..."
-                    value={employeeSearchQuery}
-                    onChangeText={setEmployeeSearchQuery}
-                    placeholderTextColor={colors.textTertiary}
-                    autoFocus
-                  />
-                  
-                  {searchingEmployees ? (
-                    <View style={styles.employeeSearchLoading}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    </View>
-                  ) : employeeSearchResults.length > 0 ? (
-                    <ScrollView style={styles.employeeSearchResults} nestedScrollEnabled={true}>
-                      {employeeSearchResults.map((emp) => (
+              <View style={styles.employeeSection}>
+                <Text style={styles.sectionTitle}>Share With</Text>
+                
+                {selectedEmployees.length > 0 && (
+                  <View style={styles.selectedEmployeesContainer}>
+                    {selectedEmployees.map((emp) => (
+                      <View key={emp.employee_id} style={styles.employeeChip}>
+                        <Text style={styles.employeeChipText}>{emp.full_name.split(' ')[0]}</Text>
                         <TouchableOpacity
-                          key={emp.employee_id}
-                          style={styles.employeeSearchItem}
-                          onPress={() => addEmployee(emp)}
+                          onPress={() => removeEmployee(emp.employee_id)}
                           activeOpacity={0.7}
+                          style={styles.employeeChipRemove}
                         >
-                          <View style={styles.employeeSearchItemInfo}>
-                            <Text style={styles.employeeSearchItemName}>{emp.full_name}</Text>
-                            <Text style={styles.employeeSearchItemRole}>
-                              {emp.role} • {emp.employee_id}
-                            </Text>
-                          </View>
+                          <Text style={styles.employeeChipRemoveText}>×</Text>
                         </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  ) : employeeSearchQuery.trim() ? (
-                    <View style={styles.employeeSearchEmpty}>
-                      <Text style={styles.employeeSearchEmptyText}>No employees found</Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
-            </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-            <View style={styles.colorPickerSection}>
-              <Text style={styles.sectionTitle}>
-                Color {!selectedColor && <Text style={styles.requiredStar}>*</Text>}
-              </Text>
-              <View style={styles.colorPickerRow}>
-                {eventColors.map(color => (
-                  <TouchableOpacity
-                    key={color.name}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color.value },
-                      selectedColor === color.value && styles.colorOptionSelected
-                    ]}
-                    onPress={() => setSelectedColor(color.value)}
-                    activeOpacity={0.7}
-                  />
-                ))}
+                <TouchableOpacity
+                  style={styles.addEmployeeButton}
+                  onPress={() => setShowEmployeeSearch(!showEmployeeSearch)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.addEmployeeButtonIcon}>+</Text>
+                  <Text style={styles.addEmployeeButtonText}>Add people</Text>
+                </TouchableOpacity>
+
+                {showEmployeeSearch && (
+                  <View style={styles.employeeSearchContainer}>
+                    <TextInput
+                      style={styles.employeeSearchInput}
+                      placeholder="Search by name..."
+                      value={employeeSearchQuery}
+                      onChangeText={setEmployeeSearchQuery}
+                      placeholderTextColor={colors.textTertiary}
+                      autoFocus
+                    />
+                    
+                    {searchingEmployees ? (
+                      <View style={styles.employeeSearchLoading}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      </View>
+                    ) : employeeSearchResults.length > 0 ? (
+                      <ScrollView style={styles.employeeSearchResults} nestedScrollEnabled={true}>
+                        {employeeSearchResults.map((emp) => (
+                          <TouchableOpacity
+                            key={emp.employee_id}
+                            style={styles.employeeSearchItem}
+                            onPress={() => addEmployee(emp)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.employeeAvatar}>
+                              <Text style={styles.avatarText}>
+                                {emp.full_name.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={styles.employeeSearchItemInfo}>
+                              <Text style={styles.employeeSearchItemName}>{emp.full_name}</Text>
+                              <Text style={styles.employeeSearchItemRole}>
+                                {emp.role}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    ) : employeeSearchQuery.trim() ? (
+                      <View style={styles.employeeSearchEmpty}>
+                        <Text style={styles.employeeSearchEmptyText}>No employees found</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
               </View>
             </View>
-
             <View style={{ height: 40 }} />
           </ScrollView>
         </SafeAreaView>
@@ -1329,132 +1390,118 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.primary,
   },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  // Header Styles (WhatsApp inspired)
   header: {
+    backgroundColor: colors.primary,
+    paddingBottom: 12,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   backButton: {
-    padding: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
   },
   backIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 4,
   },
   backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: colors.surface,
-    transform: [{ rotate: '-45deg' }],
+    fontSize: 24,
+    color: colors.surface,
+    fontWeight: '300',
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: colors.surface,
+    fontWeight: '500',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.surface,
-    flex: 1,
-    textAlign: 'center',
+    marginBottom: 8,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    padding: 2,
+  },
+  viewToggleButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  viewToggleButtonActive: {
+    backgroundColor: colors.surface,
+  },
+  viewToggleText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+  },
+  viewToggleTextActive: {
+    color: colors.primary,
+  },
+  viewToggleDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   searchButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
   },
   searchButtonIcon: {
     fontSize: 20,
-  },
-  iconContainer: {
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editIconPencil: {
-    width: 10,
-    height: 10,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    borderRadius: 2,
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    transform: [{ rotate: '45deg' }],
-  },
-  editIconLine: {
-    width: 12,
-    height: 1.5,
-    backgroundColor: colors.accent,
-    position: 'absolute',
-    bottom: 2,
-    left: 4,
-    transform: [{ rotate: '45deg' }],
-  },
-  deleteIconLine1: {
-    width: 14,
-    height: 2,
-    backgroundColor: colors.error,
-    position: 'absolute',
-    transform: [{ rotate: '45deg' }],
-  },
-  deleteIconLine2: {
-    width: 14,
-    height: 2,
-    backgroundColor: colors.error,
-    position: 'absolute',
-    transform: [{ rotate: '-45deg' }],
-  },
-  dropdownIcon: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dropdownArrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.textSecondary,
+    color: colors.surface,
   },
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.primaryLight,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
   searchInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 16,
     fontSize: 16,
-    color: colors.surface,
+    color: colors.text,
+    paddingVertical: 8,
   },
-  toolbar: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+  clearSearchButton: {
+    padding: 8,
+  },
+  clearSearchButtonText: {
+    fontSize: 16,
+    color: colors.textTertiary,
+  },
+  // Calendar Header (Google Calendar inspired)
+  calendarHeader: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
   monthNavigation: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   navButton: {
     width: 36,
@@ -1465,57 +1512,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   navArrow: {
-    fontSize: 22,
-    color: colors.primary,
+    fontSize: 20,
+    color: colors.text,
     fontWeight: '600',
   },
+  todayButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+  },
+  todayButtonText: {
+    color: colors.surface,
+    fontWeight: '600',
+    fontSize: 14,
+  },
   monthYearText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    flex: 1,
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    padding: 3,
-    alignSelf: 'center',
-  },
-  viewToggleButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    borderRadius: 8,
-    minWidth: 75,
-    alignItems: 'center',
-  },
-  viewToggleButtonActive: {
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  viewToggleText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  viewToggleTextActive: {
-    color: colors.surface,
-    fontWeight: '700',
   },
   content: {
     flex: 1,
-    backgroundColor: colors.surface,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  // Month View Styles
   monthView: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -1533,10 +1564,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   weekDayText: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textSecondary,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '600',
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -1547,22 +1577,19 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: `${100 / 7}%`,
-    aspectRatio: 0.9,
-    padding: 4,
+    aspectRatio: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     borderRightWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.divider,
   },
   dayNumberContainer: {
-    width: '80%',
-    aspectRatio: 1,
-    maxWidth: 40,
-    maxHeight: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
     marginBottom: 4,
   },
   dayNumberToday: {
@@ -1571,7 +1598,7 @@ const styles = StyleSheet.create({
   dayNumber: {
     fontSize: 16,
     color: colors.text,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   dayNumberTodayText: {
     color: colors.surface,
@@ -1579,90 +1606,99 @@ const styles = StyleSheet.create({
   },
   dayNumberPast: {
     color: colors.textTertiary,
-    opacity: 0.5,
   },
   dayEventsContainer: {
     flexDirection: 'row',
-    gap: 3,
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
+    maxWidth: '80%',
   },
   dayEventDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    marginHorizontal: 1,
   },
   moreEventsText: {
-    fontSize: 9,
+    fontSize: 10,
     color: colors.textSecondary,
     fontWeight: '600',
   },
+  // Agenda View Styles
   agendaView: {
     flex: 1,
     backgroundColor: colors.background,
   },
   selectedDateHeader: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
   backToAllButton: {
-    paddingVertical: 4,
+    marginBottom: 8,
   },
   backToAllButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.accent,
     fontWeight: '600',
   },
+  selectedDateText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
   emptyState: {
     alignItems: 'center',
-    paddingTop: 120,
+    paddingTop: 80,
     paddingHorizontal: 40,
   },
   emptyStateIcon: {
-    fontSize: 80,
-    marginBottom: 20,
-    opacity: 0.4,
+    fontSize: 64,
+    marginBottom: 16,
+    opacity: 0.3,
   },
   emptyStateTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
     color: colors.text,
     marginBottom: 8,
   },
   emptyStateSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textSecondary,
     textAlign: 'center',
   },
   agendaSection: {
-    marginTop: 20,
+    marginTop: 16,
   },
   agendaDateHeaderContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: colors.surface,
   },
   agendaDateHeader: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.text,
   },
   addReminderButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 16,
+    backgroundColor: colors.primary,
   },
   addReminderButtonText: {
     color: colors.surface,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '300',
   },
   agendaItem: {
     flexDirection: 'row',
@@ -1671,14 +1707,14 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     borderRadius: 12,
     overflow: 'hidden',
+    elevation: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   agendaItemAccent: {
-    width: 5,
+    width: 4,
   },
   agendaItemContent: {
     flex: 1,
@@ -1688,18 +1724,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  agendaItemTitle: {
-    fontSize: 17,
-    color: colors.text,
-    fontWeight: '600',
-    flex: 1,
-    marginRight: 8,
+  agendaItemTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  agendaItemTitleCompleted: {
-    textDecorationLine: 'line-through',
+  agendaItemTime: {
+    fontSize: 15,
     color: colors.textSecondary,
+    fontWeight: '500',
   },
   agendaItemActions: {
     flexDirection: 'row',
@@ -1708,23 +1742,41 @@ const styles = StyleSheet.create({
   agendaActionButton: {
     padding: 4,
   },
-  agendaItemTime: {
-    fontSize: 14,
+  iconContainer: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editIcon: {
+    fontSize: 18,
+  },
+  deleteIcon: {
+    fontSize: 18,
+  },
+  agendaItemTitle: {
+    fontSize: 17,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  agendaItemTitleCompleted: {
+    textDecorationLine: 'line-through',
     color: colors.textSecondary,
-    marginBottom: 4,
   },
   agendaItemDesc: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
     lineHeight: 20,
-    marginBottom: 4,
+    marginBottom: 8,
+  },
+  sharedWithContainer: {
+    marginBottom: 12,
   },
   agendaItemShared: {
-    fontSize: 12,
-    color: colors.accent,
+    fontSize: 14,
+    color: colors.textTertiary,
     fontWeight: '500',
-    marginTop: 4,
-    marginBottom: 8,
   },
   completeButton: {
     flexDirection: 'row',
@@ -1732,7 +1784,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
-    marginTop: 8,
   },
   checkbox: {
     width: 22,
@@ -1756,11 +1807,33 @@ const styles = StyleSheet.create({
   completeButtonText: {
     fontSize: 15,
     color: colors.text,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   completeButtonTextCompleted: {
     color: colors.success,
   },
+  // FAB
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  fabText: {
+    fontSize: 28,
+    color: colors.surface,
+    fontWeight: '300',
+  },
+  // Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1772,8 +1845,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: colors.divider,
+  },
+  modalHeaderCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   modalHeaderButton: {
     fontSize: 17,
@@ -1784,6 +1861,9 @@ const styles = StyleSheet.create({
   modalHeaderButtonPrimary: {
     fontWeight: '600',
   },
+  modalHeaderButtonDisabled: {
+    opacity: 0.5,
+  },
   modalHeaderTitle: {
     fontSize: 17,
     color: colors.text,
@@ -1791,10 +1871,10 @@ const styles = StyleSheet.create({
   },
   modalHeaderActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
   },
   editButton: {
-    marginRight: 4,
+    padding: 8,
   },
   modalHeaderEdit: {
     fontSize: 17,
@@ -1808,63 +1888,83 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
-    paddingTop: 24,
   },
-  modalColorBar: {
+  modalTopSection: {
+    backgroundColor: colors.surface,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  modalColorIndicator: {
+    width: 40,
     height: 4,
-    marginHorizontal: 16,
     borderRadius: 2,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
-    paddingHorizontal: 16,
-    marginBottom: 28,
+    marginBottom: 16,
   },
-  modalSection: {
-    marginBottom: 28,
-    paddingHorizontal: 16,
+  modalDateTimeContainer: {
+    flexDirection: 'row',
+    gap: 24,
   },
-  modalRow: {
+  modalDateTimeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   modalIcon: {
-    fontSize: 22,
-    marginRight: 12,
-    width: 32,
+    fontSize: 18,
+    marginRight: 8,
+    color: colors.textSecondary,
   },
   modalText: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
+  },
+  modalSection: {
+    backgroundColor: colors.surface,
+    padding: 20,
+    marginTop: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
   modalLabel: {
-    fontSize: 17,
-    color: colors.text,
+    fontSize: 15,
+    color: colors.textSecondary,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   modalDescription: {
-    fontSize: 17,
+    fontSize: 16,
+    color: colors.text,
+    lineHeight: 22,
+  },
+  sharedWithItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sharedWithDot: {
+    fontSize: 16,
     color: colors.textSecondary,
-    lineHeight: 24,
+    marginRight: 8,
   },
   completeButtonModal: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.divider,
   },
   checkboxModal: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: colors.textTertiary,
     alignItems: 'center',
@@ -1877,24 +1977,52 @@ const styles = StyleSheet.create({
   },
   checkmarkModal: {
     color: colors.surface,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   completeButtonTextModal: {
     fontSize: 17,
     color: colors.text,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   completeButtonTextCompletedModal: {
     color: colors.success,
   },
-  typeSection: {
-    paddingHorizontal: 16,
+  // Create/Edit Modal Styles - RESTORED DROPDOWN
+  modalForm: {
+    padding: 16,
+  },
+  inputGroup: {
     marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  inputField: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 16,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  // Type Dropdown Styles - RESTORED
+  typeSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   typeDropdownButton: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -1913,17 +2041,17 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   typeDropdownText: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
     fontWeight: '500',
   },
   typeDropdownPlaceholder: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.textTertiary,
   },
   typeDropdownList: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 8,
     marginTop: 8,
     overflow: 'hidden',
     borderWidth: 1,
@@ -1950,7 +2078,7 @@ const styles = StyleSheet.create({
     width: 28,
   },
   typeDropdownItemText: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
     flex: 1,
   },
@@ -1965,90 +2093,46 @@ const styles = StyleSheet.create({
   },
   customTypeInput: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 17,
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 16,
     color: colors.text,
     marginTop: 8,
     borderWidth: 1,
     borderColor: colors.accent,
   },
-  inputTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 20,
-  },
-  inputGroup: {
+  timeInputButton: {
     backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  inputRow: {
+    borderRadius: 8,
+    padding: 16,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.divider,
   },
-  inputLabel: {
-    fontSize: 17,
+  timeInputText: {
+    fontSize: 16,
     color: colors.text,
-    fontWeight: '500',
   },
-  inputField: {
-    fontSize: 17,
+  timeInputArrow: {
+    fontSize: 12,
     color: colors.textSecondary,
-    textAlign: 'right',
-    flex: 1,
-    marginLeft: 16,
-  },
-  inputValue: {
-    fontSize: 17,
-    color: colors.textSecondary,
-  },
-  inputDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.divider,
-    marginLeft: 16,
-  },
-  inputTextArea: {
-    fontSize: 17,
-    color: colors.text,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 100,
-    textAlignVertical: 'top',
   },
   timePickerContainer: {
-    paddingVertical: 16,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.divider,
   },
   timePickerRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 8,
+    maxHeight: 200,
+    padding: 8,
   },
   timePickerColumn: {
     flex: 1,
-  },
-  timePickerLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 8,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  timePickerScroll: {
-    maxHeight: 150,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
   },
   timePickerOption: {
     paddingVertical: 12,
@@ -2056,27 +2140,58 @@ const styles = StyleSheet.create({
   },
   timePickerOptionActive: {
     backgroundColor: colors.primary,
+    borderRadius: 4,
   },
   timePickerOptionText: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
   },
   timePickerOptionTextActive: {
     color: colors.surface,
     fontWeight: '600',
   },
-  employeeSection: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
+  timePickerDoneButton: {
+    padding: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
   },
-  sectionTitle: {
+  timePickerDoneButtonText: {
     fontSize: 17,
-    color: colors.text,
+    color: colors.accent,
     fontWeight: '600',
-    marginBottom: 12,
   },
-  requiredStar: {
-    color: colors.error,
+  inputTextArea: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 16,
+    color: colors.text,
+    height: 100,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  colorPickerSection: {
+    marginBottom: 20,
+  },
+  colorPickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  colorOption: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorOptionSelected: {
+    borderColor: colors.text,
+    transform: [{ scale: 1.1 }],
+  },
+  employeeSection: {
+    marginBottom: 20,
   },
   selectedEmployeesContainer: {
     flexDirection: 'row',
@@ -2087,12 +2202,12 @@ const styles = StyleSheet.create({
   employeeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primaryLight,
-    borderRadius: 20,
-    paddingLeft: 14,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    paddingLeft: 12,
     paddingRight: 8,
-    paddingVertical: 8,
-    gap: 6,
+    paddingVertical: 6,
+    gap: 4,
   },
   employeeChipText: {
     fontSize: 14,
@@ -2100,38 +2215,45 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   employeeChipRemove: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   employeeChipRemoveText: {
-    fontSize: 18,
+    fontSize: 14,
     color: colors.surface,
     fontWeight: '600',
-    lineHeight: 20,
   },
   addEmployeeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.divider,
     borderStyle: 'dashed',
   },
-  addEmployeeButtonText: {
-    fontSize: 15,
+  addEmployeeButtonIcon: {
+    fontSize: 18,
     color: colors.accent,
-    fontWeight: '600',
+    marginRight: 8,
+  },
+  addEmployeeButtonText: {
+    fontSize: 16,
+    color: colors.accent,
+    fontWeight: '500',
   },
   employeeSearchContainer: {
     marginTop: 12,
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.divider,
   },
   employeeSearchInput: {
     fontSize: 16,
@@ -2156,46 +2278,50 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
   },
+  employeeAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 16,
+    color: colors.surface,
+    fontWeight: '600',
+  },
   employeeSearchItemInfo: {
     flex: 1,
   },
   employeeSearchItemName: {
     fontSize: 16,
     color: colors.text,
-    fontWeight: '600',
+    fontWeight: '500',
     marginBottom: 2,
   },
   employeeSearchItemRole: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   employeeSearchEmpty: {
-    paddingVertical: 24,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   employeeSearchEmptyText: {
     fontSize: 15,
     color: colors.textSecondary,
   },
-  colorPickerSection: {
-    paddingHorizontal: 16,
-    marginBottom: 32,
+  dropdownIcon: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  colorPickerRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 12,
-  },
-  colorOption: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  colorOptionSelected: {
-    borderColor: colors.primary,
-    transform: [{ scale: 1.1 }],
+  dropdownArrow: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 });
 
