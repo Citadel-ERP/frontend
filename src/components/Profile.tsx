@@ -1230,7 +1230,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
               </View>
             </View>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]}
               onPress={handleDownloadIDCard}
               disabled={downloading}
@@ -1246,7 +1246,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                   </Text>
                 </>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         );
       case 'assets':
