@@ -905,7 +905,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
 LeadDetails.displayName = 'LeadDetails';
 
 const s = StyleSheet.create({
-  // ... (keep all your existing styles exactly as they are)
   mainContainer: { flex: 1, backgroundColor: C.chatBg },
   container: { flex: 1, backgroundColor: C.chatBg },
   keyboardAvoidView: { flex: 1 },
