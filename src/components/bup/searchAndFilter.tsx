@@ -285,7 +285,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 const styles = StyleSheet.create({
   searchContainer: {
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#e7e6e5',
   },
   searchInputWrapper: {
     position: 'relative',

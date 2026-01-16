@@ -1,9 +1,9 @@
 export const lightTheme = {
   primary: '#075E54',
   primaryBlue: '#007AFF',
-  background: '#f5f7fa',
-  backgroundSecondary: '#FFFFFF',
-  cardBg: '#FFFFFF',
+  background: '#e7e6e5',
+  backgroundSecondary: '#e7e6e5',
+  cardBg: '#e7e6e5',
   text: '#1A1A1A',
   textSecondary: '#666666',
   textLight: '#999999',

@@ -26,7 +26,7 @@ const MODERN_COLORS = {
   accent: '#10B981',
   danger: '#EF4444',
   warning: '#F59E0B',
-  background: '#F0F2F5',
+  background: '#e7e6e5',
   surface: '#FFFFFF',
   textPrimary: '#1F2937',
   textSecondary: '#6B7280',
