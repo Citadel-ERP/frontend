@@ -176,6 +176,8 @@ export interface VehicleAssignment {
   assigned_at: string | null;
   created_at: string;
   updated_at: string;
+  odometer_start_reading: string | null;
+  odometer_end_reading: string | null;
 }
 export interface Driver {
   id: number;

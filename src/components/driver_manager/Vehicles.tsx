@@ -1430,7 +1430,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                     </LinearGradient>
                 </View>
 
-                <View style={styles.tabContainer}>
+                <View style={[styles.tabContainer, { backgroundColor: '#fff',padding:0 }]}>
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'vehicles' && styles.activeTabButton]}
                         onPress={() => setActiveTab('vehicles')}

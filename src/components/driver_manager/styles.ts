@@ -23,259 +23,6 @@ export const styles = StyleSheet.create({
         paddingBottom: 100,
     },
 
-    sectionDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    marginBottom: 16,
-},
-
-vehicleListContainer: {
-    gap: 12,
-    marginTop: 12,
-},
-
-driverListContainer: {
-    gap: 12,
-    marginTop: 12,
-},
-
-vehicleCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-},
-
-driverCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    flex: 1,
-},
-
-selectedIconContainer: {
-    position: 'absolute',
-    top: '50%',
-    right: 12,
-    transform: [{ translateY: -14 }],
-},
-
-driverEmail: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-},
-
-// ==================== IMPROVED BUTTON STYLES ====================
-modalActionsFooter: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    gap: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-},
-
-backButtonSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#008069',
-    gap: 8,
-    minWidth: 120,
-},
-
-backButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#008069',
-},
-
-nextButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#008069',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    gap: 10,
-    shadowColor: '#008069',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-},
-
-nextButtonDisabled: {
-    backgroundColor: '#B0D9CB',
-    shadowOpacity: 0,
-    elevation: 0,
-},
-
-nextButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-},
-
-confirmButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#008069',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    gap: 10,
-    shadowColor: '#008069',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 5,
-},
-
-confirmButtonDisabled: {
-    backgroundColor: '#B0D9CB',
-    shadowOpacity: 0,
-    elevation: 0,
-},
-
-confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-},
-
-// Update existing vehicleCard style
-vehicleCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#E9EDEF',
-    overflow: 'hidden',
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    transition: 'all 0.2s ease',
-},
-
-selectedCard: {
-    borderColor: '#008069',
-    backgroundColor: '#F0FFF4',
-    shadowColor: '#008069',
-    shadowOpacity: 0.15,
-    elevation: 4,
-},
-
-// Update existing driverCard style
-driverCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#E9EDEF',
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-},
-
-driverAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#008069',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-    shadowColor: '#008069',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-},
-
-driverAvatarText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 20,
-    letterSpacing: 1,
-},
-
-driverInfo: {
-    flex: 1,
-    paddingRight: 40,
-},
-
-driverName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-    letterSpacing: 0.3,
-},
-
-driverMeta: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: '500',
-    marginBottom: 2,
-},
-
-// Enhanced empty state
-emptyStateContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 20,
-},
-
-emptyIconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#F0FFF4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#C6E9D8',
-},
-
-emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: 0.3,
-},
-
-emptyStateText: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 20,
-},
-
     // ==================== HEADERS ====================
     header: {
         position: 'relative',
@@ -350,71 +97,6 @@ emptyStateText: {
         textAlign: 'center',
     },
 
-    // ==================== CITY SELECTION ====================
-    searchBox: {
-        padding: 20,
-        backgroundColor: '#e7e6e5',
-    },
-    searchInputWrapper: {
-        position: 'relative',
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    searchInput: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#E9EDEF',
-        borderRadius: 25,
-        paddingHorizontal: 45,
-        paddingVertical: 15,
-        fontSize: 16,
-        flex: 1,
-    },
-    searchIcon: {
-        position: 'absolute',
-        left: 20,
-        zIndex: 1,
-    },
-    citiesGrid: {
-        paddingHorizontal: 20,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
-    cityCard: {
-        width: '30%',
-        alignItems: 'center',
-        marginBottom: 25,
-    },
-    cityIconContainer: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: '#fff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    cityIconImage: {
-        width: 80,
-        height: 80,
-        borderRadius: 50,
-    },
-    cityName: {
-        fontSize: 13,
-        color: '#333',
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    bottomSpacing: {
-        height: 40,
-    },
-
     // ==================== TITLE SECTIONS ====================
     titleSection: {
         paddingHorizontal: 20,
@@ -437,7 +119,7 @@ emptyStateText: {
     backIcon: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,  // Increase from 4 to 8 for more space
+        gap: 8,
     },
     backArrow: {
         width: 14,
@@ -450,8 +132,8 @@ emptyStateText: {
     backText: {
         color: '#fff',
         fontSize: 14,
-        marginLeft: 2,  // More space from arrow
-        fontWeight: '600',  // Bolder
+        marginLeft: 2,
+        fontWeight: '600',
     },
     detailHeader: {
         flexDirection: 'row',
@@ -991,7 +673,7 @@ emptyStateText: {
         marginLeft: 8,
     },
 
-    // Date Time Inputs (Updated for WhatsApp style)
+    // Date Time Inputs
     dateTimeInput: {
         flex: 1,
         backgroundColor: '#F8F9FA',
@@ -1009,8 +691,6 @@ emptyStateText: {
         marginLeft: 12,
         fontWeight: '500',
     },
-
-    // WhatsApp-style date time button
     dateTimeButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1027,8 +707,6 @@ emptyStateText: {
         color: '#333333',
         marginLeft: 12,
     },
-
-    // Text Area (Updated)
     textAreaContainer: {
         backgroundColor: '#F8F9FA',
         borderRadius: 10,
@@ -1042,7 +720,6 @@ emptyStateText: {
         minHeight: 100,
         textAlignVertical: 'top',
     },
-
     descriptionInput: {
         flex: 1,
         padding: 16,
@@ -1051,7 +728,6 @@ emptyStateText: {
         minHeight: 100,
         textAlignVertical: 'top',
     },
-
     dateButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1109,8 +785,7 @@ emptyStateText: {
         padding: 4,
     },
 
-    // ==================== BOOKING MODAL SPECIFIC (UPDATED) ====================
-    // WhatsApp-style selected user
+    // ==================== BOOKING MODAL SPECIFIC ====================
     selectedUserCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1156,8 +831,6 @@ emptyStateText: {
     removeUserButton: {
         padding: 8,
     },
-
-    // WhatsApp-style search
     searchButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1176,8 +849,6 @@ emptyStateText: {
         color: '#333333',
         marginLeft: 12,
     },
-
-    // WhatsApp-style search container
     searchContainer: {
         marginTop: 12,
     },
@@ -1192,7 +863,6 @@ emptyStateText: {
         borderColor: '#E9EDEF',
         marginBottom: 8,
     },
-
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1206,8 +876,6 @@ emptyStateText: {
         color: '#666',
         fontSize: 14,
     },
-
-    // WhatsApp-style results list
     resultsList: {
         maxHeight: 200,
         backgroundColor: '#FFFFFF',
@@ -1249,8 +917,6 @@ emptyStateText: {
         fontSize: 12,
         color: '#8E8E93',
     },
-
-    // WhatsApp-style no results
     noResults: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -1266,8 +932,7 @@ emptyStateText: {
         marginTop: 8,
     },
 
-    // ==================== MODAL STYLES (UPDATED) ====================
-    // WhatsApp-style modal overlay
+    // ==================== MODAL STYLES ====================
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -1276,8 +941,6 @@ emptyStateText: {
     keyboardAvoidingView: {
         width: '100%',
     },
-
-    // WhatsApp-style modal container
     modalContainer: {
         backgroundColor: '#e7e6e5',
         borderTopLeftRadius: 20,
@@ -1285,12 +948,20 @@ emptyStateText: {
         maxHeight: screenHeight * 0.9,
         width: '100%',
     },
-
-    // WhatsApp-style modal header
     modalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        backgroundColor: '#008069',
+        paddingTop: Platform.OS === 'ios' ? 20 : 40,
+        paddingBottom: 16,
+        paddingHorizontal: 16,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+    },
+    modalHeaderLog: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#008069',
         paddingTop: Platform.OS === 'ios' ? 20 : 40,
         paddingBottom: 16,
@@ -1325,12 +996,9 @@ emptyStateText: {
         justifyContent: 'center',
         marginLeft: 8,
     },
-
     modalScrollContent: {
         paddingBottom: 30,
     },
-
-    // WhatsApp-style section
     section: {
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
@@ -1351,8 +1019,6 @@ emptyStateText: {
         borderBottomWidth: 1,
         borderBottomColor: '#F0F0F0',
     },
-
-    // Modal close button (legacy)
     modalCloseButton: {
         width: 40,
         height: 40,
@@ -1361,7 +1027,6 @@ emptyStateText: {
         alignItems: 'center',
         justifyContent: 'center',
     },
-
     downloadButton: {
         width: 40,
         height: 40,
@@ -1370,8 +1035,6 @@ emptyStateText: {
         alignItems: 'center',
         justifyContent: 'center',
     },
-
-    // WhatsApp-style action buttons
     modalActions: {
         flexDirection: 'row',
         paddingHorizontal: 16,
@@ -1420,8 +1083,6 @@ emptyStateText: {
         fontWeight: '600',
         color: '#FFFFFF',
     },
-
-    // Legacy modal buttons (keeping for compatibility)
     modalButtons: {
         flexDirection: 'row',
         gap: 12,
@@ -1588,7 +1249,6 @@ emptyStateText: {
         justifyContent: 'center',
         marginBottom: 24,
     },
-    
     emptyStateSubtext: {
         fontSize: 14,
         color: '#999',
@@ -1733,11 +1393,9 @@ emptyStateText: {
         color: '#333',
         flex: 1,
     },
-
     scrollView: {
         flex: 1,
     },
-
     photoScrollContent: {
         paddingVertical: 8,
     },
@@ -1983,7 +1641,6 @@ emptyStateText: {
     documentsContainer: {
         gap: 12,
     },
-
     documentDownloadButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1993,7 +1650,6 @@ emptyStateText: {
         borderWidth: 1,
         borderColor: '#E9EDEF',
     },
-
     documentIconWrapper: {
         width: 48,
         height: 48,
@@ -2008,21 +1664,18 @@ emptyStateText: {
         shadowRadius: 4,
         elevation: 2,
     },
-
     noDocumentsContainer: {
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 32,
         paddingHorizontal: 16,
     },
-
     noDocumentsText: {
         fontSize: 16,
         fontWeight: '600',
         color: '#718096',
         marginTop: 12,
     },
-
     noDocumentsSubtext: {
         fontSize: 14,
         color: '#A0AEC0',
@@ -2032,24 +1685,20 @@ emptyStateText: {
     documentPreviewContainer: {
         marginBottom: 12,
     },
-
     documentNameContainer: {
         marginTop: 4,
     },
-
     documentNameText: {
         fontSize: 13,
         fontWeight: '500',
         color: '#008069',
         marginBottom: 2,
     },
-
     documentStatusText: {
         fontSize: 11,
         color: '#666',
         fontStyle: 'italic',
     },
-
     documentActionIcon: {
         width: 40,
         height: 40,
@@ -2057,8 +1706,6 @@ emptyStateText: {
         justifyContent: 'center',
         marginLeft: 8,
     },
-
-    // Update this existing style:
     updateVehicleDocumentButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2074,20 +1721,6 @@ emptyStateText: {
         shadowRadius: 2,
         elevation: 1,
     },
-    // loadingContainer: {
-    //     flexDirection: 'row',
-    //     alignItems: 'center',
-    //     justifyContent: 'center',
-    //     padding: 16,
-    //     backgroundColor: '#F5F5F5',
-    //     borderRadius: 8,
-    //     marginBottom: 12,
-    // },
-    // loadingText: {
-    //     marginLeft: 12,
-    //     fontSize: 14,
-    //     color: '#666',
-    // },
     errorContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2230,10 +1863,38 @@ emptyStateText: {
         marginHorizontal: 8,
     },
 
-    // Vehicle Card Styles
-    
-    
-
+    // ==================== VEHICLE CARD STYLES ====================
+    sectionDescription: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+        marginBottom: 16,
+    },
+    vehicleListContainer: {
+        gap: 12,
+        marginTop: 12,
+    },
+    driverListContainer: {
+        gap: 12,
+        marginTop: 12,
+    },
+    vehicleCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    driverCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        position: 'relative',
+        flex: 1,
+    },
+    selectedIconContainer: {
+        position: 'absolute',
+        top: '50%',
+        right: 12,
+        transform: [{ translateY: -14 }],
+    },
     vehicleImagePlaceholder: {
         width: 80,
         height: 80,
@@ -2247,7 +1908,6 @@ emptyStateText: {
         marginLeft: 12,
         justifyContent: 'center',
     },
-
     vehicleSpecs: {
         flexDirection: 'row',
         gap: 8,
@@ -2261,13 +1921,478 @@ emptyStateText: {
         borderRadius: 8,
         gap: 4,
     },
-
     selectedIcon: {
         position: 'absolute',
         top: 12,
         right: 12,
     },
 
-    // Driver Card Styles
-    
+    // ==================== IMPROVED BUTTON STYLES ====================
+    modalActionsFooter: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 20,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+        gap: 12,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#F0F0F0',
+    },
+    backButtonSecondary: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#008069',
+        gap: 8,
+        minWidth: 120,
+    },
+    backButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#008069',
+    },
+    nextButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#008069',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        gap: 10,
+        shadowColor: '#008069',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    nextButtonDisabled: {
+        backgroundColor: '#B0D9CB',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    nextButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        letterSpacing: 0.5,
+    },
+    confirmButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#008069',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        gap: 10,
+        shadowColor: '#008069',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    confirmButtonDisabled: {
+        backgroundColor: '#B0D9CB',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    confirmButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        letterSpacing: 0.5,
+    },
+
+    // ==================== VEHICLE CARD ====================
+    vehicleCard: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        marginBottom: 12,
+        borderWidth: 2,
+        borderColor: '#E9EDEF',
+        overflow: 'hidden',
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+        transition: 'all 0.2s ease',
+    },
+    selectedCard: {
+        borderColor: '#008069',
+        backgroundColor: '#F0FFF4',
+        shadowColor: '#008069',
+        shadowOpacity: 0.15,
+        elevation: 4,
+    },
+
+    // ==================== DRIVER CARD ====================
+    driverCard: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        marginBottom: 12,
+        borderWidth: 2,
+        borderColor: '#E9EDEF',
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    driverAvatar: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#008069',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16,
+        shadowColor: '#008069',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    driverAvatarText: {
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 20,
+        letterSpacing: 1,
+    },
+    driverInfo: {
+        flex: 1,
+        paddingRight: 40,
+    },
+    driverName: {
+        fontSize: 17,
+        fontWeight: '500',
+        color: '#1A1A1A',
+        marginBottom: 4,
+        letterSpacing: 0.3,
+    },
+    driverMeta: {
+        fontSize: 13,
+        color: '#666',
+        fontWeight: '500',
+        marginBottom: 2,
+    },
+
+    // ==================== ENHANCED EMPTY STATE ====================
+    emptyStateContainer: {
+        alignItems: 'center',
+        paddingVertical: 60,
+        paddingHorizontal: 20,
+    },
+    emptyIconCircle: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#F0FFF4',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        borderWidth: 2,
+        borderColor: '#C6E9D8',
+    },
+    emptyStateTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1A1A1A',
+        marginBottom: 8,
+        textAlign: 'center',
+        letterSpacing: 0.3,
+    },
+    emptyStateText: {
+        fontSize: 15,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 22,
+        paddingHorizontal: 20,
+    },
+
+    // ==================== BOOKING DRIVER ASSIGNMENT & ODOMETER MODALS ====================
+    assignmentsSection: {
+        marginTop: 16,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+    },
+    assignmentsSectionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 12,
+    },
+    assignmentCard: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: '#008069',
+    },
+    assignmentRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    assignmentVehicleText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#333',
+        marginLeft: 8,
+        flex: 1,
+    },
+    driverRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    driverText: {
+        fontSize: 13,
+        color: '#666',
+        flex: 1,
+        marginLeft: 4,
+    },
+    noDriverText: {
+        fontStyle: 'italic',
+        color: '#999',
+    },
+    changeDriverButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#008069',
+        gap: 4,
+    },
+    changeDriverText: {
+        fontSize: 12,
+        color: '#008069',
+        fontWeight: '600',
+    },
+    driverModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    driverModalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        width: '100%',
+        maxWidth: 500,
+        maxHeight: '80%',
+        overflow: 'hidden',
+    },
+    driverModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    driverModalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+    },
+    driverList: {
+        maxHeight: 400,
+        padding: 16,
+    },
+    noDriversText: {
+        textAlign: 'center',
+        color: '#999',
+        fontSize: 14,
+        marginTop: 20,
+    },
+    driverOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 8,
+        backgroundColor: '#f8f9fa',
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    selectedDriverOption: {
+        backgroundColor: '#e8f5e9',
+        borderColor: '#008069',
+    },
+    driverOptionContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    driverOptionAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+    },
+    driverAvatarPlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#e0e0e0',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    driverInfoModal: {
+        flex: 1,
+    },
+    driverNameModal: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 2,
+    },
+    driverEmailModal: {
+        fontSize: 13,
+        color: '#666',
+    },
+    modalFooter: {
+        flexDirection: 'row',
+        padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+        gap: 12,
+    },
+    modalButton: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    cancelButtonModal: {
+        backgroundColor: '#f5f5f5',
+    },
+    cancelButtonTextModal: {
+        color: '#666',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    confirmButtonModal: {
+        backgroundColor: '#008069',
+    },
+    confirmButtonTextModal: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    disabledButton: {
+        opacity: 0.5,
+    },
+    odometerModalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        width: '100%',
+        maxWidth: 400,
+        overflow: 'hidden',
+    },
+    odometerInputContainer: {
+        padding: 24,
+        alignItems: 'center',
+    },
+    odometerLabel: {
+        fontSize: 15,
+        color: '#666',
+        textAlign: 'center',
+        marginTop: 16,
+        marginBottom: 20,
+    },
+    odometerInput: {
+        width: '100%',
+        backgroundColor: '#f8f9fa',
+        borderWidth: 2,
+        borderColor: '#e0e0e0',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        fontSize: 16,
+        color: '#333',
+        textAlign: 'center',
+    },
+    driverEmail: {
+        fontSize: 15,
+        color: '#666',
+        textAlign: 'center',
+        marginTop: 16,
+        marginBottom: 20,
+    },
+    odometerSection: {
+        marginTop: 16,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+    },
+    odometerSectionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 12,
+    },
+    odometerCard: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 12,
+        borderLeftWidth: 3,
+        borderLeftColor: '#008069',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    odometerVehicleText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 12,
+        letterSpacing: 0.3,
+    },
+    odometerReadings: {
+        gap: 10,
+    },
+    odometerReading: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        gap: 8,
+    },
+    // odometerLabel: {
+    //     fontSize: 13,
+    //     color: '#666',
+    //     fontWeight: '500',
+    //     minWidth: 45,
+    // },
+    odometerValue: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1A1A1A',
+        flex: 1,
+    },
 });

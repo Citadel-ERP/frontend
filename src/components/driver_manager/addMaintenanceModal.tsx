@@ -12,7 +12,6 @@ import {
   Alert,
   Keyboard,
   TouchableWithoutFeedback,
-  Dimensions,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -32,31 +31,6 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        setKeyboardVisible(true);
-        setKeyboardHeight(e.endCoordinates.height);
-      }
-    );
-    
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, []);
 
   const formatDateForDisplay = (date: Date): string => {
     return date.toISOString().split('T')[0];
@@ -107,6 +81,8 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
     Keyboard.dismiss();
   };
 
+  const isFormValid = form.cost && form.description && form.start_date && form.end_date;
+
   return (
     <Modal
       visible={isVisible}
@@ -115,194 +91,242 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <TouchableWithoutFeedback onPress={dismissKeyboard}>
-        <View style={[
-          styles.modalOverlay,
-          { 
-            justifyContent: keyboardVisible ? 'flex-start' : 'center',
-            paddingTop: keyboardVisible ? Platform.OS === 'ios' ? 40 : 20 : 0
-          }
-        ]}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardAvoidingView}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-          >
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <View style={[
-                styles.modalContainer,
-                keyboardVisible && {
-                  maxHeight: Dimensions.get('window').height - keyboardHeight - 100,
-                  marginTop: 0
-                }
-              ]}>
-                <View style={styles.modalHeader}>
-                  <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                    <Ionicons name="close" size={24} color="#075E54" />
-                  </TouchableOpacity>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <View style={styles.modalContainer}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity 
+                  style={styles.detailBackButton} 
+                  onPress={onClose}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.headerTitleContainer}>
                   <Text style={styles.modalTitle}>Add Maintenance</Text>
-                  <View style={{ width: 40 }} />
+                  <Text style={styles.modalSubtitle}>Record vehicle maintenance</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Content */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              bounces={true}
+              scrollEventThrottle={16}
+            >
+              {/* Cost Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialCommunityIcons name="cash" size={22} color="#008069" />
+                  <Text style={styles.cardTitle}>Cost Details</Text>
+                </View>
+                <View style={styles.formGroup}>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.formLabel}>Maintenance Cost</Text>
+                    <Text style={styles.requiredStar}>*</Text>
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <MaterialCommunityIcons
+                      name="currency-inr"
+                      size={20}
+                      color="#008069"
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={form.cost}
+                      onChangeText={(text) => setForm((prev) => ({ ...prev, cost: text }))}
+                      placeholder="Enter cost"
+                      placeholderTextColor="#999"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Description Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons name="description" size={22} color="#008069" />
+                  <Text style={styles.cardTitle}>Work Description</Text>
+                </View>
+                <View style={styles.formGroup}>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.formLabel}>Description</Text>
+                    <Text style={styles.requiredStar}>*</Text>
+                  </View>
+                  <View style={styles.textAreaContainer}>
+                    <TextInput
+                      style={styles.textAreaInput}
+                      value={form.description}
+                      onChangeText={(text) => setForm((prev) => ({ ...prev, description: text }))}
+                      placeholder="Describe the maintenance work performed"
+                      placeholderTextColor="#999"
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Date Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons name="date-range" size={22} color="#008069" />
+                  <Text style={styles.cardTitle}>Maintenance Period</Text>
+                </View>
+                
+                <View style={styles.formGroup}>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.formLabel}>Start Date</Text>
+                    <Text style={styles.requiredStar}>*</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowStartDatePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="event" size={20} color="#008069" />
+                    <Text style={[
+                      styles.dateTimeButtonText,
+                      !form.start_date && { color: '#999' }
+                    ]}>
+                      {form.start_date || 'Select start date'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color="#666" />
+                  </TouchableOpacity>
+                  {showStartDatePicker && (
+                    <DateTimePicker
+                      value={startDate}
+                      mode="date"
+                      display="default"
+                      onChange={handleStartDateChange}
+                    />
+                  )}
                 </View>
 
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={[
-                    styles.modalScrollContent,
-                    keyboardVisible && { paddingBottom: 20 }
-                  ]}
-                  keyboardShouldPersistTaps="handled"
-                  bounces={false}
-                >
-                  <View style={styles.formGroup}>
-                    <View style={styles.inputContainer}>
-                      <MaterialCommunityIcons
-                        name="currency-inr"
-                        size={20}
-                        color="#075E54"
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        style={styles.textInput}
-                        value={form.cost}
-                        onChangeText={(text) => setForm((prev) => ({ ...prev, cost: text }))}
-                        placeholder="Enter maintenance cost"
-                        placeholderTextColor="#888"
-                        keyboardType="numeric"
-                      />
-                    </View>
+                <View style={styles.formGroup}>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.formLabel}>End Date</Text>
+                    <Text style={styles.requiredStar}>*</Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowEndDatePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="event" size={20} color="#008069" />
+                    <Text style={[
+                      styles.dateTimeButtonText,
+                      !form.end_date && { color: '#999' }
+                    ]}>
+                      {form.end_date || 'Select end date'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color="#666" />
+                  </TouchableOpacity>
+                  {showEndDatePicker && (
+                    <DateTimePicker
+                      value={endDate}
+                      mode="date"
+                      display="default"
+                      onChange={handleEndDateChange}
+                    />
+                  )}
+                </View>
+              </View>
 
-                  <View style={styles.formGroup}>
-                    <View style={styles.inputContainer}>
-                      <MaterialIcons
-                        name="description"
-                        size={20}
-                        color="#075E54"
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        style={styles.descriptionInput}
-                        value={form.description}
-                        onChangeText={(text) => setForm((prev) => ({ ...prev, description: text }))}
-                        placeholder="Describe the maintenance work"
-                        placeholderTextColor="#888"
-                        multiline
-                        numberOfLines={4}
-                        textAlignVertical="top"
-                      />
-                    </View>
+              {/* Document Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons name="attach-file" size={22} color="#008069" />
+                  <Text style={styles.cardTitle}>Supporting Documents</Text>
+                </View>
+                <View style={styles.formGroup}>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.formLabel}>Attachment</Text>
+                    <Text style={styles.optionalText}>(optional)</Text>
                   </View>
-
-                  <View style={styles.formGroup}>
-                    <TouchableOpacity
-                      style={styles.dateButton}
-                      onPress={() => setShowStartDatePicker(true)}
-                    >
-                      <MaterialIcons
-                        name="date-range"
-                        size={20}
-                        color="#075E54"
-                        style={styles.buttonIcon}
-                      />
-                      <Text style={[styles.dateButtonText, !form.start_date && styles.dateButtonPlaceholder]}>
-                        {form.start_date || 'Select start date'}
-                      </Text>
-                    </TouchableOpacity>
-                    {showStartDatePicker && (
-                      <DateTimePicker
-                        value={startDate}
-                        mode="date"
-                        display="default"
-                        onChange={handleStartDateChange}
-                      />
-                    )}
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <TouchableOpacity
-                      style={styles.dateButton}
-                      onPress={() => setShowEndDatePicker(true)}
-                    >
-                      <MaterialIcons
-                        name="date-range"
-                        size={20}
-                        color="#075E54"
-                        style={styles.buttonIcon}
-                      />
-                      <Text style={[styles.dateButtonText, !form.end_date && styles.dateButtonPlaceholder]}>
-                        {form.end_date || 'Select end date'}
-                      </Text>
-                    </TouchableOpacity>
-                    {showEndDatePicker && (
-                      <DateTimePicker
-                        value={endDate}
-                        mode="date"
-                        display="default"
-                        onChange={handleEndDateChange}
-                      />
-                    )}
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <TouchableOpacity style={styles.documentButton} onPress={handleDocumentPick}>
-                      <MaterialIcons
-                        name="attach-file"
-                        size={20}
-                        color="#075E54"
-                        style={styles.buttonIcon}
-                      />
-                      <Text style={styles.documentButtonText}>
-                        {form.document ? form.document.name || 'Document Selected' : 'Attach Document (Optional)'}
-                      </Text>
-                    </TouchableOpacity>
-                    {form.document && (
-                      <View style={styles.documentInfo}>
-                        <View style={styles.documentRow}>
-                          <MaterialIcons name="insert-drive-file" size={16} color="#075E54" />
-                          <Text style={styles.documentName} numberOfLines={1}>
+                  <TouchableOpacity 
+                    style={styles.searchButton} 
+                    onPress={handleDocumentPick}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="cloud-upload" size={20} color="#008069" />
+                    <Text style={styles.searchButtonText}>
+                      {form.document ? 'Change Document' : 'Upload Document'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color="#666" />
+                  </TouchableOpacity>
+                  
+                  {form.document && (
+                    <View style={styles.selectedUserCard}>
+                      <View style={styles.selectedUserContent}>
+                        <View style={styles.selectedUserAvatar}>
+                          <MaterialIcons name="insert-drive-file" size={20} color="#FFFFFF" />
+                        </View>
+                        <View style={styles.selectedUserInfo}>
+                          <Text style={styles.selectedUserName} numberOfLines={1}>
                             {form.document.name}
                           </Text>
+                          <Text style={styles.selectedUserEmail}>
+                            {form.document.size ? (form.document.size / 1024).toFixed(2) + ' KB' : 'Unknown size'}
+                          </Text>
                         </View>
-                        <TouchableOpacity
-                          style={styles.removeDocumentButton}
-                          onPress={() => setForm((prev) => ({ ...prev, document: null }))}
-                        >
-                          <Ionicons name="close-circle" size={20} color="#FF3B30" />
-                        </TouchableOpacity>
                       </View>
-                    )}
-                  </View>
-
-                  <View style={styles.modalButtons}>
-                    <TouchableOpacity
-                      style={styles.modalCancelButton}
-                      onPress={onClose}
-                      disabled={loading}
-                    >
-                      <Text style={styles.modalCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.modalSubmitButton,
-                        (!form.cost || !form.description || !form.start_date || !form.end_date) &&
-                          styles.modalSubmitButtonDisabled,
-                      ]}
-                      onPress={onSubmit}
-                      disabled={loading || !form.cost || !form.description || !form.start_date || !form.end_date}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <Text style={styles.modalSubmitText}>Submit</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </ScrollView>
+                      <TouchableOpacity
+                        style={styles.removeUserButton}
+                        onPress={() => setForm((prev) => ({ ...prev, document: null }))}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </View>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        </View>
-      </TouchableWithoutFeedback>
+            </ScrollView>
+
+            {/* Footer Actions */}
+            <View style={styles.modalActionsFooter}>
+              <TouchableOpacity
+                style={styles.backButtonSecondary}
+                onPress={onClose}
+                disabled={loading}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color="#008069" />
+                <Text style={styles.backButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.nextButton,
+                  !isFormValid && styles.nextButtonDisabled,
+                ]}
+                onPress={onSubmit}
+                disabled={loading || !isFormValid}
+                activeOpacity={0.7}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.nextButtonText}>Submit</Text>
+                    <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

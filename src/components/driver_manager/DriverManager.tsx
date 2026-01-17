@@ -36,7 +36,6 @@ const DriverManager: React.FC<DriverManagerProps> = ({ onBack }) => {
   if (!selectedCity) {
     return <CitySelection onCitySelect={setSelectedCity} onBack={onBack} />;
   }
-  console.log("correct path")
   return (
     <View style={styles.screenContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#075E54" />

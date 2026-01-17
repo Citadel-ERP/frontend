@@ -105,11 +105,11 @@ const MaintenanceLogsModal: React.FC<MaintenanceLogsModalProps> = ({
     <Modal visible={isVisible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-              <Ionicons name="close" size={24} color="#075E54" />
+          <View style={styles.modalHeaderLog}>
+            <TouchableOpacity style={[{marginRight: 10}]} onPress={onClose}>
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Maintenance Logs</Text>
+            <Text style={[styles.modalTitle, {textAlign: 'left', alignItems: 'flex-start'}]}>Maintenance Logs</Text>
             {token && vehicleId && (
               <TouchableOpacity
                 style={styles.downloadButton}
