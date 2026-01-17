@@ -18,7 +18,6 @@ import { VehicleImage } from './VehicleImage';
 import { Booking, VehicleAssignment, Driver } from './types';
 import { BACKEND_URL } from '../../config/config';
 import { getStatusColor, getStatusIconBooking } from './utils';
-import BookingModal from './bookingModal';
 
 const BackIcon = () => (
     <View style={styles.backIcon}>
@@ -72,6 +71,8 @@ const BookingCard: React.FC<{
         }).start();
     }, []);
 
+
+
     const handleStatusChange = (status: string) => {
         setSelectedStatus(status);
         if (status === 'cancelled') {
@@ -83,29 +84,38 @@ const BookingCard: React.FC<{
     };
 
     const handleUpdateStatus = async () => {
-    if (selectedStatus === 'cancelled' && !cancellationReason.trim()) {
-        Alert.alert('Error', 'Please provide a reason for cancellation');
-        return;
-    }
-    if (selectedStatus === booking.status && selectedStatus !== 'cancelled') {
-        Alert.alert('Info', 'Status is already set to ' + selectedStatus);
-        return;
-    }
+        if (selectedStatus === 'cancelled' && !cancellationReason.trim()) {
+            Alert.alert('Error', 'Please provide a reason for cancellation');
+            return;
+        }
+        if (selectedStatus === booking.status && selectedStatus !== 'cancelled') {
+            Alert.alert('Info', 'Status is already set to ' + selectedStatus);
+            return;
+        }
 
-    // Check if we need odometer readings
-    if ((selectedStatus === 'in-progress' || selectedStatus === 'completed') && assignments.length === 0) {
-        Alert.alert('Error', 'No vehicles assigned to this booking');
-        return;
-    }
+        // Check if we need odometer readings
+        if ((selectedStatus === 'in-progress' || selectedStatus === 'completed') && assignments.length === 0) {
+            Alert.alert('Error', 'No vehicles assigned to this booking');
+            return;
+        }
 
-    setIsUpdating(true);
-    await onUpdateStatus(booking.id, selectedStatus, cancellationReason);
-    setIsUpdating(false);
-    setShowCancellationInput(false);
-    setCancellationReason('');
-};
+        // Only set loading for non-odometer status updates
+        if (selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
+            setIsUpdating(true);
+        }
+
+        await onUpdateStatus(booking.id, selectedStatus, cancellationReason);
+
+        if (selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
+            setIsUpdating(false);
+        }
+
+        setShowCancellationInput(false);
+        setCancellationReason('');
+    };
 
     const assignments = booking.vehicle_assignments || [];
+    console.log('Assignments found:', assignments);
     const hasMultipleVehicles = assignments.length > 1;
     const firstVehicle = assignments.length > 0 ? assignments[0].vehicle : null;
 
@@ -384,7 +394,6 @@ const Bookings: React.FC<BookingsProps> = ({
     const [bookings, setBookings] = useState<ExtendedBooking[]>([]);
     const [updating, setUpdating] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
 
     // Driver assignment state
     const [selectedAssignment, setSelectedAssignment] = useState<VehicleAssignment | null>(null);
@@ -402,6 +411,7 @@ const Bookings: React.FC<BookingsProps> = ({
         cancellationReason: undefined,
         assignments: [],
     });
+    const isOpeningModalRef = useRef(false);
     const [odometerReadings, setOdometerReadings] = useState<{ [key: number]: string }>({});
     const [submittingOdometer, setSubmittingOdometer] = useState(false);
     useEffect(() => {
@@ -420,62 +430,72 @@ const Bookings: React.FC<BookingsProps> = ({
         }
     }, [loading, bookings]);
 
+    useEffect(() => {
+        console.log('==== MODAL STATE CHANGED ====');
+        console.log('Visible:', odometerModal.visible);
+        console.log('Assignments count:', odometerModal.assignments?.length || 0);
+        console.log('Type:', odometerModal.type);
+        if (odometerModal.visible && odometerModal.assignments.length > 0) {
+            console.log('First assignment vehicle:', odometerModal.assignments[0].vehicle.make);
+        }
+    }, [odometerModal]);
+
     const fetchBookings = async () => {
-    setLoading(true);
-    try {
-        const response = await fetch(`${BACKEND_URL}/manager/getCarBookings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ token }),
-        });
+        setLoading(true);
+        try {
+            const response = await fetch(`${BACKEND_URL}/manager/getCarBookings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ token }),
+            });
 
-        const text = await response.text();
-        console.log('Raw response:', text.substring(0, 500)); // Log first 500 chars
+            const text = await response.text();
+            console.log('Raw response:', text.substring(0, 500)); // Log first 500 chars
 
-        if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-            try {
-                const data = JSON.parse(text);
-                console.log('Parsed data:', JSON.stringify(data, null, 2).substring(0, 1000));
-                
-                if (response.ok) {
-                    const bookingsData = data.bookings || [];
-                    if (Array.isArray(bookingsData)) {
-                        // Log first booking to check structure
-                        if (bookingsData.length > 0) {
-                            console.log('First booking structure:', JSON.stringify(bookingsData[0], null, 2));
-                            console.log('Vehicle assignments:', bookingsData[0].vehicle_assignments);
+            if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                try {
+                    const data = JSON.parse(text);
+                    console.log('Parsed data:', JSON.stringify(data, null, 2).substring(0, 1000));
+
+                    if (response.ok) {
+                        const bookingsData = data.bookings || [];
+                        if (Array.isArray(bookingsData)) {
+                            // Log first booking to check structure
+                            if (bookingsData.length > 0) {
+                                console.log('First booking structure:', JSON.stringify(bookingsData[0], null, 2));
+                                console.log('Vehicle assignments:', bookingsData[0].vehicle_assignments);
+                            }
+
+                            const sortedBookings = [...bookingsData].sort((a: ExtendedBooking, b: ExtendedBooking) =>
+                                new Date(b.created_at || b.start_time || 0).getTime() - new Date(a.created_at || a.start_time || 0).getTime()
+                            );
+                            setBookings(sortedBookings);
+                        } else {
+                            console.error('Bookings data is not an array:', bookingsData);
+                            setBookings([]);
                         }
-                        
-                        const sortedBookings = [...bookingsData].sort((a: ExtendedBooking, b: ExtendedBooking) =>
-                            new Date(b.created_at || b.start_time || 0).getTime() - new Date(a.created_at || a.start_time || 0).getTime()
-                        );
-                        setBookings(sortedBookings);
                     } else {
-                        console.error('Bookings data is not an array:', bookingsData);
+                        console.error('Response not OK:', data);
                         setBookings([]);
                     }
-                } else {
-                    console.error('Response not OK:', data);
+                } catch (parseError) {
+                    console.error('Failed to parse bookings JSON:', parseError);
                     setBookings([]);
                 }
-            } catch (parseError) {
-                console.error('Failed to parse bookings JSON:', parseError);
+            } else {
+                console.error('Response is not JSON:', text);
                 setBookings([]);
             }
-        } else {
-            console.error('Response is not JSON:', text);
+        } catch (error) {
+            console.error('Error fetching bookings:', error);
             setBookings([]);
+        } finally {
+            setLoading(false);
         }
-    } catch (error) {
-        console.error('Error fetching bookings:', error);
-        setBookings([]);
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
     const fetchAvailableDrivers = async () => {
         setLoadingDrivers(true);
@@ -514,25 +534,46 @@ const Bookings: React.FC<BookingsProps> = ({
     };
 
     const updateBookingStatus = async (bookingId: number, status: string, reason?: string) => {
-        // Check if odometer reading is required
+        console.log('=== updateBookingStatus START ===');
+        console.log('Booking ID:', bookingId);
+        console.log('Status:', status);
+
         if (status === 'in-progress' || status === 'completed') {
             const booking = bookings.find(b => b.id === bookingId);
-            const assignments = booking?.vehicle_assignments || [];
 
-            setOdometerModal({
-                visible: true,
-                type: status === 'in-progress' ? 'start' : 'end',
-                bookingId,
-                selectedStatus: status,
-                cancellationReason: reason,
-                assignments: assignments,
-            });
-            setOdometerReadings({});  // Reset readings
-            setUpdating(false);
+            if (!booking) {
+                Alert.alert('Error', 'Booking not found');
+                return;
+            }
+
+            const assignments = booking.vehicle_assignments || [];
+
+            console.log('Assignments found:', assignments.length);
+
+            if (assignments.length === 0) {
+                Alert.alert('No Vehicles Assigned', 'This booking has no vehicles assigned.');
+                return;
+            }
+
+            // CRITICAL: Clear readings first
+            setOdometerReadings({});
+
+            // CRITICAL: Set modal state in next tick
+            setTimeout(() => {
+                console.log('Opening modal NOW');
+                setOdometerModal({
+                    visible: true,
+                    type: status === 'in-progress' ? 'start' : 'end',
+                    bookingId: bookingId,
+                    selectedStatus: status,
+                    cancellationReason: reason || '',
+                    assignments: assignments,
+                });
+            }, 100);
+
             return;
         }
 
-        // Proceed with status update for other statuses
         await performStatusUpdate(bookingId, status, reason);
     };
 
@@ -688,10 +729,6 @@ const Bookings: React.FC<BookingsProps> = ({
         setIsDriverModalVisible(true);
     };
 
-    const handleCreateBooking = () => {
-        setIsBookingModalVisible(true);
-    };
-
     return (
         <View style={styles.screenContainer}>
             <ScrollView
@@ -718,16 +755,10 @@ const Bookings: React.FC<BookingsProps> = ({
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
                                     <BackIcon />
                                 </TouchableOpacity>
-                                <View style={styles.headerCenter}>
+                                <View style={[styles.headerCenter, {marginRight: 60, height: 40}]}>
                                     <Text style={styles.logoText}>CITADEL</Text>
                                     <Text style={styles.headerSubtitle}>Managing: {city}</Text>
                                 </View>
-                                <TouchableOpacity
-                                    style={{ padding: 8 }}
-                                    onPress={handleCreateBooking}
-                                >
-                                    <MaterialIcons name="add" size={24} color="#fff" />
-                                </TouchableOpacity>
                             </View>
                         </View>
 
@@ -783,12 +814,6 @@ const Bookings: React.FC<BookingsProps> = ({
                         <Text style={styles.emptyStateText}>
                             No bookings found for {city}
                         </Text>
-                        <TouchableOpacity
-                            style={styles.searchBtn}
-                            onPress={handleCreateBooking}
-                        >
-                            <Text style={styles.searchBtnText}>Create First Booking</Text>
-                        </TouchableOpacity>
                     </View>
                 ) : (
                     <Animated.View style={{ opacity: fadeAnim }}>
@@ -809,17 +834,6 @@ const Bookings: React.FC<BookingsProps> = ({
                     </Animated.View>
                 )}
             </ScrollView>
-
-            <BookingModal
-                visible={isBookingModalVisible}
-                onClose={() => setIsBookingModalVisible(false)}
-                token={token}
-                city={city}
-                onBookingCreated={() => {
-                    setIsBookingModalVisible(false);
-                    fetchBookings();
-                }}
-            />
 
             {/* Driver Selection Modal */}
             <Modal
@@ -895,272 +909,265 @@ const Bookings: React.FC<BookingsProps> = ({
             </Modal>
 
             {/* Odometer Reading Modal */}
-            {/* Odometer Reading Modal */}
-            <Modal
-                visible={odometerModal.visible}
-                transparent
-                animationType="slide"
-                onRequestClose={() => {
-                    if (!submittingOdometer) {
-                        setOdometerModal({
-                            visible: false,
-                            type: 'start',
-                            bookingId: null,
-                            selectedStatus: '',
-                            cancellationReason: undefined,
-                            assignments: [],
-                        });
-                        setOdometerReadings({});
-                    }
-                }}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.odometerModalContainer}>
-                        <View style={styles.modalHeader}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.modalTitle}>
-                                    {odometerModal.type === 'start' ? 'Start Trip' : 'Complete Trip'}
-                                </Text>
-                                <Text style={styles.modalSubtitle}>
-                                    Enter odometer {odometerModal.type === 'start' ? 'start' : 'end'} readings
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => {
-                                    if (!submittingOdometer) {
-                                        setOdometerModal({
-                                            visible: false,
-                                            type: 'start',
-                                            bookingId: null,
-                                            selectedStatus: '',
-                                            cancellationReason: undefined,
-                                            assignments: [],
-                                        });
-                                        setOdometerReadings({});
-                                    }
-                                }}
-                                disabled={submittingOdometer}
-                            >
-                                <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
-                            </TouchableOpacity>
-                        </View>
+            
 
-                        <ScrollView
-                            style={{ flex: 1, maxHeight: 500 }}
-                            contentContainerStyle={{ padding: 20 }}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            <View style={{ alignItems: 'center', marginBottom: 24 }}>
-                                <View style={{
-                                    width: 80,
-                                    height: 80,
-                                    borderRadius: 40,
-                                    backgroundColor: '#E8F5E9',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginBottom: 16
-                                }}>
-                                    <MaterialCommunityIcons
-                                        name="speedometer"
-                                        size={40}
-                                        color="#008069"
-                                    />
-                                </View>
-                                <Text style={{
-                                    fontSize: 16,
-                                    color: '#666',
-                                    textAlign: 'center',
-                                    lineHeight: 22
-                                }}>
-                                    Please record the odometer reading for {odometerModal.assignments.length === 1 ? 'this vehicle' : 'each vehicle'} before {odometerModal.type === 'start' ? 'starting' : 'completing'} the trip
-                                </Text>
-                            </View>
+            {/* Odometer Reading Modal - FIXED VERSION */}
 
-                            {odometerModal.assignments.map((assignment, index) => (
-                                <View
-                                    key={assignment.id}
-                                    style={{
-                                        backgroundColor: '#F8F9FA',
-                                        borderRadius: 16,
-                                        padding: 16,
-                                        marginBottom: 16,
-                                        borderLeftWidth: 4,
-                                        borderLeftColor: '#008069',
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.05,
-                                        shadowRadius: 4,
-                                        elevation: 2
-                                    }}
-                                >
-                                    <View style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        marginBottom: 16
-                                    }}>
-                                        <View style={{
-                                            width: 40,
-                                            height: 40,
-                                            borderRadius: 20,
-                                            backgroundColor: '#008069',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            marginRight: 12
-                                        }}>
-                                            <Text style={{
-                                                color: '#FFFFFF',
-                                                fontSize: 16,
-                                                fontWeight: '700'
-                                            }}>
-                                                {index + 1}
-                                            </Text>
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{
-                                                fontSize: 16,
-                                                fontWeight: '700',
-                                                color: '#1A1A1A',
-                                                marginBottom: 2
-                                            }}>
-                                                {assignment.vehicle.make} {assignment.vehicle.model}
-                                            </Text>
-                                            <Text style={{
-                                                fontSize: 14,
-                                                color: '#666',
-                                                fontWeight: '600'
-                                            }}>
-                                                {assignment.vehicle.license_plate}
-                                            </Text>
-                                        </View>
-                                    </View>
+            {/* Odometer Reading Modal - GUARANTEED FIX */}
 
-                                    <View style={{
-                                        backgroundColor: '#FFFFFF',
-                                        borderRadius: 12,
-                                        borderWidth: 2,
-                                        borderColor: odometerReadings[assignment.id] ? '#008069' : '#E9EDEF',
-                                        overflow: 'hidden'
-                                    }}>
-                                        <View style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            paddingHorizontal: 16
-                                        }}>
-                                            <MaterialCommunityIcons
-                                                name="speedometer"
-                                                size={20}
-                                                color={odometerReadings[assignment.id] ? '#008069' : '#999'}
-                                            />
-                                            <TextInput
-                                                style={{
-                                                    flex: 1,
-                                                    paddingVertical: 16,
-                                                    paddingHorizontal: 12,
-                                                    fontSize: 18,
-                                                    fontWeight: '600',
-                                                    color: '#1A1A1A'
-                                                }}
-                                                value={odometerReadings[assignment.id] || ''}
-                                                onChangeText={(value) => {
-                                                    // Only allow numeric input
-                                                    const numericValue = value.replace(/[^0-9]/g, '');
-                                                    setOdometerReadings(prev => ({
-                                                        ...prev,
-                                                        [assignment.id]: numericValue
-                                                    }));
-                                                }}
-                                                placeholder="Enter reading"
-                                                placeholderTextColor="#999"
-                                                keyboardType="numeric"
-                                                autoFocus={index === 0}
-                                                editable={!submittingOdometer}
-                                            />
-                                            <Text style={{
-                                                fontSize: 14,
-                                                color: '#666',
-                                                fontWeight: '500'
-                                            }}>
-                                                km
-                                            </Text>
-                                        </View>
-                                    </View>
-
-                                    {odometerReadings[assignment.id] && (
-                                        <View style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            marginTop: 12,
-                                            backgroundColor: '#E8F5E9',
-                                            padding: 8,
-                                            borderRadius: 8
-                                        }}>
-                                            <MaterialCommunityIcons
-                                                name="check-circle"
-                                                size={16}
-                                                color="#008069"
-                                            />
-                                            <Text style={{
-                                                fontSize: 12,
-                                                color: '#008069',
-                                                fontWeight: '600',
-                                                marginLeft: 6
-                                            }}>
-                                                Reading recorded: {Number(odometerReadings[assignment.id]).toLocaleString()} km
-                                            </Text>
-                                        </View>
-                                    )}
-                                </View>
-                            ))}
-                        </ScrollView>
-
-                        <View style={styles.modalFooter}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.modalButton,
-                                    styles.cancelButton,
-                                    submittingOdometer && { opacity: 0.5 }
-                                ]}
-                                onPress={() => {
-                                    if (!submittingOdometer) {
-                                        setOdometerModal({
-                                            visible: false,
-                                            type: 'start',
-                                            bookingId: null,
-                                            selectedStatus: '',
-                                            cancellationReason: undefined,
-                                            assignments: [],
-                                        });
-                                        setOdometerReadings({});
-                                    }
-                                }}
-                                disabled={submittingOdometer}
-                            >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.modalButton,
-                                    styles.confirmButton,
-                                    (Object.keys(odometerReadings).length !== odometerModal.assignments.length || submittingOdometer) && styles.disabledButton
-                                ]}
-                                onPress={handleOdometerConfirm}
-                                disabled={Object.keys(odometerReadings).length !== odometerModal.assignments.length || submittingOdometer}
-                            >
-                                {submittingOdometer ? (
-                                    <ActivityIndicator color="#FFFFFF" size="small" />
-                                ) : (
-                                    <>
-                                        <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-                                        <Text style={styles.confirmButtonText}>
-                                            Confirm {odometerModal.type === 'start' ? 'Start' : 'Complete'}
-                                        </Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </View>
+{/* Odometer Reading Modal - FIXED ScrollView Height */}
+<Modal
+    visible={odometerModal.visible}
+    transparent={true}
+    animationType="slide"
+>
+    <View style={{
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    }}>
+        <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            width: '100%',
+            maxWidth: 500,
+            height: 600, // FIXED: Explicit height instead of flex/maxHeight
+            overflow: 'hidden',
+        }}>
+            {/* Header - Fixed height */}
+            <View style={{
+                backgroundColor: '#075E54',
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                height: 80, // FIXED: Explicit height
+            }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }}>
+                            {odometerModal.type === 'start' ? 'Start Trip' : 'Complete Trip'}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#FFFFFF', marginTop: 4 }}>
+                            Enter odometer readings
+                        </Text>
                     </View>
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (!submittingOdometer) {
+                                setOdometerModal({
+                                    visible: false,
+                                    type: 'start',
+                                    bookingId: null,
+                                    selectedStatus: '',
+                                    cancellationReason: undefined,
+                                    assignments: [],
+                                });
+                                setOdometerReadings({});
+                            }
+                        }}
+                        disabled={submittingOdometer}
+                        style={{ padding: 4 }}
+                    >
+                        <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
                 </View>
-            </Modal>
+            </View>
+
+            {/* Content - ScrollView with calculated height */}
+            <ScrollView 
+                style={{ 
+                    height: 440, // FIXED: 600 total - 80 header - 80 footer = 440
+                }}
+                contentContainerStyle={{
+                    padding: 20,
+                    paddingBottom: 40,
+                }}
+                showsVerticalScrollIndicator={true}
+            >
+                {/* Info Icon */}
+                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                    <View style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
+                        backgroundColor: '#E8F5E9',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 10
+                    }}>
+                        <MaterialCommunityIcons name="speedometer" size={30} color="#008069" />
+                    </View>
+                    <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
+                        Enter readings for all {odometerModal.assignments.length} vehicle(s)
+                    </Text>
+                </View>
+
+                {/* VEHICLE INPUTS */}
+                {odometerModal.assignments.map((assignment, index) => (
+                    <View
+                        key={assignment.id}
+                        style={{
+                            backgroundColor: '#F5F5F5',
+                            borderRadius: 12,
+                            padding: 16,
+                            marginBottom: 16,
+                        }}
+                    >
+                        {/* Vehicle Header */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            <View style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: '#008069',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginRight: 10
+                            }}>
+                                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>
+                                    {index + 1}
+                                </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#000' }}>
+                                    {assignment.vehicle.make} {assignment.vehicle.model}
+                                </Text>
+                                <Text style={{ fontSize: 13, color: '#666' }}>
+                                    {assignment.vehicle.license_plate}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Input */}
+                        <View style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 8,
+                            borderWidth: 2,
+                            borderColor: odometerReadings[assignment.id] ? '#008069' : '#DDD',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 12,
+                            height: 50, // FIXED: Explicit height for input
+                        }}>
+                            <MaterialCommunityIcons 
+                                name="speedometer" 
+                                size={20} 
+                                color={odometerReadings[assignment.id] ? '#008069' : '#999'} 
+                            />
+                            <TextInput
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 0,
+                                    paddingHorizontal: 10,
+                                    fontSize: 16,
+                                    color: '#000',
+                                    height: 50, // FIXED: Match parent
+                                }}
+                                value={odometerReadings[assignment.id] || ''}
+                                onChangeText={(text) => {
+                                    const numeric = text.replace(/[^0-9]/g, '');
+                                    setOdometerReadings(prev => ({
+                                        ...prev,
+                                        [assignment.id]: numeric
+                                    }));
+                                }}
+                                placeholder="Enter reading"
+                                placeholderTextColor="#999"
+                                keyboardType="numeric"
+                                editable={!submittingOdometer}
+                            />
+                            <Text style={{ fontSize: 13, color: '#666' }}>km</Text>
+                        </View>
+
+                        {/* Success Message */}
+                        {odometerReadings[assignment.id] && (
+                            <View style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                marginTop: 8,
+                                backgroundColor: '#E8F5E9',
+                                padding: 6,
+                                borderRadius: 6
+                            }}>
+                                <MaterialCommunityIcons name="check-circle" size={14} color="#008069" />
+                                <Text style={{ fontSize: 11, color: '#008069', marginLeft: 4, fontWeight: '600' }}>
+                                    Recorded: {Number(odometerReadings[assignment.id]).toLocaleString()} km
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                ))}
+            </ScrollView>
+
+            {/* Footer - Fixed height */}
+            <View style={{
+                flexDirection: 'row',
+                padding: 16,
+                borderTopWidth: 1,
+                borderTopColor: '#EEE',
+                height: 80, // FIXED: Explicit height
+                backgroundColor: '#FAFAFA',
+            }}>
+                <TouchableOpacity
+                    style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        backgroundColor: '#FFF',
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: '#DDD',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 8,
+                    }}
+                    onPress={() => {
+                        if (!submittingOdometer) {
+                            setOdometerModal({
+                                visible: false,
+                                type: 'start',
+                                bookingId: null,
+                                selectedStatus: '',
+                                cancellationReason: undefined,
+                                assignments: [],
+                            });
+                            setOdometerReadings({});
+                        }
+                    }}
+                    disabled={submittingOdometer}
+                >
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#666' }}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        backgroundColor: (Object.keys(odometerReadings).length === odometerModal.assignments.length && !submittingOdometer) ? '#008069' : '#CCC',
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginLeft: 8,
+                    }}
+                    onPress={handleOdometerConfirm}
+                    disabled={Object.keys(odometerReadings).length !== odometerModal.assignments.length || submittingOdometer}
+                >
+                    {submittingOdometer ? (
+                        <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFF' }}>
+                            Confirm
+                        </Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+        </View>
+    </View>
+</Modal>
+
+
+            {/* ALSO UPDATE YOUR updateBookingStatus FUNCTION */}
+            {/* Replace the function with this: */}
         </View>
     );
 };
