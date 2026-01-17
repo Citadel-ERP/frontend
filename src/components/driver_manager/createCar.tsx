@@ -10,6 +10,7 @@ import {
     Platform,
     KeyboardAvoidingView,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
@@ -48,10 +49,13 @@ interface CarFormData {
     fuel_type: string;
     status: string;
     vehicle_type: string;
-    office_id: string; // Changed from office to office_id
+    office_id: string;
     pollution_certificate: Document | null;
+    pollution_expiry_date: string;
     insurance_certificate: Document | null;
+    insurance_expiry_date: string;
     registration_certificate: Document | null;
+    registration_expiry_date: string;
     photos: Document[];
 }
 
@@ -93,6 +97,11 @@ const CreateCar: React.FC<CreateCarProps> = ({
     const [loading, setLoading] = useState(false);
     const [offices, setOffices] = useState<Office[]>([]);
     const [loadingOffices, setLoadingOffices] = useState(true);
+    const [vehicleTypeDropdownOpen, setVehicleTypeDropdownOpen] = useState(false);
+    const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+    const [pollutionDatePickerOpen, setPollutionDatePickerOpen] = useState(false);
+    const [insuranceDatePickerOpen, setInsuranceDatePickerOpen] = useState(false);
+    const [registrationDatePickerOpen, setRegistrationDatePickerOpen] = useState(false);
     const [formData, setFormData] = useState<CarFormData>({
         make: '',
         model: '',
@@ -103,16 +112,20 @@ const CreateCar: React.FC<CreateCarProps> = ({
         fuel_type: 'Petrol',
         status: 'available',
         vehicle_type: 'Sedan',
-        office_id: '', // Changed from office to office_id
+        office_id: '',
         pollution_certificate: null,
+        pollution_expiry_date: '',
         insurance_certificate: null,
+        insurance_expiry_date: '',
         registration_certificate: null,
+        registration_expiry_date: '',
         photos: [],
     });
 
     const fuelTypes = ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'CNG'];
     const vehicleTypes = ['Sedan', 'SUV', 'Hatchback', 'MPV', 'Luxury'];
     const statuses = ['available', 'not_available', 'in_maintenance'];
+    const [dropdownOpen, setDropdownOpen] = useState(false);
 
     useEffect(() => {
         // Fetch all offices on component mount
@@ -121,10 +134,10 @@ const CreateCar: React.FC<CreateCarProps> = ({
                 setLoadingOffices(true);
                 const officesData = await fetchAllOffices(token);
                 setOffices(officesData);
-                
+
                 // Try to find and pre-select an office based on the city
                 if (city && officesData.length > 0) {
-                    const officeInCity = officesData.find(office => 
+                    const officeInCity = officesData.find(office =>
                         office.address.city.toLowerCase().includes(city.toLowerCase()) ||
                         city.toLowerCase().includes(office.address.city.toLowerCase())
                     );
@@ -148,8 +161,14 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
     const handleDocumentPick = async (type: 'pollution' | 'insurance' | 'registration' | 'photo') => {
         try {
+            // Check photo limit
+            if (type === 'photo' && formData.photos.length >= 6) {
+                Alert.alert('Limit Reached', 'You can only upload up to 6 photos');
+                return;
+            }
+
             const result = await DocumentPicker.getDocumentAsync({
-                type: ['image/*', 'application/pdf'],
+                type: type === 'photo' ? ['image/*'] : ['image/*', 'application/pdf'],
                 copyToCacheDirectory: true,
             });
 
@@ -172,7 +191,9 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         setFormData({ ...formData, registration_certificate: docObject });
                         break;
                     case 'photo':
-                        setFormData({ ...formData, photos: [...formData.photos, docObject] });
+                        if (formData.photos.length < 6) {
+                            setFormData({ ...formData, photos: [...formData.photos, docObject] });
+                        }
                         break;
                 }
             }
@@ -199,6 +220,11 @@ const CreateCar: React.FC<CreateCarProps> = ({
             return;
         }
 
+        if (!formData.pollution_expiry_date || !formData.insurance_expiry_date || !formData.registration_expiry_date) {
+            Alert.alert('Error', 'All certificate expiry dates are required');
+            return;
+        }
+
         if (formData.photos.length === 0) {
             Alert.alert('Error', 'At least one photo is required');
             return;
@@ -217,17 +243,20 @@ const CreateCar: React.FC<CreateCarProps> = ({
             formDataToSend.append('fuel_type', formData.fuel_type);
             formDataToSend.append('status', formData.status);
             formDataToSend.append('vehicle_type', formData.vehicle_type);
-            formDataToSend.append('office', formData.office_id); // Keep as 'office' for backend compatibility
+            formDataToSend.append('office', formData.office_id);
 
             // Append certificates
             if (formData.pollution_certificate) {
                 formDataToSend.append('pollution_certificate', formData.pollution_certificate as any);
+                formDataToSend.append('pollution_expiry_date', formData.pollution_expiry_date);
             }
             if (formData.insurance_certificate) {
                 formDataToSend.append('insurance_certificate', formData.insurance_certificate as any);
+                formDataToSend.append('insurance_expiry_date', formData.insurance_expiry_date);
             }
             if (formData.registration_certificate) {
                 formDataToSend.append('registration_certificate', formData.registration_certificate as any);
+                formDataToSend.append('registration_expiry_date', formData.registration_expiry_date);
             }
 
             // Append photos
@@ -271,7 +300,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
     return (
         <View style={styles.screenContainer}>
-            <View style={styles.detailHeader}>
+            <View style={[styles.detailHeader]}>
                 <TouchableOpacity style={styles.detailBackButton} onPress={onBack}>
                     <View style={styles.backIcon}>
                         <View style={styles.backArrow} />
@@ -291,8 +320,8 @@ const CreateCar: React.FC<CreateCarProps> = ({
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    <View style={styles.formSection}>
-                        <Text style={styles.sectionTitle}>Basic Information</Text>
+                    <View style={[styles.formSection, { marginTop: 20 }]}>
+                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Basic Information</Text>
 
                         <View style={styles.formGroup}>
                             <Text style={styles.formLabel}>Make *</Text>
@@ -364,86 +393,109 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         </View>
 
                         <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Fuel Type</Text>
-                            <View style={styles.optionsContainer}>
-                                {fuelTypes.map((type) => (
-                                    <TouchableOpacity
-                                        key={type}
-                                        style={[
-                                            styles.optionButton,
-                                            formData.fuel_type === type && styles.optionButtonSelected,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, fuel_type: type })}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.optionButtonText,
-                                                formData.fuel_type === type && styles.optionButtonTextSelected,
-                                            ]}
-                                        >
-                                            {type}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
+                            <Text style={[styles.formLabel, { marginBottom: 6 }]}>Fuel Type</Text>
+                            <View style={styles.dropdownContainer}>
+                                <TouchableOpacity
+                                    style={styles.dropdown}
+                                    onPress={() => setDropdownOpen(!dropdownOpen)}
+                                >
+                                    <Text style={styles.dropdownText}>
+                                        {formData.fuel_type || 'Select Fuel Type'}
+                                    </Text>
+                                    <Text style={styles.dropdownArrow}>{dropdownOpen ? '▲' : '▼'}</Text>
+                                </TouchableOpacity>
+
+                                {dropdownOpen && (
+                                    <View style={styles.dropdownList}>
+                                        {fuelTypes.map((type) => (
+                                            <TouchableOpacity
+                                                key={type}
+                                                style={styles.dropdownItem}
+                                                onPress={() => {
+                                                    setFormData({ ...formData, fuel_type: type });
+                                                    setDropdownOpen(false);
+                                                }}
+                                            >
+                                                <Text style={styles.dropdownItemText}>{type}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         </View>
 
                         <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Vehicle Type</Text>
-                            <View style={styles.optionsContainer}>
-                                {vehicleTypes.map((type) => (
-                                    <TouchableOpacity
-                                        key={type}
-                                        style={[
-                                            styles.optionButton,
-                                            formData.vehicle_type === type && styles.optionButtonSelected,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, vehicle_type: type })}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.optionButtonText,
-                                                formData.vehicle_type === type && styles.optionButtonTextSelected,
-                                            ]}
-                                        >
-                                            {type}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
+                            <Text style={[styles.formLabel, { marginBottom: 6 }]}>Vehicle Type</Text>
+                            <View style={styles.dropdownContainer}>
+                                <TouchableOpacity
+                                    style={styles.dropdown}
+                                    onPress={() => setVehicleTypeDropdownOpen(!vehicleTypeDropdownOpen)}
+                                >
+                                    <Text style={styles.dropdownText}>
+                                        {formData.vehicle_type || 'Select Vehicle Type'}
+                                    </Text>
+                                    <Text style={styles.dropdownArrow}>{vehicleTypeDropdownOpen ? '▲' : '▼'}</Text>
+                                </TouchableOpacity>
+
+                                {vehicleTypeDropdownOpen && (
+                                    <View style={styles.dropdownList}>
+                                        {vehicleTypes.map((type) => (
+                                            <TouchableOpacity
+                                                key={type}
+                                                style={styles.dropdownItem}
+                                                onPress={() => {
+                                                    setFormData({ ...formData, vehicle_type: type });
+                                                    setVehicleTypeDropdownOpen(false);
+                                                }}
+                                            >
+                                                <Text style={styles.dropdownItemText}>{type}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         </View>
 
                         <View style={styles.formGroup}>
-                            <Text style={styles.formLabel}>Status</Text>
-                            <View style={styles.optionsContainer}>
-                                {statuses.map((status) => (
-                                    <TouchableOpacity
-                                        key={status}
-                                        style={[
-                                            styles.optionButton,
-                                            formData.status === status && styles.optionButtonSelected,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, status })}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.optionButtonText,
-                                                formData.status === status && styles.optionButtonTextSelected,
-                                            ]}
-                                        >
-                                            {status.replace('_', ' ').toUpperCase()}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
+                            <Text style={[styles.formLabel, { marginBottom: 6 }]}>Status</Text>
+                            <View style={styles.dropdownContainer}>
+                                <TouchableOpacity
+                                    style={styles.dropdown}
+                                    onPress={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                                >
+                                    <Text style={styles.dropdownText}>
+                                        {formData.status ? formData.status.replace('_', ' ').toUpperCase() : 'Select Status'}
+                                    </Text>
+                                    <Text style={styles.dropdownArrow}>{statusDropdownOpen ? '▲' : '▼'}</Text>
+                                </TouchableOpacity>
+
+                                {statusDropdownOpen && (
+                                    <View style={styles.dropdownList}>
+                                        {statuses.map((status) => (
+                                            <TouchableOpacity
+                                                key={status}
+                                                style={styles.dropdownItem}
+                                                onPress={() => {
+                                                    setFormData({ ...formData, status });
+                                                    setStatusDropdownOpen(false);
+                                                }}
+                                            >
+                                                <Text style={styles.dropdownItemText}>
+                                                    {status.replace('_', ' ').toUpperCase()}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         </View>
                     </View>
 
                     {/* Office Selection Section */}
                     <View style={styles.formSection}>
-                        <Text style={styles.sectionTitle}>Office Selection</Text>
+                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Office Selection</Text>
                         <Text style={styles.formLabel}>Select Office *</Text>
-                        
+
                         {loadingOffices ? (
                             <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="small" color="#075E54" />
@@ -495,13 +547,13 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 ))}
                             </View>
                         )}
-                        
+
                         {formData.office_id && (
                             <View style={styles.selectedOfficeContainer}>
                                 <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
                                 <Text style={styles.selectedOfficeText}>
                                     Office Selected: {
-                                        offices.find(o => o.id.toString() === formData.office_id)?.name || 
+                                        offices.find(o => o.id.toString() === formData.office_id)?.name ||
                                         offices.find(o => o.id.toString() === formData.office_id)?.address.city
                                     }
                                 </Text>
@@ -509,8 +561,8 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         )}
                     </View>
 
-                    <View style={styles.formSection}>
-                        <Text style={styles.sectionTitle}>Documents</Text>
+                    {/* <View style={styles.formSection}>
+                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Documents</Text>
 
                         <View style={styles.documentGroup}>
                             <Text style={styles.formLabel}>Pollution Certificate *</Text>
@@ -586,44 +638,342 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 </TouchableOpacity>
                             )}
                         </View>
-                    </View>
+                    </View> */}
 
                     <View style={styles.formSection}>
-                        <Text style={styles.sectionTitle}>Photos</Text>
-                        <Text style={styles.formLabel}>Vehicle Photos (Minimum 1 required) *</Text>
-                        <TouchableOpacity
-                            style={styles.photoButton}
-                            onPress={() => handleDocumentPick('photo')}
+                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Documents</Text>
+
+                        <View style={styles.documentGroup}>
+                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Pollution Certificate *</Text>
+
+
+
+                            {/* Document Upload */}
+                            {formData.pollution_certificate ? (
+                                <View style={styles.documentSelected}>
+                                    <View style={[styles.documentIconContainer]}>
+                                        <MaterialIcons name="description" size={28} color="#075E54" />
+                                    </View>
+                                    <View style={[styles.documentInfo, { width: 150 }]}>
+                                        <Text style={styles.documentName} numberOfLines={1}>
+                                            {formData.pollution_certificate.name}
+                                        </Text>
+                                        <Text style={styles.documentSize}>
+                                            {formData.pollution_certificate.type?.split('/')[1]?.toUpperCase() || 'FILE'}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.removeButton}
+                                        onPress={() => setFormData({
+                                            ...formData,
+                                            pollution_certificate: null,
+                                            pollution_expiry_date: ''
+                                        })}
+                                    >
+                                        <Ionicons name="close-circle" size={28} color="#FF3B30" />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => handleDocumentPick('pollution')}
+                                >
+                                    <View style={styles.uploadIconContainer}>
+                                        <MaterialIcons name="cloud-upload" size={28} color="#075E54" />
+                                    </View>
+                                    <View style={styles.uploadTextContainer}>
+                                        <Text style={styles.documentButtonText}>Upload Pollution Certificate</Text>
+                                        <Text style={styles.documentButtonSubtext}>PDF or Image (Max 5MB)</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Expiry Date Field */}
+                            <View style={styles.expiryDateContainer}>
+                                <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
+                                <TouchableOpacity
+                                    style={styles.datePickerButton}
+                                    onPress={() => setPollutionDatePickerOpen(true)}
+                                >
+                                    <MaterialIcons name="calendar-today" size={20} color="#075E54" />
+                                    <Text style={styles.datePickerText}>
+                                        {formData.pollution_expiry_date
+                                            ? new Date(formData.pollution_expiry_date).toLocaleDateString('en-GB')
+                                            : 'Select Expiry Date'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.documentGroup}>
+                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Insurance Certificate *</Text>
+                            {/* Document Upload */}
+                            {formData.insurance_certificate ? (
+                                <View style={styles.documentSelected}>
+                                    <View style={styles.documentIconContainer}>
+                                        <MaterialIcons name="description" size={28} color="#075E54" />
+                                    </View>
+                                    <View style={[styles.documentInfo, { width: 150 }]}>
+                                        <Text style={styles.documentName} numberOfLines={1}>
+                                            {formData.insurance_certificate.name}
+                                        </Text>
+                                        <Text style={styles.documentSize}>
+                                            {formData.insurance_certificate.type?.split('/')[1]?.toUpperCase() || 'FILE'}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.removeButton}
+                                        onPress={() => setFormData({
+                                            ...formData,
+                                            insurance_certificate: null,
+                                            insurance_expiry_date: ''
+                                        })}
+                                    >
+                                        <Ionicons name="close-circle" size={28} color="#FF3B30" />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => handleDocumentPick('insurance')}
+                                >
+                                    <View style={styles.uploadIconContainer}>
+                                        <MaterialIcons name="cloud-upload" size={28} color="#075E54" />
+                                    </View>
+                                    <View style={styles.uploadTextContainer}>
+                                        <Text style={styles.documentButtonText}>Upload Insurance Certificate</Text>
+                                        <Text style={styles.documentButtonSubtext}>PDF or Image (Max 5MB)</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Expiry Date Field */}
+                            <View style={styles.expiryDateContainer}>
+                                <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
+                                <TouchableOpacity
+                                    style={styles.datePickerButton}
+                                    onPress={() => setInsuranceDatePickerOpen(true)}
+                                >
+                                    <MaterialIcons name="calendar-today" size={20} color="#075E54" />
+                                    <Text style={styles.datePickerText}>
+                                        {formData.insurance_expiry_date
+                                            ? new Date(formData.insurance_expiry_date).toLocaleDateString('en-GB')
+                                            : 'Select Expiry Date'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.documentGroup}>
+                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Registration Certificate *</Text>
+                            {/* Document Upload */}
+                            {formData.registration_certificate ? (
+                                <View style={styles.documentSelected}>
+                                    <View style={styles.documentIconContainer}>
+                                        <MaterialIcons name="description" size={28} color="#075E54" />
+                                    </View>
+                                    <View style={[styles.documentInfo, { width: 150 }]}>
+                                        <Text style={styles.documentName} numberOfLines={1}>
+                                            {formData.registration_certificate.name}
+                                        </Text>
+                                        <Text style={styles.documentSize}>
+                                            {formData.registration_certificate.type?.split('/')[1]?.toUpperCase() || 'FILE'}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.removeButton}
+                                        onPress={() => setFormData({
+                                            ...formData,
+                                            registration_certificate: null,
+                                            registration_expiry_date: ''
+                                        })}
+                                    >
+                                        <Ionicons name="close-circle" size={28} color="#FF3B30" />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => handleDocumentPick('registration')}
+                                >
+                                    <View style={styles.uploadIconContainer}>
+                                        <MaterialIcons name="cloud-upload" size={28} color="#075E54" />
+                                    </View>
+                                    <View style={styles.uploadTextContainer}>
+                                        <Text style={styles.documentButtonText}>Upload Registration Certificate</Text>
+                                        <Text style={styles.documentButtonSubtext}>PDF or Image (Max 5MB)</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Expiry Date Field */}
+                            <View style={styles.expiryDateContainer}>
+                                <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
+                                <TouchableOpacity
+                                    style={styles.datePickerButton}
+                                    onPress={() => setRegistrationDatePickerOpen(true)}
+                                >
+                                    <MaterialIcons name="calendar-today" size={20} color="#075E54" />
+                                    <Text style={styles.datePickerText}>
+                                        {formData.registration_expiry_date
+                                            ? new Date(formData.registration_expiry_date).toLocaleDateString('en-GB')
+                                            : 'Select Expiry Date'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {/* Date Picker Modals */}
+                        {pollutionDatePickerOpen && (
+                            <DateTimePicker
+                                value={formData.pollution_expiry_date ? new Date(formData.pollution_expiry_date) : new Date()}
+                                mode="date"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                    setPollutionDatePickerOpen(false);
+                                    if (selectedDate) {
+                                        setFormData({ ...formData, pollution_expiry_date: selectedDate.toISOString() });
+                                    }
+                                }}
+                                minimumDate={new Date()}
+                            />
+                        )}
+
+                        {insuranceDatePickerOpen && (
+                            <DateTimePicker
+                                value={formData.insurance_expiry_date ? new Date(formData.insurance_expiry_date) : new Date()}
+                                mode="date"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                    setInsuranceDatePickerOpen(false);
+                                    if (selectedDate) {
+                                        setFormData({ ...formData, insurance_expiry_date: selectedDate.toISOString() });
+                                    }
+                                }}
+                                minimumDate={new Date()}
+                            />
+                        )}
+
+                        {registrationDatePickerOpen && (
+                            <DateTimePicker
+                                value={formData.registration_expiry_date ? new Date(formData.registration_expiry_date) : new Date()}
+                                mode="date"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                    setRegistrationDatePickerOpen(false);
+                                    if (selectedDate) {
+                                        setFormData({ ...formData, registration_expiry_date: selectedDate.toISOString() });
+                                    }
+                                }}
+                                minimumDate={new Date()}
+                            />
+                        )}
+                    </View>
+
+                    {/* Photo Gallery Section */}
+                    <View style={styles.formSection}>
+                        <View style={styles.sectionHeaderRow}>
+                            <View style={styles.sectionHeaderLeft}>
+                                {/* <View style={styles.photoSectionIconContainer}>
+                                    <MaterialIcons name="photo-library" size={22} color="#075E54" />
+                                </View> */}
+                                <View>
+                                    <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 4, fontWeight: '400' }]}>
+                                        Vehicle Photos
+                                    </Text>
+                                    <Text style={styles.photoSectionSubtitle}>
+                                        Add up to 6 photos (minimum 1 required) *
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.photoScrollContent}
+                            style={styles.photoScrollContainer}
                         >
-                            <MaterialIcons name="add-a-photo" size={24} color="#075E54" />
-                            <Text style={styles.photoButtonText}>Add Photo</Text>
-                        </TouchableOpacity>
+                            {[...Array(6)].map((_, index) => {
+                                const photo = formData.photos[index];
+                                const hasPhoto = photo !== undefined;
+                                const isFirstPhoto = index === 0;
+
+                                return (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={[
+                                            styles.photoSlot,
+                                            isFirstPhoto && styles.firstPhotoSlot,
+                                            hasPhoto && styles.photoSlotFilled
+                                        ]}
+                                        onPress={() => {
+                                            if (!hasPhoto && formData.photos.length < 6) {
+                                                handleDocumentPick('photo');
+                                            }
+                                        }}
+                                        activeOpacity={0.7}
+                                        disabled={hasPhoto}
+                                    >
+                                        {hasPhoto ? (
+                                            <>
+                                                <View style={styles.photoPreviewContainer}>
+                                                    <MaterialIcons name="image" size={48} color="#075E54" />
+                                                    <Text style={styles.photoFileName} numberOfLines={2}>
+                                                        {photo.name}
+                                                    </Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={styles.removePhotoButton}
+                                                    onPress={() => {
+                                                        const newPhotos = [...formData.photos];
+                                                        newPhotos.splice(index, 1);
+                                                        setFormData({ ...formData, photos: newPhotos });
+                                                    }}
+                                                >
+                                                    <Ionicons name="close" size={18} color="#fff" />
+                                                </TouchableOpacity>
+                                                <View style={styles.photoIndexBadge}>
+                                                    <Text style={styles.photoIndexText}>{index + 1}</Text>
+                                                </View>
+                                                {isFirstPhoto && (
+                                                    <View style={styles.primaryPhotoBadge}>
+                                                        <MaterialIcons name="star" size={12} color="#FFD700" />
+                                                        <Text style={styles.primaryPhotoText}>Primary</Text>
+                                                    </View>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <View style={styles.emptyPhotoSlot}>
+                                                <View style={styles.addPhotoIconContainer}>
+                                                    <Ionicons name="add" size={32} color="#075E54" />
+                                                </View>
+                                                <Text style={styles.addPhotoText}>Add Photo</Text>
+                                                <Text style={styles.photoSlotNumber}>{index + 1}</Text>
+                                                {isFirstPhoto && (
+                                                    <View style={styles.requiredBadge}>
+                                                        <Text style={styles.requiredBadgeText}>Required</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
 
                         {formData.photos.length > 0 && (
-                            <View style={styles.photosContainer}>
-                                {formData.photos.map((photo, index) => (
-                                    <View key={index} style={styles.photoItem}>
-                                        <MaterialIcons name="image" size={24} color="#075E54" />
-                                        <Text style={styles.photoName} numberOfLines={1}>
-                                            {photo.name}
-                                        </Text>
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                const newPhotos = [...formData.photos];
-                                                newPhotos.splice(index, 1);
-                                                setFormData({ ...formData, photos: newPhotos });
-                                            }}
-                                        >
-                                            <Ionicons name="close-circle" size={20} color="#FF3B30" />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
+                            <View style={styles.photoCountContainer}>
+                                <MaterialIcons name="photo" size={16} color="#075E54" />
+                                <Text style={styles.photoCountText}>
+                                    {formData.photos.length} of 6 photos added
+                                </Text>
                             </View>
                         )}
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.submitButton, (loading || !formData.office_id) && styles.submitButtonDisabled]}
+                        style={[styles.submitButton, (loading || !formData.office_id) && styles.submitButtonDisabled, { width: '90%', alignItems: 'center', justifyContent: 'center', marginLeft: 20 }]}
                         onPress={handleSubmit}
                         disabled={loading || !formData.office_id}
                     >

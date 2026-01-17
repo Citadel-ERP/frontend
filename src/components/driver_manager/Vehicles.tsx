@@ -13,9 +13,12 @@ import {
     NativeSyntheticEvent,
     TextInput,
     Platform,
-    Linking
+    Linking,
+    Modal
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import CreateCar from './createCar';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -74,6 +77,9 @@ interface UpdateVehicleForm {
     existing_pollution_certificate?: string | null;
     existing_rc_document?: string | null;
     existing_insurance_document?: string | null;
+    pollution_expiry_date: string;
+    insurance_expiry_date: string;
+    registration_expiry_date: string;
 }
 
 
@@ -99,6 +105,9 @@ const Vehicles: React.FC<VehiclesProps> = ({
     const scrollViewRef = useRef<ScrollView>(null);
     const photoScrollRef = useRef<ScrollView>(null);
     const [deletedPhotoIds, setDeletedPhotoIds] = useState<number[]>([]);
+    const [pollutionDatePickerOpen, setPollutionDatePickerOpen] = useState(false);
+    const [insuranceDatePickerOpen, setInsuranceDatePickerOpen] = useState(false);
+    const [registrationDatePickerOpen, setRegistrationDatePickerOpen] = useState(false);
     const [maintenanceForm, setMaintenanceForm] = useState({
         cost: '',
         description: '',
@@ -124,7 +133,14 @@ const Vehicles: React.FC<VehiclesProps> = ({
         pollution_certificate: null,
         rc_document: null,
         insurance_document: null,
+        pollution_expiry_date: '',
+        insurance_expiry_date: '',
+        registration_expiry_date: '',
     });
+    const [isDownloadReportModalVisible, setIsDownloadReportModalVisible] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState('');
+    const [selectedYear, setSelectedYear] = useState('');
+    const [isDownloading, setIsDownloading] = useState(false);
 
     useEffect(() => {
         if (token) {
@@ -497,6 +513,9 @@ const Vehicles: React.FC<VehiclesProps> = ({
             existing_pollution_certificate: vehicle.pollution_certificate || null,
             existing_rc_document: vehicle.registration_certificate || null,
             existing_insurance_document: vehicle.insurance_certificate || null,
+            pollution_expiry_date: vehicle.pollution_certificate_expiry_date || '',
+            insurance_expiry_date: vehicle.insurance_certificate_expiry_date || '',
+            registration_expiry_date: vehicle.registration_certificate_expiry_date || '',
         });
     };
 
@@ -579,10 +598,28 @@ const Vehicles: React.FC<VehiclesProps> = ({
         const newDocument = updateVehicleForm[type];
         const existingDocument = updateVehicleForm[existingKey];
 
+        // Get expiry date field name
+        let expiryDateField: keyof UpdateVehicleForm;
+        let datePickerOpen: boolean;
+        let setDatePickerOpen: (open: boolean) => void;
+
+        if (type === 'pollution_certificate') {
+            expiryDateField = 'pollution_expiry_date';
+            datePickerOpen = pollutionDatePickerOpen;
+            setDatePickerOpen = setPollutionDatePickerOpen;
+        } else if (type === 'insurance_document') {
+            expiryDateField = 'insurance_expiry_date';
+            datePickerOpen = insuranceDatePickerOpen;
+            setDatePickerOpen = setInsuranceDatePickerOpen;
+        } else {
+            expiryDateField = 'registration_expiry_date';
+            datePickerOpen = registrationDatePickerOpen;
+            setDatePickerOpen = setRegistrationDatePickerOpen;
+        }
+
         // Determine what to show
         let displayName = '';
         let statusText = '';
-
         if (newDocument) {
             displayName = (newDocument as any).name;
             statusText = '✓ New document selected';
@@ -638,6 +675,43 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         <Ionicons name="cloud-upload-outline" size={24} color="#999" />
                     )}
                 </TouchableOpacity>
+
+                {/* Expiry Date Field */}
+                <View style={styles.expiryDateContainer}>
+                    <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date</Text>
+                    <TouchableOpacity
+                        style={styles.datePickerButton}
+                        onPress={() => setDatePickerOpen(true)}
+                    >
+                        <MaterialIcons name="calendar-today" size={20} color="#008069" />
+                        <Text style={styles.datePickerText}>
+                            {updateVehicleForm[expiryDateField]
+                                ? new Date(updateVehicleForm[expiryDateField] as string).toLocaleDateString('en-GB')
+                                : 'Select Expiry Date'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Date Picker Modal */}
+                {datePickerOpen && (
+                    <DateTimePicker
+                        value={updateVehicleForm[expiryDateField]
+                            ? new Date(updateVehicleForm[expiryDateField] as string)
+                            : new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={(event, selectedDate) => {
+                            setDatePickerOpen(false);
+                            if (selectedDate) {
+                                setUpdateVehicleForm({
+                                    ...updateVehicleForm,
+                                    [expiryDateField]: selectedDate.toISOString()
+                                });
+                            }
+                        }}
+                        minimumDate={new Date()}
+                    />
+                )}
             </View>
         );
     };
@@ -713,11 +787,22 @@ const Vehicles: React.FC<VehiclesProps> = ({
             if (updateVehicleForm.pollution_certificate) {
                 formData.append('pollution_certificate', updateVehicleForm.pollution_certificate as any);
             }
+            if (updateVehicleForm.pollution_expiry_date) {
+                formData.append('pollution_expiry_date', updateVehicleForm.pollution_expiry_date);
+            }
+
             if (updateVehicleForm.rc_document) {
                 formData.append('rc_document', updateVehicleForm.rc_document as any);
             }
+            if (updateVehicleForm.registration_expiry_date) {
+                formData.append('registration_expiry_date', updateVehicleForm.registration_expiry_date);
+            }
+
             if (updateVehicleForm.insurance_document) {
                 formData.append('insurance_document', updateVehicleForm.insurance_document as any);
+            }
+            if (updateVehicleForm.insurance_expiry_date) {
+                formData.append('insurance_expiry_date', updateVehicleForm.insurance_expiry_date);
             }
 
             const response = await fetch(`${BACKEND_URL}/manager/updateVehicle`, {
@@ -745,6 +830,82 @@ const Vehicles: React.FC<VehiclesProps> = ({
             Alert.alert('Error', 'Network error occurred');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const generateMonthYearOptions = () => {
+        const months = [
+            { label: 'January', value: '01' },
+            { label: 'February', value: '02' },
+            { label: 'March', value: '03' },
+            { label: 'April', value: '04' },
+            { label: 'May', value: '05' },
+            { label: 'June', value: '06' },
+            { label: 'July', value: '07' },
+            { label: 'August', value: '08' },
+            { label: 'September', value: '09' },
+            { label: 'October', value: '10' },
+            { label: 'November', value: '11' },
+            { label: 'December', value: '12' },
+        ];
+
+        const currentYear = new Date().getFullYear();
+        const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+        return { months, years };
+    };
+
+    const handleDownloadReport = async () => {
+        if (!selectedMonth || !selectedYear || !selectedVehicle) {
+            Alert.alert('Error', 'Please select both month and year');
+            return;
+        }
+
+        setIsDownloading(true);
+        try {
+            const month = `${selectedMonth}/${selectedYear}`;
+            const response = await fetch(`${BACKEND_URL}/manager/downloadVehicleReport`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    token,
+                    vehicle_id: selectedVehicle.id,
+                    month: month,
+                }),
+            });
+
+            const text = await response.text();
+
+            if (text.trim().startsWith('{')) {
+                const data = JSON.parse(text);
+
+                if (response.ok && data.success) {
+                    // Close modal
+                    setIsDownloadReportModalVisible(false);
+
+                    // Open PDF in browser
+                    Linking.openURL(data.file_url).catch(err => {
+                        Alert.alert('Error', 'Unable to open report');
+                        console.error('Error opening URL:', err);
+                    });
+
+                    // Reset selections
+                    setSelectedMonth('');
+                    setSelectedYear('');
+                } else {
+                    Alert.alert('Error', data.message || 'Failed to download report');
+                }
+            } else {
+                Alert.alert('Error', 'Invalid response from server');
+            }
+        } catch (error) {
+            console.error('Error downloading report:', error);
+            Alert.alert('Error', 'Network error occurred');
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -1303,26 +1464,32 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.actionButtonsContainer}>
-                            <TouchableOpacity style={styles.actionButton} onPress={() => setIsMaintenanceModalVisible(true)}>
-                                <MaterialCommunityIcons name="toolbox" size={24} color="#008069" />
-                                <Text style={styles.actionButtonText}>Maintenance</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionButton} onPress={() => setIsFuelLogModalVisible(true)}>
-                                <MaterialCommunityIcons name="fuel" size={24} color="#008069" />
-                                <Text style={styles.actionButtonText}>Fuel Log</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionButton} onPress={() => selectedVehicle && fetchMaintenanceLogs(selectedVehicle.id)}>
-                                <MaterialCommunityIcons name="history" size={24} color="#008069" />
-                                <Text style={styles.actionButtonText}>Logs</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionButton} onPress={() => selectedVehicle && fetchFuelLogs(selectedVehicle.id)}>
-                                <MaterialCommunityIcons name="gas-station" size={24} color="#008069" />
-                                <Text style={styles.actionButtonText}>Fuel History</Text>
-                            </TouchableOpacity>
+                        <View  style={styles.actionButtonsContainer}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                            >
+                                <TouchableOpacity style={styles.actionButton} onPress={() => setIsMaintenanceModalVisible(true)}>
+                                    <MaterialCommunityIcons name="toolbox" size={24} color="#008069" />
+                                    <Text style={styles.actionButtonText}>Maintenance</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionButton} onPress={() => setIsFuelLogModalVisible(true)}>
+                                    <MaterialCommunityIcons name="fuel" size={24} color="#008069" />
+                                    <Text style={styles.actionButtonText}>Fuel Log</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionButton} onPress={() => selectedVehicle && fetchMaintenanceLogs(selectedVehicle.id)}>
+                                    <MaterialCommunityIcons name="history" size={24} color="#008069" />
+                                    <Text style={styles.actionButtonText}>Logs</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionButton} onPress={() => selectedVehicle && fetchFuelLogs(selectedVehicle.id)}>
+                                    <MaterialCommunityIcons name="gas-station" size={24} color="#008069" />
+                                    <Text style={styles.actionButtonText}>Fuel History</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionButton} onPress={() => setIsDownloadReportModalVisible(true)}>
+                                    <MaterialCommunityIcons name="file-download" size={24} color="#008069" />
+                                    <Text style={styles.actionButtonText}>Download Report</Text>
+                                </TouchableOpacity>
+                            </ScrollView>
                         </View>
                     </View>
                 )}
@@ -1430,7 +1597,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                     </LinearGradient>
                 </View>
 
-                <View style={[styles.tabContainer, { backgroundColor: '#fff',padding:0 }]}>
+                <View style={[styles.tabContainer, { backgroundColor: '#fff', padding: 0 }]}>
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'vehicles' && styles.activeTabButton]}
                         onPress={() => setActiveTab('vehicles')}
@@ -1505,22 +1672,22 @@ const Vehicles: React.FC<VehiclesProps> = ({
     );
 
     const renderContent = () => {
-    switch (currentView) {
-        case 'vehicle-detail':
-            return renderVehicleDetailPage();
-        case 'update-vehicle':
-            return renderUpdateVehiclePage();
-        case 'create-vehicle':
-            return <CreateCar 
-                token={token} 
-                city={city} 
-                onBack={() => setCurrentView('main')} 
-                onCarCreated={fetchVehicles}
-            />;
-        default:
-            return renderMainView();
-    }
-};
+        switch (currentView) {
+            case 'vehicle-detail':
+                return renderVehicleDetailPage();
+            case 'update-vehicle':
+                return renderUpdateVehiclePage();
+            case 'create-vehicle':
+                return <CreateCar
+                    token={token}
+                    city={city}
+                    onBack={() => setCurrentView('main')}
+                    onCarCreated={fetchVehicles}
+                />;
+            default:
+                return renderMainView();
+        }
+    };
 
     return (
         <>
@@ -1557,6 +1724,116 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 logs={fuelLogs}
                 formatDateTime={formatDate}
             />
+
+            {/* Download Report Modal */}
+            <Modal
+                visible={isDownloadReportModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setIsDownloadReportModalVisible(false)}
+            >
+                <View style={styles.downloadReportModalOverlay}>
+                    <View style={styles.downloadReportModalContainer}>
+                        {/* Header */}
+                        <View style={styles.downloadReportModalHeader}>
+                            <View style={styles.downloadReportHeaderContent}>
+                                <MaterialCommunityIcons name="file-download" size={24} color="#008069" />
+                                <Text style={styles.downloadReportModalTitle}>Download Vehicle Report</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setIsDownloadReportModalVisible(false);
+                                    setSelectedMonth('');
+                                    setSelectedYear('');
+                                }}
+                                style={styles.downloadReportCloseButton}
+                            >
+                                <Ionicons name="close" size={24} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Content */}
+                        <ScrollView style={styles.downloadReportModalContent}>
+                            <Text style={styles.downloadReportVehicleInfo}>
+                                {selectedVehicle?.make} {selectedVehicle?.model} ({selectedVehicle?.license_plate})
+                            </Text>
+
+                            {/* Month Dropdown */}
+                            <View style={styles.downloadReportInputGroup}>
+                                <Text style={styles.downloadReportLabel}>Select Month</Text>
+                                <View style={styles.downloadReportPickerContainer}>
+                                    <Picker
+                                        selectedValue={selectedMonth}
+                                        onValueChange={(value) => setSelectedMonth(value)}
+                                        style={styles.downloadReportPicker}
+                                    >
+                                        <Picker.Item label="Choose a month..." value="" />
+                                        {generateMonthYearOptions().months.map((month) => (
+                                            <Picker.Item
+                                                key={month.value}
+                                                label={month.label}
+                                                value={month.value}
+                                            />
+                                        ))}
+                                    </Picker>
+                                </View>
+                            </View>
+
+                            {/* Year Dropdown */}
+                            <View style={styles.downloadReportInputGroup}>
+                                <Text style={styles.downloadReportLabel}>Select Year</Text>
+                                <View style={styles.downloadReportPickerContainer}>
+                                    <Picker
+                                        selectedValue={selectedYear}
+                                        onValueChange={(value) => setSelectedYear(value)}
+                                        style={styles.downloadReportPicker}
+                                    >
+                                        <Picker.Item label="Choose a year..." value="" />
+                                        {generateMonthYearOptions().years.map((year) => (
+                                            <Picker.Item
+                                                key={year}
+                                                label={year.toString()}
+                                                value={year.toString()}
+                                            />
+                                        ))}
+                                    </Picker>
+                                </View>
+                            </View>
+                        </ScrollView>
+
+                        {/* Footer Actions */}
+                        <View style={styles.downloadReportModalFooter}>
+                            <TouchableOpacity
+                                style={styles.downloadReportCancelButton}
+                                onPress={() => {
+                                    setIsDownloadReportModalVisible(false);
+                                    setSelectedMonth('');
+                                    setSelectedYear('');
+                                }}
+                            >
+                                <Text style={styles.downloadReportCancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.downloadReportDownloadButton,
+                                    (!selectedMonth || !selectedYear || isDownloading) && styles.downloadReportDownloadButtonDisabled
+                                ]}
+                                onPress={handleDownloadReport}
+                                disabled={!selectedMonth || !selectedYear || isDownloading}
+                            >
+                                {isDownloading ? (
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                    <>
+                                        <MaterialCommunityIcons name="download" size={20} color="#FFFFFF" />
+                                        <Text style={styles.downloadReportDownloadButtonText}>Download Report</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </>
     );
 };

@@ -72,6 +72,9 @@ export interface Vehicle {
   pollution_certificate?: string | null;
   insurance_certificate?: string | null;
   registration_certificate?: string | null;
+  insurance_certificate_expiry_date?: string | null;
+  pollution_certificate_expiry_date?: string | null;
+  registration_certificate_expiry_date?: string | null;
 }
 
 export interface Booking {
