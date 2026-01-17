@@ -65,7 +65,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
     // Vehicle and Driver selection states
     const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>([]);
     const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
-    const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+    const [selectedVehicles, setSelectedVehicles] = useState<Vehicle[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
     const [fetchingVehicles, setFetchingVehicles] = useState(false);
     const [fetchingDrivers, setFetchingDrivers] = useState(false);
@@ -174,8 +174,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
             }
             fetchAvailableVehicles();
         } else if (currentStep === 'vehicle') {
-            if (!selectedVehicle) {
-                Alert.alert('Error', 'Please select a vehicle');
+            if (selectedVehicles.length === 0) {
+                Alert.alert('Error', 'Please select at least one vehicle');
                 return;
             }
             fetchAvailableDrivers();
@@ -183,16 +183,16 @@ const BookingModal: React.FC<BookingModalProps> = ({
     };
 
     const handleSubmit = async () => {
-        if (!selectedVehicle || !selectedDriver) {
-            Alert.alert('Error', 'Please select both vehicle and driver');
-            return;
-        }
+        if (selectedVehicles.length === 0 || !selectedDriver) {
+                Alert.alert('Error', 'Please select at least one vehicle and a driver');
+                return;
+}
 
         setLoading(true);
         try {
             const requestBody = {
                 token,
-                vehicle_ids: [selectedVehicle.id],
+                vehicle_ids: selectedVehicles.map(v => v.id),
                 driver_ids: [selectedDriver.employee_id],
                 start_time: formData.startTime.toISOString(),
                 end_time: formData.endTime.toISOString(),
@@ -244,7 +244,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
         setCurrentStep('details');
         setAvailableVehicles([]);
         setAvailableDrivers([]);
-        setSelectedVehicle(null);
+        setSelectedVehicles([]);
         setSelectedDriver(null);
     };
 
@@ -625,9 +625,18 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                 key={vehicle.id}
                                 style={[
                                     styles.vehicleCard,
-                                    selectedVehicle?.id === vehicle.id && styles.selectedCard
+                                   selectedVehicles.some(v => v.id === vehicle.id) && styles.selectedCard
                                 ]}
-                                onPress={() => setSelectedVehicle(vehicle)}
+                                onPress={() => {
+                                    setSelectedVehicles(prev => {
+                                        const isSelected = prev.some(v => v.id === vehicle.id);
+                                        if (isSelected) {
+                                            return prev.filter(v => v.id !== vehicle.id);
+                                        } else {
+                                            return [...prev, vehicle];
+                                        }
+                                    });
+                                }}
                                 activeOpacity={0.7}
                             >
                                 <View style={styles.vehicleCardContent}>
@@ -660,7 +669,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                                             </View>
                                         </View>
                                     </View>
-                                    {selectedVehicle?.id === vehicle.id && (
+                                    {selectedVehicles.some(v => v.id === vehicle.id) && (
                                         <View style={styles.selectedIconContainer}>
                                             <MaterialIcons name="check-circle" size={28} color="#008069" />
                                         </View>
@@ -682,9 +691,9 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[styles.nextButton, (!selectedVehicle || fetchingDrivers) && styles.nextButtonDisabled]}
+                    style={[styles.nextButton, (selectedVehicles.length === 0 || fetchingDrivers) && styles.nextButtonDisabled]}
                     onPress={handleNextStep}
-                    disabled={!selectedVehicle || fetchingDrivers}
+                    disabled={selectedVehicles.length === 0 || fetchingDrivers}
                     activeOpacity={0.7}
                 >
                     {fetchingDrivers ? (
