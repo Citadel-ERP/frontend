@@ -65,8 +65,40 @@ const BookingCard: React.FC<{
     }, []);
 
     const handleStatusChange = (status: string) => {
+        // Never allow updating to 'Assigned' status
+        if (status === 'Assigned') {
+            Alert.alert('Invalid Action', 'Cannot manually set status to Assigned');
+            return;
+        }
+
+        // Normalize current status to lowercase for comparison
+        const currentStatus = booking.status.toLowerCase();
+        const newStatus = status.toLowerCase();
+
+        // From Assigned: only allow in-progress or cancelled
+        if (currentStatus === 'assigned') {
+            if (newStatus !== 'in-progress' && newStatus !== 'cancelled') {
+                Alert.alert('Invalid Action', 'From Assigned, you can only move to In-Progress or Cancelled');
+                return;
+            }
+        }
+
+        // From in-progress: only allow completed or cancelled
+        if (currentStatus === 'in-progress') {
+            if (newStatus !== 'completed' && newStatus !== 'cancelled') {
+                Alert.alert('Invalid Action', 'From In-Progress, you can only move to Completed or Cancelled');
+                return;
+            }
+        }
+
+        // From completed or cancelled: no changes allowed
+        if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+            Alert.alert('Invalid Action', 'Cannot change status from ' + booking.status);
+            return;
+        }
+
         setSelectedStatus(status);
-        
+
         // Reset all input states
         setShowCancellationInput(false);
         setShowOdometerStartInput(false);
@@ -74,13 +106,13 @@ const BookingCard: React.FC<{
         setCancellationReason('');
         setOdometerStartReading('');
         setOdometerEndReading('');
-        
-        // Show appropriate input based on status
-        if (status === 'cancelled') {
+
+        // Show appropriate input based on status - only if changing FROM a different status
+        if (status === 'cancelled' && booking.status !== 'cancelled') {
             setShowCancellationInput(true);
-        } else if (status === 'in-progress') {
+        } else if (status === 'in-progress' && booking.status !== 'in-progress') {
             setShowOdometerStartInput(true);
-        } else if (status === 'completed') {
+        } else if (status === 'completed' && booking.status !== 'completed') {
             setShowOdometerEndInput(true);
         }
     };
@@ -96,7 +128,7 @@ const BookingCard: React.FC<{
             Alert.alert('Error', 'Please provide a reason for cancellation');
             return;
         }
-        
+
         // Validation for in-progress status
         if (selectedStatus === 'in-progress') {
             if (!odometerStartReading.trim()) {
@@ -108,7 +140,7 @@ const BookingCard: React.FC<{
                 return;
             }
         }
-        
+
         // Validation for completed status
         if (selectedStatus === 'completed') {
             if (!odometerEndReading.trim()) {
@@ -120,9 +152,9 @@ const BookingCard: React.FC<{
                 return;
             }
         }
-        
+
         // Check if status is the same (excluding statuses that require additional input)
-        if (selectedStatus === booking.status && selectedStatus !== 'cancelled' && 
+        if (selectedStatus === booking.status && selectedStatus !== 'cancelled' &&
             selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
             Alert.alert('Info', 'Status is already set to ' + selectedStatus);
             return;
@@ -137,14 +169,14 @@ const BookingCard: React.FC<{
 
         setIsUpdating(true);
         await onUpdateStatus(
-            assignmentId, 
-            selectedStatus, 
+            assignmentId,
+            selectedStatus,
             cancellationReason,
             selectedStatus === 'in-progress' ? odometerStartReading : undefined,
             selectedStatus === 'completed' ? odometerEndReading : undefined
         );
         setIsUpdating(false);
-        
+
         // Reset all inputs
         setShowCancellationInput(false);
         setShowOdometerStartInput(false);
@@ -277,124 +309,127 @@ const BookingCard: React.FC<{
             )}
 
             {/* Status Update Section */}
-            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>
-                    Update Status
-                </Text>
-                <View style={styles.statusOptions}>
-                    {['Assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
-                        const statusColor = getStatusColor(status);
-                        const isSelected = selectedStatus === status;
-                        return (
-                            <TouchableOpacity
-                                key={status}
-                                style={[
-                                    styles.statusOption,
-                                    isSelected && { backgroundColor: statusColor, borderColor: statusColor }
-                                ]}
-                                onPress={() => handleStatusChange(status)}
-                            >
-                                <MaterialCommunityIcons
-                                    name={getStatusIconBooking(status)}
-                                    size={16}
-                                    color={isSelected ? '#FFFFFF' : statusColor}
-                                />
-                                <Text
+            {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>
+                        Update Status
+                    </Text>
+                    <View style={styles.statusOptions}>
+                        {['Assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
+                            const statusColor = getStatusColor(status);
+                            const isSelected = selectedStatus === status;
+                            return (
+                                <TouchableOpacity
+                                    key={status}
                                     style={[
-                                        styles.statusOptionText,
-                                        { color: isSelected ? '#FFFFFF' : statusColor }
+                                        styles.statusOption,
+                                        isSelected && { backgroundColor: statusColor, borderColor: statusColor }
                                     ]}
+                                    onPress={() => handleStatusChange(status)}
                                 >
-                                    {status.toUpperCase()}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
+                                    <MaterialCommunityIcons
+                                        name={getStatusIconBooking(status)}
+                                        size={16}
+                                        color={isSelected ? '#FFFFFF' : statusColor}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.statusOptionText,
+                                            { color: isSelected ? '#FFFFFF' : statusColor }
+                                        ]}
+                                    >
+                                        {status.toUpperCase()}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+
+                    {/* Cancellation Reason Input */}
+                    {showCancellationInput && (
+                        <View style={{ marginTop: 12 }}>
+                            <View style={styles.inputContainer}>
+                                <MaterialIcons name="warning" size={20} color="#FF3B30" style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.textInput, { minHeight: 80 }]}
+                                    value={cancellationReason}
+                                    onChangeText={setCancellationReason}
+                                    placeholder="Reason for cancellation (required)"
+                                    placeholderTextColor="#888"
+                                    multiline
+                                    numberOfLines={3}
+                                    textAlignVertical="top"
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Odometer Start Reading Input (for in-progress status) */}
+                    {showOdometerStartInput && (
+                        <View style={{ marginTop: 12 }}>
+                            <View style={styles.inputContainer}>
+                                <MaterialCommunityIcons name="speedometer" size={20} color="#00d285" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={odometerStartReading}
+                                    onChangeText={setOdometerStartReading}
+                                    placeholder="Enter odometer start reading (km/miles)"
+                                    placeholderTextColor="#888"
+                                    keyboardType="numeric"
+                                    maxLength={10}
+                                />
+                            </View>
+                            <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
+                                Enter the current odometer reading when starting the trip
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Odometer End Reading Input (for completed status) */}
+                    {showOdometerEndInput && (
+                        <View style={{ marginTop: 12 }}>
+                            <View style={styles.inputContainer}>
+                                <MaterialCommunityIcons name="speedometer" size={20} color="#4A90E2" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={odometerEndReading}
+                                    onChangeText={setOdometerEndReading}
+                                    placeholder="Enter odometer end reading (km/miles)"
+                                    placeholderTextColor="#888"
+                                    keyboardType="numeric"
+                                    maxLength={10}
+                                />
+                            </View>
+                            <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
+                                Enter the odometer reading when completing the trip
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Update Button */}
+                    {selectedStatus !== booking.status && (
+                        <TouchableOpacity
+                            style={[
+                                styles.updateButton,
+                                { marginTop: 12 },
+                                (isUpdating || updating) && { backgroundColor: '#ccc' }
+                            ]}
+                            onPress={handleUpdateStatus}
+                            disabled={isUpdating || updating}
+                        >
+                            {isUpdating || updating ? (
+                                <ActivityIndicator color="#FFFFFF" size="small" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
+                                    <Text style={styles.updateButtonText}>Update to {selectedStatus}</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    )}
+
                 </View>
-
-                {/* Cancellation Reason Input */}
-                {showCancellationInput && (
-                    <View style={{ marginTop: 12 }}>
-                        <View style={styles.inputContainer}>
-                            <MaterialIcons name="warning" size={20} color="#FF3B30" style={styles.inputIcon} />
-                            <TextInput
-                                style={[styles.textInput, { minHeight: 80 }]}
-                                value={cancellationReason}
-                                onChangeText={setCancellationReason}
-                                placeholder="Reason for cancellation (required)"
-                                placeholderTextColor="#888"
-                                multiline
-                                numberOfLines={3}
-                                textAlignVertical="top"
-                            />
-                        </View>
-                    </View>
-                )}
-
-                {/* Odometer Start Reading Input (for in-progress status) */}
-                {showOdometerStartInput && (
-                    <View style={{ marginTop: 12 }}>
-                        <View style={styles.inputContainer}>
-                            <MaterialCommunityIcons name="speedometer" size={20} color="#00d285" style={styles.inputIcon} />
-                            <TextInput
-                                style={styles.textInput}
-                                value={odometerStartReading}
-                                onChangeText={setOdometerStartReading}
-                                placeholder="Enter odometer start reading (km/miles)"
-                                placeholderTextColor="#888"
-                                keyboardType="numeric"
-                                maxLength={10}
-                            />
-                        </View>
-                        <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
-                            Enter the current odometer reading when starting the trip
-                        </Text>
-                    </View>
-                )}
-
-                {/* Odometer End Reading Input (for completed status) */}
-                {showOdometerEndInput && (
-                    <View style={{ marginTop: 12 }}>
-                        <View style={styles.inputContainer}>
-                            <MaterialCommunityIcons name="speedometer" size={20} color="#4A90E2" style={styles.inputIcon} />
-                            <TextInput
-                                style={styles.textInput}
-                                value={odometerEndReading}
-                                onChangeText={setOdometerEndReading}
-                                placeholder="Enter odometer end reading (km/miles)"
-                                placeholderTextColor="#888"
-                                keyboardType="numeric"
-                                maxLength={10}
-                            />
-                        </View>
-                        <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
-                            Enter the odometer reading when completing the trip
-                        </Text>
-                    </View>
-                )}
-
-                {/* Update Button */}
-                {selectedStatus !== booking.status && (
-                    <TouchableOpacity
-                        style={[
-                            styles.updateButton,
-                            { marginTop: 12 },
-                            (isUpdating || updating) && { backgroundColor: '#ccc' }
-                        ]}
-                        onPress={handleUpdateStatus}
-                        disabled={isUpdating || updating}
-                    >
-                        {isUpdating || updating ? (
-                            <ActivityIndicator color="#FFFFFF" size="small" />
-                        ) : (
-                            <>
-                                <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-                                <Text style={styles.updateButtonText}>Update to {selectedStatus}</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                )}
-            </View>
+            )}
         </Animated.View>
     );
 };
@@ -473,10 +508,10 @@ const Bookings: React.FC<BookingsProps> = ({
     };
 
     const updateBookingStatus = async (
-        assignmentId: number, 
-        status: string, 
-        reason?: string, 
-        odometerStartReading?: string, 
+        assignmentId: number,
+        status: string,
+        reason?: string,
+        odometerStartReading?: string,
         odometerEndReading?: string
     ) => {
         setUpdating(true);
@@ -486,22 +521,22 @@ const Bookings: React.FC<BookingsProps> = ({
                 assignment_id: assignmentId,
                 status: status,
             };
-            
+
             // Add cancellation reason if applicable
             if (status === 'cancelled' && reason) {
                 requestBody.reason_of_cancellation = reason;
             }
-            
+
             // Add odometer start reading for in-progress status
             if (status === 'in-progress' && odometerStartReading) {
                 requestBody.odometer_start_reading = odometerStartReading;
             }
-            
+
             // Add odometer end reading for completed status
             if (status === 'completed' && odometerEndReading) {
                 requestBody.odometer_end_reading = odometerEndReading;
             }
-            
+
             const response = await fetch(`${BACKEND_URL}/employee/updateCarBookings`, {
                 method: 'POST',
                 headers: {
@@ -510,7 +545,7 @@ const Bookings: React.FC<BookingsProps> = ({
                 },
                 body: JSON.stringify(requestBody),
             });
-            
+
             const text = await response.text();
             if (text.trim().startsWith('{')) {
                 try {

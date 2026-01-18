@@ -52,6 +52,7 @@ const getResponsiveValues = () => {
 interface LoginProps {
   onLogin: (identifier: string, password: string, identifierType: 'email' | 'phone', isBrowser: boolean) => Promise<void>;
   onForgotPassword: () => void;
+  onUseMPIN?: () => void; // New prop for MPIN navigation
   isLoading?: boolean;
 }
 
@@ -73,6 +74,7 @@ const isPhoneNumber = (input: string): boolean => {
 const Login: React.FC<LoginProps> = ({
   onLogin,
   onForgotPassword,
+  onUseMPIN,
   isLoading,
 }) => {
   const [identifier, setIdentifier] = useState('');
@@ -218,6 +220,17 @@ const Login: React.FC<LoginProps> = ({
     }, 100);
   };
 
+  const handleUseMPINPress = () => {
+    if (!onUseMPIN) return;
+    
+    if (Platform.OS !== 'web') {
+      Keyboard.dismiss();
+    }
+    setTimeout(() => {
+      onUseMPIN();
+    }, 100);
+  };
+
   const dynamicStyles = getDynamicStyles(responsive);
 
   const content = (
@@ -357,6 +370,21 @@ const Login: React.FC<LoginProps> = ({
                     <Text style={[styles.loginButtonText, dynamicStyles.loginButtonText]}>Sign In</Text>
                   )}
                 </TouchableOpacity>
+
+                {/* New: Use MPIN Button */}
+                {onUseMPIN && (
+                  <TouchableOpacity
+                    style={[styles.mpinButtonWrapper, dynamicStyles.mpinButtonMargin]}
+                    onPress={handleUseMPINPress}
+                    disabled={isLoading}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 15, bottom: 15, left: 10, right: 10 }}
+                  >
+                    <Text style={[styles.mpinButtonText, dynamicStyles.mpinButtonText]}>
+                      Use MPIN Instead
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
@@ -456,6 +484,12 @@ const getDynamicStyles = (responsive: ReturnType<typeof getResponsiveValues>) =>
     },
     loginButtonText: {
       fontSize: responsive.fontSize + 1,
+    },
+    mpinButtonMargin: {
+      marginTop: responsive.spacing * 0.5,
+    },
+    mpinButtonText: {
+      fontSize: responsive.fontSize - 1,
     },
     errorText: {
       fontSize: responsive.fontSize - 2,
@@ -674,6 +708,18 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  // New: MPIN button styles
+  mpinButtonWrapper: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    width: '100%',
+  },
+  mpinButtonText: {
+    color: colors.primary,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
   footerContainer: {
     width: '100%',

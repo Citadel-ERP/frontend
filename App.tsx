@@ -643,6 +643,7 @@ function App(): React.JSX.Element {
           <Login
             onLogin={handleLogin}
             onForgotPassword={handleForgotPassword}
+            onUseMPIN={() => setCurrentScreen('mpinLogin')} // Add this line
             isLoading={isLoading}
           />
         );
