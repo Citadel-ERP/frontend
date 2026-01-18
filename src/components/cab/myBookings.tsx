@@ -35,7 +35,7 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
             isWeb && styles.screenContainerWeb
         ]}>
             <ScrollView
-                style={styles.scrollContainer}
+                style={[styles.scrollContainer,{marginTop:Platform.OS === 'ios' ? -60 : 0}]}
                 contentContainerStyle={[
                     styles.scrollContent,
                     isWeb && styles.scrollContentWeb
@@ -71,13 +71,14 @@ const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                             styles.headerContent,
                             isWeb && styles.headerContentWeb
                         ]}>
-                            <View style={styles.headerTopRow}>
+                            <View style={[styles.headerTopRow,{paddingTop: Platform.OS === 'ios' ? 10 : 0}]}>
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
                                     <BackIcon />
                                 </TouchableOpacity>
                                 <Text style={[
                                     styles.logoText,
-                                    isLargeScreen && styles.logoTextDesktop
+                                    isLargeScreen && styles.logoTextDesktop,
+                                    {marginRight: 25}
                                 ]}>CITADEL</Text>
                                 <View style={{ width: 32 }} />
                             </View>

@@ -106,7 +106,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
             isWeb && styles.screenContainerWeb
         ]}>
             <ScrollView
-                style={styles.scrollContainer}
+                style={[styles.scrollContainer,{marginTop:Platform.OS === 'ios' ? -60 : 0}]}
                 contentContainerStyle={[
                     styles.scrollContent,
                     isWeb && styles.scrollContentWeb
@@ -151,7 +151,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                             styles.headerContentContainer,
                             isWeb && styles.headerContentContainerWeb
                         ]}>
-                            <View style={styles.headerContent}>
+                            <View style={[styles.headerContent,{paddingTop:Platform.OS === 'ios' ? 60 : 40,marginRight:15}]}>
                                 <View style={styles.headerTopRow}>
                                     <TouchableOpacity style={styles.backButton} onPress={onBack}>
                                         <BackIcon />
@@ -165,7 +165,8 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                             </View>
                             <View style={[
                                 styles.titleSection,
-                                isLargeScreen && styles.titleSectionDesktop
+                                isLargeScreen && styles.titleSectionDesktop,
+                                {marginTop:45}
                             ]}>
                                 <Text style={[
                                     styles.headerTitle,
@@ -394,7 +395,8 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
             {selectedVehicles.length > 0 && (
                 <View style={[
                     styles.bottomBar,
-                    isWeb && styles.bottomBarWeb
+                    isWeb && styles.bottomBarWeb,
+                    {marginBottom:Platform.OS === 'ios' ? -30:0}
                 ]}>
                     <View style={[
                         styles.bottomBarContainer,
@@ -427,7 +429,10 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                     styles.proceedBtn,
                                     styles.proceedBtnTablet,
                                     styles.proceedBtnDesktop
-                                )
+                                ),
+                                {
+                                    marginTop: 10
+                                }
                             ]}
                             onPress={onProceedToBooking}
                         >

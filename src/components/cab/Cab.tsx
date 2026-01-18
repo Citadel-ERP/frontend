@@ -39,7 +39,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
     const [myBookings, setMyBookings] = useState<Booking[]>([]);
-    const [selectedVehicles, setSelectedVehicles] = useState<Array<{vehicle: Vehicle, driver: Driver | null}>>([]);
+    const [selectedVehicles, setSelectedVehicles] = useState<Array<{ vehicle: Vehicle, driver: Driver | null }>>([]);
     const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
     const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
     const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
@@ -65,7 +65,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
             try {
                 const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
                 const savedCity = await AsyncStorage.getItem('city');
-                
+
                 setToken(storedToken);
                 if (savedCity) {
                     setSelectedCity(savedCity);
@@ -115,11 +115,11 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
             if (vehiclesResponse.ok && driversResponse.ok) {
                 const vehiclesData = await vehiclesResponse.json();
                 const driversData = await driversResponse.json();
-                
+
                 setVehicles(vehiclesData.vehicles || []);
                 setAvailableDrivers(driversData.drivers || []);
                 setCurrentScreen('cabs');
-                
+
                 if (vehiclesData.vehicles.length === 0) {
                     Alert.alert('No Vehicles', 'No vehicles available for the selected time period');
                 } else if (driversData.drivers.length === 0) {
@@ -261,7 +261,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
 
     return (
         <Container style={styles.appContainer}>
-            <StatusBar barStyle="light-content" backgroundColor="#017bf9" />
+            <StatusBar translucent barStyle="light-content" backgroundColor="#017bf9" />
 
             {currentScreen === 'booking' && (
                 <BookingScreen
@@ -318,14 +318,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                             styles.navIconContainer,
                             currentScreen === 'booking' && styles.activeNavIconContainer
                         ]}>
-                            <MaterialCommunityIcons 
-                                name="car" 
-                                size={24} 
-                                color={currentScreen === 'booking' ? '#fff' : '#666'} 
+                            <MaterialCommunityIcons
+                                name="car"
+                                size={24}
+                                color={currentScreen === 'booking' ? '#fff' : '#666'}
                             />
                         </View>
                         <Text style={[
-                            styles.navLabel, 
+                            styles.navLabel,
                             currentScreen === 'booking' && styles.activeNavLabel
                         ]}>
                             Book
@@ -344,14 +344,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                             styles.navIconContainer,
                             currentScreen === 'myBookings' && styles.activeNavIconContainer
                         ]}>
-                            <MaterialCommunityIcons 
-                                name="clipboard-text" 
-                                size={24} 
-                                color={currentScreen === 'myBookings' ? '#fff' : '#666'} 
+                            <MaterialCommunityIcons
+                                name="clipboard-text"
+                                size={24}
+                                color={currentScreen === 'myBookings' ? '#fff' : '#666'}
                             />
                         </View>
                         <Text style={[
-                            styles.navLabel, 
+                            styles.navLabel,
                             currentScreen === 'myBookings' && styles.activeNavLabel
                         ]}>
                             My Bookings
@@ -389,7 +389,41 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 }}
             />
 
-            {activePickerType && (
+            {activePickerType && Platform.OS === 'ios' && (
+                <Modal
+                    visible={true}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setActivePickerType(null)}
+                >
+                    <View style={styles.pickerModalOverlay}>
+                        <View style={styles.pickerModalContent}>
+                            <View style={styles.pickerHeader}>
+                                <TouchableOpacity onPress={() => setActivePickerType(null)}>
+                                    <Text style={styles.pickerCancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.pickerTitle}>
+                                    {activePickerType.includes('Date') ? 'Select Date' : 'Select Time'}
+                                </Text>
+                                <TouchableOpacity onPress={() => setActivePickerType(null)}>
+                                    <Text style={styles.pickerDoneText}>Done</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <DateTimePicker
+                                value={bookingForm[activePickerType as keyof typeof bookingForm] as Date}
+                                mode={activePickerType.includes('Date') ? 'date' : 'time'}
+                                display="spinner"
+                                onChange={handlePickerChange}
+                                minimumDate={activePickerType.includes('Date') ? new Date() : undefined}
+                                style={styles.dateTimePicker}
+                                textColor="#000"
+                            />
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
+            {activePickerType && Platform.OS === 'android' && (
                 <DateTimePicker
                     value={bookingForm[activePickerType as keyof typeof bookingForm] as Date}
                     mode={activePickerType.includes('Date') ? 'date' : 'time'}

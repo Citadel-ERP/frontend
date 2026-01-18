@@ -338,10 +338,12 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
             styles.screenContainer,
             isWeb && styles.screenContainerWeb
         ]}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar translucent 
+            backgroundColor="transparent" 
+            barStyle="light-content"  />
             <SafeAreaView style={styles.safeArea}>
                 <ScrollView
-                    style={styles.scrollContainer}
+                    style={[styles.scrollContainer,{marginTop:Platform.OS === 'ios' ? -60 : 0}]}
                     contentContainerStyle={[
                         styles.scrollContent,
                         isWeb && styles.scrollContentWeb
@@ -377,7 +379,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
                                 styles.headerContent,
                                 isWeb && styles.headerContentWeb
                             ]}>
-                                <View style={styles.headerTopRow}>
+                                <View style={[styles.headerTopRow,{paddingTop:Platform.OS === 'ios' ? 40 : 0}]}>
                                     <TouchableOpacity style={styles.backButton} onPress={onBack}>
                                         <BackIcon />
                                     </TouchableOpacity>

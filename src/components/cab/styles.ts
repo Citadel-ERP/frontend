@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 export const styles = StyleSheet.create({
     appContainer: {
@@ -52,6 +52,45 @@ export const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 4,
+    },
+    pickerModalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    pickerModalContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    },
+    pickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+    },
+    pickerTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#333',
+    },
+    pickerCancelText: {
+        fontSize: 16,
+        color: '#ff5e7a',
+        fontWeight: '500',
+    },
+    pickerDoneText: {
+        fontSize: 16,
+        color: '#00d285',
+        fontWeight: '600',
+    },
+    dateTimePicker: {
+        height: 220,
+        backgroundColor: '#fff',
     },
 });
 
