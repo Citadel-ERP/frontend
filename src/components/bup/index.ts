@@ -2,7 +2,7 @@ export { default as BUP } from './BUP';
 export { default as Header } from './header';
 export { default as Cities } from './cities';
 export { default as SearchAndFilter } from './searchAndFilter';
-export { default as LeadsList } from './list';
+export { default as LeadsListUpdated } from './listUpdated';
 export { default as LeadDetails } from './leadDetails';
 export { default as EditLead } from './editDetails';
 export { default as CreateLead } from './createLead';

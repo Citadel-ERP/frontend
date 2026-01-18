@@ -94,9 +94,9 @@ const EditLead: React.FC<EditLeadProps> = ({
     { value: 'hold', label: 'Hold' },
     { value: 'mandate', label: 'Mandate' },
     { value: 'closed', label: 'Closed' },
-    { value: 'no-requirement', label: 'No Requirement' },
-    { value: 'transaction-complete', label: 'Transaction Complete' },
-    { value: 'non-responsive', label: 'Non Responsive' }
+    { value: 'no_requirement', label: 'No Requirement' },
+    { value: 'transaction_complete', label: 'Transaction Complete' },
+    { value: 'non_responsive', label: 'Non Responsive' }
   ];
 
   useEffect(() => {

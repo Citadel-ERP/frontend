@@ -2395,26 +2395,8 @@ export const styles = StyleSheet.create({
         color: '#1A1A1A',
         flex: 1,
     },
-    downloadReportModalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-   downloadReportModalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    width: '100%',
-    maxWidth: 500,
-    maxHeight: '70%',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-},
+
+
     downloadReportModalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2594,7 +2576,7 @@ export const styles = StyleSheet.create({
     },
     dropdownContainer: {
         position: 'relative',
-        zIndex: 1,
+        zIndex: 1000,
     },
     dropdown: {
         flexDirection: 'row',
@@ -2619,14 +2601,19 @@ export const styles = StyleSheet.create({
         top: '100%',
         left: 0,
         right: 0,
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: '#ccc',
-        borderTopWidth: 0,
+        borderColor: '#E0E0E0',
         borderRadius: 8,
-        marginTop: -8,
-        maxHeight: 200,
-        zIndex: 1000,
+        marginTop: 4,
+        maxHeight: 250,
+        zIndex: 10000, 
+        elevation: 5, 
+        shadowColor: '#000', 
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        overflow: 'hidden'
     },
     dropdownItem: {
         padding: 12,
@@ -2859,16 +2846,113 @@ export const styles = StyleSheet.create({
         color: '#075E54',
         fontWeight: '500',
     },
-downloadReportPickerContainer: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E9EDEF',
-    overflow: 'hidden',
-    marginTop: 8,
+
+    downloadReportPicker: {
+        height: 50,
+        width: '100%',
+    },
+    downloadReportModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+    },
+    downloadReportModalContainer: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        width: '100%',
+        maxHeight: '100%',
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20, // Account for iOS safe area
+    },
+    downloadReportPickerContainer: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        overflow: 'hidden',
+        marginTop: 8,
+    },
+    iosPickerButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        minHeight: 56, // Ensure it's easy to tap
+    },
+    iosPickerButtonText: {
+        fontSize: 16,
+        color: '#000',
+    },
+    iosPickerModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    iosPickerModalContainer: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 0,
+    },
+    iosPickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E5E5',
+        backgroundColor: '#F8F9FA',
+    },
+    iosPickerCancelText: {
+        fontSize: 17,
+        color: '#FF3B30',
+        fontWeight: '400',
+    },
+    iosPickerDoneText: {
+        fontSize: 17,
+        color: '#008069',
+        fontWeight: '600',
+    },
+    iosPicker: {
+        width: '100%',
+        height: 216, // Standard iOS picker height
+        backgroundColor: '#FFFFFF',
+    },
+    modalOverlayDate: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
 },
-downloadReportPicker: {
-    height: 50,
-    width: '100%',
+modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+},
+modalHeaderDate: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+},
+modalTitleDate: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000',
+},
+modalCancelTextDate: {
+    fontSize: 17,
+    color: '#FF3B30',
+},
+modalDoneText: {
+    fontSize: 17,
+    color: '#075E54',
+    fontWeight: '600',
 },
 });

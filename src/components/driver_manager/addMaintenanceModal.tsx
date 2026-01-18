@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Alert,
   Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -31,6 +30,7 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const formatDateForDisplay = (date: Date): string => {
     return date.toISOString().split('T')[0];
@@ -77,10 +77,6 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
     }
   };
 
-  const dismissKeyboard = () => {
-    Keyboard.dismiss();
-  };
-
   const isFormValid = form.cost && form.description && form.start_date && form.end_date;
 
   return (
@@ -91,12 +87,12 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <View
+        // behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
+        // keyboardVerticalOffset={0}
       >
-        <TouchableWithoutFeedback onPress={dismissKeyboard}>
-          <View style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
             {/* Header */}
             <View style={styles.modalHeader}>
               <View style={styles.headerLeft}>
@@ -115,11 +111,14 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
 
             {/* Content */}
             <ScrollView
+              ref={scrollViewRef}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
               keyboardShouldPersistTaps="handled"
               bounces={true}
               scrollEventThrottle={16}
+              nestedScrollEnabled={true}
+              removeClippedSubviews={false}
             >
               {/* Cost Section */}
               <View style={styles.section}>
@@ -146,6 +145,12 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
                       placeholder="Enter cost"
                       placeholderTextColor="#999"
                       keyboardType="numeric"
+                      onFocus={() => {
+                        // Small delay to ensure keyboard is opening
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                        }, 150);
+                      }}
                     />
                   </View>
                 </View>
@@ -172,6 +177,12 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
                       multiline
                       numberOfLines={4}
                       textAlignVertical="top"
+                      scrollEnabled={false}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+                        }, 150);
+                      }}
                     />
                   </View>
                 </View>
@@ -325,10 +336,10 @@ const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-};
+        </View>
+      </Modal>
+    );
+  };
+
 
 export default MaintenanceModal;

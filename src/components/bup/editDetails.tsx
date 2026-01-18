@@ -1033,24 +1033,7 @@ const EditLead: React.FC<EditLeadProps> = ({
               )}
             </View>
             
-            <ScrollView style={styles.modalScrollView}>
-              {/* Current assigned user if exists */}
-              {/* {editedLead.assigned_to && (
-                <View style={[styles.searchResultItem, styles.currentAssignedItem]}>
-                  <View style={styles.searchResultContent}>
-                    <Ionicons name="person-add" size={18} color={MODERN_COLORS.success} />
-                    <View>
-                      <Text style={[styles.searchResultText, { color: MODERN_COLORS.success, fontWeight: '600' }]}>
-                        Current: {getAssignedToLabel()}
-                      </Text>
-                      <Text style={styles.assignedToEmail}>
-                        {editedLead.assigned_to.email}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )} */}
-              
+            <ScrollView style={styles.modalScrollView}>              
               {/* Search results */}
               {assignedToResults.length > 0 ? (
                 assignedToResults.map((user) => (

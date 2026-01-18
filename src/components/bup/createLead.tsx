@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
-import { ThemeColors, FilterOption } from './types';
+import { ThemeColors, FilterOption, AssignedTo } from './types';
 import DropdownModal from './dropdownModal';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -46,6 +46,30 @@ interface CreateLeadProps {
   fetchSubphases: (phase: string) => Promise<void>;
 }
 
+// Debounce hook for search optimization
+const useDebounce = (value: string, delay: number): string => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
 const CreateLead: React.FC<CreateLeadProps> = ({
   onBack,
   onCreate,
@@ -59,18 +83,27 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     company: '',
     status: 'active' as const,
     phase: 'initial_phase',
-    subphase: 'without_contact_details'
+    subphase: 'without_contact_details',
+    assigned_to: null as AssignedTo | null,
   });
+
   const [editingEmails, setEditingEmails] = useState<string[]>([]);
   const [editingPhones, setEditingPhones] = useState<string[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'assigned' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Assigned person states
+  const [assignedToSearch, setAssignedToSearch] = useState('');
+  const [assignedToResults, setAssignedToResults] = useState<AssignedTo[]>([]);
+  const [assignedToLoading, setAssignedToLoading] = useState(false);
+
+  const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -89,7 +122,13 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     }
   }, []);
 
-  const fetchPhases = async () => {
+  useEffect(() => {
+    if (activeDropdown === 'assigned') {
+      searchAssignedToUsers(debouncedAssignedSearch);
+    }
+  }, [debouncedAssignedSearch, activeDropdown]);
+
+  const fetchPhases = async (): Promise<void> => {
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getAllPhases`, {
         method: 'GET',
@@ -109,14 +148,18 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
       };
-      setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
+
+      setAllPhases(data.phases.map((phase: string) => ({ 
+        value: phase, 
+        label: beautifyName(phase) 
+      })));
     } catch (error) {
       console.error('Error fetching phases:', error);
       setAllPhases([]);
     }
   };
 
-  const fetchSubphasesForPhase = async (phase: string) => {
+  const fetchSubphasesForPhase = async (phase: string): Promise<void> => {
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
         method: 'GET',
@@ -136,11 +179,79 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
       };
-      setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
+
+      setAllSubphases(data.subphases.map((subphase: string) => ({ 
+        value: subphase, 
+        label: beautifyName(subphase) 
+      })));
     } catch (error) {
       console.error('Error fetching subphases:', error);
       setAllSubphases([]);
     }
+  };
+
+  const searchAssignedToUsers = async (query: string): Promise<void> => {
+    try {
+      if (!token) {
+        setAssignedToResults([]);
+        return;
+      }
+
+      setAssignedToLoading(true);
+
+      // If query is empty, fetch all users
+      if (query.length === 0) {
+        const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setAssignedToResults(data.users || []);
+        return;
+      }
+
+      // If query has at least 2 characters, search
+      if (query.length >= 2) {
+        const response = await fetch(
+          `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setAssignedToResults(data.potential_collaborators);
+      } else {
+        setAssignedToResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching assignable users:', error);
+      setAssignedToResults([]);
+    } finally {
+      setAssignedToLoading(false);
+    }
+  };
+
+  const handleAssignToUser = (user: AssignedTo): void => {
+    setFormData({ ...formData, assigned_to: user });
+    setActiveDropdown(null);
+    setAssignedToSearch('');
+    setAssignedToResults([]);
   };
 
   const beautifyName = (name: string): string => {
@@ -160,7 +271,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
   };
 
-  const handleAddEmail = () => {
+  const handleAddEmail = (): void => {
     const trimmedEmail = newEmail.trim();
     
     if (!trimmedEmail) {
@@ -183,11 +294,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     setEmailError(null);
   };
 
-  const handleRemoveEmail = (index: number) => {
+  const handleRemoveEmail = (index: number): void => {
     setEditingEmails(editingEmails.filter((_, i) => i !== index));
   };
 
-  const handleAddPhone = () => {
+  const handleAddPhone = (): void => {
     const trimmedPhone = newPhone.trim();
     
     if (!trimmedPhone) {
@@ -210,12 +321,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     setPhoneError(null);
   };
 
-  const handleRemovePhone = (index: number) => {
+  const handleRemovePhone = (index: number): void => {
     setEditingPhones(editingPhones.filter((_, i) => i !== index));
   };
 
-  const handlePhaseSelection = async (phase: string) => {
-    setFormData({...formData, phase: phase, subphase: ''});
+  const handlePhaseSelection = async (phase: string): Promise<void> => {
+    setFormData({ ...formData, phase: phase, subphase: '' });
     await fetchSubphases(phase);
     await fetchSubphasesForPhase(phase);
   };
@@ -223,15 +334,27 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   const getFilterLabel = (filterKey: string, value: string): string => {
     let choices: FilterOption[] = [];
     switch (filterKey) {
-      case 'status': choices = STATUS_CHOICES; break;
-      case 'phase': choices = allPhases; break;
-      case 'subphase': choices = allSubphases; break;
+      case 'status': 
+        choices = STATUS_CHOICES; 
+        break;
+      case 'phase': 
+        choices = allPhases; 
+        break;
+      case 'subphase': 
+        choices = allSubphases; 
+        break;
     }
     const option = choices.find(choice => choice.value === value);
     return option ? option.label : beautifyName(value);
   };
 
-  const handleCreate = async () => {
+  const getAssignedToLabel = (): string => {
+    if (!formData.assigned_to) return 'Unassigned';
+    return formData.assigned_to.full_name || 
+           `${formData.assigned_to.first_name} ${formData.assigned_to.last_name}`;
+  };
+
+  const handleCreate = async (): Promise<void> => {
     try {
       if (!token || !selectedCity) {
         Alert.alert('Error', 'Token or city not found');
@@ -266,6 +389,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         createPayload.phone_numbers = editingPhones;
       }
 
+      // Add assigned_to if selected
+      if (formData.assigned_to) {
+        createPayload.assigned_to_email = formData.assigned_to.email;
+      }
+
       const response = await fetch(`${BACKEND_URL}/manager/createLead`, {
         method: 'POST',
         headers: {
@@ -289,7 +417,8 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         company: '',
         status: 'active',
         phase: 'initial_phase',
-        subphase: 'without_contact_details'
+        subphase: 'without_contact_details',
+        assigned_to: null,
       });
       setEditingEmails([]);
       setEditingPhones([]);
@@ -324,7 +453,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
             <TextInput
               style={styles.input}
               value={formData.name}
-              onChangeText={(text) => setFormData({...formData, name: text})}
+              onChangeText={(text) => setFormData({ ...formData, name: text })}
               placeholder="Enter lead name"
               placeholderTextColor={WHATSAPP_COLORS.textTertiary}
             />
@@ -335,7 +464,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
             <TextInput
               style={styles.input}
               value={formData.company}
-              onChangeText={(text) => setFormData({...formData, company: text})}
+              onChangeText={(text) => setFormData({ ...formData, company: text })}
               placeholder="Enter company name (optional)"
               placeholderTextColor={WHATSAPP_COLORS.textTertiary}
             />
@@ -347,6 +476,41 @@ const CreateLead: React.FC<CreateLeadProps> = ({
               <Ionicons name="location" size={16} color={WHATSAPP_COLORS.primaryDark} style={styles.fieldIcon} />
               <Text style={styles.readOnlyText}>{selectedCity}</Text>
             </View>
+          </View>
+
+          {/* Assigned To Section */}
+          <View style={styles.inputGroup}>
+            <View style={styles.assignedToHeader}>
+              <Text style={styles.inputLabel}>Assigned To</Text>
+              {formData.assigned_to && (
+                <TouchableOpacity
+                  onPress={() => setFormData({ ...formData, assigned_to: null })}
+                  style={styles.clearAssignmentButton}
+                >
+                  <Text style={styles.clearAssignmentText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setActiveDropdown('assigned')}
+            >
+              <View style={styles.assignedToContent}>
+                {formData.assigned_to ? (
+                  <>
+                    <Ionicons name="person" size={18} color={WHATSAPP_COLORS.primary} />
+                    <Text style={styles.assignedToText} numberOfLines={1}>
+                      {getAssignedToLabel()}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.dropdownPlaceholder} numberOfLines={1}>
+                    Select assignee (optional)
+                  </Text>
+                )}
+              </View>
+              <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -379,7 +543,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={[styles.input, emailError && styles.inputError,{width:'83%'}]}
+              style={[styles.input, emailError && styles.inputError, { width: '83%' }]}
               value={newEmail}
               onChangeText={(text) => {
                 setNewEmail(text);
@@ -426,7 +590,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={[styles.input, phoneError && styles.inputError,{width:"85%"}]}
+              style={[styles.input, phoneError && styles.inputError, { width: "85%" }]}
               value={newPhone}
               onChangeText={(text) => {
                 setNewPhone(text);
@@ -518,7 +682,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         visible={activeDropdown === 'status'}
         onClose={() => setActiveDropdown(null)}
         options={STATUS_CHOICES}
-        onSelect={(value) => setFormData({...formData, status: value as any})}
+        onSelect={(value) => setFormData({ ...formData, status: value as any })}
         title="Select Status"
         theme={{
           ...theme,
@@ -529,6 +693,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           border: WHATSAPP_COLORS.border,
         }}
       />
+
       <DropdownModal
         visible={activeDropdown === 'phase'}
         onClose={() => setActiveDropdown(null)}
@@ -544,11 +709,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           border: WHATSAPP_COLORS.border,
         }}
       />
+
       <DropdownModal
         visible={activeDropdown === 'subphase'}
         onClose={() => setActiveDropdown(null)}
         options={allSubphases}
-        onSelect={(value) => setFormData({...formData, subphase: value})}
+        onSelect={(value) => setFormData({ ...formData, subphase: value })}
         title="Select Subphase"
         theme={{
           ...theme,
@@ -559,6 +725,87 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           border: WHATSAPP_COLORS.border,
         }}
       />
+
+      {/* Assigned To Dropdown Modal */}
+      {activeDropdown === 'assigned' && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assign Lead To</Text>
+              <TouchableOpacity onPress={() => setActiveDropdown(null)}>
+                <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.searchInputContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={assignedToSearch}
+                onChangeText={setAssignedToSearch}
+                placeholder="Search employees..."
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                autoCapitalize="none"
+              />
+              {assignedToLoading && (
+                <ActivityIndicator 
+                  size="small" 
+                  color={WHATSAPP_COLORS.primary} 
+                  style={styles.searchLoading} 
+                />
+              )}
+            </View>
+            
+            <ScrollView style={styles.modalScrollView}>              
+              {/* Search results */}
+              {assignedToResults.length > 0 ? (
+                assignedToResults.map((user) => (
+                  <TouchableOpacity
+                    key={user.email}
+                    style={[
+                      styles.searchResultItem,
+                      formData.assigned_to?.email === user.email && styles.selectedItem,
+                      { backgroundColor: "#fff" },
+                    ]}
+                    onPress={() => handleAssignToUser(user)}
+                  >
+                    <View style={styles.searchResultContent}>
+                      <Ionicons 
+                        name="person" 
+                        size={18} 
+                        color={formData.assigned_to?.email === user.email 
+                          ? WHATSAPP_COLORS.success 
+                          : WHATSAPP_COLORS.primary
+                        } 
+                      />
+                      <View style={styles.assignedToUserInfo}>
+                        <Text style={styles.searchResultText} numberOfLines={1}>
+                          {user.full_name || `${user.first_name} ${user.last_name}`}
+                        </Text>
+                        <Text style={styles.assignedToEmail} numberOfLines={1}>
+                          {user.email}
+                        </Text>
+                      </View>
+                    </View>
+                    {formData.assigned_to?.email === user.email && (
+                      <Ionicons 
+                        name="checkmark-circle" 
+                        size={22} 
+                        color={WHATSAPP_COLORS.success} 
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                !assignedToLoading && assignedToResults.length === 0 && (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No users found</Text>
+                  </View>
+                )
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -624,7 +871,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: WHATSAPP_COLORS.textPrimary,
     backgroundColor: "#fff",
-    
   },
   inputError: {
     borderColor: WHATSAPP_COLORS.danger,
@@ -645,6 +891,55 @@ const styles = StyleSheet.create({
   readOnlyText: {
     fontSize: 15,
     color: WHATSAPP_COLORS.textPrimary,
+  },
+  
+  // Assigned To Section
+  assignedToHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  clearAssignmentButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.danger + '15',
+  },
+  clearAssignmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.danger,
+  },
+  assignedToContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  assignedToText: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+  },
+  dropdownPlaceholder: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textTertiary,
+    flex: 1,
+  },
+  assignedToUserInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  assignedToEmail: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+    marginTop: 2,
+  },
+  selectedItem: {
+    backgroundColor: WHATSAPP_COLORS.primary + '10',
+    borderLeftWidth: 3,
+    borderLeftColor: WHATSAPP_COLORS.primary,
   },
   
   // Contact Items
@@ -770,6 +1065,108 @@ const styles = StyleSheet.create({
   bottomSpacing: {
     height: 20,
   },
+  
+  // Modal Styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  modalScrollView: {
+    maxHeight: 400,
+  },
+  
+  // Search Input
+  searchInputContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: WHATSAPP_COLORS.textPrimary,
+    backgroundColor: '#fff',
+    paddingRight: 40,
+  },
+  searchLoading: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  
+  // Search Results
+  searchResultItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: "#fff",
+    borderLeftWidth: 4,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderColor: WHATSAPP_COLORS.accent,
+  },
+  searchResultContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchResultText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+  },
+  
+  // Empty State
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderRadius: 12,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textTertiary,
+    textAlign: 'center',
+  },
 });
 
-export default CreateLead;
+export default CreateLead

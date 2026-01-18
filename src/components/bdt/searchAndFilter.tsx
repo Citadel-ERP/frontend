@@ -66,9 +66,9 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     { value: 'hold', label: 'Hold' },
     { value: 'mandate', label: 'Mandate' },
     { value: 'closed', label: 'Closed' },
-    { value: 'no-requirement', label: 'No Requirement' },
-    { value: 'transaction-complete', label: 'Transaction Complete' },
-    { value: 'non-responsive', label: 'Non Responsive' }
+    { value: 'no_requirement', label: 'No Requirement' },
+    { value: 'transaction_complete', label: 'Transaction Complete' },
+    { value: 'non_responsive', label: 'Non Responsive' }
   ];
 
   const FILTER_OPTIONS: FilterOption[] = [
@@ -78,15 +78,18 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     { value: 'subphase', label: 'Filter by Subphase' }
   ];
 
+  const calculatedTotal = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+
+
   const tabs = [
-    { id: 'all', label: `All (${totalLeads || 0})` },
+    { id: 'all', label: `All (${calculatedTotal || 0})` },
     { id: 'active', label: `Active (${statusCounts.active || 0})` },
     { id: 'hold', label: `Hold (${statusCounts.hold || 0})` },
     { id: 'mandate', label: `Mandate (${statusCounts.mandate || 0})` },
     { id: 'closed', label: `Closed (${statusCounts.closed || 0})` },
-    { id: 'no-requirement', label: `No Req (${statusCounts['no-requirement'] || 0})` },
-    { id: 'transaction-complete', label: `Complete (${statusCounts['transaction-complete'] || 0})` },
-    { id: 'non-responsive', label: `Non-Res (${statusCounts['non-responsive'] || 0})` }
+    { id: 'no_requirement', label: `No Req (${statusCounts['no_requirement'] || 0})` },
+    { id: 'transaction_complete', label: `Complete (${statusCounts['transaction_complete'] || 0})` },
+    { id: 'non_responsive', label: `Non-Res (${statusCounts['non_responsive'] || 0})` }
   ];
 
   const handleSearchSubmit = () => {
@@ -163,7 +166,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   const handleTabPress = (tabId: string) => {
     setActiveTab(tabId);
-    
+
     if (tabId === 'all') {
       clearFilters();
     } else {
@@ -193,7 +196,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setActiveDropdown('filter')}
               style={styles.filterButton}
             >
@@ -204,8 +207,8 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       </View>
 
       {/* Status Tabs - WhatsApp Style */}
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.tabsContainer}
       >
@@ -213,13 +216,13 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           <TouchableOpacity
             key={tab.id}
             style={[
-              styles.tab, 
+              styles.tab,
               activeTab === tab.id && [styles.activeTab, { backgroundColor: WHATSAPP_COLORS.primary }]
             ]}
             onPress={() => handleTabPress(tab.id)}
           >
             <Text style={[
-              styles.tabText, 
+              styles.tabText,
               { color: WHATSAPP_COLORS.textSecondary },
               activeTab === tab.id && [styles.activeTabText, { color: WHATSAPP_COLORS.white }]
             ]}>
@@ -296,7 +299,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           border: WHATSAPP_COLORS.border,
         }}
       />
-      
+
       <DropdownModal
         visible={activeDropdown === 'filter-phase'}
         onClose={() => setActiveDropdown(null)}
@@ -312,7 +315,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           border: WHATSAPP_COLORS.border,
         }}
       />
-      
+
       <DropdownModal
         visible={activeDropdown === 'filter-subphase'}
         onClose={() => setActiveDropdown(null)}

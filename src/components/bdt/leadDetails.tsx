@@ -411,7 +411,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   const handleTakePhoto = useCallback(async (): Promise<void> => {
     if (isPickerActive) return;
     setIsPickerActive(true);
-
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
@@ -434,6 +433,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           name: fileName,
           mimeType: 'image/jpeg',
           size: asset.fileSize,
+          lastModified: Date.now(), // Add this missing property
         };
         setSelectedDocuments(prev => [...prev, newFile]);
         setTimeout(() => inputRef.current?.focus(), 100);
@@ -450,7 +450,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   const handleSelectFromGallery = useCallback(async (): Promise<void> => {
     if (isPickerActive) return;
     setIsPickerActive(true);
-
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -474,6 +473,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
             name: `image_${Date.now()}_${index}.${extension}`,
             mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
             size: asset.fileSize,
+            lastModified: Date.now(), // Add this missing property
           };
         });
         setSelectedDocuments(prev => [...prev, ...newFiles]);
@@ -919,24 +919,24 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
       {/* <SafeAreaView style={[s.modalContainer]} edges={['top']}> */}
-        <View style={[s.modalHeader,{paddingTop: Platform.OS === 'ios' ? 50 : 15}]}>
-          <TouchableOpacity
-            onPress={() => setShowLeadDetailsModal(false)}
-            style={s.modalBackButton}
-          >
-            <Ionicons name="close" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={s.modalTitle}>Lead Details</Text>
-        </View>
-        <FlatList
-          ref={modalFlatListRef}
-          data={modalSections}
-          renderItem={renderModalSection}
-          keyExtractor={(item) => item}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.modalScrollContent}
-          ListFooterComponent={<View style={s.modalBottomSpacing} />}
-        />
+      <View style={[s.modalHeader, { paddingTop: Platform.OS === 'ios' ? 50 : 15 }]}>
+        <TouchableOpacity
+          onPress={() => setShowLeadDetailsModal(false)}
+          style={s.modalBackButton}
+        >
+          <Ionicons name="close" size={24} color="#FFF" />
+        </TouchableOpacity>
+        <Text style={s.modalTitle}>Lead Details</Text>
+      </View>
+      <FlatList
+        ref={modalFlatListRef}
+        data={modalSections}
+        renderItem={renderModalSection}
+        keyExtractor={(item) => item}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.modalScrollContent}
+        ListFooterComponent={<View style={s.modalBottomSpacing} />}
+      />
       {/* </SafeAreaView> */}
     </Modal>
   ), [showLeadDetailsModal, modalSections, renderModalSection]);
@@ -1158,7 +1158,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
             s.inputContainerWrapper,
             { marginBottom: isKeyboardVisible ? 0 : -30 }
           ]}>
-            {/* <SafeAreaView style={s.inputSafeArea} edges={['bottom']}> */}
             <View style={s.inputContainer}>
               <View style={s.inputWrapper}>
                 <View style={s.inputRow}>
@@ -1212,7 +1211,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
                 </View>
               </View>
             </View>
-            {/* </SafeAreaView> */}
           </View>
         </KeyboardAvoidingView>
       )}
@@ -1494,7 +1492,8 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 2,
-    elevation: 2
+    elevation: 2,
+    minWidth: 220,  // Add this line - ensures minimum width for bubbles
   },
   currentUserBubble: { borderBottomRightRadius: 2 },
   otherUserBubble: { borderBottomLeftRadius: 2 },
@@ -1524,7 +1523,9 @@ const s = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     gap: 8,
-    marginBottom: 4
+    marginBottom: 4,
+    minWidth: 200,  // Add this line
+    maxWidth: 280,
   },
   documentAttachmentOutgoing: { backgroundColor: 'rgba(7, 94, 84, 0.15)' },
   documentAttachmentIncoming: { backgroundColor: 'rgba(7, 94, 84, 0.08)' },

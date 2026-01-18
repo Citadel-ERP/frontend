@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     Platform,
     KeyboardAvoidingView,
+    Modal,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 import { Document } from './types';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 interface CreateCarProps {
     token: string | null;
@@ -167,34 +169,62 @@ const CreateCar: React.FC<CreateCarProps> = ({
                 return;
             }
 
-            const result = await DocumentPicker.getDocumentAsync({
-                type: type === 'photo' ? ['image/*'] : ['image/*', 'application/pdf'],
-                copyToCacheDirectory: true,
-            });
+            // Use ImagePicker for photos, DocumentPicker for certificates
+            if (type === 'photo') {
+                // Request permission
+                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                const document = result.assets[0];
-                const docObject = {
-                    uri: document.uri,
-                    name: document.name,
-                    type: document.mimeType || 'application/octet-stream',
-                };
+                if (!permissionResult.granted) {
+                    Alert.alert('Permission Required', 'Please allow access to your photo library');
+                    return;
+                }
 
-                switch (type) {
-                    case 'pollution':
-                        setFormData({ ...formData, pollution_certificate: docObject });
-                        break;
-                    case 'insurance':
-                        setFormData({ ...formData, insurance_certificate: docObject });
-                        break;
-                    case 'registration':
-                        setFormData({ ...formData, registration_certificate: docObject });
-                        break;
-                    case 'photo':
-                        if (formData.photos.length < 6) {
-                            setFormData({ ...formData, photos: [...formData.photos, docObject] });
-                        }
-                        break;
+                const result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsMultipleSelection: false,
+                    quality: 0.8,
+                    allowsEditing: false,
+                });
+
+                if (!result.canceled && result.assets && result.assets.length > 0) {
+                    const image = result.assets[0];
+                    const fileName = image.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+                    const docObject = {
+                        uri: image.uri,
+                        name: fileName,
+                        type: 'image/jpeg',
+                    };
+
+                    if (formData.photos.length < 6) {
+                        setFormData({ ...formData, photos: [...formData.photos, docObject] });
+                    }
+                }
+            } else {
+                // Use DocumentPicker for certificates (PDF or images)
+                const result = await DocumentPicker.getDocumentAsync({
+                    type: ['image/*', 'application/pdf'],
+                    copyToCacheDirectory: true,
+                });
+
+                if (!result.canceled && result.assets && result.assets.length > 0) {
+                    const document = result.assets[0];
+                    const docObject = {
+                        uri: document.uri,
+                        name: document.name,
+                        type: document.mimeType || 'application/octet-stream',
+                    };
+
+                    switch (type) {
+                        case 'pollution':
+                            setFormData({ ...formData, pollution_certificate: docObject });
+                            break;
+                        case 'insurance':
+                            setFormData({ ...formData, insurance_certificate: docObject });
+                            break;
+                        case 'registration':
+                            setFormData({ ...formData, registration_certificate: docObject });
+                            break;
+                    }
                 }
             }
         } catch (error) {
@@ -392,19 +422,22 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             />
                         </View>
 
-                        <View style={styles.formGroup}>
+                        <View style={[styles.formGroup, { zIndex: dropdownOpen ? 3000 : 1 }]}>
                             <Text style={[styles.formLabel, { marginBottom: 6 }]}>Fuel Type</Text>
                             <View style={styles.dropdownContainer}>
                                 <TouchableOpacity
                                     style={styles.dropdown}
-                                    onPress={() => setDropdownOpen(!dropdownOpen)}
+                                    onPress={() => {
+                                        setDropdownOpen(!dropdownOpen);
+                                        setVehicleTypeDropdownOpen(false); // Close others
+                                        setStatusDropdownOpen(false);
+                                    }}
                                 >
                                     <Text style={styles.dropdownText}>
                                         {formData.fuel_type || 'Select Fuel Type'}
                                     </Text>
                                     <Text style={styles.dropdownArrow}>{dropdownOpen ? '▲' : '▼'}</Text>
                                 </TouchableOpacity>
-
                                 {dropdownOpen && (
                                     <View style={styles.dropdownList}>
                                         {fuelTypes.map((type) => (
@@ -423,20 +456,22 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 )}
                             </View>
                         </View>
-
-                        <View style={styles.formGroup}>
+                        <View style={[styles.formGroup, { zIndex: vehicleTypeDropdownOpen ? 2000 : 1 }]}>
                             <Text style={[styles.formLabel, { marginBottom: 6 }]}>Vehicle Type</Text>
                             <View style={styles.dropdownContainer}>
                                 <TouchableOpacity
                                     style={styles.dropdown}
-                                    onPress={() => setVehicleTypeDropdownOpen(!vehicleTypeDropdownOpen)}
+                                    onPress={() => {
+                                        setVehicleTypeDropdownOpen(!vehicleTypeDropdownOpen);
+                                        setDropdownOpen(false); // Close others
+                                        setStatusDropdownOpen(false);
+                                    }}
                                 >
                                     <Text style={styles.dropdownText}>
                                         {formData.vehicle_type || 'Select Vehicle Type'}
                                     </Text>
                                     <Text style={styles.dropdownArrow}>{vehicleTypeDropdownOpen ? '▲' : '▼'}</Text>
                                 </TouchableOpacity>
-
                                 {vehicleTypeDropdownOpen && (
                                     <View style={styles.dropdownList}>
                                         {vehicleTypes.map((type) => (
@@ -492,10 +527,15 @@ const CreateCar: React.FC<CreateCarProps> = ({
                     </View>
 
                     {/* Office Selection Section */}
-                    <View style={styles.formSection}>
-                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Office Selection</Text>
+                    {/* Office Selection Section */}
+                    <View style={[
+                        styles.formSection,
+                        { zIndex: (dropdownOpen || vehicleTypeDropdownOpen || statusDropdownOpen) ? -1 : 1 }
+                    ]}>
+                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>
+                            Office Selection
+                        </Text>
                         <Text style={styles.formLabel}>Select Office *</Text>
-
                         {loadingOffices ? (
                             <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="small" color="#075E54" />
@@ -547,7 +587,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 ))}
                             </View>
                         )}
-
                         {formData.office_id && (
                             <View style={styles.selectedOfficeContainer}>
                                 <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
@@ -560,85 +599,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             </View>
                         )}
                     </View>
-
-                    {/* <View style={styles.formSection}>
-                        <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Documents</Text>
-
-                        <View style={styles.documentGroup}>
-                            <Text style={styles.formLabel}>Pollution Certificate *</Text>
-                            {formData.pollution_certificate ? (
-                                <View style={styles.documentSelected}>
-                                    <MaterialIcons name="description" size={24} color="#075E54" />
-                                    <Text style={styles.documentName} numberOfLines={1}>
-                                        {formData.pollution_certificate.name}
-                                    </Text>
-                                    <TouchableOpacity
-                                        onPress={() => setFormData({ ...formData, pollution_certificate: null })}
-                                    >
-                                        <Ionicons name="close-circle" size={24} color="#FF3B30" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <TouchableOpacity
-                                    style={styles.documentButton}
-                                    onPress={() => handleDocumentPick('pollution')}
-                                >
-                                    <MaterialIcons name="upload-file" size={24} color="#075E54" />
-                                    <Text style={styles.documentButtonText}>Upload Pollution Certificate</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        <View style={styles.documentGroup}>
-                            <Text style={styles.formLabel}>Insurance Certificate *</Text>
-                            {formData.insurance_certificate ? (
-                                <View style={styles.documentSelected}>
-                                    <MaterialIcons name="description" size={24} color="#075E54" />
-                                    <Text style={styles.documentName} numberOfLines={1}>
-                                        {formData.insurance_certificate.name}
-                                    </Text>
-                                    <TouchableOpacity
-                                        onPress={() => setFormData({ ...formData, insurance_certificate: null })}
-                                    >
-                                        <Ionicons name="close-circle" size={24} color="#FF3B30" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <TouchableOpacity
-                                    style={styles.documentButton}
-                                    onPress={() => handleDocumentPick('insurance')}
-                                >
-                                    <MaterialIcons name="upload-file" size={24} color="#075E54" />
-                                    <Text style={styles.documentButtonText}>Upload Insurance Certificate</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        <View style={styles.documentGroup}>
-                            <Text style={styles.formLabel}>Registration Certificate *</Text>
-                            {formData.registration_certificate ? (
-                                <View style={styles.documentSelected}>
-                                    <MaterialIcons name="description" size={24} color="#075E54" />
-                                    <Text style={styles.documentName} numberOfLines={1}>
-                                        {formData.registration_certificate.name}
-                                    </Text>
-                                    <TouchableOpacity
-                                        onPress={() => setFormData({ ...formData, registration_certificate: null })}
-                                    >
-                                        <Ionicons name="close-circle" size={24} color="#FF3B30" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <TouchableOpacity
-                                    style={styles.documentButton}
-                                    onPress={() => handleDocumentPick('registration')}
-                                >
-                                    <MaterialIcons name="upload-file" size={24} color="#075E54" />
-                                    <Text style={styles.documentButtonText}>Upload Registration Certificate</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View> */}
 
                     <View style={styles.formSection}>
                         <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Documents</Text>
@@ -825,48 +785,153 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
                         {/* Date Picker Modals */}
                         {pollutionDatePickerOpen && (
-                            <DateTimePicker
-                                value={formData.pollution_expiry_date ? new Date(formData.pollution_expiry_date) : new Date()}
-                                mode="date"
-                                display="default"
-                                onChange={(event, selectedDate) => {
-                                    setPollutionDatePickerOpen(false);
-                                    if (selectedDate) {
-                                        setFormData({ ...formData, pollution_expiry_date: selectedDate.toISOString() });
-                                    }
-                                }}
-                                minimumDate={new Date()}
-                            />
+                            Platform.OS === 'ios' ? (
+                                <Modal
+                                    transparent={true}
+                                    animationType="slide"
+                                    visible={pollutionDatePickerOpen}
+                                    onRequestClose={() => setPollutionDatePickerOpen(false)}
+                                >
+                                    <View style={styles.modalOverlayDate}>
+                                        <View style={styles.modalContent}>
+                                            <View style={styles.modalHeaderDate}>
+                                                <TouchableOpacity onPress={() => setPollutionDatePickerOpen(false)}>
+                                                    <Text style={styles.modalCancelTextDate}>Cancel</Text>
+                                                </TouchableOpacity>
+                                                <Text style={styles.modalTitleDate}>Select Expiry Date</Text>
+                                                <TouchableOpacity onPress={() => setPollutionDatePickerOpen(false)}>
+                                                    <Text style={styles.modalDoneText}>Done</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <DateTimePicker
+                                                value={formData.pollution_expiry_date ? new Date(formData.pollution_expiry_date) : new Date()}
+                                                mode="date"
+                                                display="spinner"
+                                                onChange={(event, selectedDate) => {
+                                                    if (selectedDate) {
+                                                        setFormData({ ...formData, pollution_expiry_date: selectedDate.toISOString() });
+                                                    }
+                                                }}
+                                                minimumDate={new Date()}
+                                                textColor="#000"
+                                            />
+                                        </View>
+                                    </View>
+                                </Modal>
+                            ) : (
+                                <DateTimePicker
+                                    value={formData.pollution_expiry_date ? new Date(formData.pollution_expiry_date) : new Date()}
+                                    mode="date"
+                                    display="default"
+                                    onChange={(event, selectedDate) => {
+                                        setPollutionDatePickerOpen(false);
+                                        if (event.type === 'set' && selectedDate) {
+                                            setFormData({ ...formData, pollution_expiry_date: selectedDate.toISOString() });
+                                        }
+                                    }}
+                                    minimumDate={new Date()}
+                                />
+                            )
                         )}
 
                         {insuranceDatePickerOpen && (
-                            <DateTimePicker
-                                value={formData.insurance_expiry_date ? new Date(formData.insurance_expiry_date) : new Date()}
-                                mode="date"
-                                display="default"
-                                onChange={(event, selectedDate) => {
-                                    setInsuranceDatePickerOpen(false);
-                                    if (selectedDate) {
-                                        setFormData({ ...formData, insurance_expiry_date: selectedDate.toISOString() });
-                                    }
-                                }}
-                                minimumDate={new Date()}
-                            />
+                            Platform.OS === 'ios' ? (
+                                <Modal
+                                    transparent={true}
+                                    animationType="slide"
+                                    visible={insuranceDatePickerOpen}
+                                    onRequestClose={() => setInsuranceDatePickerOpen(false)}
+                                >
+                                    <View style={styles.modalOverlayDate}>
+                                        <View style={styles.modalContent}>
+                                            <View style={styles.modalHeaderDate}>
+                                                <TouchableOpacity onPress={() => setInsuranceDatePickerOpen(false)}>
+                                                    <Text style={styles.modalCancelTextDate}>Cancel</Text>
+                                                </TouchableOpacity>
+                                                <Text style={styles.modalTitleDate}>Select Expiry Date</Text>
+                                                <TouchableOpacity onPress={() => setInsuranceDatePickerOpen(false)}>
+                                                    <Text style={styles.modalDoneText}>Done</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <DateTimePicker
+                                                value={formData.insurance_expiry_date ? new Date(formData.insurance_expiry_date) : new Date()}
+                                                mode="date"
+                                                display="spinner"
+                                                onChange={(event, selectedDate) => {
+                                                    if (selectedDate) {
+                                                        setFormData({ ...formData, insurance_expiry_date: selectedDate.toISOString() });
+                                                    }
+                                                }}
+                                                minimumDate={new Date()}
+                                                textColor="#000"
+                                            />
+                                        </View>
+                                    </View>
+                                </Modal>
+                            ) : (
+                                <DateTimePicker
+                                    value={formData.insurance_expiry_date ? new Date(formData.insurance_expiry_date) : new Date()}
+                                    mode="date"
+                                    display="default"
+                                    onChange={(event, selectedDate) => {
+                                        setInsuranceDatePickerOpen(false);
+                                        if (event.type === 'set' && selectedDate) {
+                                            setFormData({ ...formData, insurance_expiry_date: selectedDate.toISOString() });
+                                        }
+                                    }}
+                                    minimumDate={new Date()}
+                                />
+                            )
                         )}
 
                         {registrationDatePickerOpen && (
-                            <DateTimePicker
-                                value={formData.registration_expiry_date ? new Date(formData.registration_expiry_date) : new Date()}
-                                mode="date"
-                                display="default"
-                                onChange={(event, selectedDate) => {
-                                    setRegistrationDatePickerOpen(false);
-                                    if (selectedDate) {
-                                        setFormData({ ...formData, registration_expiry_date: selectedDate.toISOString() });
-                                    }
-                                }}
-                                minimumDate={new Date()}
-                            />
+                            Platform.OS === 'ios' ? (
+                                <Modal
+                                    transparent={true}
+                                    animationType="slide"
+                                    visible={registrationDatePickerOpen}
+                                    onRequestClose={() => setRegistrationDatePickerOpen(false)}
+                                >
+                                    <View style={styles.modalOverlayDate}>
+                                        <View style={styles.modalContent}>
+                                            <View style={styles.modalHeaderDate}>
+                                                <TouchableOpacity onPress={() => setRegistrationDatePickerOpen(false)}>
+                                                    <Text style={styles.modalCancelTextDate}>Cancel</Text>
+                                                </TouchableOpacity>
+                                                <Text style={styles.modalTitleDate}>Select Expiry Date</Text>
+                                                <TouchableOpacity onPress={() => setRegistrationDatePickerOpen(false)}>
+                                                    <Text style={styles.modalDoneText}>Done</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <DateTimePicker
+                                                value={formData.registration_expiry_date ? new Date(formData.registration_expiry_date) : new Date()}
+                                                mode="date"
+                                                display="spinner"
+                                                onChange={(event, selectedDate) => {
+                                                    if (selectedDate) {
+                                                        setFormData({ ...formData, registration_expiry_date: selectedDate.toISOString() });
+                                                    }
+                                                }}
+                                                minimumDate={new Date()}
+                                                textColor="#000"
+                                            />
+                                        </View>
+                                    </View>
+                                </Modal>
+                            ) : (
+                                <DateTimePicker
+                                    value={formData.registration_expiry_date ? new Date(formData.registration_expiry_date) : new Date()}
+                                    mode="date"
+                                    display="default"
+                                    onChange={(event, selectedDate) => {
+                                        setRegistrationDatePickerOpen(false);
+                                        if (event.type === 'set' && selectedDate) {
+                                            setFormData({ ...formData, registration_expiry_date: selectedDate.toISOString() });
+                                        }
+                                    }}
+                                    minimumDate={new Date()}
+                                />
+                            )
                         )}
                     </View>
 

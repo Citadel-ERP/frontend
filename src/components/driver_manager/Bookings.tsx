@@ -74,7 +74,40 @@ const BookingCard: React.FC<{
 
 
     const handleStatusChange = (status: string) => {
+        // Never allow updating to 'Assigned' status manually
+        if (status === 'assigned' && booking.status !== 'assigned') {
+            Alert.alert('Invalid Action', 'Cannot manually set status to Assigned');
+            return;
+        }
+
+        // Normalize current status to lowercase for comparison
+        const currentStatus = booking.status.toLowerCase();
+        const newStatus = status.toLowerCase();
+
+        // From assigned: only allow in-progress or cancelled
+        if (currentStatus === 'assigned') {
+            if (newStatus !== 'in-progress' && newStatus !== 'cancelled') {
+                Alert.alert('Invalid Action', 'From Assigned, you can only move to In-Progress or Cancelled');
+                return;
+            }
+        }
+
+        // From in-progress: only allow completed or cancelled
+        if (currentStatus === 'in-progress') {
+            if (newStatus !== 'completed' && newStatus !== 'cancelled') {
+                Alert.alert('Invalid Action', 'From In-Progress, you can only move to Completed or Cancelled');
+                return;
+            }
+        }
+
+        // From completed or cancelled: no changes allowed
+        if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+            Alert.alert('Invalid Action', 'Cannot change status from ' + booking.status);
+            return;
+        }
+
         setSelectedStatus(status);
+
         if (status === 'cancelled') {
             setShowCancellationInput(true);
         } else {
@@ -178,11 +211,31 @@ const BookingCard: React.FC<{
                                         : 'No driver assigned'}
                                 </Text>
                                 <TouchableOpacity
-                                    style={styles.changeDriverButton}
+                                    style={[
+                                        styles.changeDriverButton,
+                                        (booking.status.toLowerCase() === 'completed' || booking.status.toLowerCase() === 'cancelled') && {
+                                            opacity: 0.5,
+                                            backgroundColor: '#f0f0f0'
+                                        }
+                                    ]}
                                     onPress={() => onOpenDriverModal(assignment)}
+                                    disabled={booking.status.toLowerCase() === 'completed' || booking.status.toLowerCase() === 'cancelled'}
                                 >
-                                    <MaterialCommunityIcons name="pencil" size={16} color="#008069" />
-                                    <Text style={styles.changeDriverText}>
+                                    <MaterialCommunityIcons
+                                        name="pencil"
+                                        size={16}
+                                        color={
+                                            (booking.status.toLowerCase() === 'completed' || booking.status.toLowerCase() === 'cancelled')
+                                                ? '#999'
+                                                : '#008069'
+                                        }
+                                    />
+                                    <Text style={[
+                                        styles.changeDriverText,
+                                        (booking.status.toLowerCase() === 'completed' || booking.status.toLowerCase() === 'cancelled') && {
+                                            color: '#999'
+                                        }
+                                    ]}>
                                         {assignment.assigned_driver ? 'Change' : 'Assign'}
                                     </Text>
                                 </TouchableOpacity>
@@ -303,81 +356,97 @@ const BookingCard: React.FC<{
                     </View>
                 </View>
             )}
+            {booking.status.toLowerCase() !== 'completed' && booking.status.toLowerCase() !== 'cancelled' && (
+                <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>
+                        Update Status
+                    </Text>
+                    <View style={styles.statusOptions}>
+                        {['assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
+                            const statusColor = getStatusColor(status);
+                            const isSelected = selectedStatus === status;
 
-            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>
-                    Update Status
-                </Text>
-                <View style={styles.statusOptions}>
-                    {['assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
-                        const statusColor = getStatusColor(status);
-                        const isSelected = selectedStatus === status;
-                        return (
-                            <TouchableOpacity
-                                key={status}
-                                style={[
-                                    styles.statusOption,
-                                    isSelected && { backgroundColor: statusColor, borderColor: statusColor }
-                                ]}
-                                onPress={() => handleStatusChange(status)}
-                            >
-                                <MaterialCommunityIcons
-                                    name={getStatusIconBooking(status)}
-                                    size={16}
-                                    color={isSelected ? '#FFFFFF' : statusColor}
-                                />
-                                <Text
+                            // Determine if this option should be disabled
+                            const currentStatus = booking.status.toLowerCase();
+                            let isDisabled = false;
+
+                            if (currentStatus === 'assigned') {
+                                isDisabled = status !== 'in-progress' && status !== 'cancelled';
+                            } else if (currentStatus === 'in-progress') {
+                                isDisabled = status !== 'completed' && status !== 'cancelled';
+                            } else if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+                                isDisabled = true;
+                            }
+
+                            return (
+                                <TouchableOpacity
+                                    key={status}
                                     style={[
-                                        styles.statusOptionText,
-                                        { color: isSelected ? '#FFFFFF' : statusColor }
+                                        styles.statusOption,
+                                        isSelected && { backgroundColor: statusColor, borderColor: statusColor },
+                                        isDisabled && { opacity: 0.4, backgroundColor: '#f5f5f5' }
                                     ]}
+                                    onPress={() => !isDisabled && handleStatusChange(status)}
+                                    disabled={isDisabled}
                                 >
-                                    {status.toUpperCase()}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-
-                {showCancellationInput && (
-                    <View style={{ marginTop: 12 }}>
-                        <View style={styles.inputContainer}>
-                            <MaterialIcons name="warning" size={20} color="#FF3B30" style={styles.inputIcon} />
-                            <TextInput
-                                style={[styles.textInput, { minHeight: 80 }]}
-                                value={cancellationReason}
-                                onChangeText={setCancellationReason}
-                                placeholder="Reason for cancellation (required)"
-                                placeholderTextColor="#888"
-                                multiline
-                                numberOfLines={3}
-                                textAlignVertical="top"
-                            />
-                        </View>
+                                    <MaterialCommunityIcons
+                                        name={getStatusIconBooking(status)}
+                                        size={16}
+                                        color={isSelected ? '#FFFFFF' : isDisabled ? '#999' : statusColor}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.statusOptionText,
+                                            { color: isSelected ? '#FFFFFF' : isDisabled ? '#999' : statusColor }
+                                        ]}
+                                    >
+                                        {status.toUpperCase()}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
-                )}
 
-                {selectedStatus !== booking.status && (
-                    <TouchableOpacity
-                        style={[
-                            styles.updateButton,
-                            { marginTop: 12 },
-                            (isUpdating || updating) && { backgroundColor: '#ccc' }
-                        ]}
-                        onPress={handleUpdateStatus}
-                        disabled={isUpdating || updating}
-                    >
-                        {isUpdating || updating ? (
-                            <ActivityIndicator color="#FFFFFF" size="small" />
-                        ) : (
-                            <>
-                                <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-                                <Text style={styles.updateButtonText}>Update to {selectedStatus}</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                )}
-            </View>
+                    {showCancellationInput && (
+                        <View style={{ marginTop: 12 }}>
+                            <View style={styles.inputContainer}>
+                                <MaterialIcons name="warning" size={20} color="#FF3B30" style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.textInput, { minHeight: 80 }]}
+                                    value={cancellationReason}
+                                    onChangeText={setCancellationReason}
+                                    placeholder="Reason for cancellation (required)"
+                                    placeholderTextColor="#888"
+                                    multiline
+                                    numberOfLines={3}
+                                    textAlignVertical="top"
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    {selectedStatus !== booking.status && (
+                        <TouchableOpacity
+                            style={[
+                                styles.updateButton,
+                                { marginTop: 12 },
+                                (isUpdating || updating) && { backgroundColor: '#ccc' }
+                            ]}
+                            onPress={handleUpdateStatus}
+                            disabled={isUpdating || updating}
+                        >
+                            {isUpdating || updating ? (
+                                <ActivityIndicator color="#FFFFFF" size="small" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
+                                    <Text style={styles.updateButtonText}>Update to {selectedStatus}</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
         </Animated.View>
     );
 };

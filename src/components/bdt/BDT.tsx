@@ -362,6 +362,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           lead.id === selectedLead.id ? updatedLead : lead
         )
       );
+      // Refresh status counts after update
+      await fetchStatusCounts();
       Alert.alert('Success', 'Lead updated successfully!');
       return true;
     } catch (error) {
@@ -373,34 +375,69 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   }, [token, selectedLead]);
 
+  const checkExistingInvoice = useCallback(async (leadId: number): Promise<boolean> => {
+    try {
+      if (!token) return false;
+
+      const response = await fetch(`${BACKEND_URL}/employee/getInvoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          lead_id: leadId
+        })
+      });
+
+      // If response is 200, invoice exists - return true
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert(
+          'Invoice Already Exists',
+          'An invoice has already been created for this lead. You cannot create another invoice.',
+          [{ text: 'OK' }]
+        );
+        return true;
+      }
+
+      // If response is 400, no invoice exists - return false
+      return false;
+    } catch (error) {
+      console.error('Error checking invoice:', error);
+      // If there's an error, assume no invoice and allow creation
+      return false;
+    }
+  }, [token]);
+
   const handleSaveLead = useCallback(async (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => {
-  if (updatedLead.phase === 'post_property_finalization' && updatedLead.subphase === 'raise_invoice') {
-    // Check if invoice already exists
-    const invoiceExists = await checkExistingInvoice(updatedLead.id);
-    
-    if (invoiceExists) {
-      // Invoice exists, just update the lead without showing invoice form
+    if (updatedLead.phase === 'post_property_finalization' && updatedLead.subphase === 'raise_invoice') {
+      // Check if invoice already exists
+      const invoiceExists = await checkExistingInvoice(updatedLead.id);
+
+      if (invoiceExists) {
+        // Invoice exists, just update the lead without showing invoice form
+        const success = await updateLead(updatedLead, editingEmails, editingPhones);
+        if (success) {
+          setIsEditMode(false);
+        }
+        return;
+      }
+
+      // No invoice exists, proceed to show invoice form
+      setPendingLeadUpdate({
+        leadData: updatedLead,
+        editingEmails: editingEmails,
+        editingPhones: editingPhones
+      });
+      setShowInvoiceForm(true);
+    } else {
       const success = await updateLead(updatedLead, editingEmails, editingPhones);
       if (success) {
         setIsEditMode(false);
       }
-      return;
     }
-    
-    // No invoice exists, proceed to show invoice form
-    setPendingLeadUpdate({
-      leadData: updatedLead,
-      editingEmails: editingEmails,
-      editingPhones: editingPhones
-    });
-    setShowInvoiceForm(true);
-  } else {
-    const success = await updateLead(updatedLead, editingEmails, editingPhones);
-    if (success) {
-      setIsEditMode(false);
-    }
-  }
-}, [updateLead, checkExistingInvoice]);
+  }, [updateLead, checkExistingInvoice]);
 
   const handleInvoiceCreated = useCallback(async () => {
     if (pendingLeadUpdate && selectedLead) {
@@ -418,40 +455,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setShowInvoiceForm(false);
   }, []);
 
-  const checkExistingInvoice = useCallback(async (leadId: number): Promise<boolean> => {
-  try {
-    if (!token) return false;
-    
-    const response = await fetch(`${BACKEND_URL}/employee/getInvoice`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        token: token,
-        lead_id: leadId
-      })
-    });
 
-    // If response is 200, invoice exists - return true
-    if (response.ok) {
-      const data = await response.json();
-      Alert.alert(
-        'Invoice Already Exists',
-        'An invoice has already been created for this lead. You cannot create another invoice.',
-        [{ text: 'OK' }]
-      );
-      return true;
-    }
-    
-    // If response is 400, no invoice exists - return false
-    return false;
-  } catch (error) {
-    console.error('Error checking invoice:', error);
-    // If there's an error, assume no invoice and allow creation
-    return false;
-  }
-}, [token]);
 
   const getHeaderTitle = () => {
     if (viewMode === 'incentive') return 'Incentive Checklist';

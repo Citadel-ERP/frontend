@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    marginTop: 5
+    marginTop: 40
   },
   headerWithGreen: {
     backgroundColor: 'transparent',
@@ -621,6 +621,7 @@ const styles = StyleSheet.create({
   },
   greenHeaderContent: {
     marginTop: 0,
+    paddingBottom:30
   },
   backButton: {
     padding: spacing.sm,

@@ -108,6 +108,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
     const [pollutionDatePickerOpen, setPollutionDatePickerOpen] = useState(false);
     const [insuranceDatePickerOpen, setInsuranceDatePickerOpen] = useState(false);
     const [registrationDatePickerOpen, setRegistrationDatePickerOpen] = useState(false);
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [showYearPicker, setShowYearPicker] = useState(false);
+    const [tempMonth, setTempMonth] = useState('');
+    const [tempYear, setTempYear] = useState('');
     const [maintenanceForm, setMaintenanceForm] = useState({
         cost: '',
         description: '',
@@ -1464,7 +1468,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             </TouchableOpacity>
                         </View>
 
-                        <View  style={styles.actionButtonsContainer}>
+                        <View style={styles.actionButtonsContainer}>
                             <ScrollView
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
@@ -1726,114 +1730,280 @@ const Vehicles: React.FC<VehiclesProps> = ({
             />
 
             {/* Download Report Modal */}
-            <Modal
-                visible={isDownloadReportModalVisible}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setIsDownloadReportModalVisible(false)}
-            >
-                <View style={styles.downloadReportModalOverlay}>
-                    <View style={styles.downloadReportModalContainer}>
-                        {/* Header */}
-                        <View style={styles.downloadReportModalHeader}>
-                            <View style={styles.downloadReportHeaderContent}>
-                                <MaterialCommunityIcons name="file-download" size={24} color="#008069" />
-                                <Text style={styles.downloadReportModalTitle}>Download Vehicle Report</Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setIsDownloadReportModalVisible(false);
-                                    setSelectedMonth('');
-                                    setSelectedYear('');
-                                }}
-                                style={styles.downloadReportCloseButton}
-                            >
-                                <Ionicons name="close" size={24} color="#666" />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Content */}
-                        <ScrollView style={styles.downloadReportModalContent}>
-                            <Text style={styles.downloadReportVehicleInfo}>
-                                {selectedVehicle?.make} {selectedVehicle?.model} ({selectedVehicle?.license_plate})
-                            </Text>
-
-                            {/* Month Dropdown */}
-                            <View style={styles.downloadReportInputGroup}>
-                                <Text style={styles.downloadReportLabel}>Select Month</Text>
-                                <View style={styles.downloadReportPickerContainer}>
-                                    <Picker
-                                        selectedValue={selectedMonth}
-                                        onValueChange={(value) => setSelectedMonth(value)}
-                                        style={styles.downloadReportPicker}
+            {!showMonthPicker && !showYearPicker && (
+                <Modal
+                    visible={isDownloadReportModalVisible}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => {
+                        setIsDownloadReportModalVisible(false);
+                        setSelectedMonth('');
+                        setSelectedYear('');
+                    }}
+                >
+                    <TouchableOpacity
+                        style={styles.downloadReportModalOverlay}
+                        activeOpacity={1}
+                        onPress={() => {
+                            setIsDownloadReportModalVisible(false);
+                            setSelectedMonth('');
+                            setSelectedYear('');
+                        }}
+                    >
+                        <TouchableOpacity
+                            activeOpacity={1}
+                            onPress={(e) => e.stopPropagation()}
+                            style={{ width: '100%' }}
+                        >
+                            <View style={styles.downloadReportModalContainer}>
+                                <View style={styles.downloadReportModalHeader}>
+                                    <View style={styles.downloadReportHeaderContent}>
+                                        <MaterialCommunityIcons name="file-download" size={24} color="#008069" />
+                                        <Text style={styles.downloadReportModalTitle}>Download Vehicle Report</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setIsDownloadReportModalVisible(false);
+                                            setSelectedMonth('');
+                                            setSelectedYear('');
+                                        }}
+                                        style={styles.downloadReportCloseButton}
                                     >
-                                        <Picker.Item label="Choose a month..." value="" />
-                                        {generateMonthYearOptions().months.map((month) => (
-                                            <Picker.Item
-                                                key={month.value}
-                                                label={month.label}
-                                                value={month.value}
-                                            />
-                                        ))}
-                                    </Picker>
+                                        <Ionicons name="close" size={24} color="#666" />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Content */}
+                                <ScrollView style={styles.downloadReportModalContent}>
+                                    <Text style={styles.downloadReportVehicleInfo}>
+                                        {selectedVehicle?.make} {selectedVehicle?.model} ({selectedVehicle?.license_plate})
+                                    </Text>
+
+                                    {/* Month Selector */}
+                                    <View style={styles.downloadReportInputGroup}>
+                                        <Text style={styles.downloadReportLabel}>Select Month</Text>
+                                        {Platform.OS === 'ios' ? (
+                                            <TouchableOpacity
+                                                style={styles.downloadReportPickerContainer}
+                                                activeOpacity={0.7}
+                                                onPress={() => {
+                                                    console.log('Month picker button pressed');
+                                                    setTempMonth(selectedMonth);
+                                                    setShowMonthPicker(true);
+                                                }}
+                                            >
+                                                <View style={styles.iosPickerButton} pointerEvents="none">
+                                                    <Text style={[
+                                                        styles.iosPickerButtonText,
+                                                        !selectedMonth && { color: '#999' }
+                                                    ]}>
+                                                        {selectedMonth
+                                                            ? generateMonthYearOptions().months.find(m => m.value === selectedMonth)?.label
+                                                            : 'Choose a month...'}
+                                                    </Text>
+                                                    <Ionicons name="chevron-down" size={20} color="#666" />
+                                                </View>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <View style={styles.downloadReportPickerContainer}>
+                                                <Picker
+                                                    selectedValue={selectedMonth}
+                                                    onValueChange={(value) => setSelectedMonth(value)}
+                                                    style={styles.downloadReportPicker}
+                                                >
+                                                    <Picker.Item label="Choose a month..." value="" />
+                                                    {generateMonthYearOptions().months.map((month) => (
+                                                        <Picker.Item
+                                                            key={month.value}
+                                                            label={month.label}
+                                                            value={month.value}
+                                                        />
+                                                    ))}
+                                                </Picker>
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    {/* Year Selector */}
+                                    <View style={styles.downloadReportInputGroup}>
+                                        <Text style={styles.downloadReportLabel}>Select Year</Text>
+                                        {Platform.OS === 'ios' ? (
+                                            <TouchableOpacity
+                                                style={styles.downloadReportPickerContainer}
+                                                activeOpacity={0.7}
+                                                onPress={() => {
+                                                    console.log('Year picker button pressed');
+                                                    setTempYear(selectedYear);
+                                                    setShowYearPicker(true);
+                                                }}
+                                            >
+                                                <View style={styles.iosPickerButton} pointerEvents="none">
+                                                    <Text style={[
+                                                        styles.iosPickerButtonText,
+                                                        !selectedYear && { color: '#999' }
+                                                    ]}>
+                                                        {selectedYear || 'Choose a year...'}
+                                                    </Text>
+                                                    <Ionicons name="chevron-down" size={20} color="#666" />
+                                                </View>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <View style={styles.downloadReportPickerContainer}>
+                                                <Picker
+                                                    selectedValue={selectedYear}
+                                                    onValueChange={(value) => setSelectedYear(value)}
+                                                    style={styles.downloadReportPicker}
+                                                >
+                                                    <Picker.Item label="Choose a year..." value="" />
+                                                    {generateMonthYearOptions().years.map((year) => (
+                                                        <Picker.Item
+                                                            key={year}
+                                                            label={year.toString()}
+                                                            value={year.toString()}
+                                                        />
+                                                    ))}
+                                                </Picker>
+                                            </View>
+                                        )}
+                                    </View>
+                                </ScrollView>
+
+                                {/* Footer Actions */}
+                                <View style={styles.downloadReportModalFooter}>
+                                    <TouchableOpacity
+                                        style={styles.downloadReportCancelButton}
+                                        onPress={() => {
+                                            setIsDownloadReportModalVisible(false);
+                                            setSelectedMonth('');
+                                            setSelectedYear('');
+                                        }}
+                                    >
+                                        <Text style={styles.downloadReportCancelButtonText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.downloadReportDownloadButton,
+                                            (!selectedMonth || !selectedYear || isDownloading) && styles.downloadReportDownloadButtonDisabled
+                                        ]}
+                                        onPress={handleDownloadReport}
+                                        disabled={!selectedMonth || !selectedYear || isDownloading}
+                                    >
+                                        {isDownloading ? (
+                                            <ActivityIndicator color="#FFFFFF" size="small" />
+                                        ) : (
+                                            <>
+                                                <MaterialCommunityIcons name="download" size={20} color="#FFFFFF" />
+                                                <Text style={styles.downloadReportDownloadButtonText}>Download Report</Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
                                 </View>
                             </View>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </Modal>
+            )}
 
-                            {/* Year Dropdown */}
-                            <View style={styles.downloadReportInputGroup}>
-                                <Text style={styles.downloadReportLabel}>Select Year</Text>
-                                <View style={styles.downloadReportPickerContainer}>
-                                    <Picker
-                                        selectedValue={selectedYear}
-                                        onValueChange={(value) => setSelectedYear(value)}
-                                        style={styles.downloadReportPicker}
-                                    >
-                                        <Picker.Item label="Choose a year..." value="" />
-                                        {generateMonthYearOptions().years.map((year) => (
-                                            <Picker.Item
-                                                key={year}
-                                                label={year.toString()}
-                                                value={year.toString()}
-                                            />
-                                        ))}
-                                    </Picker>
-                                </View>
+            {/* iOS Month Picker Modal */}
+            {Platform.OS === 'ios' && showMonthPicker && (
+                <Modal
+                    visible={showMonthPicker}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => {
+                        setShowMonthPicker(false);
+                    }}
+                >
+                    <View style={styles.iosPickerModalOverlay}>
+                        <TouchableOpacity
+                            style={{ flex: 1 }}
+                            activeOpacity={1}
+                            onPress={() => setShowMonthPicker(false)}
+                        />
+                        <View style={styles.iosPickerModalContainer}>
+                            <View style={styles.iosPickerHeader}>
+                                <TouchableOpacity onPress={() => {
+                                    setShowMonthPicker(false);
+                                }}>
+                                    <Text style={styles.iosPickerCancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 17, fontWeight: '600', color: '#000' }}>Select Month</Text>
+                                <TouchableOpacity onPress={() => {
+                                    setSelectedMonth(tempMonth);
+                                    setShowMonthPicker(false);
+                                }}>
+                                    <Text style={styles.iosPickerDoneText}>Done</Text>
+                                </TouchableOpacity>
                             </View>
-                        </ScrollView>
-
-                        {/* Footer Actions */}
-                        <View style={styles.downloadReportModalFooter}>
-                            <TouchableOpacity
-                                style={styles.downloadReportCancelButton}
-                                onPress={() => {
-                                    setIsDownloadReportModalVisible(false);
-                                    setSelectedMonth('');
-                                    setSelectedYear('');
-                                }}
+                            <Picker
+                                selectedValue={tempMonth}
+                                onValueChange={(value) => setTempMonth(value)}
+                                style={styles.iosPicker}
                             >
-                                <Text style={styles.downloadReportCancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.downloadReportDownloadButton,
-                                    (!selectedMonth || !selectedYear || isDownloading) && styles.downloadReportDownloadButtonDisabled
-                                ]}
-                                onPress={handleDownloadReport}
-                                disabled={!selectedMonth || !selectedYear || isDownloading}
-                            >
-                                {isDownloading ? (
-                                    <ActivityIndicator color="#FFFFFF" size="small" />
-                                ) : (
-                                    <>
-                                        <MaterialCommunityIcons name="download" size={20} color="#FFFFFF" />
-                                        <Text style={styles.downloadReportDownloadButtonText}>Download Report</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
+                                <Picker.Item label="Choose a month..." value="" />
+                                {generateMonthYearOptions().months.map((month) => (
+                                    <Picker.Item
+                                        key={month.value}
+                                        label={month.label}
+                                        value={month.value}
+                                    />
+                                ))}
+                            </Picker>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </Modal>
+            )}
+
+            {/* iOS Year Picker Modal */}
+            {Platform.OS === 'ios' && showYearPicker && (
+                <Modal
+                    visible={showYearPicker}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => {
+                        setShowYearPicker(false);
+                    }}
+                >
+                    <View style={styles.iosPickerModalOverlay}>
+                        <TouchableOpacity
+                            style={{ flex: 1 }}
+                            activeOpacity={1}
+                            onPress={() => setShowYearPicker(false)}
+                        />
+                        <View style={styles.iosPickerModalContainer}>
+                            <View style={styles.iosPickerHeader}>
+                                <TouchableOpacity onPress={() => {
+                                    setShowYearPicker(false);
+                                }}>
+                                    <Text style={styles.iosPickerCancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 17, fontWeight: '600', color: '#000' }}>Select Year</Text>
+                                <TouchableOpacity onPress={() => {
+                                    setSelectedYear(tempYear);
+                                    setShowYearPicker(false);
+                                }}>
+                                    <Text style={styles.iosPickerDoneText}>Done</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Picker
+                                selectedValue={tempYear}
+                                onValueChange={(value) => setTempYear(value)}
+                                style={styles.iosPicker}
+                            >
+                                <Picker.Item label="Choose a year..." value="" />
+                                {generateMonthYearOptions().years.map((year) => (
+                                    <Picker.Item
+                                        key={year}
+                                        label={year.toString()}
+                                        value={year.toString()}
+                                    />
+                                ))}
+                            </Picker>
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
         </>
     );
 };

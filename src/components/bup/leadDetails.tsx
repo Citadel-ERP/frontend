@@ -23,11 +23,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Incentive from './incentive';
+import Invoice from './invoice';
+import { styles } from '../hr/styles';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -91,10 +94,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [selectedAssignedTo, setSelectedAssignedTo] = useState<string | null>(null);
   const [assignedToOptions, setAssignedToOptions] = useState<Array<{ id: string, name: string }>>([]);
+  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+  const [isPickerActive, setIsPickerActive] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const modalFlatListRef = useRef<FlatList>(null);
   const hasLoadedInitially = useRef(false);
   const inputRef = useRef<TextInput>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showIncentiveModal, setShowIncentiveModal] = useState(false);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
@@ -424,20 +430,108 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
-  const handleAttachDocuments = async (): Promise<void> => {
+  const handleTakePhoto = useCallback(async (): Promise<void> => {
+    if (isPickerActive) return;
+    setIsPickerActive(true);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permissions are needed to take photos.');
+        setIsPickerActive(false);
+        setShowAttachmentModal(false);
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const fileName = `photo_${Date.now()}.jpg`;
+        const newFile: DocumentPicker.DocumentPickerAsset = {
+          uri: asset.uri,
+          name: fileName,
+          mimeType: 'image/jpeg',
+          size: asset.fileSize,
+          lastModified: Date.now(),
+        };
+        setSelectedDocuments(prev => [...prev, newFile]);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Camera Error', 'Failed to take photo. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
+    }
+  }, [isPickerActive]);
+
+  const handleSelectFromGallery = useCallback(async (): Promise<void> => {
+    if (isPickerActive) return;
+    setIsPickerActive(true);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Photo library permissions are needed to select images.');
+        setIsPickerActive(false);
+        setShowAttachmentModal(false);
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        selectionLimit: 5,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newFiles: DocumentPicker.DocumentPickerAsset[] = result.assets.map((asset, index) => {
+          const extension = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+          return {
+            uri: asset.uri,
+            name: `image_${Date.now()}_${index}.${extension}`,
+            mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
+            size: asset.fileSize,
+            lastModified: Date.now(),
+          };
+        });
+        setSelectedDocuments(prev => [...prev, ...newFiles]);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    } catch (error) {
+      console.error('Error selecting images:', error);
+      Alert.alert('Selection Error', 'Failed to select images. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
+    }
+  }, [isPickerActive]);
+
+  const handleSelectDocument = useCallback(async (): Promise<void> => {
+    if (isPickerActive) return;
+    setIsPickerActive(true);
+
     try {
       const result = await DocumentPicker.getDocumentAsync({
         multiple: true,
-        type: '*/*'
+        type: '*/*',
+        copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets) {
-        setSelectedDocuments(result.assets);
+        setSelectedDocuments(prev => [...prev, ...result.assets]);
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error picking documents:', error);
       Alert.alert('Error', 'Failed to pick documents. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
     }
-  };
+  }, [isPickerActive]);
 
   const addCommentToBackend = async (
     comment: string,
@@ -675,63 +769,64 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     </View>
   );
   const ModernHeader = useMemo(() => (
-    <SafeAreaView style={s.headerSafeArea}>
+    <SafeAreaView style={s.headerSafeArea} edges={['top']}>
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backButton}>
-          < BackIcon />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={s.headerInfo}
-          onPress={() => setShowLeadDetailsModal(true)}
-          activeOpacity={0.7}
-        >
-          <View style={s.avatarContainer}>
-            <View style={s.avatarPlaceholder}>
-              <Text style={s.avatarText}>
-                {getInitials(lead.name)}
+        <StatusBar barStyle="light-content" backgroundColor={C.primary} />
+        <View style={s.headerContent}>
+          <TouchableOpacity onPress={onBack} style={s.backButton}>
+            <BackIcon />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.headerInfo}
+            onPress={() => setShowLeadDetailsModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={s.avatarContainer}>
+              <View style={s.avatarPlaceholder}>
+                <Text style={s.avatarText}>
+                  {getInitials(lead.name)}
+                </Text>
+              </View>
+            </View>
+            <View style={s.headerTextContainer}>
+              <Text style={s.headerTitle} numberOfLines={1}>
+                {lead.name || 'Lead'}
+              </Text>
+              <Text style={s.headerSubtitle} numberOfLines={1}>
+                {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
               </Text>
             </View>
-          </View>
-          <View style={s.headerTextContainer}>
-            <Text style={s.headerTitle} numberOfLines={1}>
-              {lead.name || 'Lead'}
-            </Text>
-            <Text style={s.headerSubtitle} numberOfLines={1}>
-              {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={s.headerActions}>
-          <TouchableOpacity style={s.headerActionButton}>
-            <MaterialIcons name="receipt" size={22} color="#FFF" />
           </TouchableOpacity>
-
-          {lead.incentive_present && (
+          <View style={s.headerActions}>
             <TouchableOpacity
-              style={[s.headerActionButton, s.incentiveButton]}
-              onPress={handleIncentivePress}
-              disabled={loadingIncentive}
+              style={s.headerActionButton}
+              onPress={() => setShowInvoiceModal(true)}
             >
-              {loadingIncentive ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <MaterialIcons name="monetization-on" size={22} color="#FFF" />
-              )}
+              <MaterialIcons name="receipt" size={22} color="#FFF" />
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
-            <MaterialIcons name="edit" size={22} color="#FFF" />
-          </TouchableOpacity>
+            {lead.incentive_present && (
+              <TouchableOpacity
+                style={[s.headerActionButton, s.incentiveButton]}
+                onPress={handleIncentivePress}
+                disabled={loadingIncentive}
+              >
+                {loadingIncentive ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+                )}
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
+              <MaterialIcons name="edit" size={22} color="#FFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
   ), [onBack, onEdit, handleIncentivePress, loadingIncentive, lead, beautifyName, getInitials]);
 
   const renderModalSection = useCallback(({ item }: { item: string }) => {
-
     switch (item) {
       case 'lead-info':
         return (
@@ -833,25 +928,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
       case 'collaborators':
         return collaborators.length > 0 ? (
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>Team ({collaborators.length})</Text>
-            </View>
-            <View style={s.collaboratorsGrid}>
-              {collaborators.map((collab) => (
-                <View key={collab.id} style={s.collaboratorItem}>
-                  <View style={s.collaboratorAvatar}>
-                    <Text style={s.collaboratorAvatarText}>
-                      {getInitials(collab.user.full_name)}
-                    </Text>
-                  </View>
-                  <Text style={s.collaboratorName} numberOfLines={1}>
-                    {collab.user.full_name}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
+          null
         ) : null;
 
       default:
@@ -873,27 +950,29 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      <SafeAreaView style={s.modalSafeArea}>
-        <View style={s.modalHeader}>
-          <TouchableOpacity
-            onPress={() => setShowLeadDetailsModal(false)}
-            style={s.modalBackButton}
-          >
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={s.modalTitle}>Lead Details</Text>
-          <View style={s.modalRightPlaceholder} />
-        </View>
-        <FlatList
-          ref={modalFlatListRef}
-          data={modalSections}
-          renderItem={renderModalSection}
-          keyExtractor={(item) => item}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.modalScrollContent}
-          ListFooterComponent={<View style={s.modalBottomSpacing} />}
-        />
-      </SafeAreaView>
+      {Platform.OS === 'ios' && (
+        <View style={{ flex: 1, backgroundColor: C.primary, height: 20, marginTop: -160 }}></View>
+      )}
+      <View style={[s.modalHeader, { paddingTop: Platform.OS === 'ios' ? 0 : 15 }]}>
+        <TouchableOpacity
+          onPress={() => setShowLeadDetailsModal(false)}
+          style={s.modalBackButton}
+        >
+          <Ionicons name="close" size={24} color="#FFF" />
+        </TouchableOpacity>
+        <Text style={[s.modalTitle, { marginRight: 40 }]}>Lead Details</Text>
+      </View>
+      <FlatList
+        ref={modalFlatListRef}
+        data={modalSections}
+        renderItem={renderModalSection}
+        keyExtractor={(item) => item}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.modalScrollContent}
+        ListFooterComponent={<View style={s.modalBottomSpacing} />}
+      />
+
+      {/* </SafeAreaView> */}
     </Modal>
   ), [showLeadDetailsModal, modalSections, renderModalSection]);
 
@@ -978,46 +1057,52 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <Animated.View style={[s.androidInputContainer, { marginBottom: keyboardHeightAnim }]}>
             <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
               <View style={s.inputContainer}>
-                <View style={s.inputRow}>
-                  <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                    <Ionicons name="attach" size={22} color={C.primary} />
-                    {selectedDocuments.length > 0 && (
-                      <View style={s.fileCounterBadge}>
-                        <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <View style={s.inputField}>
-                    <TextInput
-                      ref={inputRef}
-                      style={s.messageInput}
-                      value={newComment}
-                      onChangeText={setNewComment}
-                      placeholder="Type your message..."
-                      multiline
-                      maxLength={1000}
-                      placeholderTextColor={C.textTertiary}
-                      editable={!addingComment}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      s.sendButton,
-                      { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
-                    ]}
-                    onPress={handleAddComment}
-                    disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-                  >
-                    {addingComment ? (
-                      <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                      <Ionicons
-                        name="send"
-                        size={18}
-                        color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                <View style={s.inputWrapper}>
+                  <View style={s.inputRow}>
+                    <TouchableOpacity
+                      style={s.attachmentButton}
+                      onPress={() => setShowAttachmentModal(true)}
+                      disabled={addingComment || isPickerActive}
+                    >
+                      <Ionicons name="attach" size={22} color={C.primary} />
+                      {selectedDocuments.length > 0 && (
+                        <View style={s.fileCounterBadge}>
+                          <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    <View style={s.inputField}>
+                      <TextInput
+                        ref={inputRef}
+                        style={s.messageInput}
+                        value={newComment}
+                        onChangeText={setNewComment}
+                        placeholder="Type your message..."
+                        multiline
+                        maxLength={1000}
+                        placeholderTextColor={C.textTertiary}
+                        editable={!addingComment}
                       />
-                    )}
-                  </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        s.sendButton,
+                        { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                      ]}
+                      onPress={handleAddComment}
+                      disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                    >
+                      {addingComment ? (
+                        <ActivityIndicator color="#FFF" size="small" />
+                      ) : (
+                        <Ionicons
+                          name="send"
+                          size={18}
+                          color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </SafeAreaView>
@@ -1027,7 +1112,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         <KeyboardAvoidingView
           style={s.iosContainer}
           behavior="padding"
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           <View style={s.chatContainer}>
             {loadingComments ? (
@@ -1100,51 +1185,60 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </View>
           )}
 
-          <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
+          <View style={[
+            s.inputContainerWrapper,
+            { marginBottom: isKeyboardVisible ? 0 : -30 }
+          ]}>
             <View style={s.inputContainer}>
-              <View style={s.inputRow}>
-                <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
-                  <Ionicons name="attach" size={22} color={C.primary} />
-                  {selectedDocuments.length > 0 && (
-                    <View style={s.fileCounterBadge}>
-                      <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <View style={s.inputField}>
-                  <TextInput
-                    ref={inputRef}
-                    style={s.messageInput}
-                    value={newComment}
-                    onChangeText={setNewComment}
-                    placeholder="Type your message..."
-                    multiline
-                    maxLength={1000}
-                    placeholderTextColor={C.textTertiary}
-                    editable={!addingComment}
-                  />
-                </View>
-                <TouchableOpacity
-                  style={[
-                    s.sendButton,
-                    { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
-                  ]}
-                  onPress={handleAddComment}
-                  disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-                >
-                  {addingComment ? (
-                    <ActivityIndicator color="#FFF" size="small" />
-                  ) : (
-                    <Ionicons
-                      name="send"
-                      size={18}
-                      color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+              <View style={s.inputWrapper}>
+                <View style={s.inputRow}>
+                  <TouchableOpacity
+                    style={s.attachmentButton}
+                    onPress={() => setShowAttachmentModal(true)}
+                    disabled={addingComment || isPickerActive}
+                  >
+                    <Ionicons name="attach" size={22} color={C.primary} />
+                    {selectedDocuments.length > 0 && (
+                      <View style={s.fileCounterBadge}>
+                        <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={s.inputField}>
+                    <TextInput
+                      ref={inputRef}
+                      style={s.messageInput}
+                      value={newComment}
+                      onChangeText={setNewComment}
+                      placeholder="Type your message..."
+                      multiline
+                      maxLength={1000}
+                      placeholderTextColor={C.textTertiary}
+                      editable={!addingComment}
                     />
-                  )}
-                </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      s.sendButton,
+                      { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+                    ]}
+                    onPress={handleAddComment}
+                    disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+                  >
+                    {addingComment ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <Ionicons
+                        name="send"
+                        size={18}
+                        color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </SafeAreaView>
+          </View>
         </KeyboardAvoidingView>
       )}
 
@@ -1184,6 +1278,61 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </SafeAreaView>
         </View>
       )}
+
+      <Modal
+        visible={showAttachmentModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          if (!isPickerActive) {
+            setShowAttachmentModal(false);
+          }
+        }}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            if (!isPickerActive) {
+              setShowAttachmentModal(false);
+            }
+          }}
+        >
+          <View style={s.attachmentModalContent}>
+            <TouchableOpacity
+              style={s.attachmentOption}
+              onPress={handleSelectDocument}
+              disabled={isPickerActive}
+            >
+              <View style={[s.attachmentIconContainer, { backgroundColor: '#7F66FF' }]}>
+                <MaterialIcons name="insert-drive-file" size={24} color="#FFF" />
+              </View>
+              <Text style={s.attachmentOptionText}>Document</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.attachmentOption}
+              onPress={handleTakePhoto}
+              disabled={isPickerActive}
+            >
+              <View style={[s.attachmentIconContainer, { backgroundColor: '#FF4D67' }]}>
+                <Ionicons name="camera" size={24} color="#FFF" />
+              </View>
+              <Text style={s.attachmentOptionText}>Camera</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.attachmentOption}
+              onPress={handleSelectFromGallery}
+              disabled={isPickerActive}
+            >
+              <View style={[s.attachmentIconContainer, { backgroundColor: '#C861F9' }]}>
+                <Ionicons name="images" size={24} color="#FFF" />
+              </View>
+              <Text style={s.attachmentOptionText}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {showIncentiveModal && (
         <Modal
           animationType="slide"
@@ -1199,6 +1348,24 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           />
         </Modal>
       )}
+
+      {showInvoiceModal && (
+        <Modal
+          animationType="slide"
+          transparent={false}
+          visible={showInvoiceModal}
+          onRequestClose={() => setShowInvoiceModal(false)}
+        >
+          <Invoice
+            leadId={lead.id}
+            leadName={lead.name}
+            token={token}
+            theme={theme}
+            onBack={() => setShowInvoiceModal(false)}
+          />
+        </Modal>
+      )}
+
     </View>
   );
 };
@@ -1251,14 +1418,8 @@ const s = StyleSheet.create({
     backgroundColor: C.primary,
     paddingTop: Platform.OS === 'android' ? 0 : 0,
   },
-  // header: {
-  //   backgroundColor: C.primary,
-  //   borderBottomWidth: 1,
-  //   borderBottomColor: C.primaryDark,
-  // },
   headerContent: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1551,6 +1712,7 @@ const s = StyleSheet.create({
   // Message Bubbles
   messageBubble: {
     maxWidth: '75%',
+    minWidth: 220,  // Add this line
     borderRadius: 10,
     padding: 10,
     shadowColor: '#000',
@@ -1618,6 +1780,8 @@ const s = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     gap: 10,
+    minWidth: 200,  // Add this line
+    maxWidth: 280,  // Add this line
   },
   documentIconContainer: {
     width: 36,
@@ -1844,6 +2008,49 @@ const s = StyleSheet.create({
 
   modalBottomSpacing: {
     height: 30
+  },
+  inputContainerWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.surface,
+  },
+  inputWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 8
+  },
+
+  // Attachment Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  attachmentModalContent: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  attachmentOption: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  attachmentIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentOptionText: {
+    fontSize: 14,
+    color: C.textPrimary,
+    fontWeight: '500',
   },
 });
 
