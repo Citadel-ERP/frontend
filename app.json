@@ -9,19 +9,15 @@
     "icon": "./src/assets/logo.png",
     "userInterfaceStyle": "light",
     "scheme": "citadel",
-
     "splash": {
       "image": "./src/assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#e7e6e5"
     },
-
     "assetBundlePatterns": ["**/*"],
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
-
       "infoPlist": {
         "UIBackgroundModes": [
           "location",
@@ -29,25 +25,18 @@
           "remote-notification",
           "processing"
         ],
-
         "NSLocationWhenInUseUsageDescription":
           "Citadel uses your location to mark attendance when you are at the office.",
-
         "NSLocationAlwaysAndWhenInUseUsageDescription":
           "Citadel requires background location access to automatically detect office entry and exit for attendance.",
-
         "NSLocationAlwaysUsageDescription":
           "Citadel uses your location even when the app is closed to enable geofencing-based attendance.",
-
         "NSCameraUsageDescription":
           "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
-
         "NSPhotoLibraryUsageDescription":
           "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
-
         "NSPhotoLibraryAddUsageDescription":
           "Citadel needs permission to save photos to your photo library.",
-
         "NSFaceIDUsageDescription":
           "Face ID is used to securely authenticate you.",
         
@@ -56,14 +45,12 @@
         }
       }
     },
-
     "android": {
       "package": "com.citadelnetinc.app",
-
       "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive_icon_android.png",
         "backgroundColor": "#FFFFFF"
       },
-
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -83,28 +70,22 @@
         "WRITE_EXTERNAL_STORAGE"
       ]
     },
-
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
-
       [
         "expo-location",
         {
           "locationWhenInUsePermission":
             "Allow Citadel to access your location while using the app.",
-
           "locationAlwaysAndWhenInUsePermission":
             "Allow Citadel to access your location in the background for attendance tracking.",
-
           "locationAlwaysPermission":
             "Allow Citadel to access your location even when the app is closed.",
-
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
-
       [
         "expo-local-authentication",
         {
@@ -112,7 +93,6 @@
             "Allow Citadel to use Face ID for secure authentication."
         }
       ],
-
       [
         "expo-image-picker",
         {
@@ -121,7 +101,6 @@
           "saveToPhotosAlbum": true
         }
       ],
-
       [
         "expo-notifications",
         {
@@ -130,12 +109,10 @@
           "useNextNotificationsApi": true
         }
       ],
-
       "expo-task-manager",
       "expo-background-fetch",
       "expo-web-browser"
     ],
-
     "extra": {
       "eas": {
         "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f"
