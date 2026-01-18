@@ -250,7 +250,6 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
     onBack,
     onSearchCabs,
     onSetActivePickerType,
-    onChangeCity,
     formatTimeForDisplay,
     formatDateForDisplay,
     token
