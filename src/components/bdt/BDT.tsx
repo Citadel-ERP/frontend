@@ -200,11 +200,15 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     try {
       setLoading(true);
       setIsSearchMode(true);
-      const response = await fetch(`${BACKEND_URL}/employee/searchLeads?query=${encodeURIComponent(query)}`, {
-        method: 'GET',
+      const response = await fetch(`${BACKEND_URL}/employee/searchLeads`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({
+          token: token,
+          query: query
+        })
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

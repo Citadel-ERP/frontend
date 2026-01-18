@@ -5,6 +5,7 @@ import {
   StatusBar,
   Alert,
   BackHandler,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,7 +14,7 @@ import { BUPProps, Lead, ViewMode, ThemeColors, Pagination, FilterOption } from 
 import { lightTheme, darkTheme } from './theme';
 import Header from './header';
 import Cities from './cities';
-import LeadsList from './list';
+import LeadsListUpdated from './listUpdated';
 import SearchAndFilter from './searchAndFilter';
 import LeadDetails from './leadDetails';
 import EditLead from './editDetails';
@@ -45,7 +46,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   // State for detail view
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false); // ADDED THIS LINE
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Calculate totalLeads from statusCounts
   const totalLeads = useMemo(() => {
@@ -106,7 +107,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       'hardwareBackPress',
       handleBackPress
     );
-
     return () => backHandler.remove();
   }, [viewMode, isEditMode, onBack]);
 
@@ -138,7 +138,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     if (token && selectedCity && viewMode === 'list') {
       fetchLeads(1);
       fetchPhases();
-       fetchAssignedToOptions();
+      fetchAssignedToOptions();
       fetchStatusCounts();
     }
   }, [token, selectedCity, viewMode]);
@@ -147,6 +147,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const fetchStatusCounts = async (): Promise<void> => {
     try {
       if (!token || !selectedCity) return;
+
       const response = await fetch(`${BACKEND_URL}/manager/getLeadStatusCounts`, {
         method: 'POST',
         headers: {
@@ -157,9 +158,11 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           city: selectedCity
         })
       });
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
       const data = await response.json();
       setStatusCounts(data.status_counts || {});
     } catch (error) {
@@ -177,6 +180,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
     try {
       if (!token || !selectedCity) return;
+
       if (!append) {
         setLoading(true);
       } else {
@@ -248,12 +252,14 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
+
       const beautifyName = (name: string): string => {
         return name
           .split('_')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
       };
+
       setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
     } catch (error) {
       console.error('Error fetching phases:', error);
@@ -275,19 +281,20 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
+
       const beautifyName = (name: string): string => {
         return name
           .split('_')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
       };
+
       setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
     } catch (error) {
       console.error('Error fetching subphases:', error);
       setAllSubphases([]);
     }
   };
-
 
   const fetchAssignedToOptions = async (): Promise<void> => {
     try {
@@ -307,7 +314,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
       const data = await response.json();
 
-      // Transform users data into FilterOption format
       const options = data.users.map((user: any) => ({
         value: user.employee_id,
         label: `${user.first_name} ${user.last_name}`
@@ -425,6 +431,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setViewMode('create');
   };
 
+  // In your BUP component, replace the updateLead function with this:
+
   const updateLead = async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
@@ -443,6 +451,12 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
       if (leadData.city !== undefined) updatePayload.city = leadData.city;
+
+      // ADD THIS: Handle assigned_to update
+      if (leadData.assigned_to !== undefined) {
+        // Send the employee_id to the backend
+        updatePayload.assigned_to = leadData.assigned_to?.employee_id || leadData.assigned_to?.email;
+      }
 
       const response = await fetch(`${BACKEND_URL}/manager/updateLead`, {
         method: 'POST',
@@ -525,7 +539,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         );
       case 'detail':
         if (!selectedLead) return null;
-
         if (isEditMode) {
           return (
             <EditLead
@@ -539,7 +552,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             />
           );
         }
-
         return (
           <LeadDetails
             lead={selectedLead}
@@ -552,7 +564,21 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       case 'list':
       default:
         return (
-          <>
+          <ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
+          >
+            {/* Move Header inside ScrollView for list view */}
+            <Header
+              title={getHeaderTitle()}
+              {...getHeaderActions()}
+              onThemeToggle={toggleDarkMode}
+              isDarkMode={isDarkMode}
+              theme={theme}
+              loading={loading}
+            />
+
             <SearchAndFilter
               token={token}
               onSearch={handleSearch}
@@ -568,22 +594,25 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
               totalLeads={totalLeads}
               statusCounts={statusCounts}
             />
-            <LeadsList
-              leads={filteredLeads}
-              onLeadPress={handleLeadPress}
-              loading={loading}
-              loadingMore={loadingMore}
-              refreshing={refreshing}
-              onLoadMore={handleLoadMore}
-              onRefresh={handleRefresh}
-              pagination={pagination}
-              isSearchMode={isSearchMode}
-              searchQuery={searchQuery}
-              token={token}
-              theme={theme}
-              isDarkMode={isDarkMode}
-            />
-          </>
+
+            <View style={{ flex: 1 }}>
+              <LeadsListUpdated
+                leads={filteredLeads}
+                onLeadPress={handleLeadPress}
+                loading={loading}
+                loadingMore={loadingMore}
+                refreshing={refreshing}
+                onLoadMore={handleLoadMore}
+                onRefresh={handleRefresh}
+                pagination={pagination}
+                isSearchMode={isSearchMode}
+                searchQuery={searchQuery}
+                token={token}
+                theme={theme}
+                isDarkMode={isDarkMode}
+              />
+            </View>
+          </ScrollView>
         );
     }
   };
@@ -612,7 +641,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           showBackButton: true,
           onBack: () => setIsEditMode(false),
           showSaveButton: true,
-          onSavePress: () => { }, // Save is handled in EditLead component
+          onSavePress: () => { },
           showThemeToggle: true,
         };
       }
@@ -629,7 +658,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showBackButton: true,
         onBack: handleBackToList,
         showSaveButton: true,
-        onSavePress: () => { }, // Save is handled in CreateLead component
+        onSavePress: () => { },
         showThemeToggle: true,
       };
     }
@@ -649,8 +678,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-
-      {viewMode !== 'city-selection' && viewMode !== 'detail' && (
+      {/* Only show header outside ScrollView for non-list views */}
+      {viewMode !== 'city-selection' && viewMode !== 'detail' && viewMode !== 'list' && (
         <Header
           title={getHeaderTitle()}
           {...headerActions}
@@ -660,7 +689,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           loading={loading}
         />
       )}
-
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         {renderContent()}
       </View>
@@ -672,6 +700,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 0
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
 });
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Alert
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, 
+    Modal, Alert, useWindowDimensions, Platform
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +25,17 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
 }) => {
     const [driverModalVisible, setDriverModalVisible] = useState(false);
     const [currentVehicleIndex, setCurrentVehicleIndex] = useState<number | null>(null);
+    const { width, height } = useWindowDimensions();
+    const isWeb = Platform.OS === 'web';
+    const isLargeScreen = width >= 1024;
+    const isTablet = width >= 768;
+    
+    // Responsive style helper
+    const responsiveStyle = (mobile: any, tablet: any, desktop: any) => {
+        if (isLargeScreen) return desktop;
+        if (isTablet) return tablet;
+        return mobile;
+    };
 
     const isVehicleSelected = (vehicleId: number) => {
         return selectedVehicles.some(sv => sv.vehicle.id === vehicleId);
@@ -36,10 +48,8 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
 
     const handleSelectVehicle = (vehicle: Vehicle) => {
         if (isVehicleSelected(vehicle.id)) {
-            // Deselect
             onUpdateSelection(selectedVehicles.filter(sv => sv.vehicle.id !== vehicle.id));
         } else {
-            // Check if there are available drivers before allowing selection
             const usedDriverEmployeeIds = selectedVehicles
                 .map(sv => sv.driver?.employee_id)
                 .filter(Boolean) as string[];
@@ -48,7 +58,6 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                 d => !usedDriverEmployeeIds.includes(d.employee_id)
             );
 
-            // Only allow selection if there's at least one available driver
             if (availableDriversForNewVehicle.length === 0) {
                 Alert.alert(
                     'No Drivers Available',
@@ -58,9 +67,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                 return;
             }
 
-            // Auto-assign first available driver
             const availableDriver = availableDriversForNewVehicle[0] || null;
-
             onUpdateSelection([...selectedVehicles, { vehicle, driver: availableDriver }]);
         }
     };
@@ -94,172 +101,340 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
     };
 
     return (
-        <View style={styles.screenContainer}>
+        <View style={[
+            styles.screenContainer,
+            isWeb && styles.screenContainerWeb
+        ]}>
             <ScrollView
                 style={styles.scrollContainer}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    isWeb && styles.scrollContentWeb
+                ]}
+                showsVerticalScrollIndicator={isWeb}
             >
-                <View style={[styles.header, styles.headerBanner]}>
+                {/* Header Banner */}
+                <View style={[
+                    styles.header,
+                    styles.headerBanner,
+                    responsiveStyle(
+                        styles.headerBanner,
+                        styles.headerBannerTablet,
+                        styles.headerBannerDesktop
+                    )
+                ]}>
                     <LinearGradient
                         colors={['#4A5568', '#2D3748']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={styles.headerBanner}
+                        style={[
+                            styles.headerBanner,
+                            responsiveStyle(
+                                styles.headerBanner,
+                                styles.headerBannerTablet,
+                                styles.headerBannerDesktop
+                            )
+                        ]}
                     >
                         <Image
                             source={require('../../assets/cars.jpeg')}
-                            style={styles.headerImage}
+                            style={[
+                                styles.headerImage,
+                                isLargeScreen && styles.headerImageDesktop
+                            ]}
                             resizeMode="cover"
                         />
                         <View style={styles.headerOverlay} />
 
-                        <View style={styles.headerContent}>
-                            <View style={styles.headerTopRow}>
-                                <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                                    <BackIcon />
-                                </TouchableOpacity>
-                                <Text style={styles.logoText}>CITADEL</Text>
-                                <View style={{ width: 40 }} />
+                        {/* Header Content with max width constraint for web */}
+                        <View style={[
+                            styles.headerContentContainer,
+                            isWeb && styles.headerContentContainerWeb
+                        ]}>
+                            <View style={styles.headerContent}>
+                                <View style={styles.headerTopRow}>
+                                    <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                                        <BackIcon />
+                                    </TouchableOpacity>
+                                    <Text style={[
+                                        styles.logoText,
+                                        isLargeScreen && styles.logoTextDesktop
+                                    ]}>CITADEL</Text>
+                                    <View style={{ width: 40 }} />
+                                </View>
                             </View>
-                        </View>
-                        <View style={styles.titleSection}>
-                            <Text style={styles.headerTitle}>Available Vehicles</Text>
-                            <Text style={styles.headerSubtitle}>
-                                {vehicles.length > 0
-                                    ? `${selectedVehicles.length} vehicle${selectedVehicles.length !== 1 ? 's' : ''} selected`
-                                    : 'Search results'
-                                }
-                            </Text>
+                            <View style={[
+                                styles.titleSection,
+                                isLargeScreen && styles.titleSectionDesktop
+                            ]}>
+                                <Text style={[
+                                    styles.headerTitle,
+                                    responsiveStyle(
+                                        styles.headerTitle,
+                                        styles.headerTitleTablet,
+                                        styles.headerTitleDesktop
+                                    )
+                                ]}>Available Vehicles</Text>
+                                <Text style={[
+                                    styles.headerSubtitle,
+                                    responsiveStyle(
+                                        styles.headerSubtitle,
+                                        styles.headerSubtitleTablet,
+                                        styles.headerSubtitleDesktop
+                                    )
+                                ]}>
+                                    {vehicles.length > 0
+                                        ? `${selectedVehicles.length} vehicle${selectedVehicles.length !== 1 ? 's' : ''} selected`
+                                        : 'Search results'
+                                    }
+                                </Text>
+                            </View>
                         </View>
                     </LinearGradient>
                 </View>
 
-                <View style={styles.cabsListContent}>
-                    {vehicles.length === 0 ? (
-                        <View style={styles.emptyStateContainer}>
-                            <View style={styles.emptyStateCard}>
-                                <View style={styles.emptyIconContainer}>
-                                    <MaterialCommunityIcons
-                                        name="car-off"
-                                        size={64}
-                                        color="#CBD5E0"
-                                    />
+                {/* Main Content Container */}
+                <View style={[
+                    styles.mainContentContainer,
+                    isWeb && styles.mainContentContainerWeb
+                ]}>
+                    <View style={[
+                        styles.cabsListContent,
+                        isLargeScreen && styles.cabsListContentDesktop
+                    ]}>
+                        {vehicles.length === 0 ? (
+                            <View style={[
+                                styles.emptyStateContainer,
+                                isLargeScreen && styles.emptyStateContainerDesktop
+                            ]}>
+                                <View style={[
+                                    styles.emptyStateCard,
+                                    responsiveStyle(
+                                        styles.emptyStateCard,
+                                        styles.emptyStateCardTablet,
+                                        styles.emptyStateCardDesktop
+                                    )
+                                ]}>
+                                    <View style={styles.emptyIconContainer}>
+                                        <MaterialCommunityIcons
+                                            name="car-off"
+                                            size={responsiveStyle(64, 72, 80)}
+                                            color="#CBD5E0"
+                                        />
+                                    </View>
+                                    <Text style={[
+                                        styles.emptyStateTitle,
+                                        responsiveStyle(
+                                            styles.emptyStateTitle,
+                                            styles.emptyStateTitleTablet,
+                                            styles.emptyStateTitleDesktop
+                                        )
+                                    ]}>No Cars Available</Text>
+                                    <Text style={[
+                                        styles.emptyStateMessage,
+                                        responsiveStyle(
+                                            styles.emptyStateMessage,
+                                            styles.emptyStateMessageTablet,
+                                            styles.emptyStateMessageDesktop
+                                        )
+                                    ]}>
+                                        Unfortunately, there are no vehicles available for the selected date and time.
+                                    </Text>
+                                    <Text style={[
+                                        styles.emptyStateSuggestion,
+                                        responsiveStyle(
+                                            styles.emptyStateSuggestion,
+                                            styles.emptyStateSuggestionTablet,
+                                            styles.emptyStateSuggestionDesktop
+                                        )
+                                    ]}>
+                                        Please try adjusting your booking dates or contact support for assistance.
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={styles.tryAgainButton}
+                                        onPress={onBack}
+                                    >
+                                        <MaterialCommunityIcons name="refresh" size={20} color="#008069" />
+                                        <Text style={styles.tryAgainText}>Try Different Dates</Text>
+                                    </TouchableOpacity>
                                 </View>
-                                <Text style={styles.emptyStateTitle}>No Cars Available</Text>
-                                <Text style={styles.emptyStateMessage}>
-                                    Unfortunately, there are no vehicles available for the selected date and time.
-                                </Text>
-                                <Text style={styles.emptyStateSuggestion}>
-                                    Please try adjusting your booking dates or contact support for assistance.
-                                </Text>
-                                <TouchableOpacity
-                                    style={styles.tryAgainButton}
-                                    onPress={onBack}
-                                >
-                                    <MaterialCommunityIcons name="refresh" size={20} color="#008069" />
-                                    <Text style={styles.tryAgainText}>Try Different Dates</Text>
-                                </TouchableOpacity>
                             </View>
-                        </View>
-                    ) : (
-                        vehicles.map((vehicle) => {
-                            const isSelected = isVehicleSelected(vehicle.id);
-                            const assignedDriver = getAssignedDriver(vehicle.id);
-                            return (
-                                <TouchableOpacity
-                                    key={vehicle.id}
-                                    style={[styles.cabCard, isSelected && styles.cabCardSelected]}
-                                    onPress={() => handleSelectVehicle(vehicle)}
-                                    activeOpacity={0.7}
-                                >
-                                    {isSelected && (
-                                        <View style={styles.selectedBadge}>
-                                            <MaterialCommunityIcons name="check-circle" size={24} color="#00d285" />
-                                        </View>
-                                    )}
-                                    <Image
-                                        source={{
-                                            uri: vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0
-                                                ? vehicle.vehicle_photos[0].photo
-                                                : 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80'
-                                        }}
-                                        style={styles.cabImage}
-                                    />
-                                    <View style={styles.cabInfo}>
-                                        <Text style={styles.cabName}>{vehicle.make} {vehicle.model}</Text>
-                                        <Text style={styles.cabMeta}>
-                                            {vehicle.license_plate} • {vehicle.color} • {vehicle.year}
-                                        </Text>
-                                        <View style={styles.cabSpecs}>
-                                            <View style={styles.specItem}>
-                                                <MaterialCommunityIcons name="gas-station" size={14} color="#008069" />
-                                                <Text style={styles.specText}>{vehicle.fuel_type}</Text>
-                                            </View>
-                                            <View style={styles.specItem}>
-                                                <MaterialCommunityIcons name="seat-passenger" size={14} color="#008069" />
-                                                <Text style={styles.specText}>{vehicle.seating_capacity} Seats</Text>
-                                            </View>
-                                        </View>
-                                        {isSelected && (
-                                            <View style={styles.driverSection}>
-                                                <View style={styles.driverHeader}>
-                                                    <MaterialCommunityIcons name="account" size={18} color="#666" />
-                                                    <Text style={styles.driverHeaderText}>Assigned Driver</Text>
+                        ) : (
+                            <View style={[
+                                styles.vehiclesGrid,
+                                isLargeScreen && styles.vehiclesGridDesktop
+                            ]}>
+                                {vehicles.map((vehicle) => {
+                                    const isSelected = isVehicleSelected(vehicle.id);
+                                    const assignedDriver = getAssignedDriver(vehicle.id);
+                                    return (
+                                        <TouchableOpacity
+                                            key={vehicle.id}
+                                            style={[
+                                                styles.cabCard,
+                                                responsiveStyle(
+                                                    styles.cabCard,
+                                                    styles.cabCardTablet,
+                                                    styles.cabCardDesktop
+                                                ),
+                                                isSelected && styles.cabCardSelected
+                                            ]}
+                                            onPress={() => handleSelectVehicle(vehicle)}
+                                            activeOpacity={0.7}
+                                        >
+                                            {isSelected && (
+                                                <View style={styles.selectedBadge}>
+                                                    <MaterialCommunityIcons name="check-circle" size={24} color="#00d285" />
                                                 </View>
-
-                                                {assignedDriver ? (
-                                                    <View style={styles.driverInfo}>
-                                                        <View style={styles.driverAvatar}>
-                                                            <Text style={styles.driverAvatarText}>
-                                                                {assignedDriver.full_name.split(' ').map(n => n[0]).join('')}
-                                                            </Text>
-                                                        </View>
-                                                        <View style={styles.driverDetails}>
-                                                            <Text style={styles.driverName}>{assignedDriver.full_name}</Text>
-                                                            <Text style={styles.driverId}>{assignedDriver.employee_id}</Text>
-                                                        </View>
-                                                        <TouchableOpacity
-                                                            style={styles.changeDriverBtn}
-                                                            onPress={() => handleChangeDriver(vehicle.id)}
-                                                        >
-                                                            <Text style={styles.changeDriverText}>Change</Text>
-                                                        </TouchableOpacity>
+                                            )}
+                                            <Image
+                                                source={{
+                                                    uri: vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0
+                                                        ? vehicle.vehicle_photos[0].photo
+                                                        : 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80'
+                                                }}
+                                                style={[
+                                                    styles.cabImage,
+                                                    responsiveStyle(
+                                                        styles.cabImage,
+                                                        styles.cabImageTablet,
+                                                        styles.cabImageDesktop
+                                                    )
+                                                ]}
+                                            />
+                                            <View style={styles.cabInfo}>
+                                                <Text style={[
+                                                    styles.cabName,
+                                                    responsiveStyle(
+                                                        styles.cabName,
+                                                        styles.cabNameTablet,
+                                                        styles.cabNameDesktop
+                                                    )
+                                                ]}>{vehicle.make} {vehicle.model}</Text>
+                                                <Text style={[
+                                                    styles.cabMeta,
+                                                    responsiveStyle(
+                                                        styles.cabMeta,
+                                                        styles.cabMetaTablet,
+                                                        styles.cabMetaDesktop
+                                                    )
+                                                ]}>
+                                                    {vehicle.license_plate} • {vehicle.color} • {vehicle.year}
+                                                </Text>
+                                                <View style={[
+                                                    styles.cabSpecs,
+                                                    responsiveStyle(
+                                                        styles.cabSpecs,
+                                                        styles.cabSpecsTablet,
+                                                        styles.cabSpecsDesktop
+                                                    )
+                                                ]}>
+                                                    <View style={styles.specItem}>
+                                                        <MaterialCommunityIcons name="gas-station" size={14} color="#008069" />
+                                                        <Text style={styles.specText}>{vehicle.fuel_type}</Text>
                                                     </View>
-                                                ) : (
-                                                    <TouchableOpacity
-                                                        style={styles.selectDriverBtn}
-                                                        onPress={() => handleChangeDriver(vehicle.id)}
-                                                    >
-                                                        <MaterialCommunityIcons name="plus-circle" size={20} color="#008069" />
-                                                        <Text style={styles.selectDriverText}>Select Driver</Text>
-                                                    </TouchableOpacity>
+                                                    <View style={styles.specItem}>
+                                                        <MaterialCommunityIcons name="seat-passenger" size={14} color="#008069" />
+                                                        <Text style={styles.specText}>{vehicle.seating_capacity} Seats</Text>
+                                                    </View>
+                                                </View>
+                                                {isSelected && (
+                                                    <View style={[
+                                                        styles.driverSection,
+                                                        responsiveStyle(
+                                                            styles.driverSection,
+                                                            styles.driverSectionTablet,
+                                                            styles.driverSectionDesktop
+                                                        )
+                                                    ]}>
+                                                        <View style={styles.driverHeader}>
+                                                            <MaterialCommunityIcons name="account" size={18} color="#666" />
+                                                            <Text style={styles.driverHeaderText}>Assigned Driver</Text>
+                                                        </View>
+
+                                                        {assignedDriver ? (
+                                                            <View style={styles.driverInfo}>
+                                                                <View style={styles.driverAvatar}>
+                                                                    <Text style={styles.driverAvatarText}>
+                                                                        {assignedDriver.full_name.split(' ').map(n => n[0]).join('')}
+                                                                    </Text>
+                                                                </View>
+                                                                <View style={styles.driverDetails}>
+                                                                    <Text style={styles.driverName}>{assignedDriver.full_name}</Text>
+                                                                    <Text style={styles.driverId}>{assignedDriver.employee_id}</Text>
+                                                                </View>
+                                                                <TouchableOpacity
+                                                                    style={styles.changeDriverBtn}
+                                                                    onPress={() => handleChangeDriver(vehicle.id)}
+                                                                >
+                                                                    <Text style={styles.changeDriverText}>Change</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                        ) : (
+                                                            <TouchableOpacity
+                                                                style={styles.selectDriverBtn}
+                                                                onPress={() => handleChangeDriver(vehicle.id)}
+                                                            >
+                                                                <MaterialCommunityIcons name="plus-circle" size={20} color="#008069" />
+                                                                <Text style={styles.selectDriverText}>Select Driver</Text>
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
                                                 )}
                                             </View>
-                                        )}
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })
-                    )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </View>
                 </View>
             </ScrollView>
 
             {selectedVehicles.length > 0 && (
-                <View style={styles.bottomBar}>
-                    <View style={styles.bottomBarInfo}>
-                        <Text style={styles.bottomBarCount}>{selectedVehicles.length} Vehicle{selectedVehicles.length !== 1 ? 's' : ''}</Text>
-                        <Text style={styles.bottomBarSubtext}>
-                            {selectedVehicles.filter(sv => sv.driver).length} driver{selectedVehicles.filter(sv => sv.driver).length !== 1 ? 's' : ''} assigned
-                        </Text>
+                <View style={[
+                    styles.bottomBar,
+                    isWeb && styles.bottomBarWeb
+                ]}>
+                    <View style={[
+                        styles.bottomBarContainer,
+                        isWeb && styles.bottomBarContainerWeb
+                    ]}>
+                        <View style={styles.bottomBarInfo}>
+                            <Text style={[
+                                styles.bottomBarCount,
+                                responsiveStyle(
+                                    styles.bottomBarCount,
+                                    styles.bottomBarCountTablet,
+                                    styles.bottomBarCountDesktop
+                                )
+                            ]}>{selectedVehicles.length} Vehicle{selectedVehicles.length !== 1 ? 's' : ''}</Text>
+                            <Text style={[
+                                styles.bottomBarSubtext,
+                                responsiveStyle(
+                                    styles.bottomBarSubtext,
+                                    styles.bottomBarSubtextTablet,
+                                    styles.bottomBarSubtextDesktop
+                                )
+                            ]}>
+                                {selectedVehicles.filter(sv => sv.driver).length} driver{selectedVehicles.filter(sv => sv.driver).length !== 1 ? 's' : ''} assigned
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            style={[
+                                styles.proceedBtn,
+                                responsiveStyle(
+                                    styles.proceedBtn,
+                                    styles.proceedBtnTablet,
+                                    styles.proceedBtnDesktop
+                                )
+                            ]}
+                            onPress={onProceedToBooking}
+                        >
+                            <Text style={styles.proceedBtnText}>Continue</Text>
+                            <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                        style={styles.proceedBtn}
-                        onPress={onProceedToBooking}
-                    >
-                        <Text style={styles.proceedBtnText}>Continue</Text>
-                        <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
-                    </TouchableOpacity>
                 </View>
             )}
 
@@ -271,9 +446,23 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                 onRequestClose={() => setDriverModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <View style={[
+                        styles.modalContent,
+                        responsiveStyle(
+                            styles.modalContent,
+                            styles.modalContentTablet,
+                            styles.modalContentDesktop
+                        )
+                    ]}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Select Driver</Text>
+                            <Text style={[
+                                styles.modalTitle,
+                                responsiveStyle(
+                                    styles.modalTitle,
+                                    styles.modalTitleTablet,
+                                    styles.modalTitleDesktop
+                                )
+                            ]}>Select Driver</Text>
                             <TouchableOpacity onPress={() => setDriverModalVisible(false)}>
                                 <MaterialCommunityIcons name="close" size={24} color="#333" />
                             </TouchableOpacity>
@@ -282,7 +471,14 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                             {getAvailableDriversForSelection().map((driver, index) => (
                                 <TouchableOpacity
                                     key={`driver-${driver.employee_id}-${index}`}
-                                    style={styles.driverItem}
+                                    style={[
+                                        styles.driverItem,
+                                        responsiveStyle(
+                                            styles.driverItem,
+                                            styles.driverItemTablet,
+                                            styles.driverItemDesktop
+                                        )
+                                    ]}
                                     onPress={() => handleSelectDriver(driver)}
                                 >
                                     <View style={styles.driverAvatar}>
@@ -291,8 +487,22 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                         </Text>
                                     </View>
                                     <View style={styles.driverDetails}>
-                                        <Text style={styles.driverName}>{driver.full_name}</Text>
-                                        <Text style={styles.driverId}>{driver.employee_id} • {driver.email}</Text>
+                                        <Text style={[
+                                            styles.driverName,
+                                            responsiveStyle(
+                                                styles.driverName,
+                                                styles.driverNameTablet,
+                                                styles.driverNameDesktop
+                                            )
+                                        ]}>{driver.full_name}</Text>
+                                        <Text style={[
+                                            styles.driverId,
+                                            responsiveStyle(
+                                                styles.driverId,
+                                                styles.driverIdTablet,
+                                                styles.driverIdDesktop
+                                            )
+                                        ]}>{driver.employee_id} • {driver.email}</Text>
                                     </View>
                                     <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
                                 </TouchableOpacity>
@@ -317,13 +527,24 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#e7e6e5',
     },
+    screenContainerWeb: {
+        alignItems: 'center',
+    },
     scrollContainer: {
         flex: 1,
+        width: '100%',
     },
     scrollContent: {
         flexGrow: 1,
         paddingBottom: 100,
     },
+    scrollContentWeb: {
+        maxWidth: 1200, // Max width for web
+        width: '100%',
+        alignSelf: 'center',
+    },
+    
+    // Header Styles
     header: {
         position: 'relative',
         overflow: 'hidden',
@@ -334,6 +555,13 @@ const styles = StyleSheet.create({
         borderBottomRightRadius: 30,
         overflow: 'hidden',
         position: 'relative',
+        width: '100%',
+    },
+    headerBannerTablet: {
+        height: 280,
+    },
+    headerBannerDesktop: {
+        height: 320,
     },
     headerImage: {
         position: 'absolute',
@@ -345,6 +573,9 @@ const styles = StyleSheet.create({
         height: '100%',
         opacity: 1,
     },
+    headerImageDesktop: {
+        height: 320,
+    },
     headerOverlay: {
         position: 'absolute',
         top: 0,
@@ -353,11 +584,18 @@ const styles = StyleSheet.create({
         bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
     },
-    headerContent: {
+    headerContentContainer: {
         flex: 1,
+        zIndex: 1,
+    },
+    headerContentContainerWeb: {
+        maxWidth: 1200,
+        alignSelf: 'center',
+        width: '100%',
+    },
+    headerContent: {
         paddingHorizontal: 20,
         paddingVertical: 40,
-        zIndex: 1,
     },
     headerTopRow: {
         flexDirection: 'row',
@@ -370,29 +608,76 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: 1,
     },
+    logoTextDesktop: {
+        fontSize: 20,
+        letterSpacing: 2,
+    },
     titleSection: {
         paddingHorizontal: 20,
         paddingBottom: 20,
+    },
+    titleSectionDesktop: {
+        paddingHorizontal: 40,
+        paddingBottom: 40,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: '600',
         color: '#fff',
     },
+    headerTitleTablet: {
+        fontSize: 28,
+    },
+    headerTitleDesktop: {
+        fontSize: 32,
+    },
     headerSubtitle: {
         fontSize: 14,
         color: 'rgba(255,255,255,0.8)',
         marginTop: 4,
     },
+    headerSubtitleTablet: {
+        fontSize: 16,
+    },
+    headerSubtitleDesktop: {
+        fontSize: 18,
+    },
+    
+    // Main Content
+    mainContentContainer: {
+        flex: 1,
+    },
+    mainContentContainerWeb: {
+        maxWidth: 1200,
+        width: '100%',
+        alignSelf: 'center',
+    },
     cabsListContent: {
         padding: 16,
     },
+    cabsListContentDesktop: {
+        padding: 24,
+    },
+    
+    // Grid Layout for Web
+    vehiclesGrid: {},
+    vehiclesGridDesktop: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 16,
+    },
+    
+    // Empty State
     emptyStateContainer: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 60,
         paddingHorizontal: 20,
+    },
+    emptyStateContainerDesktop: {
+        paddingVertical: 80,
     },
     emptyStateCard: {
         backgroundColor: '#fff',
@@ -406,6 +691,14 @@ const styles = StyleSheet.create({
         elevation: 4,
         width: '100%',
         maxWidth: 400,
+    },
+    emptyStateCardTablet: {
+        maxWidth: 500,
+        padding: 40,
+    },
+    emptyStateCardDesktop: {
+        maxWidth: 600,
+        padding: 48,
     },
     emptyIconContainer: {
         width: 120,
@@ -423,6 +716,12 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         textAlign: 'center',
     },
+    emptyStateTitleTablet: {
+        fontSize: 28,
+    },
+    emptyStateTitleDesktop: {
+        fontSize: 32,
+    },
     emptyStateMessage: {
         fontSize: 16,
         color: '#4A5568',
@@ -430,12 +729,28 @@ const styles = StyleSheet.create({
         lineHeight: 24,
         marginBottom: 8,
     },
+    emptyStateMessageTablet: {
+        fontSize: 18,
+        lineHeight: 28,
+    },
+    emptyStateMessageDesktop: {
+        fontSize: 20,
+        lineHeight: 32,
+    },
     emptyStateSuggestion: {
         fontSize: 14,
         color: '#718096',
         textAlign: 'center',
         lineHeight: 20,
         marginBottom: 28,
+    },
+    emptyStateSuggestionTablet: {
+        fontSize: 16,
+        lineHeight: 24,
+    },
+    emptyStateSuggestionDesktop: {
+        fontSize: 18,
+        lineHeight: 28,
     },
     tryAgainButton: {
         flexDirection: 'row',
@@ -453,6 +768,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    
+    // Cab Cards
     cabCard: {
         backgroundColor: '#fff',
         borderRadius: 16,
@@ -465,6 +782,13 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         borderWidth: 2,
         borderColor: 'transparent',
+    },
+    cabCardTablet: {
+        marginBottom: 20,
+    },
+    cabCardDesktop: {
+        width: '48%',
+        marginBottom: 16,
     },
     cabCardSelected: {
         borderColor: '#00d285',
@@ -487,6 +811,12 @@ const styles = StyleSheet.create({
         width: '100%',
         height: 160,
     },
+    cabImageTablet: {
+        height: 180,
+    },
+    cabImageDesktop: {
+        height: 200,
+    },
     cabInfo: {
         padding: 16,
     },
@@ -496,15 +826,33 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: 4,
     },
+    cabNameTablet: {
+        fontSize: 20,
+    },
+    cabNameDesktop: {
+        fontSize: 22,
+    },
     cabMeta: {
         fontSize: 13,
         color: '#666',
         marginBottom: 12,
     },
+    cabMetaTablet: {
+        fontSize: 14,
+    },
+    cabMetaDesktop: {
+        fontSize: 15,
+    },
     cabSpecs: {
         flexDirection: 'row',
         gap: 12,
         marginBottom: 12,
+    },
+    cabSpecsTablet: {
+        gap: 16,
+    },
+    cabSpecsDesktop: {
+        gap: 20,
     },
     specItem: {
         flexDirection: 'row',
@@ -525,6 +873,14 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: '#f0f0f0',
+    },
+    driverSectionTablet: {
+        marginTop: 16,
+        paddingTop: 16,
+    },
+    driverSectionDesktop: {
+        marginTop: 20,
+        paddingTop: 20,
     },
     driverHeader: {
         flexDirection: 'row',
@@ -566,10 +922,22 @@ const styles = StyleSheet.create({
         color: '#333',
         fontSize: 14,
     },
+    driverNameTablet: {
+        fontSize: 15,
+    },
+    driverNameDesktop: {
+        fontSize: 16,
+    },
     driverId: {
         fontSize: 12,
         color: '#666',
         marginTop: 2,
+    },
+    driverIdTablet: {
+        fontSize: 13,
+    },
+    driverIdDesktop: {
+        fontSize: 14,
     },
     changeDriverBtn: {
         paddingHorizontal: 12,
@@ -599,21 +967,32 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
     },
+    
+    // Bottom Bar
     bottomBar: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
         backgroundColor: '#fff',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,
         shadowRadius: 12,
         elevation: 8,
+    },
+    bottomBarWeb: {
+        alignItems: 'center',
+    },
+    bottomBarContainer: {
+        padding: 16,
+    },
+    bottomBarContainerWeb: {
+        maxWidth: 1200,
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     bottomBarInfo: {
         flex: 1,
@@ -623,10 +1002,22 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#333',
     },
+    bottomBarCountTablet: {
+        fontSize: 20,
+    },
+    bottomBarCountDesktop: {
+        fontSize: 22,
+    },
     bottomBarSubtext: {
         fontSize: 12,
         color: '#666',
         marginTop: 2,
+    },
+    bottomBarSubtextTablet: {
+        fontSize: 13,
+    },
+    bottomBarSubtextDesktop: {
+        fontSize: 14,
     },
     proceedBtn: {
         flexDirection: 'row',
@@ -637,11 +1028,21 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         gap: 8,
     },
+    proceedBtnTablet: {
+        paddingHorizontal: 32,
+        paddingVertical: 16,
+    },
+    proceedBtnDesktop: {
+        paddingHorizontal: 40,
+        paddingVertical: 18,
+    },
     proceedBtnText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
     },
+    
+    // Modal
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -653,6 +1054,20 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 24,
         maxHeight: '80%',
         paddingTop: 20,
+    },
+    modalContentTablet: {
+        maxHeight: '60%',
+        alignSelf: 'center',
+        width: '80%',
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+    },
+    modalContentDesktop: {
+        maxHeight: '70%',
+        width: 600,
+        alignSelf: 'center',
+        borderRadius: 24,
+        maxWidth: '90%',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -668,6 +1083,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#333',
     },
+    modalTitleTablet: {
+        fontSize: 24,
+    },
+    modalTitleDesktop: {
+        fontSize: 28,
+    },
     driverList: {
         padding: 20,
     },
@@ -679,6 +1100,12 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginBottom: 12,
     },
+    driverItemTablet: {
+        padding: 20,
+    },
+    driverItemDesktop: {
+        padding: 24,
+    },
     emptyState: {
         alignItems: 'center',
         padding: 40,
@@ -688,6 +1115,8 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: 12,
     },
+    
+    // Back Button
     backIcon: {
         flexDirection: 'row',
         alignItems: 'center',

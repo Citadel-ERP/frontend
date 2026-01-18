@@ -31,7 +31,7 @@ const getDeviceType = () => {
 
 const getResponsiveValues = () => {
   const deviceType = getDeviceType();
-  
+
   return {
     isDesktop: deviceType === 'desktop',
     isTablet: deviceType === 'tablet',
@@ -83,7 +83,7 @@ interface BiometricCapabilities {
 // Biometric Icons Component
 const BiometricIcon = ({ type }: { type: 'face' | 'fingerprint' | 'default' }) => {
   const responsive = getResponsiveValues();
-  
+
   const getIconText = () => {
     switch (type) {
       case 'face': return '🔐';
@@ -298,11 +298,11 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
         } else {
           await onMPINLogin('__BIOMETRIC_SUCCESS__');
         }
-        
+
         if (onDashboardRedirect) {
           onDashboardRedirect();
         }
-        
+
         return;
       } else {
         if (authResult.error === 'user_cancel' || authResult.error === 'user_fallback') {
@@ -409,57 +409,56 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
       handleRedirectToLogin();
       return;
     }
-
     const completeMPin = mpinValue || mpin.join('');
-
     if (completeMPin.length !== 6) {
       setError('Please enter all 6 digits');
       return;
     }
-
     if (!/^\d{6}$/.test(completeMPin)) {
       setError('MPIN must contain only numbers');
       return;
     }
-
     setIsSubmitting(true);
     console.log('Attempting MPIN login...');
-
     try {
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
       if (!storedToken) {
         throw new Error('No authentication token found');
       }
-
       const response = await mpinLoginAPI(storedToken, completeMPin);
-
       console.log('MPIN login successful, clearing attempt data');
       setAttemptCount(0);
       setIsBlocked(false);
-      
-      await onMPINLogin(completeMPin);
 
+      await onMPINLogin(completeMPin);
       if (onDashboardRedirect) {
         console.log('Redirecting to dashboard after MPIN login');
         onDashboardRedirect();
       }
-
       console.log('MPIN login successful:', response.message);
     } catch (e: any) {
       console.error('MPIN login error:', e);
 
-      let errorMessage = 'Invalid MPIN. Please try again.';
+      // Check if the error is an Invalid Token error
+      const errorMsg = e.message?.toLowerCase() || '';
+      if (errorMsg.includes('invalid token') || errorMsg.includes('login failed')) {
+        console.log('Invalid token detected, clearing stored data and redirecting to login');
+        // Clear the invalid token
+        await AsyncStorage.removeItem(TOKEN_2_KEY);
+        // Redirect to login page
+        handleRedirectToLogin();
+        return;
+      }
 
+      let errorMessage = 'Invalid MPIN. Please try again.';
       setError(errorMessage);
       setMPin(['', '', '', '', '', '']);
       setCurrentIndex(0);
       inputRefs.current[0]?.focus();
-
     } finally {
       setIsSubmitting(false);
     }
   }, [isBlocked, mpin, mpinLoginAPI, onMPINLogin, onDashboardRedirect, isAuthenticationError, handleRedirectToLogin]);
-
   const handleMPINChange = useCallback((value: string, index: number) => {
     if (isBlocked) return;
     if (value.length > 1) return;
@@ -546,7 +545,7 @@ const MPINLogin: React.FC<MPINLoginProps> = ({
           translucent={false}
         />
       )}
-      
+
       {/* Fixed Container - No Scroll */}
       <View style={styles.fixedContainer}>
         <View style={[styles.innerContainer, { maxHeight: SCREEN_HEIGHT }]}>
@@ -793,7 +792,7 @@ const getDynamicStyles = (responsive: ReturnType<typeof getResponsiveValues>) =>
     subtitle: {
       fontSize: responsive.subtitleSize,
     },
-    
+
     // Biometric section
     biometricSection: {
       alignItems: 'center',

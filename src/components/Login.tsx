@@ -50,7 +50,7 @@ const getResponsiveValues = () => {
 };
 
 interface LoginProps {
-  onLogin: (identifier: string, password: string, identifierType: 'email' | 'phone') => Promise<void>;
+  onLogin: (identifier: string, password: string, identifierType: 'email' | 'phone', isBrowser: boolean) => Promise<void>;
   onForgotPassword: () => void;
   isLoading?: boolean;
 }
@@ -63,12 +63,10 @@ const EyeIcon = ({ visible }: { visible: boolean }) => (
 const isPhoneNumber = (input: string): boolean => {
   // Remove spaces, dashes, and parentheses
   const cleaned = input.replace(/[\s\-\(\)]/g, '');
-
   // If it contains @ it is likely an email, not a phone number
   if (cleaned.includes('@')) {
     return false;
   }
-
   return true;
 };
 
@@ -159,11 +157,15 @@ const Login: React.FC<LoginProps> = ({
       const trimmedIdentifier = identifier.trim();
       const identifierType = isPhoneNumber(trimmedIdentifier) ? 'phone' : 'email';
       console.log("identifierType", identifierType);
+      
       const formattedIdentifier = identifierType === 'email' 
         ? trimmedIdentifier.toLowerCase() 
         : trimmedIdentifier;
-
-      await onLogin(formattedIdentifier, password, identifierType);
+      
+      // Detect if the user is using a browser (web platform) or native app (iOS/Android)
+      const isBrowser = Platform.OS === 'web';
+      
+      await onLogin(formattedIdentifier, password, identifierType, isBrowser);
       setLoginError('');
     } catch (error: any) {
       console.error('Login error:', error);

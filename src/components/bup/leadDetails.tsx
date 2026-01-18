@@ -27,6 +27,7 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Incentive from './incentive';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -94,6 +95,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const modalFlatListRef = useRef<FlatList>(null);
   const hasLoadedInitially = useRef(false);
   const inputRef = useRef<TextInput>(null);
+  const [showIncentiveModal, setShowIncentiveModal] = useState(false);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -320,13 +322,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
 
     if (incentiveData) {
-      Alert.alert(
-        'Incentive Details',
-        `Amount: ₹${incentiveData.amount || '0'}\n` +
-        `Status: ${incentiveData.status || 'Pending'}\n` +
-        `Date: ${formatDateTime(incentiveData.created_at)}\n` +
-        `Notes: ${incentiveData.notes || 'No additional notes'}`
-      );
+      setShowIncentiveModal(true);
     } else {
       Alert.alert('Incentive', 'No incentive data available for this lead.');
     }
@@ -672,12 +668,17 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       </View>
     );
   }, [currentUserEmployeeId, formatTime, handleDownloadFile, truncateFileName]);
-
+  const BackIcon = () => (
+    <View style={s.backIcon}>
+      <View style={s.backArrow} />
+      {/* <Text style={s.backText}>Back</Text> */}
+    </View>
+  );
   const ModernHeader = useMemo(() => (
     <SafeAreaView style={s.headerSafeArea}>
       <View style={s.header}>
         <TouchableOpacity onPress={onBack} style={s.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFF" />
+          < BackIcon />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -878,7 +879,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             onPress={() => setShowLeadDetailsModal(false)}
             style={s.modalBackButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
+            <BackIcon />
           </TouchableOpacity>
           <Text style={s.modalTitle}>Lead Details</Text>
           <View style={s.modalRightPlaceholder} />
@@ -1183,6 +1184,21 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </SafeAreaView>
         </View>
       )}
+      {showIncentiveModal && (
+        <Modal
+          animationType="slide"
+          transparent={false}
+          visible={showIncentiveModal}
+          onRequestClose={() => setShowIncentiveModal(false)}
+        >
+          <Incentive
+            onBack={() => setShowIncentiveModal(false)}
+            leadId={lead.id}
+            leadName={lead.name}
+            theme={theme}
+          />
+        </Modal>
+      )}
     </View>
   );
 };
@@ -1191,6 +1207,28 @@ const s = StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: C.chatBg
+  },
+
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: "#fff",
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
 
   // Android-specific container

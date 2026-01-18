@@ -5,13 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
-  FlatList,
 } from 'react-native';
 import { ThemeColors, Lead, Pagination } from './types';
 import { Ionicons } from '@expo/vector-icons';
 
-// WhatsApp Color Scheme (matching BDT)
+// WhatsApp Color Scheme
 const WHATSAPP_COLORS = {
   primary: '#075E54',
   primaryLight: '#128C7E',
@@ -50,19 +48,14 @@ interface LeadsListProps {
   isDarkMode: boolean;
 }
 
-const LeadsList: React.FC<LeadsListProps> = ({
+const LeadsListUpdated: React.FC<LeadsListProps> = ({
   leads,
   onLeadPress,
   loading,
   loadingMore,
-  refreshing,
-  onLoadMore,
-  onRefresh,
   pagination,
   isSearchMode,
   searchQuery,
-  theme,
-  isDarkMode,
 }) => {
   const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
 
@@ -140,7 +133,7 @@ const LeadsList: React.FC<LeadsListProps> = ({
     }
   };
 
-  const renderLeadItem = ({ item: lead }: { item: Lead }) => {
+  const renderLeadItem = (lead: Lead) => {
     const avatarColor = getAvatarColor(lead.name);
     const initials = getInitials(lead.name);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
@@ -148,6 +141,7 @@ const LeadsList: React.FC<LeadsListProps> = ({
     
     return (
       <TouchableOpacity 
+        key={lead.id}
         style={styles.leadItem} 
         onPress={() => onLeadPress(lead)}
         activeOpacity={0.7}
@@ -225,45 +219,32 @@ const LeadsList: React.FC<LeadsListProps> = ({
   }
 
   return (
-    <FlatList
-      data={leads}
-      renderItem={renderLeadItem}
-      keyExtractor={(item) => item.id.toString()}
-      showsVerticalScrollIndicator={false}
-      onEndReached={onLoadMore}
-      onEndReachedThreshold={0.1}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[WHATSAPP_COLORS.primary]}
-          tintColor={WHATSAPP_COLORS.primary}
-        />
-      }
-      contentContainerStyle={styles.listContainer}
-      ListFooterComponent={
-        loadingMore ? (
-          <View style={styles.loadMoreContainer}>
-            <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.loadMoreText}>Loading more leads...</Text>
-          </View>
-        ) : pagination && !pagination.has_next && !isSearchMode ? (
-          <View style={styles.endOfListContainer}>
-            <Text style={styles.endOfListText}>
-              You've reached the end of the list
-            </Text>
-          </View>
-        ) : null
-      }
-    />
+    <View style={styles.listContainer}>
+      {leads.map(lead => renderLeadItem(lead))}
+      
+      {loadingMore && (
+        <View style={styles.loadMoreContainer}>
+          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+          <Text style={styles.loadMoreText}>Loading more leads...</Text>
+        </View>
+      )}
+      
+      {pagination && !pagination.has_next && !isSearchMode && (
+        <View style={styles.endOfListContainer}>
+          <Text style={styles.endOfListText}>
+            You've reached the end of the list
+          </Text>
+        </View>
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   listContainer: {
-    // marginTop: 16,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   leadItem: {
     flexDirection: 'row',
@@ -399,4 +380,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LeadsList;
+export default LeadsListUpdated;

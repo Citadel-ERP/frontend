@@ -414,7 +414,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       }
       
       setLoadingCollaborators(true);
-      const response = await fetch(`${BACKEND_URL}/manager/addCollaborators`, {
+      const response = await fetch(`${BACKEND_URL}/manager/addCollaborator`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -917,9 +917,9 @@ const EditLead: React.FC<EditLeadProps> = ({
         </View>
 
         {/* Save Button */}
-        <View style={styles.detailCard}>
+        <View style={[{alignItems: 'center'}]}>
           <TouchableOpacity 
-            style={[styles.saveButton, loading && styles.buttonDisabled]} 
+            style={[styles.saveButton, loading && styles.buttonDisabled,{width: '90%'}]} 
             onPress={handleSave}
             disabled={loading}
           >
@@ -1035,7 +1035,7 @@ const EditLead: React.FC<EditLeadProps> = ({
             
             <ScrollView style={styles.modalScrollView}>
               {/* Current assigned user if exists */}
-              {editedLead.assigned_to && (
+              {/* {editedLead.assigned_to && (
                 <View style={[styles.searchResultItem, styles.currentAssignedItem]}>
                   <View style={styles.searchResultContent}>
                     <Ionicons name="person-add" size={18} color={MODERN_COLORS.success} />
@@ -1049,7 +1049,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                     </View>
                   </View>
                 </View>
-              )}
+              )} */}
               
               {/* Search results */}
               {assignedToResults.length > 0 ? (
@@ -1058,7 +1058,8 @@ const EditLead: React.FC<EditLeadProps> = ({
                     key={user.email}
                     style={[
                       styles.searchResultItem,
-                      editedLead.assigned_to?.email === user.email && styles.selectedItem
+                      editedLead.assigned_to?.email === user.email && styles.selectedItem,
+                      {backgroundColor: "#fff"},
                     ]}
                     onPress={() => handleAssignToUser(user)}
                   >
@@ -1209,7 +1210,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: MODERN_COLORS.textPrimary,
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: '#fff',
     width: '100%',
   },
   inputError: {
@@ -1340,7 +1341,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: MODERN_COLORS.textPrimary,
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: '#fff',
     paddingRight: 40,
   },
   searchLoading: {
@@ -1369,9 +1370,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
-    backgroundColor: MODERN_COLORS.background,
-    borderLeftWidth: 3,
-    borderLeftColor: MODERN_COLORS.accent,
+    backgroundColor: "#fff",
+    borderLeftWidth: 4,
+    borderTopWidth:1,
+    borderBottomWidth:1,
+    borderRightWidth:1,
+    borderColor: MODERN_COLORS.accent,
   },
   searchResultContent: {
     flex: 1,
@@ -1426,7 +1430,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: '#fff',
   },
   dropdownText: {
     fontSize: 15,

@@ -51,7 +51,6 @@ const Header: React.FC<HeaderProps> = ({
   addButtonText = '+ Add',
   loading = false,
 }) => {
-  console.log('Header rendered with onBack:', onBack);
   
   return (
     <View style={styles.headerBanner}>

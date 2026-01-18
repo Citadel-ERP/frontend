@@ -961,7 +961,9 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
               textAlignVertical="top"
             />
             <TouchableOpacity
-              style={[styles.submitButton, addingRemark && styles.submitButtonDisabled]}
+              style={[styles.submitButton, addingRemark && styles.submitButtonDisabled,{
+                backgroundColor: colors.success, width: '100%', marginLeft: 0
+              }]}
               onPress={addRemark}
               disabled={addingRemark}
             >

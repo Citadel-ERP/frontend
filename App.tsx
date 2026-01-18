@@ -192,10 +192,11 @@ function App(): React.JSX.Element {
     }
   };
 
-  const loginAPI = async (email: string, password: string): Promise<LoginResponse> => {
+  const loginAPI = async (email: string, password: string, isBrowser: boolean): Promise<LoginResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
       console.log('Using Backend URL:', BACKEND_URL);
+      console.log('Is Browser:', isBrowser);
 
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
@@ -205,6 +206,7 @@ function App(): React.JSX.Element {
         body: JSON.stringify({
           email,
           password,
+          is_browser: isBrowser, // Added is_browser parameter
         }),
       });
 
@@ -329,10 +331,10 @@ function App(): React.JSX.Element {
     }
   };
 
-  const handleLogin = async (email: string, password: string) => {
+  const handleLogin = async (email: string, password: string, identifierType: 'email' | 'phone' = 'email', isBrowser: boolean = false) => {
     setIsLoading(true);
     try {
-      const response = await loginAPI(email, password);
+      const response = await loginAPI(email, password, isBrowser);
       console.log('Login response:', response);
 
       // Store email and user data

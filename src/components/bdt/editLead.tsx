@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption } from './types';
@@ -109,7 +110,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   }, []);
 
   const ModernHeader = () => (
-    <SafeAreaView style={styles.header}>
+    <View style={[styles.header,{paddingTop: Platform.OS === 'ios' ? 10 : 10}]}>
       <View style={styles.headerContent}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
@@ -138,7 +139,7 @@ const EditLead: React.FC<EditLeadProps> = ({
           )}
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 
   const fetchPhases = async () => {
@@ -750,9 +751,9 @@ const EditLead: React.FC<EditLeadProps> = ({
         </View>
 
         {/* Save Button */}
-        <View style={styles.detailCard}>
+        <View style={[{display:'flex', justifyContent: 'center', alignItems: 'center'}]}>
           <TouchableOpacity 
-            style={[styles.saveButton, loading && styles.buttonDisabled]} 
+            style={[styles.saveButton, loading && styles.buttonDisabled,{width: '90%', alignItems: 'center'}]} 
             onPress={handleSave}
             disabled={loading}
           >
@@ -988,7 +989,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: MODERN_COLORS.textPrimary,
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: "#fff",
   },
   inputError: {
     borderColor: MODERN_COLORS.danger,
@@ -1034,7 +1035,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom:10,
     color: MODERN_COLORS.textPrimary,
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: "#fff",
     paddingRight: 40,
   },
   searchLoading: {
@@ -1063,9 +1064,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: "#fff",
     borderLeftWidth: 3,
-    borderLeftColor: MODERN_COLORS.accent,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderColor: MODERN_COLORS.accent,
   },
   searchResultContent: {
     flex: 1,
@@ -1126,7 +1130,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: MODERN_COLORS.background,
+    backgroundColor: "#fff",
   },
   dropdownText: {
     fontSize: 15,

@@ -17,8 +17,10 @@ import {
   Linking,
   StatusBar,
   Keyboard,
+  KeyboardEvent,
   Animated
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -85,7 +87,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
   const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
-  
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+  const [isPickerActive, setIsPickerActive] = useState(false);
+
   // Refs
   const flatListRef = useRef<FlatList>(null);
   const hasLoadedInitially = useRef(false);
@@ -93,8 +99,44 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   const inputRef = useRef<TextInput>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
-  // Get keyboard behavior based on platform
-  const keyboardBehavior = useMemo(() => Platform.OS === 'ios' ? 'padding' : 'height', []);
+  // Keyboard event handlers
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      handleKeyboardShow
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      handleKeyboardHide
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const handleKeyboardShow = (event: KeyboardEvent) => {
+    setIsKeyboardVisible(true);
+    if (Platform.OS === 'android') {
+      Animated.timing(keyboardHeightAnim, {
+        toValue: event.endCoordinates.height,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  const handleKeyboardHide = () => {
+    setIsKeyboardVisible(false);
+    if (Platform.OS === 'android') {
+      Animated.timing(keyboardHeightAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   // Effects
   useEffect(() => {
@@ -230,18 +272,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   // Process comments to include date separators
   const getProcessedComments = useCallback(() => {
     if (!comments || comments.length === 0) return [];
-    
+
     const processed: any[] = [];
     let lastDate = '';
-    
+
     // Sort comments by date (oldest to newest)
     const sortedComments = [...comments].sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-    
+
     sortedComments.forEach((comment, index) => {
       const commentDate = formatWhatsAppDate(comment.date);
-      
+
       // Add date separator if this is the first comment or date has changed
       if (commentDate !== lastDate) {
         processed.push({
@@ -252,7 +294,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
         });
         lastDate = commentDate;
       }
-      
+
       // Add the comment
       processed.push({
         type: 'comment',
@@ -260,7 +302,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
         data: comment
       });
     });
-    
+
     return processed;
   }, [comments, formatWhatsAppDate]);
 
@@ -366,21 +408,108 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
     }
   }, [token]);
 
-  const handleAttachDocuments = useCallback(async (): Promise<void> => {
+  const handleTakePhoto = useCallback(async (): Promise<void> => {
+    if (isPickerActive) return;
+    setIsPickerActive(true);
+
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permissions are needed to take photos.');
+        setIsPickerActive(false);
+        setShowAttachmentModal(false);
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const fileName = `photo_${Date.now()}.jpg`;
+        const newFile: DocumentPicker.DocumentPickerAsset = {
+          uri: asset.uri,
+          name: fileName,
+          mimeType: 'image/jpeg',
+          size: asset.fileSize,
+        };
+        setSelectedDocuments(prev => [...prev, newFile]);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Camera Error', 'Failed to take photo. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
+    }
+  }, [isPickerActive]);
+
+  const handleSelectFromGallery = useCallback(async (): Promise<void> => {
+    if (isPickerActive) return;
+    setIsPickerActive(true);
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Photo library permissions are needed to select images.');
+        setIsPickerActive(false);
+        setShowAttachmentModal(false);
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        selectionLimit: 5,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newFiles: DocumentPicker.DocumentPickerAsset[] = result.assets.map((asset, index) => {
+          const extension = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+          return {
+            uri: asset.uri,
+            name: `image_${Date.now()}_${index}.${extension}`,
+            mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
+            size: asset.fileSize,
+          };
+        });
+        setSelectedDocuments(prev => [...prev, ...newFiles]);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    } catch (error) {
+      console.error('Error selecting images:', error);
+      Alert.alert('Selection Error', 'Failed to select images. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
+    }
+  }, [isPickerActive]);
+
+  const handleSelectDocument = useCallback(async (): Promise<void> => {
+    if (isPickerActive) return;
+    setIsPickerActive(true);
+
     try {
       const result = await DocumentPicker.getDocumentAsync({
         multiple: true,
-        type: '*/*'
+        type: '*/*',
+        copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets) {
-        setSelectedDocuments(result.assets);
+        setSelectedDocuments(prev => [...prev, ...result.assets]);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error picking documents:', error);
       Alert.alert('Error', 'Failed to pick documents. Please try again.');
+    } finally {
+      setIsPickerActive(false);
+      setShowAttachmentModal(false);
     }
-  }, []);
+  }, [isPickerActive]);
 
   const addCommentToBackend = useCallback(async (
     comment: string,
@@ -616,7 +745,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   }, [renderDateSeparator, renderCommentItem]);
 
   const ModernHeader = useMemo(() => (
-    <SafeAreaView style={s.headerSafeArea}>
+    <SafeAreaView style={s.headerSafeArea} edges={['top']}>
       <View style={s.header}>
         <StatusBar barStyle="light-content" backgroundColor={C.primary} />
         <View style={s.headerContent}>
@@ -789,8 +918,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      <SafeAreaView style={s.modalContainer}>
-        <View style={s.modalHeader}>
+      {/* <SafeAreaView style={[s.modalContainer]} edges={['top']}> */}
+        <View style={[s.modalHeader,{paddingTop: Platform.OS === 'ios' ? 50 : 15}]}>
           <TouchableOpacity
             onPress={() => setShowLeadDetailsModal(false)}
             style={s.modalBackButton}
@@ -808,7 +937,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           contentContainerStyle={s.modalScrollContent}
           ListFooterComponent={<View style={s.modalBottomSpacing} />}
         />
-      </SafeAreaView>
+      {/* </SafeAreaView> */}
     </Modal>
   ), [showLeadDetailsModal, modalSections, renderModalSection]);
 
@@ -817,89 +946,224 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       {ModernHeader}
       {ContactInfoModal}
 
-      <KeyboardAvoidingView
-        style={s.keyboardAvoidView}
-        behavior={keyboardBehavior}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        enabled
-      >
-        <View style={s.chatContainer}>
-          {loadingComments ? (
-            <View style={s.loadingContainer}>
-              <ActivityIndicator size="large" color={C.primary} />
-              <Text style={s.loadingText}>Loading conversations...</Text>
-            </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              data={getProcessedComments()}
-              renderItem={renderChatItem}
-              keyExtractor={(item) => item.id}
-              inverted={false}
-              onEndReached={handleLoadMoreComments}
-              onEndReachedThreshold={0.1}
-              contentContainerStyle={s.chatListContent}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  colors={[C.primary]}
-                  tintColor={C.primary}
-                />
-              }
-              ListHeaderComponent={
-                loadingMoreComments ? (
-                  <View style={s.loadMoreContainer}>
-                    <ActivityIndicator size="small" color={C.primary} />
-                  </View>
-                ) : null
-              }
-              ListEmptyComponent={
-                <View style={s.emptyChat}>
-                  <MaterialIcons name="forum" size={64} color={C.border} />
-                  <Text style={s.emptyChatTitle}>No conversations yet</Text>
-                  <Text style={s.emptyChatText}>
-                    Start by sending a message or quick reply
-                  </Text>
-                </View>
-              }
-            />
-          )}
-        </View>
-
-        {selectedDocuments.length > 0 && (
-          <View style={s.selectedFilesPreview}>
-            <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
-            <FlatList
-              horizontal
-              data={selectedDocuments}
-              renderItem={({ item: doc, index }) => (
-                <View style={s.selectedDocumentItem}>
-                  <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
-                  <View style={s.selectedDocumentInfo}>
-                    <Text style={s.selectedDocumentName} numberOfLines={1}>
-                      {truncateFileName(doc.name, 20)}
+      {Platform.OS === 'android' ? (
+        <View style={s.androidContainer}>
+          <View style={s.chatContainer}>
+            {loadingComments ? (
+              <View style={s.loadingContainer}>
+                <ActivityIndicator size="large" color={C.primary} />
+                <Text style={s.loadingText}>Loading conversations...</Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={getProcessedComments()}
+                renderItem={renderChatItem}
+                keyExtractor={(item) => item.id}
+                inverted={false}
+                onEndReached={handleLoadMoreComments}
+                onEndReachedThreshold={0.1}
+                contentContainerStyle={s.chatListContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[C.primary]}
+                    tintColor={C.primary}
+                  />
+                }
+                ListHeaderComponent={
+                  loadingMoreComments ? (
+                    <View style={s.loadMoreContainer}>
+                      <ActivityIndicator size="small" color={C.primary} />
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  <View style={s.emptyChat}>
+                    <MaterialIcons name="forum" size={64} color={C.border} />
+                    <Text style={s.emptyChatTitle}>No conversations yet</Text>
+                    <Text style={s.emptyChatText}>
+                      Start by sending a message or quick reply
                     </Text>
-                    <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
-                    <Ionicons name="close" size={18} color={C.textTertiary} />
-                  </TouchableOpacity>
-                </View>
-              )}
-              keyExtractor={(_, idx) => `doc-${idx}`}
-              showsHorizontalScrollIndicator={false}
-            />
+                }
+              />
+            )}
           </View>
-        )}
 
-        <View style={s.inputContainerWrapper}>
-          <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
+          {selectedDocuments.length > 0 && (
+            <View style={s.selectedFilesPreview}>
+              <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+              <FlatList
+                horizontal
+                data={selectedDocuments}
+                renderItem={({ item: doc, index }) => (
+                  <View style={s.selectedDocumentItem}>
+                    <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
+                    <View style={s.selectedDocumentInfo}>
+                      <Text style={s.selectedDocumentName} numberOfLines={1}>
+                        {truncateFileName(doc.name, 20)}
+                      </Text>
+                      <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
+                      <Ionicons name="close" size={18} color={C.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(_, idx) => `doc-${idx}`}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+
+          <Animated.View style={[s.androidInputContainer, { marginBottom: keyboardHeightAnim }]}>
+            <SafeAreaView style={s.inputSafeArea} edges={['bottom']}>
+              <View style={s.inputContainer}>
+                <View style={s.inputWrapper}>
+                  <View style={s.inputRow}>
+                    <TouchableOpacity style={s.attachmentButton} onPress={() => setShowAttachmentModal(true)}
+                      disabled={addingComment || isPickerActive}>
+                      <Ionicons name="attach" size={22} color={C.primary} />
+                      {selectedDocuments.length > 0 && (
+                        <View style={s.fileCounterBadge}>
+                          <Text style={s.fileCounterText}>{selectedDocuments.length}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    <View style={s.inputField}>
+                      <TextInput
+                        ref={inputRef}
+                        style={s.messageInput}
+                        value={newComment}
+                        onChangeText={setNewComment}
+                        placeholder="Type your message..."
+                        multiline
+                        maxLength={1000}
+                        placeholderTextColor={C.textTertiary}
+                        editable={!addingComment}
+                        returnKeyType="default"
+                        blurOnSubmit={false}
+                        onSubmitEditing={() => {
+                          if (isSendEnabled()) {
+                            handleAddComment();
+                          }
+                        }}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        s.sendButton,
+                        { backgroundColor: isSendEnabled() ? C.primary : C.border }
+                      ]}
+                      onPress={handleAddComment}
+                      disabled={addingComment || !isSendEnabled()}
+                    >
+                      {addingComment ? (
+                        <ActivityIndicator color="#FFF" size="small" />
+                      ) : (
+                        <Ionicons
+                          name="send"
+                          size={18}
+                          color={isSendEnabled() ? '#FFF' : C.textTertiary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </SafeAreaView>
+          </Animated.View>
+        </View>
+      ) : (
+        <KeyboardAvoidingView
+          style={s.iosContainer}
+          behavior="padding"
+          keyboardVerticalOffset={0}
+        >
+          <View style={s.chatContainer}>
+            {loadingComments ? (
+              <View style={s.loadingContainer}>
+                <ActivityIndicator size="large" color={C.primary} />
+                <Text style={s.loadingText}>Loading conversations...</Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={getProcessedComments()}
+                renderItem={renderChatItem}
+                keyExtractor={(item) => item.id}
+                inverted={false}
+                onEndReached={handleLoadMoreComments}
+                onEndReachedThreshold={0.1}
+                contentContainerStyle={s.chatListContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[C.primary]}
+                    tintColor={C.primary}
+                  />
+                }
+                ListHeaderComponent={
+                  loadingMoreComments ? (
+                    <View style={s.loadMoreContainer}>
+                      <ActivityIndicator size="small" color={C.primary} />
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  <View style={s.emptyChat}>
+                    <MaterialIcons name="forum" size={64} color={C.border} />
+                    <Text style={s.emptyChatTitle}>No conversations yet</Text>
+                    <Text style={s.emptyChatText}>
+                      Start by sending a message or quick reply
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+
+          {selectedDocuments.length > 0 && (
+            <View style={s.selectedFilesPreview}>
+              <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+              <FlatList
+                horizontal
+                data={selectedDocuments}
+                renderItem={({ item: doc, index }) => (
+                  <View style={s.selectedDocumentItem}>
+                    <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
+                    <View style={s.selectedDocumentInfo}>
+                      <Text style={s.selectedDocumentName} numberOfLines={1}>
+                        {truncateFileName(doc.name, 20)}
+                      </Text>
+                      <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
+                      <Ionicons name="close" size={18} color={C.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(_, idx) => `doc-${idx}`}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+
+          <View style={[
+            s.inputContainerWrapper,
+            { marginBottom: isKeyboardVisible ? 0 : -30 }
+          ]}>
+            {/* <SafeAreaView style={s.inputSafeArea} edges={['bottom']}> */}
             <View style={s.inputContainer}>
               <View style={s.inputWrapper}>
                 <View style={s.inputRow}>
-                  <TouchableOpacity style={s.attachmentButton} onPress={handleAttachDocuments}>
+                  <TouchableOpacity style={s.attachmentButton} onPress={() => setShowAttachmentModal(true)}
+                    disabled={addingComment || isPickerActive}>
                     <Ionicons name="attach" size={22} color={C.primary} />
                     {selectedDocuments.length > 0 && (
                       <View style={s.fileCounterBadge}>
@@ -948,9 +1212,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
                 </View>
               </View>
             </View>
-          </SafeAreaView>
-        </View>
-      </KeyboardAvoidingView>
+            {/* </SafeAreaView> */}
+          </View>
+        </KeyboardAvoidingView>
+      )}
 
       {showDefaultComments && (
         <View style={s.defaultCommentsOverlay}>
@@ -988,6 +1253,60 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           </SafeAreaView>
         </View>
       )}
+
+      <Modal
+        visible={showAttachmentModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          if (!isPickerActive) {
+            setShowAttachmentModal(false);
+          }
+        }}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            if (!isPickerActive) {
+              setShowAttachmentModal(false);
+            }
+          }}
+        >
+          <View style={s.attachmentModalContent}>
+            <TouchableOpacity
+              style={s.attachmentOption}
+              onPress={handleSelectDocument}
+              disabled={isPickerActive}
+            >
+              <View style={[s.attachmentIconContainer, { backgroundColor: '#7F66FF' }]}>
+                <MaterialIcons name="insert-drive-file" size={24} color="#FFF" />
+              </View>
+              <Text style={s.attachmentOptionText}>Document</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.attachmentOption}
+              onPress={handleTakePhoto}
+              disabled={isPickerActive}
+            >
+              <View style={[s.attachmentIconContainer, { backgroundColor: '#FF4D67' }]}>
+                <Ionicons name="camera" size={24} color="#FFF" />
+              </View>
+              <Text style={s.attachmentOptionText}>Camera</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.attachmentOption}
+              onPress={handleSelectFromGallery}
+              disabled={isPickerActive}
+            >
+              <View style={[s.attachmentIconContainer, { backgroundColor: '#C861F9' }]}>
+                <Ionicons name="images" size={24} color="#FFF" />
+              </View>
+              <Text style={s.attachmentOptionText}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 });
@@ -996,8 +1315,8 @@ LeadDetails.displayName = 'LeadDetails';
 
 const s = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: C.chatBg },
-  container: { flex: 1, backgroundColor: C.chatBg },
-  keyboardAvoidView: { flex: 1 },
+  androidContainer: { flex: 1 },
+  iosContainer: { flex: 1 },
   headerSafeArea: { backgroundColor: C.primary },
   header: {
     backgroundColor: C.primary,
@@ -1264,11 +1583,17 @@ const s = StyleSheet.create({
   inputContainerWrapper: {
     borderTopWidth: 1,
     borderTopColor: C.border,
+    backgroundColor: C.surface,
+    // marginBottom: -30
+  },
+  androidInputContainer: {
+    borderTopWidth: 1,
+    borderTopColor: C.border,
     backgroundColor: C.surface
   },
   inputSafeArea: { backgroundColor: C.surface },
   inputContainer: { backgroundColor: C.surface },
-  inputWrapper: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 20 : 8 },
+  inputWrapper: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 8 : 8 },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   attachmentButton: { padding: 8, marginBottom: 2, position: 'relative' },
   fileCounterBadge: {
@@ -1364,7 +1689,7 @@ const s = StyleSheet.create({
   },
   defaultCommentText: { fontSize: 16, color: C.textPrimary, lineHeight: 22 },
   modalBottomSpacing: { height: 40 },
-  
+
   // New styles for date separators
   dateSeparatorContainer: {
     alignItems: 'center',
@@ -1379,6 +1704,37 @@ const s = StyleSheet.create({
   dateSeparatorText: {
     fontSize: 12,
     color: '#666',
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  attachmentModalContent: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  attachmentOption: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  attachmentIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentOptionText: {
+    fontSize: 14,
+    color: C.textPrimary,
     fontWeight: '500',
   },
 });

@@ -344,7 +344,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>City</Text>
             <View style={styles.readOnlyField}>
-              <Ionicons name="location" size={16} color={WHATSAPP_COLORS.textTertiary} style={styles.fieldIcon} />
+              <Ionicons name="location" size={16} color={WHATSAPP_COLORS.primaryDark} style={styles.fieldIcon} />
               <Text style={styles.readOnlyText}>{selectedCity}</Text>
             </View>
           </View>
@@ -379,7 +379,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={[styles.input, emailError && styles.inputError]}
+              style={[styles.input, emailError && styles.inputError,{width:'83%'}]}
               value={newEmail}
               onChangeText={(text) => {
                 setNewEmail(text);
@@ -426,7 +426,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
           <View style={styles.addContactContainer}>
             <TextInput
-              style={[styles.input, phoneError && styles.inputError]}
+              style={[styles.input, phoneError && styles.inputError,{width:"85%"}]}
               value={newPhone}
               onChangeText={(text) => {
                 setNewPhone(text);
@@ -623,7 +623,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: WHATSAPP_COLORS.textPrimary,
-    backgroundColor: WHATSAPP_COLORS.background,
+    backgroundColor: "#fff",
+    
   },
   inputError: {
     borderColor: WHATSAPP_COLORS.danger,
@@ -736,7 +737,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.background,
+    backgroundColor: "#fff",
   },
   dropdownText: {
     fontSize: 15,

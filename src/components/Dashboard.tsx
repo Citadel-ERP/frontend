@@ -56,8 +56,6 @@ import BottomBar from './dashboard/bottomBar';
 import { BackgroundAttendanceService } from '../services/backgroundAttendance';
 import { GeofencingService } from '../services/geofencing';
 import { AttendanceUtils } from '../services/attendanceUtils';
-// Do not remove this line
-// import { BackgroundLocationService } from '../services/backgroundLocationTracking';
 import { BACKEND_URL } from '../config/config';
 
 const { width, height } = Dimensions.get('window');
@@ -240,13 +238,14 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   currentColors,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const { width: screenWidth } = useWindowDimensions();
+  const isWeb = Platform.OS === 'web';
 
   // WhatsApp-style menu items with icons and colors
   const whatsappMenuItems = [
     { id: 'profile', title: 'Profile', icon: 'person-circle-outline', color: '#008069' },
     { id: 'settings', title: 'Settings', icon: 'settings-outline', color: '#008069' },
     { id: 'notifications', title: 'Notifications', icon: 'notifications-outline', color: '#F59E0B' },
-    // { id: 'validation', title: 'System Validation', icon: 'shield-checkmark-outline', color: '#3B82F6' }, // Add this
     { id: 'privacy', title: 'Privacy Policy', icon: 'shield-checkmark-outline', color: '#1E40AF' },
     { id: 'messages', title: 'Messages', icon: 'chatbubbles-outline', color: '#10B981' },
     { id: 'logout', title: 'Logout', icon: 'log-out-outline', color: '#EF4444' },
@@ -263,78 +262,61 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     <>
       {/* Backdrop */}
       <TouchableOpacity
-        style={styles.menuBackdrop}
+        style={[styles.menuBackdrop, isWeb && styles.menuBackdropWeb]}
         activeOpacity={1}
         onPress={onClose}
       >
         <Animated.View
           style={[
             styles.menuContainer,
+            isWeb && styles.menuContainerWeb,
             {
               transform: [{ translateX: slideAnim }],
               backgroundColor: isDark ? '#111B21' : '#e7e6e5',
+              width: isWeb ? Math.min(screenWidth * 0.3, 400) : width * 0.85,
+              maxWidth: isWeb ? 400 : undefined,
             },
           ]}
         >
           {/* Header Section - WhatsApp Style */}
-          <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }]}>
+          <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }, isWeb && styles.menuHeaderWeb]}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
 
-            <View style={styles.userInfoContainer}>
+            <View style={[styles.userInfoContainer, isWeb && styles.userInfoContainerWeb]}>
               {userData?.profile_picture ? (
                 <Image
                   source={{ uri: userData.profile_picture }}
-                  style={styles.userAvatar}
+                  style={[styles.userAvatar, isWeb && styles.userAvatarWeb]}
                 />
               ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#0c4036ff' }]}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: '#0c4036ff' }, isWeb && styles.avatarPlaceholderWeb]}>
                   <Text style={styles.avatarText}>
                     {getInitials(userData?.full_name || 'User')}
                   </Text>
                 </View>
               )}
 
-              <View style={styles.userDetails}>
-                <Text style={styles.userName} numberOfLines={1}>
+              <View style={[styles.userDetails, isWeb && styles.userDetailsWeb]}>
+                <Text style={[styles.userName, isWeb && styles.userNameWeb]} numberOfLines={1}>
                   {userData?.full_name || 'User'}
                 </Text>
-                <Text style={styles.userStatus} numberOfLines={1}>
+                <Text style={[styles.userStatus, isWeb && styles.userStatusWeb]} numberOfLines={1}>
                   {userData?.designation || 'Employee'}
                 </Text>
               </View>
             </View>
-
-            {/* <TouchableOpacity style={styles.qrButton}>
-              <Ionicons name="qr-code-outline" size={24} color="white" />
-            </TouchableOpacity> */}
           </View>
 
-          {/* Search Bar */}
-          {/* <View style={[styles.searchContainer, { backgroundColor: isDark ? '#202C33' : '#F0F2F5' }]}>
-            <Ionicons name="search" size={18} color={isDark ? '#8696A0' : '#667781'} />
-            <TextInput
-              style={[styles.searchInput, { color: isDark ? '#E9EDEF' : '#111B21' }]}
-              placeholder="Search menu"
-              placeholderTextColor={isDark ? '#8696A0' : '#667781'}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={18} color={isDark ? '#8696A0' : '#667781'} />
-              </TouchableOpacity>
-            )}
-          </View> */}
-
           {/* Menu Items */}
-          <ScrollView style={styles.menuItemsContainer}>
+          <ScrollView style={[styles.menuItemsContainer, isWeb && styles.menuItemsContainerWeb]}>
             {filteredMenuItems.map((item, index) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.menuItem,
+                  isWeb && styles.menuItemWeb,
                   activeMenuItem === item.title && styles.activeMenuItem,
                   index === filteredMenuItems.length - 1 && styles.lastMenuItem,
                 ]}
@@ -347,21 +329,21 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 }}
                 activeOpacity={0.7}
               >
-                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
+                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? '#2A3942' : '#F0F2F5' }, isWeb && styles.menuIconContainerWeb]}>
                   <Ionicons
                     name={item.icon as any}
-                    size={22}
+                    size={isWeb ? 24 : 22}
                     color={item.color}
                   />
                 </View>
-                <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
+                <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }, isWeb && styles.menuItemTextWeb]}>
                   {item.title}
                 </Text>
 
                 {item.id !== 'logout' && (
                   <Ionicons
                     name="chevron-forward"
-                    size={18}
+                    size={isWeb ? 20 : 18}
                     color={isDark ? '#8696A0' : '#667781'}
                     style={styles.chevronIcon}
                   />
@@ -371,8 +353,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           </ScrollView>
 
           {/* Footer - App Version */}
-          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
-            <Text style={[styles.versionText, { color: isDark ? '#8696A0' : '#667781' }]}>
+          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#2A3942' : '#F0F2F5' }, isWeb && styles.menuFooterWeb]}>
+            <Text style={[styles.versionText, { color: isDark ? '#8696A0' : '#667781' }, isWeb && styles.versionTextWeb]}>
               Citadel v1.0.0
             </Text>
           </View>
@@ -396,6 +378,7 @@ NotificationsExpo.setNotificationHandler({
 // Main Dashboard Component
 function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isWeb = Platform.OS === 'web';
 
   // State
   const [token, setToken] = useState<string | null>(null);
@@ -454,7 +437,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(-300)).current;
+  const slideAnim = useRef(new Animated.Value(isWeb ? 0 : -300)).current;
   const bulgeAnim = useRef(new Animated.Value(0)).current;
 
   // Current theme colors
@@ -472,10 +455,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Default modules for new users
   const defaultLastOpened: IconItem[] = [
-    // { name: 'HR', color: '#00d285', icon: 'user-tie', library: 'fa5', module_unique_name: 'hr' },
-    // { name: 'Car', color: '#ff5e7a', icon: 'car', library: 'fa5', module_unique_name: 'cab' },
     { name: 'Attendance', color: '#ffb157', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
-    // { name: 'BDT', color: '#1da1f2', icon: 'network-wired', library: 'fa5', module_unique_name: 'bdt' },
   ];
 
   // Debug logging function
@@ -707,7 +687,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           const data = notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') {
             debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
-            // Use the shared utility function
             AttendanceUtils.executeAttendanceFlow('manual', true);
           }
         });
@@ -741,7 +720,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
     };
 
-    setupNotifications();
+    if (!isWeb) {
+      setupNotifications();
+    }
 
     return () => {
       isMounted = false;
@@ -787,7 +768,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         setShowScoutBoy(true);
         break;
       case 'reminder':
-        setShowReminder(true); // Handle reminder notification
+        setShowReminder(true);
         break;
       case 'bup':
         setShowBUP(true);
@@ -881,7 +862,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             if (Array.isArray(data.upcoming_reminder)) {
               setReminders(data.upcoming_reminder);
             } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
-              setReminders([data.upcoming_reminder]); // Wrap single reminder in array
+              setReminders([data.upcoming_reminder]);
             } else {
               setReminders([]);
             }
@@ -889,21 +870,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setHoursWorked(data.hours_worked_last_7_attendance || []);
             setOvertimeHours(data.overtime_hours || []);
 
-            // Combine and sort events
             const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
             console.log('Upcoming events:', events);
             setUpcomingEvents(events);
 
-            // Set autoReconfigure if needed
             if (data.autoReconfigure) {
               setAutoReconfigure();
             }
 
-            // After setting modules, refresh last opened modules with backend icons
             const storedModules = await AsyncStorage.getItem('last_opened_modules');
             if (storedModules) {
               let modulesArray = JSON.parse(storedModules);
-              // Update icons with backend data
               if (data.modules && data.modules.length > 0) {
                 modulesArray = modulesArray.map((storedModule: any) => {
                   const backendModule = data.modules.find(
@@ -919,7 +896,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   }
                   return storedModule;
                 });
-                // Remove duplicates after update
                 const uniqueModules: any[] = [];
                 const seen = new Set();
                 for (const module of modulesArray) {
@@ -931,13 +907,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 modulesArray = uniqueModules.slice(0, 4);
                 await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
                 setLastOpenedModules(modulesArray);
-                // If we have less than 4 modules, populate with random ones from backend
                 if (modulesArray.length < 4 && data.modules.length > 0) {
                   populateMissingLastOpenedModules();
                 }
               }
             } else {
-              // If no stored modules, initialize with random modules from backend
               populateMissingLastOpenedModules();
             }
           }
@@ -959,7 +933,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       const storedModules = await AsyncStorage.getItem('last_opened_modules');
       if (storedModules) {
         let modulesArray = JSON.parse(storedModules);
-        // Remove any duplicates
         const uniqueModules: any[] = [];
         const seen = new Set();
         for (const module of modulesArray) {
@@ -969,10 +942,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           }
         }
         modulesArray = uniqueModules.slice(0, 4);
-        // If we have backend modules, update the icons
         if (modules.length > 0) {
           modulesArray = modulesArray.map((storedModule: any) => {
-            // Try to find matching module from backend
             const backendModule = modules.find(
               m => m.module_unique_name === storedModule.module_unique_name ||
                 m.module_name.toLowerCase().replace('_', ' ') === storedModule.title.toLowerCase()
@@ -986,7 +957,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 module_unique_name: backendModule.module_unique_name
               };
             }
-            // If not found, try to find by partial match
             const partialMatch = modules.find(m =>
               m.module_name.toLowerCase().includes(storedModule.title.toLowerCase()) ||
               storedModule.title.toLowerCase().includes(m.module_name.toLowerCase())
@@ -1002,16 +972,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             }
             return storedModule;
           });
-          // Save the updated modules back to storage
           await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
         }
         setLastOpenedModules(modulesArray);
-        // If we have less than 4 modules, populate with random ones
         if (modulesArray.length < 4) {
           populateMissingLastOpenedModules();
         }
       } else {
-        // If no stored modules, initialize with random modules from backend or defaults
         populateMissingLastOpenedModules();
       }
     } catch (error) {
@@ -1021,13 +988,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Initialize background services
   useEffect(() => {
-    if (!token || !userData) return;
+    if (!token || !userData || isWeb) return;
 
     const initializeBackgroundServices = async () => {
       try {
         console.log('🚀 Initializing hybrid attendance system...');
 
-        // Request permissions
         const permissions = await AttendanceUtils.requestLocationPermissions();
 
         if (!permissions.foreground) {
@@ -1041,14 +1007,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           return;
         }
 
-        // Initialize polling service
         const pollingInitialized = await BackgroundAttendanceService.initialize();
         console.log(pollingInitialized
           ? '✅ Polling service: Active'
           : '❌ Polling service: Failed'
         );
 
-        // Initialize geofencing service (only if background permission granted)
         if (permissions.background) {
           const geofencingInitialized = await GeofencingService.initialize();
           console.log(geofencingInitialized
@@ -1061,10 +1025,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         }
 
         console.log('✅ Hybrid attendance system initialized');
-        console.log('   📊 Active mechanisms:');
-        console.log(`      - Polling: ${pollingInitialized ? 'Yes' : 'No'} (15-min intervals, 8-11 AM, Mon-Fri)`);
-        console.log(`      - Geofencing: ${permissions.background ? 'Yes' : 'No'} (50m radius, office entry)`);
-
       } catch (error) {
         console.warn('⚠️ Failed to initialize attendance services:', error);
       }
@@ -1081,16 +1041,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     const threeMonthsFromNow = new Date();
     threeMonthsFromNow.setMonth(today.getMonth() + 3);
 
-    // Process birthdays
     birthdays.forEach(user => {
       if (user.birth_date) {
         const birthDate = new Date(user.birth_date);
         const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-        // If birthday has already passed this year, get next year's birthday
         if (nextBirthday < today) {
           nextBirthday.setFullYear(today.getFullYear() + 1);
         }
-        // Only include if within next 3 months
         if (nextBirthday <= threeMonthsFromNow) {
           events.push({
             full_name: user.full_name,
@@ -1101,16 +1058,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
     });
 
-    // Process anniversaries
     anniversaries.forEach(user => {
       if (user.joining_date) {
         const anniversaryDate = new Date(user.joining_date);
         const nextAnniversary = new Date(today.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-        // If anniversary has already passed this year, get next year's
         if (nextAnniversary < today) {
           nextAnniversary.setFullYear(today.getFullYear() + 1);
         }
-        // Only include if within next 3 months
         if (nextAnniversary <= threeMonthsFromNow) {
           const years = today.getFullYear() - anniversaryDate.getFullYear();
           events.push({
@@ -1124,7 +1078,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
     });
 
-    // Sort events by date
     events.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
@@ -1136,7 +1089,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     });
 
     console.log(`Found ${events.length} upcoming events within next 3 months`);
-    return events.slice(0, 3); // Return max 3 events
+    return events.slice(0, 3);
   };
 
   // Function to get initials from name
@@ -1164,7 +1117,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Get icon URL helper
   const getIconUrl = (item: IconItem): string => {
-    console.log("this is what i need to fix", item)
     if (item.iconUrl) return item.iconUrl;
     return `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`;
   };
@@ -1192,7 +1144,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Handle module press
   const handleModulePress = (moduleName: string, moduleUniqueName?: string) => {
     const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
-    // Try to find the module in backend modules first
     let moduleData = null;
     if (modules.length > 0) {
       const backendModule = modules.find(
@@ -1208,7 +1159,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         };
       }
     }
-    // If not found in backend modules, create a basic module object
     if (!moduleData) {
       moduleData = {
         title: moduleName,
@@ -1219,41 +1169,30 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     saveLastOpenedModule(moduleData);
 
-    // Navigation logic
     if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
     } else if (key.includes('hr')) {
       setShowHR(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('cab')) {
       setShowCab(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
-    } else if (key.includes('driver') && key!="driver_manager") {
+    } else if (key.includes('driver') && key != "driver_manager") {
       setShowDriver(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('bdt')) {
       setShowBDT(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
       setShowMedical(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('scout')) {
       setShowScoutBoy(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('reminder')) {
-      setShowReminder(true); 
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      setShowReminder(true);
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     } else if (key.includes('employee_management')) {
       setShowEmployeeManagement(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
     else if (key.includes('driver_manager') || key.includes('driver manager')) {
       setShowDriverManager(true);
-      // Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
     }
     else {
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
@@ -1264,16 +1203,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     try {
       const storedModules = await AsyncStorage.getItem('last_opened_modules');
       let modulesArray = storedModules ? JSON.parse(storedModules) : [];
-      // If we have less than 4 modules and we have backend modules available
       if (modulesArray.length < 4 && modules.length > 0) {
         const existingModuleNames = new Set(modulesArray.map((m: any) => m.module_unique_name));
-        // Get all available backend modules that aren't already in the list
         const availableBackendModules = modules.filter(
           (backendModule: any) => !existingModuleNames.has(backendModule.module_unique_name)
         );
-        // Shuffle the available modules to pick random ones
         const shuffledModules = [...availableBackendModules].sort(() => 0.5 - Math.random());
-        // Add random modules until we have 4 total
         while (modulesArray.length < 4 && shuffledModules.length > 0) {
           const randomModule = shuffledModules.pop();
           if (randomModule) {
@@ -1285,20 +1220,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             });
           }
         }
-        // If we still don't have 4 modules and we have default modules, use them
         if (modulesArray.length < 4) {
           const defaultModules = [...defaultLastOpened];
-          // Shuffle default modules
           const shuffledDefaults = [...defaultModules].sort(() => 0.5 - Math.random());
           while (modulesArray.length < 4 && shuffledDefaults.length > 0) {
             const defaultModule = shuffledDefaults.pop();
             if (defaultModule) {
-              // Check if this default module already exists
               const alreadyExists = modulesArray.some(
                 (m: any) => m.module_unique_name === defaultModule.module_unique_name
               );
               if (!alreadyExists) {
-                // Try to find if there's a backend module for this default
                 const backendModule = modules.find(
                   (m: any) => m.module_unique_name === defaultModule.module_unique_name
                 );
@@ -1320,7 +1251,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             }
           }
         }
-        // Ensure no duplicates
         const uniqueModules: any[] = [];
         const seen = new Set();
         for (const module of modulesArray) {
@@ -1329,7 +1259,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             uniqueModules.push(module);
           }
         }
-        // Keep only first 4 unique modules
         modulesArray = uniqueModules.slice(0, 4);
         await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
         setLastOpenedModules(modulesArray);
@@ -1345,16 +1274,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       const storedModules = await AsyncStorage.getItem('last_opened_modules');
       let modulesArray = storedModules ? JSON.parse(storedModules) : [];
 
-      // Find the full module data from backend modules to get the correct icon
       let moduleData = module;
-      // If we have backend modules loaded, try to find the matching module
       if (modules.length > 0) {
         const backendModule = modules.find(
           m => m.module_unique_name === module.module_unique_name ||
             m.module_name.toLowerCase().replace('_', ' ') === module.title.toLowerCase()
         );
         if (backendModule) {
-          // Use the backend module data including the proper icon
           moduleData = {
             title: backendModule.module_name.charAt(0).toUpperCase() +
               backendModule.module_name.slice(1).replace('_', ' '),
@@ -1362,7 +1288,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             module_unique_name: backendModule.module_unique_name
           };
         } else if (module.module_unique_name) {
-          // Try to find by module_unique_name if not found by title
           const backendModuleByName = modules.find(
             m => m.module_unique_name === module.module_unique_name
           );
@@ -1377,15 +1302,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         }
       }
 
-      // Remove existing module if it exists
       modulesArray = modulesArray.filter((m: any) =>
         m.module_unique_name !== moduleData.module_unique_name
       );
 
-      // Add to beginning of array
       modulesArray.unshift(moduleData);
 
-      // Keep only last 4 modules
       if (modulesArray.length > 4) {
         modulesArray = modulesArray.slice(0, 4);
       }
@@ -1396,7 +1318,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('Error saving last opened module:', error);
     }
   };
+
   const [showValidation, setShowValidation] = useState(false);
+
   // Handle back from pages
   const handleBackFromPage = () => {
     setShowAttendance(false);
@@ -1428,11 +1352,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          // Stop both attendance services
-          await BackgroundAttendanceService.stop();
-          await GeofencingService.stop();
-          console.log('✅ All attendance services stopped');
-
+          if (!isWeb) {
+            await BackgroundAttendanceService.stop();
+            await GeofencingService.stop();
+            console.log('✅ All attendance services stopped');
+          }
           onLogout();
         }
       },
@@ -1442,12 +1366,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Open menu
   const openMenu = () => {
     setIsMenuVisible(true);
-    Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    if (!isWeb) {
+      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    }
   };
 
   // Close menu
   const closeMenu = () => {
-    Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
+    if (!isWeb) {
+      Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
+    } else {
+      setIsMenuVisible(false);
+    }
   };
 
   // Handle nav item press
@@ -1455,7 +1385,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setActiveNavItem(navItem);
     if (navItem === 'message') {
       Alert.alert('Support', 'Citadel Hub will be available soon!');
-      // setShowChat(true);
     } else if (navItem === 'hr') {
       setShowHR(true);
     } else if (navItem === 'support') {
@@ -1475,9 +1404,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         is_generic: module.is_generic
       }));
     }
-    // Only use default icons as fallback when no backend modules are available
     return defaultLastOpened.map(item => {
-      // Try to find if this module exists in backend modules (for initial load)
       const backendModule = modules.find(m =>
         m.module_unique_name === item.module_unique_name ||
         m.module_name.toLowerCase().replace('_', ' ') === item.name.toLowerCase()
@@ -1513,7 +1440,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (item.id === 'settings') {
       setShowSettings(true);
     } else if (item.id === 'validation') {
-      setShowValidation(true); // Add this
+      setShowValidation(true);
     } else if (item.id === 'messages') {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     } else if (item.id === 'notifications') {
@@ -1540,9 +1467,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Loading state
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.bgColor }]}>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.bgColor }, isWeb && styles.loadingContainerWeb]}>
         <ActivityIndicator size="large" color={theme.accentBlue} />
-        <Text style={[styles.loadingText, { color: theme.textMain }]}>Loading...</Text>
+        <Text style={[styles.loadingText, { color: theme.textMain }, isWeb && styles.loadingTextWeb]}>Loading...</Text>
       </View>
     );
   }
@@ -1550,20 +1477,22 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Error state
   if (error || !userData) {
     return (
-      <View style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }]}>
+      <View style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }, isWeb && styles.containerWeb]}>
         <StatusBar barStyle={isDark ? "light-content" : "light-content"} backgroundColor={currentColors.headerBg} />
-        <Text style={[styles.errorText, { color: currentColors.text }]}>Failed to load data</Text>
+        <Text style={[styles.errorText, { color: currentColors.text }, isWeb && styles.errorTextWeb]}>Failed to load data</Text>
         <TouchableOpacity style={[styles.retryButton, { backgroundColor: currentColors.info }]}>
           <Text style={[styles.retryButtonText, { color: currentColors.white }]}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
   }
+
   if (showValidation) {
     return (
       <ValidationScreen onBack={handleBackFromPage} />
     );
   }
+
   // Render different pages
   if (showChatRoom && selectedChatRoom) {
     return (
@@ -1675,90 +1604,134 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  // Module Grid
-  const ModuleGrid = () => (
-    <View style={styles.moduleGrid}>
-      {/* Attendance Module */}
-      <TouchableOpacity
-        style={styles.moduleAttendance}
-        onPress={() => handleModulePress('Attendance', 'attendance')}
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={['#00d285', '#00b872']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.moduleGradient}
-        >
-          <Ionicons
-            name="arrow-up"
-            size={18}
-            color="white"
-            style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-          />
-          <View style={styles.moduleIconCircle}>
-            <FontAwesome5 name="book-open" size={22} color="white" />
-          </View>
-          <Text style={[styles.moduleTitle, { fontSize: 22, marginBottom: 15 }]}>Attendance</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-      <View style={styles.moduleColumn}>
-        {/* Cab Module */}
-        <TouchableOpacity
-          style={styles.moduleSmall}
-          onPress={() => handleModulePress('Car', 'cab')}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={['#ff5e7a', '#ff4168']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.moduleGradient}
-          >
-            <Ionicons
-              name="arrow-up"
-              size={16}
-              color="white"
-              style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-            />
-            <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
-              <FontAwesome5 name="car" size={18} color="white" />
-            </View>
-            <Text style={[styles.moduleTitle, { fontSize: 14 }]}>Car</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        {/* HR Module */}
-        <TouchableOpacity
-          style={styles.moduleSmall}
-          onPress={() => handleModulePress('HR', 'hr')}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={['#ffb157', '#ff9d3f']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.moduleGradient}
-          >
-            <Ionicons
-              name="arrow-up"
-              size={16}
-              color="white"
-              style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-            />
-            <View style={[styles.moduleIconCircle, { width: 40, height: 40 }]}>
-              <FontAwesome5 name="users" size={18} color="white" />
-            </View>
-            <Text style={[styles.moduleTitle, { fontSize: 14 }]}>HR</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  // Module Grid - Responsive version
+ const ModuleGrid = () => {
+  if (isWeb) {
+    // Web layout - 4 modules in a row
+    return (
+      <View style={[styles.moduleGrid, isWeb && styles.moduleGridWeb]}>
+        {(['attendance', 'cab', 'hr', 'medical'] as const).map((moduleType, index) => {
+          const moduleInfo = {
+            attendance: { name: 'Attendance', icon: 'book-open', gradient: ['#00d285', '#00b872'] },
+            cab: { name: 'Car', icon: 'car', gradient: ['#ff5e7a', '#ff4168'] },
+            hr: { name: 'HR', icon: 'users', gradient: ['#ffb157', '#ff9d3f'] },
+            medical: { name: 'Medical', icon: 'heartbeat', gradient: ['#1da1f2', '#1a8cd8'] }
+          }[moduleType];
+          
+          if (!moduleInfo) return null;
+            return (
+              <TouchableOpacity
+                key={moduleType}
+                style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
+                onPress={() => handleModulePress(moduleInfo.name, moduleType)}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={moduleInfo.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
+                >
+                  <Ionicons
+                    name="arrow-up"
+                    size={isWeb ? 18 : 16}
+                    color="white"
+                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+                  />
+                  <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
+                    <FontAwesome5 name={moduleInfo.icon as any} size={isWeb ? 20 : 18} color="white" />
+                  </View>
+                  <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>{moduleInfo.name}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      );
+    }
 
-  // View All Modules Button
+    // Mobile layout - Original design
+    return (
+      <View style={[styles.moduleGrid, isWeb && styles.moduleGridWeb]}>
+        <TouchableOpacity
+          style={[styles.moduleAttendance, isWeb && styles.moduleAttendanceWeb]}
+          onPress={() => handleModulePress('Attendance', 'attendance')}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#00d285', '#00b872']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
+          >
+            <Ionicons
+              name="arrow-up"
+              size={isWeb ? 22 : 18}
+              color="white"
+              style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+            />
+            <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
+              <FontAwesome5 name="book-open" size={isWeb ? 26 : 22} color="white" />
+            </View>
+            <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>Attendance</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <View style={[styles.moduleColumn, isWeb && styles.moduleColumnWeb]}>
+          <TouchableOpacity
+            style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
+            onPress={() => handleModulePress('Car', 'cab')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#ff5e7a', '#ff4168']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={isWeb ? 18 : 16}
+                color="white"
+                style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+              />
+              <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
+                <FontAwesome5 name="car" size={isWeb ? 20 : 18} color="white" />
+              </View>
+              <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>Car</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
+            onPress={() => handleModulePress('HR', 'hr')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#ffb157', '#ff9d3f']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={isWeb ? 18 : 16}
+                color="white"
+                style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+              />
+              <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
+                <FontAwesome5 name="users" size={isWeb ? 20 : 18} color="white" />
+              </View>
+              <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>HR</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // View All Modules Button - Responsive
   const ViewAllModulesButton = () => (
     <TouchableOpacity
-      style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
+      style={[styles.viewAllContainer, { marginHorizontal: isWeb ? 'auto' : 20 }, isWeb && styles.viewAllContainerWeb]}
       onPress={() => setAllModulesVisible(true)}
       activeOpacity={0.7}
     >
@@ -1766,13 +1739,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         colors={[currentColors.gradientStart, currentColors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.viewAllButton}
+        style={[styles.viewAllButton, isWeb && styles.viewAllButtonWeb]}
       >
-        <Text style={styles.viewAllText}>View all modules</Text>
+        <Text style={[styles.viewAllText, isWeb && styles.viewAllTextWeb]}>View all modules</Text>
         <View style={styles.chevronGroup}>
-          <Ionicons name="chevron-forward" size={16} color="white" />
-          <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
-          <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+          <Ionicons name="chevron-forward" size={isWeb ? 18 : 16} color="white" />
+          <Ionicons name="chevron-forward" size={isWeb ? 18 : 16} color="white" style={{ marginLeft: -8 }} />
+          <Ionicons name="chevron-forward" size={isWeb ? 18 : 16} color="white" style={{ marginLeft: -8 }} />
         </View>
       </LinearGradient>
     </TouchableOpacity>
@@ -1780,7 +1753,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Main dashboard render
   return (
-    <View style={styles.safeContainer}>
+    <View style={[styles.safeContainer, isWeb && styles.safeContainerWeb]}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'light-content'}
         backgroundColor={currentColors.headerBg}
@@ -1814,7 +1787,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         currentColors={currentColors}
       />
 
-      <View style={[styles.mainContent, { backgroundColor: theme.bgColor }]}>
+      <View style={[styles.mainContent, { backgroundColor: theme.bgColor }, isWeb && styles.mainContentWeb]}>
         {/* Animated Circle Overlay */}
         {isAnimating && (
           <Animated.View
@@ -1832,39 +1805,37 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isWeb && styles.scrollContentWeb]}
+          style={isWeb && styles.scrollViewWeb}
         >
           {/* Header Banner with dark overlay */}
           <LinearGradient
             colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.headerBanner}
+            style={[styles.headerBanner, isWeb && styles.headerBannerWeb]}
           >
             <Image
               source={require('../assets/bg.jpeg')}
-              style={styles.headerImage}
+              style={[styles.headerImage, isWeb && styles.headerImageWeb] as any}
               resizeMode="cover"
             />
-            {/* Adjust overlay opacity for better contrast */}
             <View style={[styles.headerOverlay, {
               backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-            }]} />
-            {/* Dark overlay for text visibility */}
-            <View style={styles.headerOverlay} />
-            <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 40 : 20 }]}>
-              <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+            }, isWeb && styles.headerOverlayWeb]} />
+            <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 40 : 20 }, isWeb && styles.headerContentWeb]}>
+              <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }, isWeb && styles.topNavWeb]}>
                 <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
                   {[1, 2, 3].map(i => (
                     <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
                   ))}
                 </TouchableOpacity>
-                <Text style={styles.logoText}>CITADEL</Text>
+                <Text style={[styles.logoText, isWeb && styles.logoTextWeb]}>CITADEL</Text>
                 <View style={styles.headerSpacer} />
               </View>
-              <View style={{ marginTop: 75 }}>
-                <Text style={styles.welcomeText}>Welcome!</Text>
-                <Text style={styles.employeeText}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
+              <View style={{ marginTop: isWeb ? 20 : 75 }}>
+                <Text style={[styles.welcomeText, isWeb && styles.welcomeTextWeb]}>Welcome!</Text>
+                <Text style={[styles.employeeText, isWeb && styles.employeeTextWeb]}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
               </View>
             </View>
           </LinearGradient>
@@ -1877,12 +1848,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             handleModulePress={handleModulePress}
           />
 
-          {/* Upcoming Reminder - ADDED onPress PROP */}
+          {/* Upcoming Reminder */}
           <UpcomingReminder
             reminders={reminders}
             theme={theme}
             currentColors={currentColors}
-            onPress={() => handleModulePress('Reminder')} // This makes the reminder card clickable
+            onPress={() => handleModulePress('Reminder')}
           />
 
           {/* Module Grid */}
@@ -1910,75 +1881,25 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             formatAnniversaryYears={formatAnniversaryYears}
           />
 
-          {/* <View style={styles.themeSwitcher}>
-            <TouchableOpacity
-              style={[styles.lightSwitch, {
-                backgroundColor: isDark ? '#1a1a1a' : '#e0e0e0',
-                width: screenWidth * 0.43,
-              }]}
-              onPress={handleThemeToggle}
-              activeOpacity={0.8}
-            >
-              <View style={styles.switchTrack}>
-                <Animated.View
-                  style={[
-                    styles.switchToggleButton,
-                    {
-                      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
-                      transform: [{ translateX: switchTranslate }],
-                      shadowColor: isDark ? '#000' : '#666',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 3,
-                      elevation: 3,
-                    },
-                  ]}
-                >
-                  <View style={[
-                    styles.switchNotch,
-                    { backgroundColor: isDark ? '#6b7cff' : '#ffa500' }
-                  ]} />
-                </Animated.View>
-              </View>
-
-              <View style={[styles.switchIcons, { width: '100%' }]}>
-                <View style={[styles.switchIconContainer, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons
-                    name="sunny"
-                    size={22}
-                    color={isDark ? '#666' : '#ffa500'}
-                    style={{ alignSelf: 'center' }}
-                  />
-                </View>
-                <View style={[styles.switchIconContainer, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons
-                    name="moon"
-                    size={22}
-                    color={isDark ? '#6b7cff' : '#999'}
-                    style={{ alignSelf: 'center' }}
-                  />
-                </View>
-              </View>
-            </TouchableOpacity>
-          </View> */}
-
           {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerLogo}>CITADEL</Text>
-            <Text style={styles.footerText}>Made with ❤️</Text>
+          <View style={[styles.footer, isWeb && styles.footerWeb]}>
+            <Text style={[styles.footerLogo, isWeb && styles.footerLogoWeb]}>CITADEL</Text>
+            <Text style={[styles.footerText, isWeb && styles.footerTextWeb]}>Made with ❤️</Text>
           </View>
         </ScrollView>
       </View>
 
-      {/* Bottom Bar */}
-      <BottomBar
-        activeNavItem={activeNavItem}
-        handleNavItemPress={handleNavItemPress}
-        theme={theme}
-        currentColors={currentColors}
-        bulgeAnim={bulgeAnim}
-        screenWidth={screenWidth}
-      />
+      {/* Bottom Bar - Only show on mobile */}
+      {!isWeb && (
+        <BottomBar
+          activeNavItem={activeNavItem}
+          handleNavItemPress={handleNavItemPress}
+          theme={theme}
+          currentColors={currentColors}
+          bulgeAnim={bulgeAnim}
+          screenWidth={screenWidth}
+        />
+      )}
     </View>
   );
 }
@@ -2013,8 +1934,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000D24',
   },
+  safeContainerWeb: {
+    maxWidth: 1200,
+    marginHorizontal: 'auto',
+    width: '100%',
+  },
   container: {
     flex: 1,
+  },
+  containerWeb: {
+    maxWidth: 1200,
+    marginHorizontal: 'auto',
   },
   centerContent: {
     justifyContent: 'center',
@@ -2025,14 +1955,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingContainerWeb: {
+    minHeight: Dimensions.get('window').height,
+  },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  loadingTextWeb: {
+    fontSize: 18,
   },
   errorText: {
     fontSize: 18,
     textAlign: 'center',
     marginBottom: 24
+  },
+  errorTextWeb: {
+    fontSize: 20,
   },
   retryButton: {
     paddingHorizontal: 24,
@@ -2045,6 +1984,11 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
+  },
+  mainContentWeb: {
+    maxWidth: 1200,
+    marginHorizontal: 'auto',
+    width: '100%',
   },
   circleOverlay: {
     position: 'absolute',
@@ -2060,6 +2004,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
+  scrollContentWeb: {
+    paddingBottom: 50,
+    paddingHorizontal: 20,
+  },
+  scrollViewWeb: {
+    maxWidth: 1200,
+    marginHorizontal: 'auto',
+  },
   headerBanner: {
     height: 250,
     borderBottomLeftRadius: 30,
@@ -2067,11 +2019,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  headerBannerWeb: {
+    height: 300,
+    borderRadius: 20,
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
   headerImage: {
     position: 'absolute',
     width: '100%',
     height: '100%',
     opacity: 1,
+  },
+  headerImageWeb: {
+    borderRadius: 20,
   },
   headerOverlay: {
     position: 'absolute',
@@ -2079,15 +2040,24 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
+  headerOverlayWeb: {
+    borderRadius: 20,
+  },
   headerContent: {
     padding: 20,
     position: 'relative',
     zIndex: 1,
   },
+  headerContentWeb: {
+    padding: 40,
+  },
   topNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  topNavWeb: {
+    marginTop: 10,
   },
   menuButton: {
     padding: 8,
@@ -2108,6 +2078,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
+  logoTextWeb: {
+    fontSize: 24,
+  },
   headerSpacer: {
     width: 40,
   },
@@ -2116,11 +2089,17 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '700',
   },
+  welcomeTextWeb: {
+    fontSize: 36,
+  },
   employeeText: {
     color: 'white',
     fontSize: 18,
     opacity: 0.8,
     marginTop: 2,
+  },
+  employeeTextWeb: {
+    fontSize: 22,
   },
   moduleGrid: {
     marginHorizontal: 20,
@@ -2128,6 +2107,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 220,
     gap: 12,
+  },
+  moduleGridWeb: {
+    height: 'auto',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 20,
   },
   moduleAttendance: {
     flex: 1,
@@ -2139,10 +2124,21 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
+  moduleAttendanceWeb: {
+    flex: 0,
+    width: '48%',
+    height: 180,
+  },
   moduleColumn: {
     flex: 1,
     gap: 12,
   },
+  moduleColumnWeb: {
+    flex: 0,
+    width: '48%',
+    gap: 20,
+  },
+
   moduleSmall: {
     flex: 1,
     borderRadius: 16,
@@ -2153,10 +2149,18 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
+  moduleWeb: {
+    flex: 0,
+    width: '100%',
+    height: 180,
+  },
   moduleGradient: {
     flex: 1,
     padding: 16,
     justifyContent: 'space-between',
+  },
+  moduleGradientWeb: {
+    padding: 24,
   },
   moduleArrow: {
     position: 'absolute',
@@ -2171,6 +2175,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  moduleIconCircleWeb: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
   moduleTitle: {
     color: 'white',
     fontSize: 16,
@@ -2179,8 +2188,15 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
+  moduleTitleWeb: {
+    fontSize: 20,
+  },
   viewAllContainer: {
     marginBottom: 15,
+  },
+  viewAllContainerWeb: {
+    width: '90%',
+    maxWidth: 400,
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -2194,11 +2210,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
+  viewAllButtonWeb: {
+    padding: 18,
+  },
   viewAllText: {
     fontSize: 14,
     fontWeight: '600',
     color: 'white',
     marginRight: 8,
+  },
+  viewAllTextWeb: {
+    fontSize: 16,
   },
   chevronGroup: {
     flexDirection: 'row',
@@ -2209,6 +2231,9 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     paddingTop: 15,
   },
+  footerWeb: {
+    paddingBottom: 50,
+  },
   footerLogo: {
     fontSize: 28,
     fontWeight: '700',
@@ -2216,9 +2241,15 @@ const styles = StyleSheet.create({
     color: '#a9a9a9b6',
     marginBottom: 5,
   },
+  footerLogoWeb: {
+    fontSize: 32,
+  },
   footerText: {
     fontSize: 10,
     color: '#666',
+  },
+  footerTextWeb: {
+    fontSize: 12,
   },
   themeSwitcher: {
     alignItems: 'center',
@@ -2270,7 +2301,7 @@ const styles = StyleSheet.create({
     height: 44,
     paddingLeft: 20,
   },
-  // WhatsApp-style Hamburger Menu Styles
+  // WhatsApp-style Hamburger Menu Styles - Web responsive
   menuBackdrop: {
     position: 'absolute',
     top: 0,
@@ -2279,6 +2310,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     zIndex: 1000,
+  },
+  menuBackdropWeb: {
+    position: 'fixed',
+  },
+  menuContainerWeb: {
+    position: 'fixed',
+    width: '30%',
+    minWidth: 300,
+    maxWidth: 400,
   },
   menuContainer: {
     position: 'absolute',
@@ -2289,10 +2329,15 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     zIndex: 1001,
   },
+
   menuHeader: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,
     paddingHorizontal: 20,
+  },
+  menuHeaderWeb: {
+    paddingTop: 60,
+    paddingBottom: 30,
   },
   closeButton: {
     position: 'absolute',
@@ -2307,6 +2352,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  userInfoContainerWeb: {
+    alignItems: 'flex-start',
+  },
   userAvatar: {
     width: 56,
     height: 56,
@@ -2314,12 +2362,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
+  userAvatarWeb: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+  },
   avatarPlaceholder: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarPlaceholderWeb: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
   },
   avatarText: {
     color: 'white',
@@ -2330,49 +2388,40 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 16,
   },
+  userDetailsWeb: {
+    marginTop: 10,
+  },
   userName: {
     color: 'white',
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 4,
   },
+  userNameWeb: {
+    fontSize: 22,
+  },
   userStatus: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 14,
   },
-  qrButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 30,
-    right: 20,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  searchInput: {
-    flex: 1,
+  userStatusWeb: {
     fontSize: 16,
-    marginLeft: 12,
-    padding: 0,
   },
   menuItemsContainer: {
     flex: 1,
+  },
+  menuItemsContainerWeb: {
+    paddingTop: 20,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
+  },
+  menuItemWeb: {
+    paddingVertical: 20,
+    paddingHorizontal: 24,
   },
   activeMenuItem: {
     backgroundColor: 'rgba(0, 128, 105, 0.1)',
@@ -2388,10 +2437,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
+  menuIconContainerWeb: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   menuItemText: {
     flex: 1,
     fontSize: 16,
     fontWeight: '400',
+  },
+  menuItemTextWeb: {
+    fontSize: 18,
   },
   chevronIcon: {
     marginLeft: 8,
@@ -2400,8 +2457,17 @@ const styles = StyleSheet.create({
     padding: 20,
     borderTopWidth: 1,
   },
+  menuFooterWeb: {
+    padding: 24,
+  },
   versionText: {
     fontSize: 12,
     textAlign: 'center',
   },
+  versionTextWeb: {
+    fontSize: 14,
+  },
 });
+
+// Import the other components (AllModulesModal, BottomBar, QuickActions, UpcomingEvents, UpcomingReminder, WorkStatistics)
+// They remain the same as in your original code, just ensure they have web-responsive styles too
