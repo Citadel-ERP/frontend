@@ -17,6 +17,7 @@ import Cities from './cities';
 import LeadsListUpdated from './listUpdated';
 import SearchAndFilter from './searchAndFilter';
 import LeadDetails from './leadDetails';
+import LeadDetailsInfo from './leadDetailsInfo'; // Import the new screen
 import EditLead from './editDetails';
 import CreateLead from './createLead';
 
@@ -47,6 +48,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   // State for detail view
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [showLeadInfo, setShowLeadInfo] = useState(false); // New state for lead info screen
 
   // Calculate totalLeads from statusCounts
   const totalLeads = useMemo(() => {
@@ -81,6 +83,10 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   // Handle Android hardware back button
   useEffect(() => {
     const handleBackPress = () => {
+      if (showLeadInfo) {
+        setShowLeadInfo(false);
+        return true;
+      }
       if (viewMode === 'list') {
         handleBackToCitySelection();
         return true;
@@ -108,7 +114,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       handleBackPress
     );
     return () => backHandler.remove();
-  }, [viewMode, isEditMode, onBack]);
+  }, [viewMode, isEditMode, onBack, showLeadInfo]);
 
   useEffect(() => {
     const checkDarkMode = async () => {
@@ -402,12 +408,14 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setSelectedLead({ ...lead });
     setViewMode('detail');
     setIsEditMode(false);
+    setShowLeadInfo(false);
   };
 
   const handleBackToList = useCallback(() => {
     setViewMode('list');
     setSelectedLead(null);
     setIsEditMode(false);
+    setShowLeadInfo(false);
     fetchLeads(1);
     fetchStatusCounts();
   }, []);
@@ -421,6 +429,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setFilterValue('');
     setIsSearchMode(false);
     setStatusCounts({});
+    setShowLeadInfo(false);
   }, []);
 
   const handleEditPress = () => {
@@ -431,7 +440,16 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setViewMode('create');
   };
 
-  // In your BUP component, replace the updateLead function with this:
+  // New function to handle opening lead info screen
+  const handleOpenLeadInfo = (lead: Lead) => {
+    setSelectedLead(lead);
+    setShowLeadInfo(true);
+  };
+
+  // New function to handle closing lead info screen
+  const handleCloseLeadInfo = () => {
+    setShowLeadInfo(false);
+  };
 
   const updateLead = async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
     try {
@@ -452,9 +470,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
       if (leadData.city !== undefined) updatePayload.city = leadData.city;
 
-      // ADD THIS: Handle assigned_to update
       if (leadData.assigned_to !== undefined) {
-        // Send the employee_id to the backend
         updatePayload.assigned_to = leadData.assigned_to?.employee_id || leadData.assigned_to?.email;
       }
 
@@ -509,10 +525,22 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     if (viewMode === 'city-selection') return 'Select City';
     if (viewMode === 'create') return 'Create New Lead';
     if (viewMode === 'detail') return 'Lead Details';
+    if (showLeadInfo) return 'Lead Information';
     return `${selectedCity} - BUP`;
   };
 
   const renderContent = () => {
+    // First check if we should show lead info screen
+    if (showLeadInfo && selectedLead) {
+      return (
+        <LeadDetailsInfo
+          lead={selectedLead}
+          token={token}
+          onBack={handleCloseLeadInfo}
+        />
+      );
+    }
+
     switch (viewMode) {
       case 'city-selection':
         return (
@@ -559,6 +587,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             onEdit={handleEditPress}
             token={token}
             theme={theme}
+            onOpenLeadDetails={handleOpenLeadInfo} // Pass the function to open lead info
           />
         );
       case 'list':
@@ -618,6 +647,13 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   };
 
   const getHeaderActions = () => {
+    if (showLeadInfo) {
+      return {
+        showBackButton: true,
+        onBack: handleCloseLeadInfo,
+        showThemeToggle: true
+      };
+    }
     if (viewMode === 'city-selection') {
       return {
         showBackButton: true,
@@ -679,7 +715,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         translucent
       />
       {/* Only show header outside ScrollView for non-list views */}
-      {viewMode !== 'city-selection' && viewMode !== 'detail' && viewMode !== 'list' && (
+      {viewMode !== 'city-selection' && viewMode !== 'detail' && viewMode !== 'list' && !showLeadInfo && (
         <Header
           title={getHeaderTitle()}
           {...headerActions}

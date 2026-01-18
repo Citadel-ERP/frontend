@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Platform
 } from 'react-native';
+
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from './src/config/config';

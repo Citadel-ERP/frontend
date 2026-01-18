@@ -10,7 +10,6 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
-  // SafeAreaView,
   FlatList,
   Image,
   Linking,
@@ -24,13 +23,12 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination } from './types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Incentive from './incentive';
 import Invoice from './invoice';
-import { styles } from '../hr/styles';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -54,16 +52,13 @@ const C = {
   outgoing: '#DCF8C6'
 };
 
-interface LeadWithNotes extends Omit<Lead, 'notes'> {
-  notes?: string;
-}
-
 interface LeadDetailsProps {
   lead: Lead;
   onBack: () => void;
   onEdit: () => void;
   token: string | null;
   theme: ThemeColors;
+  onOpenLeadDetails: (lead: Lead) => void; // New prop to open lead details screen
 }
 
 const LeadDetails: React.FC<LeadDetailsProps> = ({
@@ -72,6 +67,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   onEdit,
   token,
   theme,
+  onOpenLeadDetails, // Receive the function to open lead details
 }) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [collaborators, setCollaborators] = useState<CollaboratorData[]>([]);
@@ -86,7 +82,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [showDefaultComments, setShowDefaultComments] = useState(false);
   const [defaultComments, setDefaultComments] = useState<any[]>([]);
   const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
-  const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
   const [incentiveData, setIncentiveData] = useState<any>(null);
   const [loadingIncentive, setLoadingIncentive] = useState(false);
   const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
@@ -96,12 +91,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [assignedToOptions, setAssignedToOptions] = useState<Array<{ id: string, name: string }>>([]);
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [isPickerActive, setIsPickerActive] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
-  const modalFlatListRef = useRef<FlatList>(null);
-  const hasLoadedInitially = useRef(false);
-  const inputRef = useRef<TextInput>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showIncentiveModal, setShowIncentiveModal] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+  const hasLoadedInitially = useRef(false);
+  const inputRef = useRef<TextInput>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -119,7 +113,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     fetchCurrentUser();
   }, []);
 
-  // Handle keyboard events to fix the Android padding issue
+  // Handle keyboard events
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
@@ -210,7 +204,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
 
-      // Assuming backend returns array of users with employee_id, first_name, last_name
       const options = data.users.map((user: any) => ({
         id: user.employee_id,
         name: user.full_name || `${user.first_name} ${user.last_name}`.trim()
@@ -762,12 +755,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       </View>
     );
   }, [currentUserEmployeeId, formatTime, handleDownloadFile, truncateFileName]);
+
   const BackIcon = () => (
     <View style={s.backIcon}>
       <View style={s.backArrow} />
-      {/* <Text style={s.backText}>Back</Text> */}
     </View>
   );
+
   const ModernHeader = useMemo(() => (
     <SafeAreaView style={s.headerSafeArea} edges={['top']}>
       <View style={s.header}>
@@ -778,7 +772,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </TouchableOpacity>
           <TouchableOpacity
             style={s.headerInfo}
-            onPress={() => setShowLeadDetailsModal(true)}
+            onPress={() => onOpenLeadDetails(lead)}
             activeOpacity={0.7}
           >
             <View style={s.avatarContainer}>
@@ -824,162 +818,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       </View>
     </SafeAreaView>
-  ), [onBack, onEdit, handleIncentivePress, loadingIncentive, lead, beautifyName, getInitials]);
-
-  const renderModalSection = useCallback(({ item }: { item: string }) => {
-    switch (item) {
-      case 'lead-info':
-        return (
-          <View style={s.infoCard}>
-            <View style={s.infoCardHeader}>
-              <View style={s.infoAvatarContainer}>
-                <View style={s.infoAvatar}>
-                  <Text style={s.infoAvatarText}>
-                    {getInitials(lead.name)}
-                  </Text>
-                </View>
-              </View>
-              <View style={s.infoHeaderText}>
-                <Text style={s.infoName}>{lead.name || 'Lead'}</Text>
-                {lead.company && <Text style={s.infoCompany}>{lead.company}</Text>}
-              </View>
-            </View>
-            <View style={s.statusBadges}>
-              <View style={[s.statusBadge, { backgroundColor: C.primary + '15' }]}>
-                <Text style={[s.statusBadgeText, { color: C.primary }]}>
-                  {beautifyName(lead.phase)}
-                </Text>
-              </View>
-              <View style={[s.statusBadge, { backgroundColor: C.secondary + '15' }]}>
-                <Text style={[s.statusBadgeText, { color: C.secondary }]}>
-                  {beautifyName(lead.subphase)}
-                </Text>
-              </View>
-              <View style={[s.statusBadge, { backgroundColor: C.accent + '15' }]}>
-                <Text style={[s.statusBadgeText, { color: C.accent }]}>
-                  {beautifyName(lead.status)}
-                </Text>
-              </View>
-            </View>
-          </View>
-        );
-
-      case 'contact-info':
-        return (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Contact Information</Text>
-            {lead.emails && lead.emails.length > 0 ? lead.emails.map((email, idx) => (
-              <View key={idx} style={s.detailRow}>
-                <MaterialIcons name="email" size={20} color={C.primary} />
-                <Text style={s.detailValue}>{email.email}</Text>
-                <TouchableOpacity style={s.copyButton}>
-                  <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            )) : (
-              <Text style={s.emptyText}>No emails</Text>
-            )}
-            {lead.phone_numbers && lead.phone_numbers.length > 0 ? lead.phone_numbers.map((phone, idx) => (
-              <View key={idx} style={s.detailRow}>
-                <MaterialIcons name="phone" size={20} color={C.primary} />
-                <Text style={s.detailValue}>{phone.number}</Text>
-                <TouchableOpacity style={s.copyButton}>
-                  <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            )) : (
-              <Text style={s.emptyText}>No phone numbers</Text>
-            )}
-          </View>
-        );
-
-      case 'metadata':
-        return (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Metadata</Text>
-            <View style={s.metadataRow}>
-              <MaterialIcons name="calendar-today" size={18} color={C.textTertiary} />
-              <Text style={s.metadataLabel}>Created:</Text>
-              <Text style={s.metadataValue}>
-                {formatDateTime(lead.created_at || lead.createdAt)}
-              </Text>
-            </View>
-            {lead.assigned_to && (
-              <View style={s.metadataRow}>
-                <MaterialIcons name="person" size={18} color={C.textTertiary} />
-                <Text style={s.metadataLabel}>Assigned to:</Text>
-                <Text style={s.metadataValue}>
-                  {lead.assigned_to.first_name} {lead.assigned_to.last_name}
-                  {lead.assigned_to.full_name && lead.assigned_to.full_name !== `${lead.assigned_to.first_name} ${lead.assigned_to.last_name}`
-                    ? ` (${lead.assigned_to.full_name})`
-                    : ''}
-                </Text>
-              </View>
-            )}
-            {lead.city && (
-              <View style={s.metadataRow}>
-                <MaterialIcons name="location-on" size={18} color={C.textTertiary} />
-                <Text style={s.metadataLabel}>Location:</Text>
-                <Text style={s.metadataValue}>{lead.city}</Text>
-              </View>
-            )}
-          </View>
-        );
-
-      case 'collaborators':
-        return collaborators.length > 0 ? (
-          null
-        ) : null;
-
-      default:
-        return null;
-    }
-  }, [lead, collaborators, beautifyName, formatDateTime, getInitials]);
-
-  const modalSections = useMemo(() => [
-    'lead-info',
-    'contact-info',
-    'metadata',
-    ...(collaborators.length > 0 ? ['collaborators'] : [])
-  ], [collaborators.length]);
-
-  const ContactInfoModal = useMemo(() => (
-    <Modal
-      animationType="slide"
-      transparent={false}
-      visible={showLeadDetailsModal}
-      onRequestClose={() => setShowLeadDetailsModal(false)}
-    >
-      {Platform.OS === 'ios' && (
-        <View style={{ flex: 1, backgroundColor: C.primary, height: 20, marginTop: -160 }}></View>
-      )}
-      <View style={[s.modalHeader, { paddingTop: Platform.OS === 'ios' ? 0 : 15 }]}>
-        <TouchableOpacity
-          onPress={() => setShowLeadDetailsModal(false)}
-          style={s.modalBackButton}
-        >
-          <Ionicons name="close" size={24} color="#FFF" />
-        </TouchableOpacity>
-        <Text style={[s.modalTitle, { marginRight: 40 }]}>Lead Details</Text>
-      </View>
-      <FlatList
-        ref={modalFlatListRef}
-        data={modalSections}
-        renderItem={renderModalSection}
-        keyExtractor={(item) => item}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.modalScrollContent}
-        ListFooterComponent={<View style={s.modalBottomSpacing} />}
-      />
-
-      {/* </SafeAreaView> */}
-    </Modal>
-  ), [showLeadDetailsModal, modalSections, renderModalSection]);
+  ), [onBack, onEdit, handleIncentivePress, loadingIncentive, lead, beautifyName, getInitials, onOpenLeadDetails]);
 
   return (
     <View style={s.mainContainer}>
       {ModernHeader}
-      {ContactInfoModal}
 
       {Platform.OS === 'android' ? (
         <View style={s.androidContainer}>
@@ -1392,11 +1235,6 @@ const s = StyleSheet.create({
     borderColor: "#fff",
     transform: [{ rotate: '-45deg' }],
   },
-  backText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 2,
-  },
 
   // Android-specific container
   androidContainer: {
@@ -1487,185 +1325,6 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
   },
 
-  // Modal Safe Area Styles
-  modalSafeArea: {
-    flex: 1,
-    backgroundColor: C.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: C.primary,
-    height: 56,
-  },
-  modalBackButton: {
-    padding: 6,
-    marginRight: 8,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFF',
-    flex: 1,
-    textAlign: 'center',
-  },
-  modalRightPlaceholder: {
-    width: 40,
-  },
-  modalScrollContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexGrow: 1,
-  },
-
-  // Info Card Styles
-  infoCard: {
-    backgroundColor: C.surface,
-    marginBottom: 12,
-    borderRadius: 8,
-    padding: 16,
-  },
-  infoCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  infoAvatarContainer: {
-    marginRight: 12
-  },
-  infoAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoAvatarText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFF'
-  },
-  infoHeaderText: {
-    flex: 1
-  },
-  infoName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: C.textPrimary,
-    marginBottom: 2,
-  },
-  infoCompany: {
-    fontSize: 14,
-    color: C.textSecondary
-  },
-  statusBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '500'
-  },
-
-  // Section Styles
-  section: {
-    backgroundColor: C.surface,
-    marginBottom: 10,
-    borderRadius: 8,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: C.primary,
-    marginBottom: 12,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    padding: 10,
-    backgroundColor: C.background,
-    borderRadius: 6,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: C.textPrimary,
-    marginLeft: 10,
-    flex: 1,
-  },
-  copyButton: {
-    padding: 4
-  },
-  metadataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingVertical: 4,
-  },
-  metadataLabel: {
-    fontSize: 13,
-    color: C.textSecondary,
-    marginLeft: 8,
-    marginRight: 4,
-    minWidth: 90,
-  },
-  metadataValue: {
-    fontSize: 13,
-    color: C.textPrimary,
-    flex: 1
-  },
-  emptyText: {
-    fontSize: 13,
-    color: C.textTertiary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 10,
-  },
-  collaboratorsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10
-  },
-  collaboratorItem: {
-    alignItems: 'center',
-    width: 70
-  },
-  collaboratorAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  collaboratorAvatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF'
-  },
-  collaboratorName: {
-    fontSize: 11,
-    color: C.textSecondary,
-    textAlign: 'center',
-  },
-
   // Chat Container
   chatContainer: {
     flex: 1,
@@ -1678,7 +1337,7 @@ const s = StyleSheet.create({
     flexGrow: 1,
   },
 
-  // Date Separator (HR Style)
+  // Date Separator
   dateSeparatorContainer: {
     alignItems: 'center',
     marginVertical: 10,
@@ -1712,7 +1371,7 @@ const s = StyleSheet.create({
   // Message Bubbles
   messageBubble: {
     maxWidth: '75%',
-    minWidth: 220,  // Add this line
+    minWidth: 220,
     borderRadius: 10,
     padding: 10,
     shadowColor: '#000',
@@ -1780,8 +1439,8 @@ const s = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     gap: 10,
-    minWidth: 200,  // Add this line
-    maxWidth: 280,  // Add this line
+    minWidth: 200,
+    maxWidth: 280,
   },
   documentIconContainer: {
     width: 36,
@@ -2006,9 +1665,6 @@ const s = StyleSheet.create({
     lineHeight: 20
   },
 
-  modalBottomSpacing: {
-    height: 30
-  },
   inputContainerWrapper: {
     borderTopWidth: 1,
     borderTopColor: C.border,
