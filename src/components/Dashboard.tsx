@@ -1187,8 +1187,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       // setShowScoutBoy(true);
       Alert.alert('Scout Boy', 'Scout Boy feature will be available soon!');
     } else if (key.includes('reminder')) {
-      // setShowReminder(true);
-      Alert.alert('Reminder', 'Reminder feature will be available soon!');
+      setShowReminder(true);
+      // Alert.alert('Reminder', 'Reminder feature will be available soon!');
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
     } else if (key.includes('employee_management')) {
