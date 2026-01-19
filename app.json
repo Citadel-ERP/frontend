@@ -3,7 +3,7 @@
     "name": "Citadel",
     "slug": "citadel",
     "owner": "ananyavishnoi",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
     "icon": "./src/assets/logo.png",
