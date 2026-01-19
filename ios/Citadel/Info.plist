@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.2.0</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -52,26 +52,34 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>This app uses the camera for Face ID authentication.</string>
+    <string>Citadel needs access to your camera to take photos for profile pictures and document uploads.</string>
     <key>NSFaceIDUsageDescription</key>
-    <string>This app uses Face ID to authenticate users and protect your sensitive data.</string>
+    <string>Allow Citadel to use Face ID for secure authentication.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Allow Citadel to use your location for automatic attendance marking.</string>
+    <string>Allow Citadel to access your location in the background for attendance tracking.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>Allow Citadel to use your location for automatic attendance marking even when the app is closed.</string>
+    <string>Allow Citadel to access your location even when the app is closed.</string>
+    <key>NSLocationTemporaryUsageDescriptionDictionary</key>
+    <dict>
+      <key>attendance</key>
+      <string>Your location is needed to verify you are at the office for attendance.</string>
+    </dict>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Allow Citadel to use your location for attendance marking.</string>
+    <string>Allow Citadel to access your location while using the app.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Citadel needs permission to save photos to your photo library.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <string>Citadel needs access to your photo library to select photos for profile pictures and document uploads.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIBackgroundModes</key>
     <array>
-      <string>fetch</string>
       <string>location</string>
+      <string>fetch</string>
       <string>remote-notification</string>
+      <string>processing</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
