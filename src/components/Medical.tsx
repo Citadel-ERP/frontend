@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar,
   Alert, ActivityIndicator, Image, TextInput, Modal, Platform, Linking,
+  SafeAreaView
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontSize } from '../styles/theme';
@@ -11,6 +12,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons, MaterialIcons, FontAwesome, AntDesign } from '@expo/vector-icons';
 
 interface MedicalProps {
   onBack: () => void;
@@ -132,7 +134,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
     }
   };
 
-  
   const downloadPDF = async () => {
     try {
       setDownloadingPDF(true);
@@ -206,40 +207,6 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
       console.error('Error opening document:', error);
       Alert.alert('Error', 'Failed to open document');
     }
-  };
-
-  const downloadAllDocuments = async () => {
-    Alert.alert(
-      'Download All',
-      'This will open all available documents in your browser',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: async () => {
-            const documents: { url: string; name: string }[] = [];
-            
-            if (mediclaimData?.sig_and_stamp) {
-              documents.push({ url: mediclaimData.sig_and_stamp, name: 'HR Signature & Stamp' });
-            }
-            
-            familyMembers.forEach((member, index) => {
-              if (member.aadhar_card) {
-                documents.push({ url: member.aadhar_card, name: `${member.first_name} - Aadhar` });
-              }
-              if (member.pan_card) {
-                documents.push({ url: member.pan_card, name: `${member.first_name} - PAN` });
-              }
-            });
-            
-            for (const doc of documents) {
-              await downloadDocument(doc.url, doc.name);
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-          },
-        },
-      ]
-    );
   };
 
   const pickDocument = async (type: 'aadhar' | 'pan' | 'signature') => {
@@ -480,208 +447,189 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const BackIcon = ({ color = colors.white, size = 24 }) => (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <View style={{ width: size * 0.5, height: size * 0.5, borderLeftWidth: 3, borderBottomWidth: 3, borderColor: color, transform: [{ rotate: '45deg' }], marginLeft: size * 0.15 }} />
-    </View>
-  );
+  const getPolicyColor = () => {
+    if (!mediclaimData) return '#128C7E';
+    const provider = mediclaimData.insurance_provider_name?.toLowerCase() || '';
+    if (provider.includes('icici')) return '#0056B3';
+    if (provider.includes('hdfc')) return '#0047AB';
+    if (provider.includes('bajaj')) return '#FF6B6B';
+    if (provider.includes('star')) return '#4ECDC4';
+    return '#128C7E';
+  };
 
-  const DownloadIcon = ({ size = 20, color = colors.primary }) => (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <View style={{ width: size * 0.7, height: size * 0.8, position: 'relative' }}>
-        <View style={{ 
-          width: size * 0.7, 
-          height: size * 0.5, 
-          borderWidth: 2, 
-          borderColor: color, 
-          borderTopWidth: 0,
-          position: 'absolute',
-          bottom: 0,
-          borderBottomLeftRadius: 3,
-          borderBottomRightRadius: 3,
-        }} />
-        <View style={{
-          width: 2.5,
-          height: size * 0.45,
-          backgroundColor: color,
-          position: 'absolute',
-          left: size * 0.325,
-          top: 0,
-        }} />
-        <View style={{
-          width: size * 0.3,
-          height: size * 0.3,
-          borderRightWidth: 2.5,
-          borderBottomWidth: 2.5,
-          borderColor: color,
-          transform: [{ rotate: '45deg' }],
-          position: 'absolute',
-          left: size * 0.2,
-          top: size * 0.22,
-        }} />
-      </View>
-    </View>
-  );
-
-  const EditIcon = ({ size = 18 }) => (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <View style={{ width: size * 0.9, height: size * 0.9, position: 'relative' }}>
-        <View style={{
-          width: size * 0.45,
-          height: size * 0.7,
-          borderWidth: 2,
-          borderColor: colors.primary,
-          transform: [{ rotate: '45deg' }],
-          position: 'absolute',
-          right: 0,
-          top: -size * 0.05,
-          borderTopLeftRadius: 2,
-          borderTopRightRadius: 2,
-        }} />
-        <View style={{
-          width: size * 0.2,
-          height: size * 0.2,
-          backgroundColor: colors.primary,
-          transform: [{ rotate: '45deg' }],
-          position: 'absolute',
-          right: size * 0.05,
-          top: -size * 0.12,
-          borderRadius: 2,
-        }} />
-        <View style={{
-          width: size * 0.55,
-          height: 2,
-          backgroundColor: colors.primary,
-          position: 'absolute',
-          left: 0,
-          bottom: size * 0.15,
-        }} />
-        <View style={{
-          width: 2,
-          height: size * 0.2,
-          backgroundColor: colors.primary,
-          position: 'absolute',
-          left: 0,
-          bottom: size * 0.15,
-        }} />
-      </View>
-    </View>
-  );
-
-  const DeleteIcon = ({ size = 18 }) => (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <View style={{ width: size * 0.6, height: size * 0.75, borderWidth: 2, borderColor: colors.error, borderTopWidth: 0, borderTopLeftRadius: 2, borderTopRightRadius: 2 }}>
-        <View style={{ width: size * 0.7, height: 2, backgroundColor: colors.error, position: 'absolute', top: -size * 0.15, left: -size * 0.05 }} />
-        <View style={{ width: 2, height: size * 0.4, backgroundColor: colors.error, position: 'absolute', top: size * 0.1, left: size * 0.15 }} />
-        <View style={{ width: 2, height: size * 0.4, backgroundColor: colors.error, position: 'absolute', top: size * 0.1, right: size * 0.15 }} />
-      </View>
-    </View>
-  );
+  const getMemberColor = (index: number) => {
+    const colors = ['#25D366', '#34B7F1', '#FF6B6B', '#4ECDC4', '#FFA726', '#AB47BC'];
+    return colors[index % colors.length];
+  };
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#075E54" />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
+            <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mediclaim</Text>
+          <View style={styles.headerContent}>
+            <View style={[styles.avatar, { backgroundColor: '#25D366' }]}>
+              <MaterialIcons name="health-and-safety" size={24} color="white" />
+            </View>
+            <Text style={styles.headerTitle}>Mediclaim</Text>
+          </View>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <View style={styles.typingIndicator}>
+            <View style={styles.typingDot} />
+            <View style={styles.typingDot} />
+            <View style={styles.typingDot} />
+          </View>
+          <Text style={styles.loadingText}>Loading your mediclaim details...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!mediclaimData) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+      <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#075E54" />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
+            <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mediclaim</Text>
+          <View style={styles.headerContent}>
+            <View style={[styles.avatar, { backgroundColor: '#25D366' }]}>
+              <MaterialIcons name="health-and-safety" size={24} color="white" />
+            </View>
+            <Text style={styles.headerTitle}>Mediclaim</Text>
+          </View>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.emptyContainer}>
-          <Image 
-            source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2965/2965140.png' }} 
-            style={styles.emptyImage} 
-            resizeMode="contain"
-          />
+          <View style={styles.emptyAvatar}>
+            <MaterialIcons name="search-off" size={64} color="#25D366" />
+          </View>
           <Text style={styles.emptyTitle}>No Mediclaim Found</Text>
-          <Text style={styles.emptyText}>Please ask your HR to add your mediclaim details</Text>
+          <Text style={styles.emptySubtitle}>Please ask your HR to add your mediclaim details</Text>
+          <TouchableOpacity style={styles.contactButton} onPress={onBack}>
+            <Text style={styles.contactButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   const canUpdate = mediclaimData.update_allowed && !mediclaimData.sig_and_stamp;
+  const policyColor = getPolicyColor();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor="#075E54" />
       
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <BackIcon />
+          <Ionicons name="chevron-back" size={28} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mediclaim</Text>
+        <View style={styles.headerContent}>
+          <View style={[styles.avatar, { backgroundColor: policyColor }]}>
+            <MaterialIcons name="health-and-safety" size={24} color="white" />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Mediclaim</Text>
+            <Text style={styles.headerSubtitle}>
+              {mediclaimData.insurance_provider_name} • Active
+            </Text>
+          </View>
+        </View>
         <TouchableOpacity 
-          style={styles.downloadAllButton} 
+          style={styles.downloadButton} 
           onPress={downloadPDF}
           disabled={downloadingPDF}
         >
           {downloadingPDF ? (
-            <ActivityIndicator size="small" color={colors.white} />
+            <ActivityIndicator size="small" color="white" />
           ) : (
-            <DownloadIcon size={22} color={colors.white} />
+            <Ionicons name="download-outline" size={24} color="white" />
           )}
         </TouchableOpacity>
       </View>
 
+      {/* Main Content */}
       <ScrollView style={styles.mainContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.contentContainer}>
+        {/* Status Banner */}
+        <View style={[styles.statusBanner, { backgroundColor: policyColor }]}>
+          <View style={styles.statusIcon}>
+            <MaterialIcons name="verified" size={24} color="white" />
+          </View>
+          <View style={styles.statusContent}>
+            <Text style={styles.statusTitle}>Policy Active</Text>
+            <Text style={styles.statusSubtitle}>Sum Insured: ₹{mediclaimData.sum_insured_opted}</Text>
+          </View>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusBadgeText}>{mediclaimData.policy_number}</Text>
+          </View>
+        </View>
+
+        {/* Edit Button */}
+        {canUpdate && !isEditing && (
+          <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editFloatingButton}>
+            <Ionicons name="create-outline" size={20} color="white" />
+            <Text style={styles.editFloatingText}>Edit Details</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Policy Details Card */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="policy" size={20} color={policyColor} />
+            <Text style={styles.sectionTitle}>Policy Details</Text>
+          </View>
           
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Policy Information</Text>
-              {canUpdate && !isEditing && (
-                <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
-                  <Text style={styles.editButtonText}>Edit</Text>
-                </TouchableOpacity>
-              )}
+          <View style={styles.detailCard}>
+            <View style={styles.detailRow}>
+              <MaterialIcons name="badge" size={18} color="#666" />
+              <Text style={styles.detailLabel}>Policy Number</Text>
+              <Text style={styles.detailValue}>{mediclaimData.policy_number}</Text>
             </View>
             
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Policy Number:</Text>
-              <Text style={styles.infoValue}>{mediclaimData.policy_number}</Text>
+            <View style={styles.detailDivider} />
+            
+            <View style={styles.detailRow}>
+              <MaterialIcons name="business" size={18} color="#666" />
+              <Text style={styles.detailLabel}>Insurance Provider</Text>
+              <Text style={[styles.detailValue, { color: policyColor, fontWeight: '700' }]}>
+                {mediclaimData.insurance_provider_name}
+              </Text>
             </View>
             
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Insurance Provider:</Text>
-              <Text style={styles.infoValue}>{mediclaimData.insurance_provider_name}</Text>
+            <View style={styles.detailDivider} />
+            
+            <View style={styles.detailRow}>
+              <MaterialIcons name="attach-money" size={18} color="#666" />
+              <Text style={styles.detailLabel}>Sum Insured</Text>
+              <Text style={styles.detailValue}>₹{mediclaimData.sum_insured_opted}</Text>
             </View>
             
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Sum Insured:</Text>
-              <Text style={styles.infoValue}>₹{mediclaimData.sum_insured_opted}</Text>
-            </View>
+            <View style={styles.detailDivider} />
             
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Created On:</Text>
-              <Text style={styles.infoValue}>{formatDate(mediclaimData.created_at)}</Text>
+            <View style={styles.detailRow}>
+              <MaterialIcons name="calendar-today" size={18} color="#666" />
+              <Text style={styles.detailLabel}>Created On</Text>
+              <Text style={styles.detailValue}>{formatDate(mediclaimData.created_at)}</Text>
             </View>
           </View>
+        </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Nominee Details</Text>
-            
+        {/* Nominee Details */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="person" size={20} color="#FF6B6B" />
+            <Text style={styles.sectionTitle}>Nominee Details</Text>
+          </View>
+          
+          <View style={styles.detailCard}>
             {isEditing ? (
               <>
                 <TextInput
@@ -689,21 +637,22 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
                   placeholder="Nominee Name"
                   value={nomineeName}
                   onChangeText={setNomineeName}
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor="#888"
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Nominee Relationship"
                   value={nomineeRelationship}
                   onChangeText={setNomineeRelationship}
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor="#888"
                 />
                 <TouchableOpacity
                   style={styles.dateInput}
                   onPress={() => setShowNomineeDatePicker(true)}
                 >
-                  <Text style={nomineeDOB ? styles.dateInputText : styles.dateInputPlaceholder}>
-                    {nomineeDOB || 'Select Nominee Date of Birth'}
+                  <Ionicons name="calendar-outline" size={20} color="#666" />
+                  <Text style={nomineeDOB ? styles.inputText : styles.inputPlaceholder}>
+                    {nomineeDOB || 'Select Date of Birth'}
                   </Text>
                 </TouchableOpacity>
                 {showNomineeDatePicker && (
@@ -718,178 +667,281 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
               </>
             ) : (
               <>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Name:</Text>
-                  <Text style={styles.infoValue}>{mediclaimData.nominee_name || 'N/A'}</Text>
+                <View style={styles.detailRow}>
+                  <MaterialIcons name="person-outline" size={18} color="#666" />
+                  <Text style={styles.detailLabel}>Name</Text>
+                  <Text style={[styles.detailValue, { color: '#FF6B6B' }]}>
+                    {mediclaimData.nominee_name || 'N/A'}
+                  </Text>
                 </View>
                 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Relationship:</Text>
-                  <Text style={styles.infoValue}>{mediclaimData.nominee_relationship || 'N/A'}</Text>
+                <View style={styles.detailDivider} />
+                
+                <View style={styles.detailRow}>
+                  <MaterialIcons name="group" size={18} color="#666" />
+                  <Text style={styles.detailLabel}>Relationship</Text>
+                  <Text style={styles.detailValue}>{mediclaimData.nominee_relationship || 'N/A'}</Text>
                 </View>
                 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Date of Birth:</Text>
-                  <Text style={styles.infoValue}>{formatDate(mediclaimData.nominee_date_of_birth)}</Text>
+                <View style={styles.detailDivider} />
+                
+                <View style={styles.detailRow}>
+                  <Ionicons name="calendar-outline" size={18} color="#666" />
+                  <Text style={styles.detailLabel}>Date of Birth</Text>
+                  <Text style={styles.detailValue}>{formatDate(mediclaimData.nominee_date_of_birth)}</Text>
                 </View>
               </>
             )}
           </View>
+        </View>
 
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Family Members</Text>
-              {isEditing && (
-                <TouchableOpacity onPress={() => setShowAddFamily(true)} style={styles.addButton}>
-                  <Text style={styles.addButtonText}>+ Add</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            {familyMembers.length === 0 ? (
-              <Text style={styles.noDataText}>No family members added</Text>
-            ) : (
-              familyMembers.map((member, index) => (
-                <View key={index} style={styles.familyMemberCard}>
-                  <View style={styles.familyMemberHeader}>
-                    <Text style={styles.familyMemberName}>{member.first_name} {member.last_name}</Text>
-                    {isEditing && (
-                      <View style={styles.familyMemberActions}>
-                        <TouchableOpacity onPress={() => handleEditFamilyMember(index)} style={styles.iconButton}>
-                          <EditIcon size={20} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDeleteFamilyMember(index)} style={styles.iconButton}>
-                          <DeleteIcon size={20} />
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.familyMemberDetails}>
-                    <Text style={styles.familyMemberText}>Relationship: {member.relationship}</Text>
-                    <Text style={styles.familyMemberText}>DOB: {formatDate(member.date_of_birth)}</Text>
-                    <Text style={styles.familyMemberText}>Gender: {member.gender}</Text>
-                    <View style={styles.dependantRow}>
-                      <Text style={styles.familyMemberText}>Dependant: </Text>
-                      {member.dependant && (
-                        <View style={styles.dependantBadge}>
-                          <Text style={styles.dependantBadgeText}>✓</Text>
-                        </View>
-                      )}
-                      {!member.dependant && <Text style={styles.familyMemberText}>No</Text>}
-                    </View>
-                    {member.existing_illness && member.existing_illness.length > 0 && (
-                      <Text style={styles.familyMemberText}>Illness: {member.existing_illness.join(', ')}</Text>
-                    )}
-                    {member.aadhar_card && (
-                      <TouchableOpacity 
-                        onPress={() => downloadDocument(member.aadhar_card, `aadhar_${index}.pdf`)}
-                        style={styles.downloadButton}
-                      >
-                        <DownloadIcon size={16} />
-                        <Text style={styles.downloadButtonText}>Download Aadhar</Text>
-                      </TouchableOpacity>
-                    )}
-                    {member.pan_card && (
-                      <TouchableOpacity 
-                        onPress={() => downloadDocument(member.pan_card, `pan_${index}.pdf`)}
-                        style={styles.downloadButton}
-                      >
-                        <DownloadIcon size={16} />
-                        <Text style={styles.downloadButtonText}>Download PAN</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))
+        {/* Family Members */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="family-restroom" size={20} color="#4ECDC4" />
+            <Text style={styles.sectionTitle}>Family Members ({familyMembers.length})</Text>
+            {isEditing && (
+              <TouchableOpacity 
+                onPress={() => setShowAddFamily(true)} 
+                style={styles.addMemberButton}
+              >
+                <Ionicons name="add-circle" size={24} color="#4ECDC4" />
+              </TouchableOpacity>
             )}
           </View>
-
-          {isEditing && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Signature</Text>
-              <TouchableOpacity onPress={() => pickDocument('signature')} style={styles.uploadButton}>
-                <Text style={styles.uploadButtonText}>
-                  {signature ? 'Signature Selected' : 'Upload Signature'}
-                </Text>
-              </TouchableOpacity>
+          
+          {familyMembers.length === 0 ? (
+            <View style={styles.emptyFamilyCard}>
+              <Ionicons name="people-outline" size={48} color="#ddd" />
+              <Text style={styles.emptyFamilyText}>No family members added</Text>
             </View>
-          )}
-
-          {mediclaimData.sig_and_stamp && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>HR Signature & Stamp</Text>
-                <TouchableOpacity 
-                  onPress={() => downloadDocument(mediclaimData.sig_and_stamp!, 'hr_signature.jpg')}
-                  style={styles.downloadIconButton}
-                >
-                  <DownloadIcon />
-                </TouchableOpacity>
+          ) : (
+            familyMembers.map((member, index) => (
+              <View key={index} style={[styles.familyCard, { borderLeftColor: getMemberColor(index) }]}>
+                <View style={styles.familyHeader}>
+                  <View style={[styles.memberAvatar, { backgroundColor: getMemberColor(index) }]}>
+                    <Text style={styles.memberInitials}>
+                      {member.first_name[0]}{member.last_name[0]}
+                    </Text>
+                  </View>
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>
+                      {member.first_name} {member.last_name}
+                    </Text>
+                    <Text style={styles.memberRelationship}>{member.relationship}</Text>
+                  </View>
+                  {isEditing && (
+                    <View style={styles.familyActions}>
+                      <TouchableOpacity 
+                        onPress={() => handleEditFamilyMember(index)} 
+                        style={styles.actionButton}
+                      >
+                        <Ionicons name="create-outline" size={18} color="#666" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => handleDeleteFamilyMember(index)} 
+                        style={styles.actionButton}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.familyDetails}>
+                  <View style={styles.detailBadge}>
+                    <Ionicons name="calendar-outline" size={14} color="#666" />
+                    <Text style={styles.badgeText}>{formatDate(member.date_of_birth)}</Text>
+                  </View>
+                  <View style={styles.detailBadge}>
+                    <MaterialIcons name="wc" size={14} color="#666" />
+                    <Text style={styles.badgeText}>{member.gender}</Text>
+                  </View>
+                  {member.dependant && (
+                    <View style={[styles.detailBadge, { backgroundColor: '#E8F5E9' }]}>
+                      <Ionicons name="checkmark-circle" size={14} color="#25D366" />
+                      <Text style={[styles.badgeText, { color: '#25D366' }]}>Dependant</Text>
+                    </View>
+                  )}
+                </View>
+                
+                {(member.aadhar_card || member.pan_card) && (
+                  <View style={styles.documentSection}>
+                    <Text style={styles.documentTitle}>Documents:</Text>
+                    <View style={styles.documentButtons}>
+                      {member.aadhar_card && (
+                        <TouchableOpacity 
+                          onPress={() => downloadDocument(member.aadhar_card, `aadhar_${index}.pdf`)}
+                          style={[styles.documentButton, { backgroundColor: '#25D366' }]}
+                        >
+                          <Ionicons name="document-text-outline" size={16} color="white" />
+                          <Text style={styles.documentButtonText}>Aadhar</Text>
+                        </TouchableOpacity>
+                      )}
+                      {member.pan_card && (
+                        <TouchableOpacity 
+                          onPress={() => downloadDocument(member.pan_card, `pan_${index}.pdf`)}
+                          style={[styles.documentButton, { backgroundColor: '#34B7F1' }]}
+                        >
+                          <Ionicons name="document-text-outline" size={16} color="white" />
+                          <Text style={styles.documentButtonText}>PAN</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                )}
               </View>
-              <Image source={{ uri: mediclaimData.sig_and_stamp }} style={styles.signatureImage} resizeMode="contain" />
-              <Text style={styles.verifiedText}>✓ Verified by HR</Text>
-            </View>
-          )}
-
-          {isEditing && (
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity onPress={() => setIsEditing(false)} style={styles.cancelButton}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleUpdateMediclaim} style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {!canUpdate && !mediclaimData.sig_and_stamp && (
-            <View style={styles.warningCard}>
-              <Text style={styles.warningText}>Updates are currently not allowed</Text>
-            </View>
+            ))
           )}
         </View>
+
+        {/* Signature Section */}
+        {isEditing && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="draw" size={20} color="#FFA726" />
+              <Text style={styles.sectionTitle}>Your Signature</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => pickDocument('signature')} 
+              style={styles.signatureCard}
+            >
+              <Ionicons name="cloud-upload-outline" size={32} color="#FFA726" />
+              <Text style={styles.signatureText}>
+                {signature ? 'Signature Selected ✓' : 'Tap to Upload Signature'}
+              </Text>
+              <Text style={styles.signatureSubtext}>JPG, PNG or PDF format</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* HR Signature */}
+        {mediclaimData.sig_and_stamp && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="verified-user" size={20} color="#25D366" />
+              <Text style={styles.sectionTitle}>HR Verification</Text>
+            </View>
+            <View style={styles.hrCard}>
+              <View style={styles.hrHeader}>
+                <Text style={styles.hrTitle}>✓ Verified & Stamped by HR</Text>
+                <TouchableOpacity 
+                  onPress={() => downloadDocument(mediclaimData!.sig_and_stamp!, 'hr_signature.jpg')}
+                  style={styles.hrDownloadButton}
+                >
+                  <Ionicons name="download-outline" size={20} color="#25D366" />
+                </TouchableOpacity>
+              </View>
+              <Image 
+                source={{ uri: mediclaimData.sig_and_stamp }} 
+                style={styles.signatureImage} 
+                resizeMode="contain" 
+              />
+              <Text style={styles.hrDate}>Verified on: {formatDate(mediclaimData.uploaded_to_portal_on)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {isEditing ? (
+          <View style={styles.actionContainer}>
+            <TouchableOpacity 
+              onPress={() => setIsEditing(false)} 
+              style={[styles.actionButtonLarge, styles.cancelButton]}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={handleUpdateMediclaim} 
+              style={[styles.actionButtonLarge, styles.saveButton]}
+            >
+              <Text style={styles.saveButtonText}>Save Changes</Text>
+            </TouchableOpacity>
+          </View>
+        ) : !canUpdate && !mediclaimData.sig_and_stamp ? (
+          <View style={styles.warningCard}>
+            <Ionicons name="alert-circle-outline" size={24} color="#FF6B6B" />
+            <Text style={styles.warningText}>Updates are currently not allowed</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      {/* Add Family Member Modal */}
       <Modal visible={showAddFamily} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editingFamilyIndex !== null ? 'Edit Family Member' : 'Add Family Member'}
-            </Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingFamilyIndex !== null ? 'Edit Family Member' : 'Add Family Member'}
+              </Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowAddFamily(false);
+                  setEditingFamilyIndex(null);
+                  setNewFamilyMember({
+                    first_name: '',
+                    last_name: '',
+                    relationship: '',
+                    date_of_birth: '',
+                    gender: '',
+                    dependant: false,
+                    aadhar_card: null,
+                    pan_card: null,
+                    existing_illness: [],
+                  });
+                }}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
             
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <TextInput
-                style={styles.input}
-                placeholder="First Name *"
-                value={newFamilyMember.first_name}
-                onChangeText={(text) => setNewFamilyMember(prev => ({ ...prev, first_name: text }))}
-                placeholderTextColor={colors.textSecondary}
-              />
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.inputGroup}>
+                <Ionicons name="person-outline" size={20} color="#666" />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="First Name"
+                  value={newFamilyMember.first_name}
+                  onChangeText={(text) => setNewFamilyMember(prev => ({ ...prev, first_name: text }))}
+                  placeholderTextColor="#888"
+                />
+              </View>
               
-              <TextInput
-                style={styles.input}
-                placeholder="Last Name *"
-                value={newFamilyMember.last_name}
-                onChangeText={(text) => setNewFamilyMember(prev => ({ ...prev, last_name: text }))}
-                placeholderTextColor={colors.textSecondary}
-              />
+              <View style={styles.inputGroup}>
+                <Ionicons name="person-outline" size={20} color="#666" />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Last Name"
+                  value={newFamilyMember.last_name}
+                  onChangeText={(text) => setNewFamilyMember(prev => ({ ...prev, last_name: text }))}
+                  placeholderTextColor="#888"
+                />
+              </View>
               
-              <TextInput
-                style={styles.input}
-                placeholder="Relationship *"
-                value={newFamilyMember.relationship}
-                onChangeText={(text) => setNewFamilyMember(prev => ({ ...prev, relationship: text }))}
-                placeholderTextColor={colors.textSecondary}
-              />
+              <View style={styles.inputGroup}>
+                <MaterialIcons name="group" size={20} color="#666" />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Relationship (Spouse, Child, Parent)"
+                  value={newFamilyMember.relationship}
+                  onChangeText={(text) => setNewFamilyMember(prev => ({ ...prev, relationship: text }))}
+                  placeholderTextColor="#888"
+                />
+              </View>
               
               <TouchableOpacity
-                style={styles.dateInput}
+                style={styles.inputGroup}
                 onPress={() => setShowFamilyDatePicker(true)}
               >
-                <Text style={newFamilyMember.date_of_birth ? styles.dateInputText : styles.dateInputPlaceholder}>
-                  {newFamilyMember.date_of_birth || 'Select Date of Birth'}
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Text style={newFamilyMember.date_of_birth ? styles.modalInputText : styles.modalInputPlaceholder}>
+                  {newFamilyMember.date_of_birth || 'Date of Birth'}
                 </Text>
               </TouchableOpacity>
+              
               {showFamilyDatePicker && (
                 <DateTimePicker
                   value={familyMemberDate}
@@ -901,12 +953,14 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
               )}
               
               <TouchableOpacity
-                style={styles.dropdownButton}
+                style={styles.inputGroup}
                 onPress={() => setShowGenderDropdown(!showGenderDropdown)}
               >
-                <Text style={newFamilyMember.gender ? styles.dateInputText : styles.dateInputPlaceholder}>
+                <MaterialIcons name="wc" size={20} color="#666" />
+                <Text style={newFamilyMember.gender ? styles.modalInputText : styles.modalInputPlaceholder}>
                   {newFamilyMember.gender || 'Select Gender'}
                 </Text>
+                <Ionicons name="chevron-down" size={20} color="#666" style={styles.dropdownArrow} />
               </TouchableOpacity>
               
               {showGenderDropdown && (
@@ -929,61 +983,68 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
                   >
                     <Text style={styles.dropdownItemText}>Female</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setNewFamilyMember(prev => ({ ...prev, gender: 'Other' }));
+                      setShowGenderDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemText}>Other</Text>
+                  </TouchableOpacity>
                 </View>
               )}
+              
               <TouchableOpacity 
                 onPress={() => setNewFamilyMember(prev => ({ ...prev, dependant: !prev.dependant }))}
                 style={styles.checkboxContainer}
               >
                 <View style={[styles.checkbox, newFamilyMember.dependant && styles.checkboxChecked]}>
                   {newFamilyMember.dependant && (
-                    <Text style={styles.checkboxTick}>✓</Text>
+                    <Ionicons name="checkmark" size={16} color="white" />
                   )}
                 </View>
                 <Text style={styles.checkboxLabel}>Is Dependant</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => pickDocument('aadhar')} style={styles.uploadButton}>
-                <Text style={styles.uploadButtonText}>
-                  {newFamilyMember.aadhar_card ? 'Aadhar Selected' : 'Upload Aadhar Card'}
-                </Text>
+              
+              <TouchableOpacity 
+                onPress={() => pickDocument('aadhar')} 
+                style={[styles.documentUpload, styles.aadharUpload]}
+              >
+                <MaterialIcons name="badge" size={24} color="#25D366" />
+                <View style={styles.uploadInfo}>
+                  <Text style={styles.uploadTitle}>Aadhar Card</Text>
+                  <Text style={styles.uploadSubtitle}>
+                    {newFamilyMember.aadhar_card ? 'File Selected ✓' : 'Tap to upload'}
+                  </Text>
+                </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => pickDocument('pan')} style={styles.uploadButton}>
-                <Text style={styles.uploadButtonText}>
-                  {newFamilyMember.pan_card ? 'PAN Selected' : 'Upload PAN Card'}
-                </Text>
+              
+              <TouchableOpacity 
+                onPress={() => pickDocument('pan')} 
+                style={[styles.documentUpload, styles.panUpload]}
+              >
+                <MaterialIcons name="credit-card" size={24} color="#34B7F1" />
+                <View style={styles.uploadInfo}>
+                  <Text style={styles.uploadTitle}>PAN Card</Text>
+                  <Text style={styles.uploadSubtitle}>
+                    {newFamilyMember.pan_card ? 'File Selected ✓' : 'Tap to upload'}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </ScrollView>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                onPress={() => {
-                  setShowAddFamily(false);
-                  setEditingFamilyIndex(null);
-                  setNewFamilyMember({
-                    first_name: '',
-                    last_name: '',
-                    relationship: '',
-                    date_of_birth: '',
-                    gender: '',
-                    dependant: false,
-                    aadhar_card: null,
-                    pan_card: null,
-                    existing_illness: [],
-                  });
-                }} 
-                style={styles.modalCancelButton}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+            
+            <View style={styles.modalFooter}>
               <TouchableOpacity onPress={handleAddFamilyMember} style={styles.modalSaveButton}>
                 <Text style={styles.modalSaveButtonText}>
-                  {editingFamilyIndex !== null ? 'Update' : 'Add Member'}
+                  {editingFamilyIndex !== null ? 'Update Member' : 'Add Member'}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -992,439 +1053,646 @@ export default Medical;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: '#075E54',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#075E54',
+    borderBottomWidth: 1,
+    borderBottomColor: '#128C7E',
   },
   backButton: {
-    padding: 8,
+    padding: 4,
+    marginRight: 12,
+  },
+  headerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.white,
-    flex: 1,
-    textAlign: 'center',
+    color: 'white',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  downloadButton: {
+    padding: 8,
   },
   headerSpacer: {
     width: 40,
   },
-  downloadAllButton: {
-    padding: 8,
-  },
   mainContent: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: '#ECE5DD',
   },
-  contentContainer: {
-    padding: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  statusBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 40,
-  },
-  emptyImage: {
-    width: 120,
-    height: 120,
-    marginBottom: 24,
-    opacity: 0.5,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: colors.white,
+    padding: 16,
+    margin: 16,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+  statusIcon: {
+    marginRight: 12,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  editButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  editButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    fontSize: fontSize.md,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  dateInput: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    justifyContent: 'center',
-  },
-  dateInputText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  dateInputPlaceholder: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-  },
-  dropdownButton: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    justifyContent: 'center',
-  },
-  dropdownList: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  dropdownItemText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  addButton: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  noDataText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  familyMemberCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  familyMemberHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  familyMemberName: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
+  statusContent: {
     flex: 1,
   },
-  familyMemberActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  iconButton: {
-    padding: 8,
-    backgroundColor: colors.white,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  familyMemberDetails: {
-    gap: 6,
-  },
-  familyMemberText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  dependantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dependantBadge: {
-    backgroundColor: colors.success,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dependantBadgeText: {
-    color: colors.white,
-    fontSize: 12,
+  statusTitle: {
+    fontSize: 16,
     fontWeight: '700',
+    color: 'white',
   },
-  downloadButton: {
+  statusSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+  statusBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  editFloatingButton: {
+    position: 'absolute',
+    right: 16,
+    top: 100,
+    backgroundColor: '#25D366',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
   },
-  downloadButtonText: {
-    color: colors.primary,
-    fontSize: fontSize.sm,
+  editFloatingText: {
+    color: 'white',
+    fontSize: 14,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: 6,
   },
-  downloadIconButton: {
-    padding: 8,
+  section: {
+    marginHorizontal: 16,
+    marginBottom: 20,
   },
-  uploadButton: {
-    backgroundColor: colors.info,
-    padding: 16,
-    borderRadius: 12,
+  sectionHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  uploadButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#075E54',
+    marginLeft: 8,
+  },
+  addMemberButton: {
+    marginLeft: 'auto',
+  },
+  detailCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  detailLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 12,
+  },
+  detailValue: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#075E54',
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginVertical: 4,
+  },
+  input: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 12,
+    fontSize: 14,
+    color: '#075E54',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  dateInput: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputText: {
+    fontSize: 14,
+    color: '#075E54',
+    marginLeft: 10,
+    flex: 1,
+  },
+  inputPlaceholder: {
+    fontSize: 14,
+    color: '#888',
+    marginLeft: 10,
+    flex: 1,
+  },
+  emptyFamilyCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyFamilyText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
+  },
+  familyCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  familyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  memberInitials: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#075E54',
+  },
+  memberRelationship: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  familyActions: {
+    flexDirection: 'row',
+  },
+  actionButton: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  familyDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  detailBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  documentSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  documentTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  documentButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  documentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  documentButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  signatureCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFA726',
+    borderStyle: 'dashed',
+  },
+  signatureText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFA726',
+    marginTop: 12,
+  },
+  signatureSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
+  hrCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+  },
+  hrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  hrTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#25D366',
+  },
+  hrDownloadButton: {
+    padding: 4,
   },
   signatureImage: {
     width: '100%',
-    height: 150,
-    marginTop: 12,
-    borderRadius: 12,
-    backgroundColor: '#F9FAFB',
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: '#F8F8F8',
   },
-  verifiedText: {
-    marginTop: 12,
-    fontSize: fontSize.md,
-    color: colors.success,
-    fontWeight: '600',
+  hrDate: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
     textAlign: 'center',
   },
-  buttonContainer: {
+  actionContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    marginBottom: 24,
   },
-  cancelButton: {
+  actionButtonLarge: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F0F0F0',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E0E0E0',
   },
   cancelButtonText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
+    color: '#666',
+    fontSize: 16,
     fontWeight: '600',
   },
   saveButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: colors.primary,
+    backgroundColor: '#25D366',
+    shadowColor: '#25D366',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   saveButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
+    color: 'white',
+    fontSize: 16,
     fontWeight: '600',
   },
   warningCard: {
-    backgroundColor: '#FEF2F2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF2F2',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    marginBottom: 24,
     borderLeftWidth: 4,
-    borderLeftColor: colors.error,
+    borderLeftColor: '#FF6B6B',
+    gap: 12,
   },
   warningText: {
-    color: colors.error,
-    fontSize: fontSize.md,
+    flex: 1,
+    fontSize: 14,
+    color: '#FF6B6B',
     fontWeight: '600',
+  },
+  bottomSpacer: {
+    height: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#ECE5DD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 100,
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#25D366',
+    marginHorizontal: 3,
+    opacity: 0.6,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    flex: 1,
+    backgroundColor: '#ECE5DD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#075E54',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
+    marginBottom: 32,
+  },
+  contactButton: {
+    backgroundColor: '#25D366',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 24,
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  contactButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 24,
-    width: '90%',
-    maxHeight: '80%',
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: 20,
-    textAlign: 'center',
+    color: '#075E54',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+    maxHeight: 500,
+  },
+  modalFooter: {
+    padding: 20,
+    paddingTop: 0,
+  },
+  inputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  modalInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#075E54',
+    marginLeft: 12,
+  },
+  modalInputText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#075E54',
+    marginLeft: 12,
+  },
+  modalInputPlaceholder: {
+    flex: 1,
+    fontSize: 14,
+    color: '#888',
+    marginLeft: 12,
+  },
+  dropdownArrow: {
+    marginLeft: 'auto',
+  },
+  dropdownList: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  dropdownItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#075E54',
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: colors.success,
+    borderColor: '#25D366',
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxChecked: {
-    backgroundColor: colors.success,
-  },
-  checkboxTick: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
+    backgroundColor: '#25D366',
   },
   checkboxLabel: {
-    fontSize: fontSize.md,
-    color: colors.text,
+    fontSize: 14,
+    color: '#075E54',
+    fontWeight: '500',
   },
-  modalButtons: {
+  documentUpload: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    padding: 16,
-    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    minHeight: 50,
+    borderColor: '#E0E0E0',
   },
-  modalCancelButtonText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
+  aadharUpload: {
+    borderColor: '#25D366',
+  },
+  panUpload: {
+    borderColor: '#34B7F1',
+  },
+  uploadInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  uploadTitle: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#075E54',
+    marginBottom: 2,
+  },
+  uploadSubtitle: {
+    fontSize: 12,
+    color: '#666',
   },
   modalSaveButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    padding: 16,
+    backgroundColor: '#25D366',
+    padding: 18,
     borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
+    shadowColor: '#25D366',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
-    minHeight: 50,
   },
   modalSaveButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
