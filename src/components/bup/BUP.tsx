@@ -6,9 +6,16 @@ import {
   Alert,
   BackHandler,
   ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Text,
+  Image,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { BUPProps, Lead, ViewMode, ThemeColors, Pagination, FilterOption } from './types';
 import { lightTheme, darkTheme } from './theme';
@@ -17,11 +24,20 @@ import Cities from './cities';
 import LeadsListUpdated from './listUpdated';
 import SearchAndFilter from './searchAndFilter';
 import LeadDetails from './leadDetails';
-import LeadDetailsInfo from './leadDetailsInfo'; // Import the new screen
+import LeadDetailsInfo from './leadDetailsInfo';
 import EditLead from './editDetails';
 import CreateLead from './createLead';
 
 const TOKEN_KEY = 'token_2';
+
+interface BDT {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  profile_picture: string | null;
+}
 
 const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
@@ -30,13 +46,18 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
+  // State for BDT selection
+  const [bdts, setBdts] = useState<BDT[]>([]);
+  const [selectedBDT, setSelectedBDT] = useState<BDT | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loadingBDTs, setLoadingBDTs] = useState(false);
+
   // State for list view
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [filterBy, setFilterBy] = useState('');
   const [filterValue, setFilterValue] = useState('');
@@ -48,7 +69,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   // State for detail view
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [showLeadInfo, setShowLeadInfo] = useState(false); // New state for lead info screen
+  const [showLeadInfo, setShowLeadInfo] = useState(false);
 
   // Calculate totalLeads from statusCounts
   const totalLeads = useMemo(() => {
@@ -80,6 +101,18 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     return matchesFilter;
   });
 
+  // Filter BDTs based on search query
+  const filteredBDTs = useMemo(() => {
+    if (!searchQuery.trim()) return bdts;
+    
+    const query = searchQuery.toLowerCase();
+    return bdts.filter(bdt => 
+      bdt.full_name.toLowerCase().includes(query) ||
+      bdt.employee_id.toLowerCase().includes(query) ||
+      bdt.email.toLowerCase().includes(query)
+    );
+  }, [bdts, searchQuery]);
+
   // Handle Android hardware back button
   useEffect(() => {
     const handleBackPress = () => {
@@ -88,6 +121,9 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         return true;
       }
       if (viewMode === 'list') {
+        handleBackToBDTSelection();
+        return true;
+      } else if (viewMode === 'bdt-selection') {
         handleBackToCitySelection();
         return true;
       } else if (viewMode === 'detail') {
@@ -141,18 +177,49 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (token && selectedCity && viewMode === 'list') {
+    if (token && selectedBDT && viewMode === 'list') {
       fetchLeads(1);
       fetchPhases();
       fetchAssignedToOptions();
       fetchStatusCounts();
     }
-  }, [token, selectedCity, viewMode]);
+  }, [token, selectedBDT, viewMode]);
+
+  // Fetch BDTs for selected city
+  const fetchBDTs = async (city: string): Promise<void> => {
+    try {
+      if (!token) return;
+      
+      setLoadingBDTs(true);
+      const response = await fetch(`${BACKEND_URL}/manager/getBDT`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          city
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setBdts(data.bdt || []);
+    } catch (error) {
+      console.error('Error fetching BDTs:', error);
+      Alert.alert('Error', 'Failed to fetch BDTs. Please try again.');
+    } finally {
+      setLoadingBDTs(false);
+    }
+  };
 
   // Fetch status counts
   const fetchStatusCounts = async (): Promise<void> => {
     try {
-      if (!token || !selectedCity) return;
+      if (!token || !selectedBDT) return;
 
       const response = await fetch(`${BACKEND_URL}/manager/getLeadStatusCounts`, {
         method: 'POST',
@@ -161,7 +228,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         },
         body: JSON.stringify({
           token,
-          city: selectedCity
+          bdt_emp_id: selectedBDT.employee_id
         })
       });
 
@@ -185,7 +252,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
     try {
-      if (!token || !selectedCity) return;
+      if (!token || !selectedBDT) return;
 
       if (!append) {
         setLoading(true);
@@ -195,7 +262,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
       const requestBody: any = {
         token: token,
-        city: selectedCity,
+        bdt_emp_id: selectedBDT.employee_id,
         page: page
       };
 
@@ -399,8 +466,14 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     }
   }, [isSearchMode, searchQuery]);
 
-  const handleCitySelection = (city: string) => {
+  const handleCitySelection = async (city: string) => {
     setSelectedCity(city);
+    setViewMode('bdt-selection');
+    await fetchBDTs(city);
+  };
+
+  const handleBDTSelection = (bdt: BDT) => {
+    setSelectedBDT(bdt);
     setViewMode('list');
   };
 
@@ -420,9 +493,23 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     fetchStatusCounts();
   }, []);
 
+  const handleBackToBDTSelection = useCallback(() => {
+    setViewMode('bdt-selection');
+    setSelectedBDT(null);
+    setLeads([]);
+    setSearchQuery('');
+    setFilterBy('');
+    setFilterValue('');
+    setIsSearchMode(false);
+    setStatusCounts({});
+    setShowLeadInfo(false);
+  }, []);
+
   const handleBackToCitySelection = useCallback(() => {
     setViewMode('city-selection');
     setSelectedCity('');
+    setBdts([]);
+    setSelectedBDT(null);
     setLeads([]);
     setSearchQuery('');
     setFilterBy('');
@@ -440,13 +527,11 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setViewMode('create');
   };
 
-  // New function to handle opening lead info screen
   const handleOpenLeadInfo = (lead: Lead) => {
     setSelectedLead(lead);
     setShowLeadInfo(true);
   };
 
-  // New function to handle closing lead info screen
   const handleCloseLeadInfo = () => {
     setShowLeadInfo(false);
   };
@@ -523,14 +608,132 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const getHeaderTitle = () => {
     if (viewMode === 'city-selection') return 'Select City';
+    if (viewMode === 'bdt-selection') return `Select BDT - ${selectedCity}`;
     if (viewMode === 'create') return 'Create New Lead';
     if (viewMode === 'detail') return 'Lead Details';
     if (showLeadInfo) return 'Lead Information';
-    return `${selectedCity} - BUP`;
+    return selectedBDT ? `${selectedBDT.full_name} - Leads` : 'Leads';
+  };
+
+  const getInitials = (name: string): string => {
+    if (!name || name.trim().length === 0) return '?';
+    const nameParts = name.trim().split(/\s+/);
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
+    }
+  };
+
+  const getAvatarColor = (name: string): string => {
+    const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+    if (!name) return avatarColors[0];
+    
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    const index = Math.abs(hash) % avatarColors.length;
+    return avatarColors[index];
+  };
+
+  // Render BDT Selection Screen
+  const renderBDTSelection = () => {
+    return (
+      <View style={styles.bdtContainer}>
+        {/* Search Bar */}
+        <View style={[styles.searchBox, { backgroundColor: theme.background }]}>
+          <View style={[styles.searchInputWrapper, { backgroundColor: theme.surface }]}>
+            <Ionicons name="search" size={20} color={theme.primary} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder="Search BDT by name or ID..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor={theme.textSecondary}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color={theme.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {loadingBDTs ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.text }]}>Loading BDTs...</Text>
+          </View>
+        ) : filteredBDTs.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="people" size={64} color={theme.border} />
+            <Text style={[styles.emptyStateText, { color: theme.text }]}>
+              {searchQuery ? 'No BDTs match your search' : 'No BDTs found'}
+            </Text>
+            <Text style={[styles.emptyStateSubtext, { color: theme.textSecondary }]}>
+              {searchQuery ? 'Try adjusting your search' : 'No BDTs available for this city'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredBDTs}
+            keyExtractor={(item) => item.employee_id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.bdtItem, { backgroundColor: theme.surface }]}
+                onPress={() => handleBDTSelection(item)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.bdtAvatar, { backgroundColor: getAvatarColor(item.full_name) }]}>
+                  {item.profile_picture ? (
+                    <Image
+                      source={{ uri: item.profile_picture }}
+                      style={styles.bdtProfileImage}
+                    />
+                  ) : (
+                    <Text style={styles.bdtAvatarText}>
+                      {getInitials(item.full_name)}
+                    </Text>
+                  )}
+                </View>
+                
+                <View style={styles.bdtContent}>
+                  <View style={styles.bdtHeader}>
+                    <Text style={[styles.bdtName, { color: theme.text }]} numberOfLines={1}>
+                      {item.full_name}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.bdtInfo}>
+                    <Text style={[styles.bdtId, { color: theme.textSecondary }]} numberOfLines={1}>
+                      ID: {item.employee_id}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.bdtContact}>
+                    <Ionicons name="mail" size={12} color={theme.textTertiary} />
+                    <Text style={[styles.bdtEmail, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {item.email}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.bdtArrow}>
+                  <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+                </View>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={styles.bdtListContent}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
+    );
   };
 
   const renderContent = () => {
-    // First check if we should show lead info screen
     if (showLeadInfo && selectedLead) {
       return (
         <LeadDetailsInfo
@@ -550,6 +753,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             theme={theme}
           />
         );
+      case 'bdt-selection':
+        return renderBDTSelection();
       case 'create':
         return (
           <CreateLead
@@ -587,7 +792,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             onEdit={handleEditPress}
             token={token}
             theme={theme}
-            onOpenLeadDetails={handleOpenLeadInfo} // Pass the function to open lead info
+            onOpenLeadDetails={handleOpenLeadInfo}
           />
         );
       case 'list':
@@ -598,7 +803,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={true}
           >
-            {/* Move Header inside ScrollView for list view */}
             <Header
               title={getHeaderTitle()}
               {...getHeaderActions()}
@@ -619,7 +823,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
               fetchSubphases={fetchSubphases}
               selectedCity={selectedCity}
               onCreateLead={handleCreateLead}
-              onBack={handleBackToCitySelection}
+              onBack={handleBackToBDTSelection}
               totalLeads={totalLeads}
               statusCounts={statusCounts}
             />
@@ -661,10 +865,17 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true
       };
     }
-    if (viewMode === 'list') {
+    if (viewMode === 'bdt-selection') {
       return {
         showBackButton: true,
         onBack: handleBackToCitySelection,
+        showThemeToggle: true,
+      };
+    }
+    if (viewMode === 'list') {
+      return {
+        showBackButton: true,
+        onBack: handleBackToBDTSelection,
         showAddButton: true,
         onAddPress: handleCreateLead,
         addButtonText: '+ Lead',
@@ -714,7 +925,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-      {/* Only show header outside ScrollView for non-list views */}
       {viewMode !== 'city-selection' && viewMode !== 'detail' && viewMode !== 'list' && !showLeadInfo && (
         <Header
           title={getHeaderTitle()}
@@ -742,6 +952,133 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+  },
+  bdtContainer: {
+    flex: 1,
+  },
+  searchBox: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 50,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    marginTop: -150,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  bdtListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  bdtItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bdtAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  bdtProfileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+  },
+  bdtAvatarText: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  bdtContent: {
+    flex: 1,
+  },
+  bdtHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  bdtName: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
+  },
+  bdtInfo: {
+    marginBottom: 4,
+  },
+  bdtId: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  bdtContact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bdtEmail: {
+    fontSize: 12,
+    flex: 1,
+  },
+  bdtArrow: {
+    padding: 4,
   },
 });
 
