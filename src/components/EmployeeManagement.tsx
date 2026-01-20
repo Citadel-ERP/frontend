@@ -1734,7 +1734,7 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     paddingHorizontal: 20,
-    paddingBottom: 25,
+    paddingBottom: 10,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     position: 'relative',
@@ -1872,6 +1872,7 @@ const styles = StyleSheet.create({
   },
   listHeader: {
     marginBottom: 16,
+    marginTop:10,
   },
   listTitle: {
     fontSize: 18,
