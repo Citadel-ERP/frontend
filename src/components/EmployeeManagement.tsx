@@ -1,15 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Alert, ActivityIndicator, TextInput, Image, Dimensions,
-  RefreshControl, Modal, Platform
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  StatusBar,
+  ActivityIndicator,
+  TextInput,
+  Image,
+  Dimensions,
+  RefreshControl,
+  Modal,
+  Alert,
+  Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
-import { colors, spacing, fontSize, borderRadius, shadows } from '../styles/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -38,31 +51,32 @@ interface Employee {
   reporting_tags?: Array<any>;
 }
 
+// WhatsApp Color Theme
+const WHATSAPP_COLORS = {
+  primary: '#075E54', // WhatsApp dark green
+  primaryLight: '#128C7E', // WhatsApp medium green
+  accent: '#25D366', // WhatsApp light green
+  background: '#ECE5DD', // WhatsApp chat background
+  surface: '#FFFFFF', // White for cards
+  chatBubbleSent: '#DCF8C6', // WhatsApp sent message bubble
+  chatBubbleReceived: '#FFFFFF', // WhatsApp received message bubble
+  textPrimary: '#000000', // Black for primary text
+  textSecondary: '#667781', // WhatsApp secondary text
+  textTertiary: '#8696A0', // WhatsApp tertiary text
+  border: '#E0E0E0', // Light gray border
+  statusOnline: '#25D366', // Online status green
+  statusAway: '#FFB300', // Away status yellow
+  statusOffline: '#9E9E9E', // Offline gray
+  error: '#FF3B30', // Red for errors
+  success: '#34C759', // Green for success
+  warning: '#FF9500', // Orange for warnings
+};
+
+// Custom BackIcon Component (from your BUP header)
 const BackIcon = () => (
   <View style={styles.backIcon}>
     <View style={styles.backArrow} />
-  </View>
-);
-
-const SearchIcon = ({ size = 20, color = '#6b7280' }) => (
-  <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-    <View style={{
-      width: size * 0.6,
-      height: size * 0.6,
-      borderRadius: size * 0.3,
-      borderWidth: 2,
-      borderColor: color,
-      position: 'relative'
-    }} />
-    <View style={{
-      position: 'absolute',
-      bottom: -size * 0.1,
-      right: -size * 0.1,
-      width: size * 0.4,
-      height: 2,
-      backgroundColor: color,
-      transform: [{ rotate: '45deg' }]
-    }} />
+    <Text style={styles.backText}>Back</Text>
   </View>
 );
 
@@ -76,6 +90,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   useEffect(() => {
     const getToken = async () => {
@@ -174,7 +189,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     }
 
     if (years > 0) {
-      return `${years}yr${years > 1 ? 's' : ''} ${months > 0 ? `${months}mo` : ''}`;
+      return `${years}yr ${months}mo`;
     }
     return `${months}mo`;
   };
@@ -199,158 +214,281 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
 
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Employee Management</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-      </SafeAreaView>
-
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.contentPadding}>
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputContainer}>
-              <View style={styles.searchIconContainer}>
-                <SearchIcon size={18} color="#6b7280" />
+      {/* BUP Style Header - Exact same as your provided header */}
+      <View style={styles.headerBanner}>
+        <LinearGradient
+          colors={['#4A5568', '#2D3748']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerBanner}
+        >
+          {/* Background Image */}
+          <Image
+            source={require('../assets/bg.jpeg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          
+          {/* Dark overlay for better text visibility */}
+          <View style={styles.headerOverlay} />
+          
+          {/* Header Content */}
+          <View style={[styles.headerContent, { 
+            paddingTop: Platform.OS === 'ios' ? 50 : 40 
+          }]}>
+            {/* Top row with back button, logo, and actions */}
+            <View style={styles.headerTopRow}>
+              {/* Left side - Back button */}
+              <View style={styles.leftSection}>
+                <TouchableOpacity 
+                  style={styles.backButton} 
+                  onPress={onBack}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <BackIcon />
+                </TouchableOpacity>
               </View>
+              
+              {/* Center - Logo */}
+              <View style={styles.centerSection}>
+                <Text style={styles.logoText}>CITADEL</Text>
+              </View>
+              
+              {/* Right side - Action buttons */}
+              <View style={styles.rightSection}>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={fetchEmployees}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="refresh" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.sectionTitle}>Employee Management</Text>
+            <Text style={styles.sectionSubtitle}>
+              {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+
+          {/* WhatsApp-style Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={[
+              styles.searchInputContainer,
+              searchFocused && styles.searchInputContainerFocused
+            ]}>
+              <Ionicons
+                name="search"
+                size={18}
+                color={searchFocused ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.textTertiary}
+                style={styles.searchIcon}
+              />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search employees by name, ID, or designation..."
-                placeholderTextColor="#9ca3af"
+                placeholder="Search employees..."
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
                 clearButtonMode="while-editing"
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity
                   style={styles.clearButton}
                   onPress={() => setSearchQuery('')}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.clearButtonText}>✕</Text>
+                  <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.textTertiary} />
                 </TouchableOpacity>
               )}
             </View>
-            <Text style={styles.searchHint}>
-              {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} found
-            </Text>
           </View>
+        </LinearGradient>
+      </View>
 
-          {loading && employees.length === 0 ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#1e1b4b" />
-              <Text style={styles.loadingText}>Loading employees...</Text>
+      {/* WhatsApp-style Content Area */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[WHATSAPP_COLORS.accent]}
+            tintColor={WHATSAPP_COLORS.accent}
+            progressBackgroundColor={WHATSAPP_COLORS.background}
+          />
+        }
+      >
+        {/* Stats Overview - WhatsApp-style */}
+        {/* <View style={styles.statsContainer}>
+          <View style={styles.statsRow}>
+            <View style={[styles.statCard, { backgroundColor: WHATSAPP_COLORS.chatBubbleSent }]}>
+              <Text style={styles.statValue}>{filteredEmployees.length}</Text>
+              <Text style={styles.statLabel}>Total</Text>
             </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
+            
+            <View style={[styles.statCard, { backgroundColor: '#DCF8C6' }]}>
+              <Text style={styles.statValue}>
+                {filteredEmployees.filter(e => e.is_active).length}
+              </Text>
+              <Text style={styles.statLabel}>Active</Text>
+            </View>
+            
+            <View style={[styles.statCard, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={styles.statValue}>
+                {filteredEmployees.reduce((sum, e) => sum + e.earned_leaves, 0)}
+              </Text>
+              <Text style={styles.statLabel}>Earned Leaves</Text>
+            </View>
+          </View>
+        </View> */}
+
+        {/* Employee List */}
+        {loading && employees.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.loadingText}>Loading employees...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="warning-outline" size={64} color={WHATSAPP_COLORS.error} />
+            <Text style={styles.errorTitle}>Something went wrong</Text>
+            <Text style={styles.errorMessage}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={fetchEmployees}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filteredEmployees.length > 0 ? (
+          <View style={styles.employeesList}>
+            <View style={styles.listHeader}>
+              <Text style={styles.listTitle}>Team Members</Text>
+              <Text style={styles.listSubtitle}>
+                {searchQuery ? `Results for "${searchQuery}"` : 'All team members'}
+              </Text>
+            </View>
+            
+            {filteredEmployees.map((employee) => (
               <TouchableOpacity
-                style={styles.retryButton}
-                onPress={fetchEmployees}
+                key={employee.employee_id}
+                style={styles.employeeCard}
+                onPress={() => handleEmployeePress(employee)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filteredEmployees.length > 0 ? (
-            <View style={styles.employeesList}>
-              {filteredEmployees.map((employee) => (
-                <TouchableOpacity
-                  key={employee.employee_id}
-                  style={styles.employeeCard}
-                  onPress={() => handleEmployeePress(employee)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.employeeCardHeader}>
-                    <View style={styles.employeeAvatar}>
-                      {employee.profile_picture ? (
-                        <Image
-                          source={{ uri: employee.profile_picture }}
-                          style={styles.avatarImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
+                {/* WhatsApp-style contact card */}
+                <View style={styles.employeeCardContent}>
+                  <View style={styles.avatarContainer}>
+                    {employee.profile_picture ? (
+                      <Image
+                        source={{ uri: employee.profile_picture }}
+                        style={styles.avatar}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.avatarDefault, 
+                        { backgroundColor: getAvatarColor(employee.employee_id) }
+                      ]}>
                         <Text style={styles.avatarInitials}>
                           {getInitials(employee.full_name)}
                         </Text>
-                      )}
-                    </View>
-                    <View style={styles.employeeInfo}>
+                      </View>
+                    )}
+                    <View style={[
+                      styles.statusIndicator,
+                      { backgroundColor: employee.is_active ? WHATSAPP_COLORS.statusOnline : WHATSAPP_COLORS.statusOffline }
+                    ]} />
+                  </View>
+
+                  <View style={styles.employeeInfo}>
+                    <View style={styles.nameRow}>
                       <Text style={styles.employeeName} numberOfLines={1}>
                         {employee.full_name}
                       </Text>
-                      <Text style={styles.employeeDesignation} numberOfLines={1}>
-                        {employee.designation || employee.role}
+                      <Text style={styles.employeeTime}>
+                        {calculateExperience(employee.joining_date)}
                       </Text>
-                      <View style={styles.employeeDetails}>
-                        <Text style={styles.employeeId}>
-                          ID: {employee.employee_id}
+                    </View>
+                    
+                    <Text style={styles.employeeDesignation} numberOfLines={1}>
+                      {employee.designation || employee.role}
+                    </Text>
+                    
+                    <Text style={styles.employeeLastMessage} numberOfLines={1}>
+                      ID: {employee.employee_id} • {employee.email}
+                    </Text>
+                    
+                    <View style={styles.leaveBadges}>
+                      <View style={[styles.leaveBadge, { backgroundColor: '#E8F5E9' }]}>
+                        <Text style={[styles.leaveBadgeText, { color: '#2E7D32' }]}>
+                          Earned: {employee.earned_leaves}
                         </Text>
-                        <Text style={styles.employeeExperience}>
-                          ⏳ {calculateExperience(employee.joining_date)}
+                      </View>
+                      <View style={[styles.leaveBadge, { backgroundColor: '#FFF3E0' }]}>
+                        <Text style={[styles.leaveBadgeText, { color: '#EF6C00' }]}>
+                          Sick: {employee.sick_leaves}
+                        </Text>
+                      </View>
+                      <View style={[styles.leaveBadge, { backgroundColor: '#E3F2FD' }]}>
+                        <Text style={[styles.leaveBadgeText, { color: '#1565C0' }]}>
+                          Casual: {employee.casual_leaves}
                         </Text>
                       </View>
                     </View>
                   </View>
 
-                  <View style={styles.employeeCardFooter}>
-                    <View style={styles.leavesContainer}>
-                      <View style={styles.leaveItem}>
-                        <Text style={styles.leaveLabel}>Earned</Text>
-                        <Text style={styles.leaveValue}>{employee.earned_leaves}</Text>
-                      </View>
-                      <View style={styles.leaveDivider} />
-                      <View style={styles.leaveItem}>
-                        <Text style={styles.leaveLabel}>Sick</Text>
-                        <Text style={styles.leaveValue}>{employee.sick_leaves}</Text>
-                      </View>
-                      <View style={styles.leaveDivider} />
-                      <View style={styles.leaveItem}>
-                        <Text style={styles.leaveLabel}>Casual</Text>
-                        <Text style={styles.leaveValue}>{employee.casual_leaves}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.viewDetailsButton}>
-                      <Text style={styles.viewDetailsText}>View Details →</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              <View style={styles.listFooter}>
-                <Text style={styles.listFooterText}>
-                  Showing {filteredEmployees.length} of {employees.length} employees
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Image
-                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4076/4076432.png' }}
-                style={styles.emptyStateImage}
-                resizeMode="contain"
-              />
-              <Text style={styles.emptyStateTitle}>
-                {searchQuery ? 'No employees found' : 'No employees'}
-              </Text>
-              <Text style={styles.emptyStateSubtitle}>
-                {searchQuery
-                  ? 'Try adjusting your search terms'
-                  : 'No employees are currently assigned under your management'}
+                  <Ionicons 
+                    name="chevron-forward" 
+                    size={20} 
+                    color={WHATSAPP_COLORS.textTertiary} 
+                    style={styles.chevronIcon}
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+            
+            <View style={styles.listFooter}>
+              <Text style={styles.listFooterText}>
+                End of list • {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
               </Text>
             </View>
-          )}
-        </View>
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyStateIcon}>
+              <Ionicons name="people-outline" size={80} color={WHATSAPP_COLORS.border} />
+            </View>
+            <Text style={styles.emptyStateTitle}>
+              {searchQuery ? 'No employees found' : 'No employees'}
+            </Text>
+            <Text style={styles.emptyStateMessage}>
+              {searchQuery
+                ? 'Try adjusting your search terms'
+                : 'No employees are currently assigned under your management'}
+            </Text>
+            {searchQuery && (
+              <TouchableOpacity
+                style={styles.clearSearchButton}
+                onPress={() => setSearchQuery('')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </ScrollView>
-
-      <RefreshControl
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        colors={['#1e1b4b']}
-        tintColor="#1e1b4b"
-      />
     </View>
   );
 };
@@ -608,9 +746,52 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     return `${firstName.charAt(0).toUpperCase()}${lastName.charAt(0).toUpperCase()}`;
   };
 
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const calculateExperience = (joiningDate: string): string => {
+    const today = new Date();
+    const joinDate = new Date(joiningDate);
+    const years = today.getFullYear() - joinDate.getFullYear();
+    const months = today.getMonth() - joinDate.getMonth();
+    const adjustedMonths = months < 0 ? months + 12 : months;
+    const adjustedYears = months < 0 ? years - 1 : years;
+
+    if (adjustedYears > 0) {
+      return `${adjustedYears}yr ${adjustedMonths}mo`;
+    }
+    return `${adjustedMonths}mo`;
+  };
+
+  // Helper functions for attendance calendar
   const getMonthName = (month: number): string => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     return months[month];
+  };
+
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const getDateStatus = (day: number) => {
+    const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    const record = attendanceReport.find(r => r.date === dateStr);
+    
+    if (record) {
+      return record.attendance_status;
+    }
+    
+    return null;
   };
 
   const prevMonth = () => {
@@ -631,37 +812,28 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     }
   };
 
-  const getDaysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (month: number, year: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-
-  const getDateStatus = (day: number) => {
-    const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-    const record = attendanceReport.find(r => r.date === dateStr);
-
-    if (record) {
-      return record.attendance_status;
+  const calculateAttendanceSummary = () => {
+    if (!attendanceReport || attendanceReport.length === 0) {
+      return {
+        present: 0,
+        leave: 0,
+        wfh: 0,
+        absent: 0,
+        holidays: 0,
+        pending: 0,
+        weekends: 0
+      };
     }
 
-    return null;
-  };
-
-  const getDateColor = (status: string | null) => {
-    switch (status) {
-      case 'present': return '#10b981';      // Green
-      case 'leave': return '#f59e0b';        // Yellow
-      case 'wfh': return '#a855f7';          // Purple
-      case 'holiday': return '#3b82f6';      // Blue
-      case 'weekend': return '#f3f4f6';      // Gray for weekends
-      case 'absent': return '#ef4444';       // Red
-      case 'pending': return '#f3f4f6';      // Light gray for pending
-      default: return '#f3f4f6';             // Default light gray
-    }
+    return {
+      present: attendanceReport.filter(r => r.attendance_status === 'present').length,
+      leave: attendanceReport.filter(r => r.attendance_status === 'leave').length,
+      wfh: attendanceReport.filter(r => r.attendance_status === 'wfh').length,
+      absent: attendanceReport.filter(r => r.attendance_status === 'absent').length,
+      holidays: attendanceReport.filter(r => r.attendance_status === 'holiday').length,
+      pending: attendanceReport.filter(r => r.attendance_status === 'pending').length,
+      weekends: attendanceReport.filter(r => r.attendance_status === 'weekend').length
+    };
   };
 
   const renderCalendar = () => {
@@ -673,29 +845,57 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
+    // Empty days for start of month
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
     }
 
+    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const status = getDateStatus(day);
       const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
-      const shouldShowText = !['pending'].includes(status || '');
+      
+      let backgroundColor = '#FFFFFF';
+      let textColor = WHATSAPP_COLORS.textPrimary;
+      
+      switch (status) {
+        case 'present':
+          backgroundColor = '#E8F5E9';
+          textColor = '#2E7D32';
+          break;
+        case 'leave':
+          backgroundColor = '#FFF3E0';
+          textColor = '#EF6C00';
+          break;
+        case 'wfh':
+          backgroundColor = '#E3F2FD';
+          textColor = '#1565C0';
+          break;
+        case 'holiday':
+          backgroundColor = '#E8EAF6';
+          textColor = '#5C6BC0';
+          break;
+        case 'absent':
+          backgroundColor = '#FFEBEE';
+          textColor = '#D32F2F';
+          break;
+        case 'weekend':
+          backgroundColor = '#F5F5F5';
+          textColor = '#9E9E9E';
+          break;
+        default:
+          backgroundColor = '#FFFFFF';
+          textColor = WHATSAPP_COLORS.textPrimary;
+      }
 
       days.push(
         <View key={day} style={styles.calendarDay}>
           <View style={[
             styles.dayCircle,
-            { backgroundColor: getDateColor(status) },
-            isToday && styles.todayCircle,
-            !shouldShowText && { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#e5e7eb' }
+            { backgroundColor, borderColor: textColor },
+            isToday && styles.todayCircle
           ]}>
-            <Text style={[
-              styles.dayText,
-              (status === 'present' || status === 'leave' || status === 'wfh' ||
-                status === 'holiday' || status === 'absent') && styles.dayTextActive,
-              (status === 'weekend' || status === 'pending') && styles.dayTextInactive
-            ]}>
+            <Text style={[styles.dayText, { color: textColor }]}>
               {day}
             </Text>
           </View>
@@ -706,198 +906,469 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     return days;
   };
 
-  const calculateSummary = () => {
-    if (!attendanceReport || attendanceReport.length === 0) {
-      return {
-        present: 0,
-        wfh: 0,
-        leave: 0,
-        absent: 0,
-        holidays: 0,
-        pending: 0,
-        weekends: 0
-      };
-    }
-
-    return {
-      present: attendanceReport.filter(r => r.attendance_status === 'present').length,
-      wfh: attendanceReport.filter(r => r.attendance_status === 'wfh').length,
-      leave: attendanceReport.filter(r => r.attendance_status === 'leave').length,
-      absent: attendanceReport.filter(r => r.attendance_status === 'absent').length,
-      holidays: attendanceReport.filter(r => r.attendance_status === 'holiday').length,
-      pending: attendanceReport.filter(r => r.attendance_status === 'pending').length,
-      weekends: attendanceReport.filter(r => r.attendance_status === 'weekend').length
-    };
-  };
-
   const renderOverviewTab = () => (
-    <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.employeeHeader}>
-        <View style={styles.employeeAvatarLarge}>
-          {employee.profile_picture ? (
-            <Image
-              source={{ uri: employee.profile_picture }}
-              style={styles.avatarImageLarge}
-              resizeMode="cover"
-            />
-          ) : (
-            <Text style={styles.avatarInitialsLarge}>
-              {getInitials(employee.first_name, employee.last_name)}
+    <ScrollView 
+      style={styles.detailsContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* BUP Style Header for Employee Details */}
+      <View style={styles.detailsHeaderBanner}>
+        <LinearGradient
+          colors={['#4A5568', '#2D3748']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.detailsHeaderBanner}
+        >
+          <Image
+            source={require('../../assets/cars.jpeg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          
+          <View style={styles.headerOverlay} />
+          
+          <View style={[styles.headerContent, { 
+            paddingTop: Platform.OS === 'ios' ? 50 : 40 
+          }]}>
+            <View style={styles.headerTopRow}>
+              <View style={styles.leftSection}>
+                <TouchableOpacity 
+                  style={styles.backButton} 
+                  onPress={onBack}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <BackIcon />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.centerSection}>
+                <Text style={styles.logoText}>CITADEL</Text>
+              </View>
+              
+              <View style={styles.rightSection}>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={fetchEmployeeDetails}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="refresh" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.detailsTitleSection}>
+            <Text style={styles.detailsSectionTitle}>{employee.full_name}</Text>
+            <Text style={styles.detailsSectionSubtitle}>
+              {employee.designation || employee.role}
             </Text>
-          )}
-        </View>
-        <View style={styles.employeeHeaderInfo}>
-          <Text style={styles.employeeNameLarge}>{employee.full_name}</Text>
-          <Text style={styles.employeeDesignationLarge}>
-            {employee.designation || employee.role}
-          </Text>
-          <Text style={styles.employeeIdLarge}>ID: {employee.employee_id}</Text>
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* Tab Navigation */}
+      <View style={styles.tabNavigation}>
+        {[
+          { key: 'overview', label: 'Overview', icon: 'person-outline' },
+          { key: 'attendance', label: 'Attendance', icon: 'calendar-outline' },
+          { key: 'leaves', label: 'Leaves', icon: 'leaf-outline' }
+        ].map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
+            onPress={() => setActiveTab(tab.key as any)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={tab.icon as any}
+              size={20}
+              color={activeTab === tab.key ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.textTertiary}
+            />
+            <Text style={[
+              styles.tabLabel,
+              activeTab === tab.key && styles.activeTabLabel
+            ]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* WhatsApp-style Profile Info */}
+      <View style={styles.profileHeader}>
+        <View style={styles.profileHeaderContent}>
+          <View style={styles.profileAvatarContainer}>
+            {employee.profile_picture ? (
+              <Image
+                source={{ uri: employee.profile_picture }}
+                style={styles.profileAvatarImage}
+              />
+            ) : (
+              <View style={[styles.profileAvatarDefault, 
+                { backgroundColor: getAvatarColor(employee.employee_id) }
+              ]}>
+                <Text style={styles.profileAvatarInitials}>
+                  {getInitials(employee.first_name, employee.last_name)}
+                </Text>
+              </View>
+            )}
+            <View style={[
+              styles.profileStatusIndicator,
+              { backgroundColor: employee.is_active ? WHATSAPP_COLORS.statusOnline : WHATSAPP_COLORS.statusOffline }
+            ]} />
+          </View>
+          
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{employee.full_name}</Text>
+            <Text style={styles.profileDesignation}>
+              {employee.designation || employee.role}
+            </Text>
+            <Text style={styles.profileId}>ID: {employee.employee_id}</Text>
+          </View>
         </View>
       </View>
 
-      {employeeDetails && (
-        <>
-          <View style={styles.infoSection}>
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-            <View style={styles.infoGrid}>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{employee.email}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={styles.infoValue}>{employee.phone_number}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Joining Date</Text>
-                <Text style={styles.infoValue}>
-                  {formatDate(employee.joining_date)}
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Experience</Text>
-                <Text style={styles.infoValue}>
-                  {calculateExperience(employee.joining_date)}
-                </Text>
-              </View>
+      {/* WhatsApp-style Info Cards */}
+      <View style={styles.infoCardsContainer}>
+        {/* Contact Info Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoCardHeader}>
+            <Ionicons name="information-circle" size={24} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.infoCardTitle}>Contact Information</Text>
+          </View>
+          
+          <View style={styles.infoItem}>
+            <Ionicons name="mail-outline" size={20} color={WHATSAPP_COLORS.textSecondary} />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Email</Text>
+              <Text style={styles.infoValue}>{employee.email}</Text>
             </View>
           </View>
-
-          <View style={styles.infoSection}>
-            <Text style={styles.sectionTitle}>Leave Balance</Text>
-            <View style={styles.leaveBalanceContainer}>
-              <View style={[styles.leaveBalanceCard, { backgroundColor: '#D1FAE5' }]}>
-                <Text style={styles.leaveBalanceTitle}>Earned Leaves</Text>
-                <Text style={[styles.leaveBalanceValue, { color: '#065F46' }]}>
-                  {employeeDetails.earned_leaves}
-                </Text>
-              </View>
-              <View style={[styles.leaveBalanceCard, { backgroundColor: '#FEE2E2' }]}>
-                <Text style={styles.leaveBalanceTitle}>Sick Leaves</Text>
-                <Text style={[styles.leaveBalanceValue, { color: '#991B1B' }]}>
-                  {employeeDetails.sick_leaves}
-                </Text>
-              </View>
-              <View style={[styles.leaveBalanceCard, { backgroundColor: '#FEF3C7' }]}>
-                <Text style={styles.leaveBalanceTitle}>Casual Leaves</Text>
-                <Text style={[styles.leaveBalanceValue, { color: '#92400E' }]}>
-                  {employeeDetails.casual_leaves}
-                </Text>
-              </View>
+          
+          <View style={styles.infoDivider} />
+          
+          <View style={styles.infoItem}>
+            <Ionicons name="call-outline" size={20} color={WHATSAPP_COLORS.textSecondary} />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Phone</Text>
+              <Text style={styles.infoValue}>{employee.phone_number}</Text>
             </View>
           </View>
-
-          {employeeDetails.assigned_assets && employeeDetails.assigned_assets.length > 0 && (
-            <View style={styles.infoSection}>
-              <Text style={styles.sectionTitle}>Assigned Assets ({employeeDetails.total_assigned_assets})</Text>
-              {employeeDetails.assigned_assets.map((asset: any, index: number) => (
-                <View key={index} style={styles.assetCard}>
-                  <Text style={styles.assetName}>{asset.asset.name}</Text>
-                  <Text style={styles.assetDetails}>
-                    Type: {asset.asset.type} • Serial: {asset.asset.serial_number}
-                  </Text>
-                  <Text style={styles.assetAssignedDate}>
-                    Assigned on: {formatDate(asset.assigned_at)}
-                  </Text>
-                </View>
-              ))}
+          
+          <View style={styles.infoDivider} />
+          
+          <View style={styles.infoItem}>
+            <Ionicons name="calendar-outline" size={20} color={WHATSAPP_COLORS.textSecondary} />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Joining Date</Text>
+              <Text style={styles.infoValue}>{formatDate(employee.joining_date)}</Text>
             </View>
-          )}
-        </>
-      )}
-
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#1e1b4b" />
+          </View>
+          
+          <View style={styles.infoDivider} />
+          
+          <View style={styles.infoItem}>
+            <Ionicons name="time-outline" size={20} color={WHATSAPP_COLORS.textSecondary} />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Experience</Text>
+              <Text style={styles.infoValue}>{calculateExperience(employee.joining_date)}</Text>
+            </View>
+          </View>
         </View>
-      )}
+
+        {/* Leave Balance Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoCardHeader}>
+            <Ionicons name="leaf-outline" size={24} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.infoCardTitle}>Leave Balance</Text>
+          </View>
+          
+          <View style={styles.leaveBalanceContainer}>
+            <View style={[styles.leaveBalanceItem, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={[styles.leaveBalanceValue, { color: '#2E7D32' }]}>
+                {employee.earned_leaves}
+              </Text>
+              <Text style={[styles.leaveBalanceLabel, { color: '#2E7D32' }]}>
+                Earned
+              </Text>
+            </View>
+            
+            <View style={[styles.leaveBalanceItem, { backgroundColor: '#FFF3E0' }]}>
+              <Text style={[styles.leaveBalanceValue, { color: '#EF6C00' }]}>
+                {employee.sick_leaves}
+              </Text>
+              <Text style={[styles.leaveBalanceLabel, { color: '#EF6C00' }]}>
+                Sick
+              </Text>
+            </View>
+            
+            <View style={[styles.leaveBalanceItem, { backgroundColor: '#E3F2FD' }]}>
+              <Text style={[styles.leaveBalanceValue, { color: '#1565C0' }]}>
+                {employee.casual_leaves}
+              </Text>
+              <Text style={[styles.leaveBalanceLabel, { color: '#1565C0' }]}>
+                Casual
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Additional Info */}
+        {employeeDetails && employeeDetails.assigned_assets && employeeDetails.assigned_assets.length > 0 && (
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardHeader}>
+              <Ionicons name="briefcase-outline" size={24} color={WHATSAPP_COLORS.primary} />
+              <Text style={styles.infoCardTitle}>
+                Assigned Assets ({employeeDetails.total_assigned_assets})
+              </Text>
+            </View>
+            
+            {employeeDetails.assigned_assets.map((asset: any, index: number) => (
+              <View key={index}>
+                {index > 0 && <View style={styles.infoDivider} />}
+                <View style={styles.infoItem}>
+                  <Ionicons name="cube-outline" size={20} color={WHATSAPP_COLORS.textSecondary} />
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>{asset.asset.name}</Text>
+                    <Text style={styles.infoValue}>
+                      {asset.asset.type} • Serial: {asset.asset.serial_number}
+                    </Text>
+                    <Text style={styles.infoSubtext}>
+                      Assigned on {formatDate(asset.assigned_at)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 
   const renderAttendanceTab = () => {
-    const summary = calculateSummary();
-
+    const summary = calculateAttendanceSummary();
+    
     return (
-      <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.calendarCard}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
-              <Text style={styles.navButtonText}>‹</Text>
+      <ScrollView 
+        style={styles.detailsContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* BUP Style Header for Employee Details */}
+        <View style={styles.detailsHeaderBanner}>
+          <LinearGradient
+            colors={['#4A5568', '#2D3748']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.detailsHeaderBanner}
+          >
+            <Image
+              source={require('../assets/cars.jpeg')}
+              style={styles.headerImage}
+              resizeMode="cover"
+            />
+            
+            <View style={styles.headerOverlay} />
+            
+            <View style={[styles.headerContent, { 
+              paddingTop: Platform.OS === 'ios' ? 50 : 40 
+            }]}>
+              <View style={styles.headerTopRow}>
+                <View style={styles.leftSection}>
+                  <TouchableOpacity 
+                    style={styles.backButton} 
+                    onPress={onBack}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <BackIcon />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.centerSection}>
+                  <Text style={styles.logoText}>CITADEL</Text>
+                </View>
+                
+                <View style={styles.rightSection}>
+                  <TouchableOpacity 
+                    style={styles.actionButton} 
+                    onPress={fetchEmployeeDetails}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="refresh" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.detailsTitleSection}>
+              <Text style={styles.detailsSectionTitle}>{employee.full_name}</Text>
+              <Text style={styles.detailsSectionSubtitle}>
+                {employee.designation || employee.role}
+              </Text>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* Tab Navigation */}
+        <View style={styles.tabNavigation}>
+          {[
+            { key: 'overview', label: 'Overview', icon: 'person-outline' },
+            { key: 'attendance', label: 'Attendance', icon: 'calendar-outline' },
+            { key: 'leaves', label: 'Leaves', icon: 'leaf-outline' }
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tab, activeTab === tab.key && styles.activeTab]}
+              onPress={() => setActiveTab(tab.key as any)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={tab.icon as any}
+                size={20}
+                color={activeTab === tab.key ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.textTertiary}
+              />
+              <Text style={[
+                styles.tabLabel,
+                activeTab === tab.key && styles.activeTabLabel
+              ]}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
-            <Text style={styles.monthYear}>
-              {getMonthName(selectedMonth)} {selectedYear}
-            </Text>
-            <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
-              <Text style={styles.navButtonText}>›</Text>
-            </TouchableOpacity>
-          </View>
+          ))}
+        </View>
 
-          <View style={styles.weekDays}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <Text key={day} style={styles.weekDay}>{day}</Text>
-            ))}
-          </View>
+        <View style={styles.attendanceHeader}>
+          <Text style={styles.attendanceTitle}>Attendance Report</Text>
+          <Text style={styles.attendanceSubtitle}>
+            View and download attendance records
+          </Text>
+        </View>
 
-          <View style={styles.calendarGrid}>
-            {renderCalendar()}
-          </View>
-
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-              <Text style={styles.legendText}>Present</Text>
+        {/* Attendance Summary Cards */}
+        <View style={styles.attendanceSummary}>
+          <View style={styles.summaryRow}>
+            <View style={[styles.summaryCard, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={[styles.summaryValue, { color: '#2E7D32' }]}>
+                {summary.present}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: '#2E7D32' }]}>
+                Present
+              </Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-              <Text style={styles.legendText}>Leave</Text>
+            
+            <View style={[styles.summaryCard, { backgroundColor: '#FFF3E0' }]}>
+              <Text style={[styles.summaryValue, { color: '#EF6C00' }]}>
+                {summary.leave}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: '#EF6C00' }]}>
+                Leave
+              </Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#a855f7' }]} />
-              <Text style={styles.legendText}>WFH</Text>
+            
+            <View style={[styles.summaryCard, { backgroundColor: '#E3F2FD' }]}>
+              <Text style={[styles.summaryValue, { color: '#1565C0' }]}>
+                {summary.wfh}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: '#1565C0' }]}>
+                WFH
+              </Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#3b82f6' }]} />
-              <Text style={styles.legendText}>Holiday</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-              <Text style={styles.legendText}>Absent</Text>
+            
+            <View style={[styles.summaryCard, { backgroundColor: '#FFEBEE' }]}>
+              <Text style={[styles.summaryValue, { color: '#D32F2F' }]}>
+                {summary.absent}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: '#D32F2F' }]}>
+                Absent
+              </Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.downloadSection}>
+        {/* Month Navigation */}
+        <View style={styles.monthSelector}>
+          <TouchableOpacity onPress={prevMonth} style={styles.monthNavButton}>
+            <Ionicons name="chevron-back" size={20} color={WHATSAPP_COLORS.primary} />
+          </TouchableOpacity>
+          
+          <Text style={styles.monthYearText}>
+            {getMonthName(selectedMonth)} {selectedYear}
+          </Text>
+          
+          <TouchableOpacity onPress={nextMonth} style={styles.monthNavButton}>
+            <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Calendar View */}
+        <View style={styles.calendarContainer}>
+          <View style={styles.weekDays}>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <Text key={day} style={styles.weekDayText}>{day}</Text>
+            ))}
+          </View>
+          
+          <View style={styles.calendarGrid}>
+            {renderCalendar()}
+          </View>
+        </View>
+
+        {/* Legend */}
+        <View style={styles.legendContainer}>
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+              <Text style={styles.legendText}>Present</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+              <Text style={styles.legendText}>Leave</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#9C27B0' }]} />
+              <Text style={styles.legendText}>WFH</Text>
+            </View>
+          </View>
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#2196F3' }]} />
+              <Text style={styles.legendText}>Holiday</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
+              <Text style={styles.legendText}>Absent</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#9E9E9E' }]} />
+              <Text style={styles.legendText}>Weekend</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Download Report Card */}
+        <View style={styles.downloadCard}>
+          <View style={styles.downloadCardContent}>
+            <Ionicons name="document-text" size={40} color={WHATSAPP_COLORS.primary} />
+            <View style={styles.downloadInfo}>
+              <Text style={styles.downloadTitle}>Download Attendance Report</Text>
+              <Text style={styles.downloadDescription}>
+                Get a detailed PDF report of {employee.full_name}'s attendance
+              </Text>
+            </View>
+          </View>
+          
           <TouchableOpacity
-            style={styles.downloadButtonNew}
+            style={styles.downloadButton}
             onPress={handleDownloadReport}
+            activeOpacity={0.8}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
-                <Text style={styles.downloadButtonIcon}>📥</Text>
-                <Text style={styles.downloadButtonTextNew}>Download PDF</Text>
+                <Ionicons name="download" size={20} color="#FFFFFF" />
+                <Text style={styles.downloadButtonText}>Download PDF</Text>
               </>
             )}
           </TouchableOpacity>
@@ -907,124 +1378,86 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
   };
 
   const renderLeavesTab = () => (
-    <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false}>
-      {employeeDetails?.leaves && employeeDetails.leaves.length > 0 ? (
-        <>
-          <Text style={styles.sectionTitle}>Leave Requests</Text>
-          {employeeDetails.leaves.map((leave: any, index: number) => (
-            <View key={index} style={styles.leaveCard}>
-              <View style={styles.leaveHeader}>
-                <Text style={styles.leaveType}>{leave.leave_type}</Text>
-                <View style={[
-                  styles.leaveStatusBadge,
-                  {
-                    backgroundColor:
-                      leave.status === 'approved_by_manager' ? '#10b981' :
-                        leave.status === 'rejected' ? '#ef4444' :
-                          '#f59e0b'
-                  }
-                ]}>
-                  <Text style={styles.leaveStatusText}>
-                    {leave.status.replaceAll('_', ' ')}
-                  </Text>
-                </View>
+    <ScrollView 
+      style={styles.detailsContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* BUP Style Header for Employee Details */}
+      <View style={styles.detailsHeaderBanner}>
+        <LinearGradient
+          colors={['#4A5568', '#2D3748']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.detailsHeaderBanner}
+        >
+          <Image
+            source={require('../../assets/cars.jpeg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          
+          <View style={styles.headerOverlay} />
+          
+          <View style={[styles.headerContent, { 
+            paddingTop: Platform.OS === 'ios' ? 50 : 40 
+          }]}>
+            <View style={styles.headerTopRow}>
+              <View style={styles.leftSection}>
+                <TouchableOpacity 
+                  style={styles.backButton} 
+                  onPress={onBack}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <BackIcon />
+                </TouchableOpacity>
               </View>
-
-              <Text style={styles.leaveDates}>
-                📅 {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
-                {leave.total_number_of_days && ` (${leave.total_number_of_days} day${leave.total_number_of_days > 1 ? 's' : ''})`}
-              </Text>
-
-              <Text style={styles.leaveReason}>
-                {leave.reject_reason}
-              </Text>
-
-              {leave.status === 'pending' && (
-                <View style={styles.leaveActions}>
-                  <TouchableOpacity
-                    style={[styles.leaveActionButton, { backgroundColor: '#10b981' }]}
-                    onPress={() => handleApproveLeave(leave.id)}
-                  >
-                    <Text style={styles.leaveActionText}>Approve</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.leaveActionButton, { backgroundColor: '#ef4444' }]}
-                    onPress={() => handleRejectLeave(leave.id)}
-                  >
-                    <Text style={styles.leaveActionText}>Reject</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {leave.manager_comment && (
-                <Text style={styles.managerComment}>
-                  <Text style={styles.commentLabel}>Manager Comment: </Text>
-                  {leave.manager_comment}
-                </Text>
-              )}
+              
+              <View style={styles.centerSection}>
+                <Text style={styles.logoText}>CITADEL</Text>
+              </View>
+              
+              <View style={styles.rightSection}>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={fetchEmployeeDetails}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="refresh" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
-          ))}
-        </>
-      ) : (
-        <View style={styles.emptyLeaves}>
-          <Text style={styles.emptyLeavesText}>No leave requests found</Text>
-        </View>
-      )}
-    </ScrollView>
-  );
+          </View>
+          
+          <View style={styles.detailsTitleSection}>
+            <Text style={styles.detailsSectionTitle}>{employee.full_name}</Text>
+            <Text style={styles.detailsSectionSubtitle}>
+              {employee.designation || employee.role}
+            </Text>
+          </View>
+        </LinearGradient>
+      </View>
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  const calculateExperience = (joiningDate: string): string => {
-    const today = new Date();
-    const joinDate = new Date(joiningDate);
-    const years = today.getFullYear() - joinDate.getFullYear();
-    const months = today.getMonth() - joinDate.getMonth();
-    const adjustedMonths = months < 0 ? months + 12 : months;
-    const adjustedYears = months < 0 ? years - 1 : years;
-
-    if (adjustedYears > 0) {
-      return `${adjustedYears}yr${adjustedYears > 1 ? 's' : ''} ${adjustedMonths > 0 ? `${adjustedMonths}mo` : ''}`;
-    }
-    return `${adjustedMonths}mo`;
-  };
-
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" translucent={false} />
-
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <BackIcon />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {employee.full_name}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
-      </SafeAreaView>
-
+      {/* Tab Navigation */}
       <View style={styles.tabNavigation}>
         {[
-          { key: 'overview' as const, label: 'Overview' },
-          { key: 'attendance' as const, label: 'Attendance' },
-          { key: 'leaves' as const, label: 'Leaves' }
+          { key: 'overview', label: 'Overview', icon: 'person-outline' },
+          { key: 'attendance', label: 'Attendance', icon: 'calendar-outline' },
+          { key: 'leaves', label: 'Leaves', icon: 'leaf-outline' }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key)}
+            onPress={() => setActiveTab(tab.key as any)}
+            activeOpacity={0.7}
           >
+            <Ionicons
+              name={tab.icon as any}
+              size={20}
+              color={activeTab === tab.key ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.textTertiary}
+            />
             <Text style={[
-              styles.tabText,
-              activeTab === tab.key && styles.activeTabText
+              styles.tabLabel,
+              activeTab === tab.key && styles.activeTabLabel
             ]}>
               {tab.label}
             </Text>
@@ -1032,53 +1465,156 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
         ))}
       </View>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.contentPadding}>
-          {activeTab === 'overview' && renderOverviewTab()}
-          {activeTab === 'attendance' && renderAttendanceTab()}
-          {activeTab === 'leaves' && renderLeavesTab()}
+      {employeeDetails?.leaves && employeeDetails.leaves.length > 0 ? (
+        <>
+          <View style={styles.leavesHeader}>
+            <Text style={styles.leavesTitle}>Leave Requests</Text>
+            <Text style={styles.leavesSubtitle}>
+              {employeeDetails.leaves.length} request{employeeDetails.leaves.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          
+          {employeeDetails.leaves.map((leave: any, index: number) => (
+            <View key={index} style={styles.leaveCard}>
+              <View style={styles.leaveCardHeader}>
+                <View style={styles.leaveHeaderInfo}>
+                  <Text style={styles.leaveType}>{leave.leave_type}</Text>
+                  <Text style={styles.leaveDates}>
+                    {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                    {leave.total_number_of_days && ` (${leave.total_number_of_days} day${leave.total_number_of_days > 1 ? 's' : ''})`}
+                  </Text>
+                </View>
+                
+                <View style={[
+                  styles.leaveStatus,
+                  { backgroundColor: 
+                    leave.status === 'approved_by_manager' ? '#E8F5E9' :
+                    leave.status === 'rejected' ? '#FFEBEE' :
+                    '#FFF3E0'
+                  }
+                ]}>
+                  <Text style={[
+                    styles.leaveStatusText,
+                    { color: 
+                      leave.status === 'approved_by_manager' ? '#2E7D32' :
+                      leave.status === 'rejected' ? '#D32F2F' :
+                      '#EF6C00'
+                    }
+                  ]}>
+                    {leave.status === 'approved_by_manager' ? 'Approved' : 
+                     leave.status === 'rejected' ? 'Rejected' : 'Pending'}
+                  </Text>
+                </View>
+              </View>
+              
+              {leave.reason && (
+                <Text style={styles.leaveReason}>
+                  <Text style={styles.leaveReasonLabel}>Reason: </Text>
+                  {leave.reason}
+                </Text>
+              )}
+              
+              {leave.status === 'pending' && (
+                <View style={styles.leaveActions}>
+                  <TouchableOpacity
+                    style={[styles.leaveActionButton, { backgroundColor: '#4CAF50' }]}
+                    onPress={() => handleApproveLeave(leave.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                    <Text style={styles.leaveActionText}>Approve</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.leaveActionButton, { backgroundColor: '#F44336' }]}
+                    onPress={() => handleRejectLeave(leave.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="close" size={18} color="#FFFFFF" />
+                    <Text style={styles.leaveActionText}>Reject</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {leave.manager_comment && (
+                <View style={styles.managerComment}>
+                  <Text style={styles.managerCommentLabel}>Manager Comment: </Text>
+                  <Text style={styles.managerCommentText}>{leave.manager_comment}</Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </>
+      ) : (
+        <View style={styles.emptyLeaves}>
+          <Ionicons name="calendar-outline" size={64} color={WHATSAPP_COLORS.border} />
+          <Text style={styles.emptyLeavesTitle}>No leave requests</Text>
+          <Text style={styles.emptyLeavesText}>
+            {employee.full_name} hasn't submitted any leave requests yet
+          </Text>
         </View>
-      </ScrollView>
+      )}
+    </ScrollView>
+  );
 
-      {/* Rejection Reason Modal */}
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+
+      {/* Render active tab content */}
+      {activeTab === 'overview' && renderOverviewTab()}
+      {activeTab === 'attendance' && renderAttendanceTab()}
+      {activeTab === 'leaves' && renderLeavesTab()}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+        </View>
+      )}
+
+      {/* Rejection Modal */}
       <Modal
         visible={rejectionModalVisible}
-        transparent={true}
+        transparent
         animationType="slide"
         onRequestClose={() => setRejectionModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Reject Leave</Text>
-            <Text style={styles.modalSubtitle}>Please provide a reason for rejecting this leave:</Text>
-
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Reject Leave Request</Text>
+            </View>
+            
+            <Text style={styles.modalDescription}>
+              Please provide a reason for rejecting this leave:
+            </Text>
+            
             <TextInput
               style={styles.reasonInput}
               placeholder="Enter rejection reason..."
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
               value={rejectionReason}
               onChangeText={setRejectionReason}
-              multiline={true}
+              multiline
               numberOfLines={4}
               textAlignVertical="top"
             />
-
+            
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setRejectionModalVisible(false);
-                  setRejectionReason('');
-                  setSelectedLeaveId(null);
-                }}
+                onPress={() => setRejectionModalVisible(false)}
+                activeOpacity={0.7}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-
+              
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
                 onPress={submitRejection}
                 disabled={!rejectionReason.trim()}
+                activeOpacity={0.7}
               >
                 <Text style={styles.submitButtonText}>Reject Leave</Text>
               </TouchableOpacity>
@@ -1086,48 +1622,156 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
           </View>
         </View>
       </Modal>
-
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#1e1b4b" />
-        </View>
-      )}
     </View>
   );
+};
+
+// Helper function for avatar colors
+const getAvatarColor = (id: string): string => {
+  const colors = [
+    '#075E54', // WhatsApp green
+    '#128C7E', // WhatsApp medium green
+    '#25D366', // WhatsApp light green
+    '#34B7F1', // WhatsApp blue
+    '#ED4C67', // Pink
+    '#FFC312', // Yellow
+    '#EE5A24', // Orange
+    '#A3CB38', // Lime green
+    '#1289A7', // Teal
+    '#D980FA', // Purple
+  ];
+  const hash = id.split('').reduce((acc, char) => {
+    return char.charCodeAt(0) + ((acc << 5) - acc);
+  }, 0);
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  safeArea: {
-    backgroundColor: '#1e1b4b',
+  
+  // BUP Header Styles - Exact same as your provided header
+  headerBanner: {
+    height: 220,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  scrollContainer: {
+  detailsHeaderBanner: {
+    height: 220,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 0.8,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  headerContent: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    position: 'relative',
+    zIndex: 1,
   },
-  contentPadding: {
-    padding: 16,
-    paddingBottom: 100,
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  header: {
+  leftSection: {
+    width: 80,
+    alignItems: 'flex-start',
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  rightSection: {
+    width: 80,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#1e1b4b',
-    marginTop: 30,
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   backButton: {
     padding: 8,
+    borderRadius: 8,
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    position: 'relative',
+    zIndex: 1,
+  },
+  detailsTitleSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    position: 'relative',
+    zIndex: 1,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  detailsSectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  detailsSectionSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
   },
   backIcon: {
-    width: 24,
-    height: 24,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
   },
   backArrow: {
     width: 12,
@@ -1137,618 +1781,811 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+  backText: {
     color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
   },
-  headerSpacer: {
-    width: 44,
-  },
-
+  
+  // Search (Added to header)
   searchContainer: {
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    position: 'relative',
+    zIndex: 1,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
     paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  searchIconContainer: {
-    marginRight: 12,
+  searchInputContainerFocused: {
+    borderColor: WHATSAPP_COLORS.accent,
+  },
+  searchIcon: {
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    paddingVertical: 14,
-    minHeight: 48,
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textPrimary,
+    padding: 0,
   },
   clearButton: {
     padding: 4,
   },
-  clearButtonText: {
-    fontSize: 16,
-    color: '#6b7280',
+  
+  // Scroll & Content
+  scrollView: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  searchHint: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 8,
+  scrollContent: {
+    paddingBottom: 32,
   },
-
-  employeesList: {
-    marginTop: 8,
+  
+  // Stats Container
+  statsContainer: {
+    padding: 16,
   },
-  employeeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  employeeCardHeader: {
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  
+  // Employee List
+  employeesList: {
+    paddingHorizontal: 16,
+  },
+  listHeader: {
+    marginBottom: 16,
+    marginTop:10,
+  },
+  listTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  listSubtitle: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  
+  // Employee Card
+  employeeCard: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 8,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  employeeCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    padding: 12,
   },
-  employeeAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1e1b4b',
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  avatarDefault: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-  },
-  avatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
   },
   avatarInitials: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.surface,
   },
   employeeInfo: {
     flex: 1,
   },
-  employeeName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  employeeDesignation: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 6,
-  },
-  employeeDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  employeeId: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginRight: 12,
-  },
-  employeeExperience: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  employeeCardFooter: {
+  nameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    marginBottom: 2,
   },
-  leavesContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  leaveItem: {
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  leaveLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  leaveValue: {
+  employeeName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
   },
-  leaveDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: '#e5e7eb',
-  },
-  viewDetailsButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#1e1b4b',
-    borderRadius: 8,
-  },
-  viewDetailsText: {
+  employeeTime: {
     fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
+    color: WHATSAPP_COLORS.textTertiary,
+    marginLeft: 8,
   },
-
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-  },
-  loadingText: {
+  employeeDesignation: {
     fontSize: 14,
-    color: '#6b7280',
-    marginTop: 16,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 2,
   },
-
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 80,
+  employeeLastMessage: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+    marginBottom: 6,
   },
-  errorText: {
-    fontSize: 16,
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 24,
+  leaveBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  retryButton: {
-    backgroundColor: '#1e1b4b',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  leaveBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
-  retryButtonText: {
-    fontSize: 16,
-    color: '#fff',
+  leaveBadgeText: {
+    fontSize: 10,
     fontWeight: '600',
   },
-
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 80,
+  chevronIcon: {
+    marginLeft: 8,
   },
-  emptyStateImage: {
-    width: 120,
-    height: 120,
-    opacity: 0.5,
-    marginBottom: 24,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-
+  
+  // List Footer
   listFooter: {
     paddingVertical: 24,
     alignItems: 'center',
   },
   listFooterText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: WHATSAPP_COLORS.textTertiary,
   },
-
+  
+  // Loading & Error States
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginTop: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Empty State
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 400,
+    paddingHorizontal: 24,
+  },
+  emptyStateIcon: {
+    marginBottom: 24,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateMessage: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  clearSearchButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  clearSearchButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Details Content
+  detailsContent: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  
+  // Tab Navigation (for details screen)
   tabNavigation: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingHorizontal: 4,
-    borderTopRightRadius: 16,
-    borderTopLeftRadius: 16,
-    marginTop: -16,
-    zIndex: 1,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    marginTop: -20,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 16,
   },
   tab: {
     flex: 1,
-    paddingVertical: 16,
     alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
   },
   activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#1e1b4b',
+    backgroundColor: WHATSAPP_COLORS.chatBubbleSent,
   },
-  tabText: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
+  tabLabel: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+    marginTop: 4,
   },
-  activeTabText: {
-    color: '#1e1b4b',
+  activeTabLabel: {
+    color: WHATSAPP_COLORS.primary,
     fontWeight: '600',
   },
-
-  detailsContent: {
-    flex: 1,
+  
+  // Profile Header in Details
+  profileHeader: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-
-  employeeHeader: {
+  profileHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  employeeAvatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#1e1b4b',
-    alignItems: 'center',
-    justifyContent: 'center',
+  profileAvatarContainer: {
+    position: 'relative',
     marginRight: 16,
   },
-  avatarImageLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  profileAvatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
-  avatarInitialsLarge: {
-    color: '#fff',
-    fontSize: 24,
+  profileAvatarDefault: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileAvatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 20,
     fontWeight: 'bold',
   },
-  employeeHeaderInfo: {
+  profileStatusIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.surface,
+  },
+  profileInfo: {
     flex: 1,
   },
-  employeeNameLarge: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  employeeDesignationLarge: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  employeeIdLarge: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-
-  infoSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
+  profileName: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
+    fontWeight: 'bold',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
   },
-  infoGrid: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+  profileDesignation: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  profileId: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+  },
+  
+  // Info Cards
+  infoCardsContainer: {
+    paddingHorizontal: 16,
+  },
+  infoCard: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  infoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  infoCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginLeft: 8,
   },
   infoItem: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  infoContent: {
+    flex: 1,
+    marginLeft: 12,
   },
   infoLabel: {
     fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 4,
-    fontWeight: '600',
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 2,
   },
   infoValue: {
-    fontSize: 16,
-    color: '#111827',
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
   },
-
+  infoSubtext: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+    marginTop: 2,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: WHATSAPP_COLORS.border,
+    marginVertical: 8,
+  },
+  
+  // Leave Balance
   leaveBalanceContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
   },
-  leaveBalanceCard: {
+  leaveBalanceItem: {
     flex: 1,
-    padding: 20,
-    borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  leaveBalanceTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#111827',
-    textAlign: 'center',
+    padding: 12,
+    borderRadius: 12,
   },
   leaveBalanceValue: {
-    fontSize: 32,
+    fontSize: 20,
     fontWeight: 'bold',
-  },
-
-  assetCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  assetName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
     marginBottom: 4,
   },
-  assetDetails: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  assetAssignedDate: {
+  leaveBalanceLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    fontWeight: '600',
   },
-
-  calendarCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+  
+  // Attendance
+  attendanceHeader: {
+    padding: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  attendanceTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  attendanceSubtitle: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  attendanceSummary: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  calendarHeader: {
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  summaryCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  monthSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  navButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+  monthNavButton: {
+    padding: 8,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  navButtonText: {
-    fontSize: 24,
-    color: '#111827',
-    fontWeight: '300',
-  },
-  monthYear: {
+  monthYearText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  calendarContainer: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   weekDays: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     marginBottom: 12,
   },
-  weekDay: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 13,
+  weekDayText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#6b7280',
+    color: WHATSAPP_COLORS.textSecondary,
+    width: 40,
+    textAlign: 'center',
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 20,
   },
   calendarDay: {
     width: `${100 / 7}%`,
-    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 2,
+    padding: 4,
   },
   dayCircle: {
-    width: '85%',
-    aspectRatio: 1,
-    borderRadius: 100,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
   todayCircle: {
     borderWidth: 2,
-    borderColor: '#1e1b4b',
+    borderColor: WHATSAPP_COLORS.accent,
   },
   dayText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  dayTextActive: {
-    color: '#fff',
-    fontWeight: '600',
+  legendContainer: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  dayTextInactive: {
-    color: '#9ca3af',
-  },
-  legend: {
+  legendRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginRight: 4,
+    flex: 1,
+    justifyContent: 'center',
   },
   legendDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
+    marginRight: 6,
   },
   legendText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: WHATSAPP_COLORS.textSecondary,
   },
-
-  downloadSection: {
-    marginTop: 8,
-  },
-  downloadButtonNew: {
-    backgroundColor: '#1e1b4b',
+  downloadCard: {
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  downloadCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  downloadInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  downloadTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  downloadDescription: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  downloadButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    padding: 16,
+    borderRadius: 8,
+    gap: 8,
   },
-  downloadButtonIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  downloadButtonTextNew: {
+  downloadButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    color: '#fff',
     fontWeight: '600',
   },
-
+  
+  // Leaves
+  leavesHeader: {
+    padding: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  leavesTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  leavesSubtitle: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
   leaveCard: {
-    backgroundColor: '#fff',
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  leaveHeader: {
+  leaveCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  leaveHeaderInfo: {
+    flex: 1,
   },
   leaveType: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-  },
-  leaveStatusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  leaveStatusText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
   },
   leaveDates: {
     fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  leaveStatus: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  leaveStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   leaveReason: {
     fontSize: 14,
-    color: '#111827',
+    color: WHATSAPP_COLORS.textPrimary,
     marginBottom: 12,
     lineHeight: 20,
   },
+  leaveReasonLabel: {
+    fontWeight: '600',
+  },
   leaveActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 12,
     marginTop: 12,
   },
   leaveActionButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 12,
     borderRadius: 8,
-    marginHorizontal: 4,
-    alignItems: 'center',
+    gap: 8,
   },
   leaveActionText: {
+    color: '#FFFFFF',
     fontSize: 14,
-    color: '#fff',
     fontWeight: '600',
   },
   managerComment: {
-    fontSize: 14,
-    color: '#111827',
     marginTop: 12,
-    paddingTop: 8,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: WHATSAPP_COLORS.border,
+  },
+  managerCommentLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  managerCommentText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
     fontStyle: 'italic',
   },
-  commentLabel: {
-    fontWeight: '600',
-  },
-
   emptyLeaves: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyLeavesText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 300,
+    paddingHorizontal: 24,
   },
-
+  emptyLeavesTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyLeavesText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1756,81 +2593,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  
   modalContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 16,
     padding: 24,
     width: '100%',
-    maxWidth: 500,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
+    maxWidth: 400,
   },
-  
+  modalHeader: {
+    marginBottom: 8,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
+    color: WHATSAPP_COLORS.textPrimary,
   },
-  
-  modalSubtitle: {
+  modalDescription: {
     fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 24,
-    textAlign: 'center',
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 20,
   },
-  
   reasonInput: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: WHATSAPP_COLORS.border,
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    color: '#111827',
-    minHeight: 100,
+    color: WHATSAPP_COLORS.textPrimary,
+    minHeight: 120,
     marginBottom: 24,
-    backgroundColor: '#f9fafb',
+    backgroundColor: WHATSAPP_COLORS.background,
+    textAlignVertical: 'top',
   },
-  
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
+    gap: 12,
   },
-  
   modalButton: {
     flex: 1,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  
   cancelButton: {
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: WHATSAPP_COLORS.border,
   },
-  
   cancelButtonText: {
+    color: WHATSAPP_COLORS.textPrimary,
     fontSize: 16,
-    color: '#6b7280',
     fontWeight: '600',
   },
-  
   submitButton: {
-    backgroundColor: '#ef4444',
+    backgroundColor: WHATSAPP_COLORS.error,
+  },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   
-  submitButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
+  // Loading Overlay
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

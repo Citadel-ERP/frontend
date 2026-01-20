@@ -1181,19 +1181,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (key.includes('bdt')) {
       setShowBDT(true);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
-      // setShowMedical(true);
-      Alert.alert('Medical Claim', 'Medical Claim feature will be available soon!');
+      setShowMedical(true);
+      // Alert.alert('Medical Claim', 'Medical Claim feature will be available soon!');
     } else if (key.includes('scout')) {
       // setShowScoutBoy(true);
       Alert.alert('Scout Boy', 'Scout Boy feature will be available soon!');
     } else if (key.includes('reminder')) {
-      // setShowReminder(true);
-      Alert.alert('Reminder', 'Reminder feature will be available soon!');
+      setShowReminder(true);
+      // Alert.alert('Reminder', 'Reminder feature will be available soon!');
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
     } else if (key.includes('employee_management')) {
-      // setShowEmployeeManagement(true);
-      Alert.alert('Employee Management', 'Employee Management feature will be available soon!');
+      setShowEmployeeManagement(true);
+      // Alert.alert('Employee Management', 'Employee Management feature will be available soon!');
     }
     else if (key.includes('driver_manager') || key.includes('driver manager')) {
       setShowDriverManager(true);
