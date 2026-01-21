@@ -22,7 +22,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
     const [localSearchQuery, setLocalSearchQuery] = useState('');
     const [localUserResults, setLocalUserResults] = useState<AssignedEmployee[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
-    const [showUserSuggestions, setShowUserSuggestions] = useState(false);
+    const [showUserSearch, setShowUserSearch] = useState(false);
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -83,19 +83,19 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         setBookingForm({ ...bookingForm, bookingFor: user });
         setLocalSearchQuery('');
         setLocalUserResults([]);
-        setShowUserSuggestions(false);
+        setShowUserSearch(false);
     };
 
     const handleRemoveUser = () => {
         setBookingForm({ ...bookingForm, bookingFor: null });
         setLocalSearchQuery('');
         setLocalUserResults([]);
-        setShowUserSuggestions(false);
+        setShowUserSearch(false);
     };
 
     const handleCheckboxPress = () => {
         if (!bookingForm.bookingFor) {
-            setShowUserSuggestions(true);
+            setShowUserSearch(!showUserSearch);
         } else {
             handleRemoveUser();
         }
@@ -208,92 +208,98 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                 <Text style={styles.helperText}>Buffer time for unexpected delays</Text>
                             </View>
 
-                            {/* Booking for someone else */}
-                            <View style={styles.checkboxWrapper}>
+                            {/* Booking for someone else - REDESIGNED */}
+                            <View style={styles.bookingForSection}>
                                 <TouchableOpacity
-                                    style={styles.checkbox}
+                                    style={styles.checkboxWrapper}
                                     onPress={handleCheckboxPress}
+                                    activeOpacity={0.7}
                                 >
                                     <MaterialCommunityIcons
                                         name={bookingForm.bookingFor ? "checkbox-marked" : "checkbox-blank-outline"}
                                         size={24}
                                         color="#008069"
                                     />
+                                    <Text style={styles.checkboxLabel}>Booking for someone else</Text>
                                 </TouchableOpacity>
-                                <Text style={styles.checkboxLabel}>Booking for someone else</Text>
-                            </View>
 
-                            {bookingForm.bookingFor && (
-                                <View style={styles.selectedPerson}>
-                                    <View style={styles.selectedPersonAvatar}>
-                                        <Text style={styles.selectedPersonAvatarText}>
-                                            {bookingForm.bookingFor.full_name.split(' ').map(n => n[0]).join('')}
-                                        </Text>
+                                {showUserSearch && !bookingForm.bookingFor && (
+                                    <View style={styles.searchPanel}>
+                                        <TextInput
+                                            style={styles.searchInput}
+                                            placeholder="Search by name or employee ID"
+                                            placeholderTextColor="#999"
+                                            value={localSearchQuery}
+                                            onChangeText={handleSearchChange}
+                                            autoFocus
+                                        />
+                                        
+                                        {searchLoading && (
+                                            <View style={styles.loadingContainer}>
+                                                <ActivityIndicator size="small" color="#008069" />
+                                                <Text style={styles.loadingText}>Searching...</Text>
+                                            </View>
+                                        )}
+                                        
+                                        {!searchLoading && localUserResults.length > 0 && (
+                                            <ScrollView 
+                                                style={styles.autocompleteList}
+                                                keyboardShouldPersistTaps="handled"
+                                                nestedScrollEnabled
+                                            >
+                                                {localUserResults.map((user) => (
+                                                    <TouchableOpacity
+                                                        key={user.employee_id}
+                                                        style={styles.autocompleteItem}
+                                                        onPress={() => handleSelectUser(user)}
+                                                    >
+                                                        <View style={styles.userAvatar}>
+                                                            <Text style={styles.userAvatarText}>
+                                                                {user.full_name.split(' ').map(n => n[0]).join('')}
+                                                            </Text>
+                                                        </View>
+                                                        <View style={styles.userInfo}>
+                                                            <Text style={styles.userName}>{user.full_name}</Text>
+                                                            <Text style={styles.userDetails}>
+                                                                {user.employee_id} • {user.email}
+                                                            </Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        )}
+                                        
+                                        {!searchLoading && localSearchQuery.length >= 2 && localUserResults.length === 0 && (
+                                            <View style={styles.noResults}>
+                                                <MaterialCommunityIcons name="account-search" size={32} color="#ccc" />
+                                                <Text style={styles.noResultsText}>No users found</Text>
+                                            </View>
+                                        )}
                                     </View>
-                                    <View style={styles.selectedPersonInfo}>
-                                        <Text style={styles.selectedPersonName}>{bookingForm.bookingFor.full_name}</Text>
-                                        <Text style={styles.selectedPersonDetails}>
-                                            {bookingForm.bookingFor.employee_id} • {bookingForm.bookingFor.email}
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={styles.removeBtn}
-                                        onPress={handleRemoveUser}
-                                    >
-                                        <MaterialCommunityIcons name="close-circle" size={24} color="#ff5e7a" />
-                                    </TouchableOpacity>
-                                </View>
-                            )}
+                                )}
 
-                            {showUserSuggestions && (
-                                <View style={styles.autocompleteWrapper}>
-                                    <TextInput
-                                        style={styles.formInput}
-                                        placeholder="Search by name or employee ID"
-                                        placeholderTextColor="#999"
-                                        value={localSearchQuery}
-                                        onChangeText={handleSearchChange}
-                                        autoFocus
-                                    />
-                                    {searchLoading && (
-                                        <View style={styles.loadingContainer}>
-                                            <ActivityIndicator size="small" color="#008069" />
-                                            <Text style={styles.loadingText}>Searching...</Text>
+                                {bookingForm.bookingFor && (
+                                    <View style={styles.selectedPerson}>
+                                        <View style={styles.selectedPersonAvatar}>
+                                            <Text style={styles.selectedPersonAvatarText}>
+                                                {bookingForm.bookingFor.full_name.split(' ').map(n => n[0]).join('')}
+                                            </Text>
                                         </View>
-                                    )}
-                                    {!searchLoading && localUserResults.length > 0 && (
-                                        <ScrollView 
-                                            style={styles.autocompleteList}
-                                            keyboardShouldPersistTaps="handled"
+                                        <View style={styles.selectedPersonInfo}>
+                                            <Text style={styles.selectedPersonName}>{bookingForm.bookingFor.full_name}</Text>
+                                            <Text style={styles.selectedPersonDetails}>
+                                                {bookingForm.bookingFor.employee_id} • {bookingForm.bookingFor.email}
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            style={styles.removeBtn}
+                                            onPress={handleRemoveUser}
                                         >
-                                            {localUserResults.map((user) => (
-                                                <TouchableOpacity
-                                                    key={user.employee_id}
-                                                    style={styles.autocompleteItem}
-                                                    onPress={() => handleSelectUser(user)}
-                                                >
-                                                    <View style={styles.userAvatar}>
-                                                        <Text style={styles.userAvatarText}>
-                                                            {user.full_name.split(' ').map(n => n[0]).join('')}
-                                                        </Text>
-                                                    </View>
-                                                    <View style={styles.userInfo}>
-                                                        <Text style={styles.userName}>{user.full_name}</Text>
-                                                        <Text style={styles.userDetails}>
-                                                            {user.employee_id} • {user.email}
-                                                        </Text>
-                                                    </View>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </ScrollView>
-                                    )}
-                                    {!searchLoading && localSearchQuery.length >= 2 && localUserResults.length === 0 && (
-                                        <View style={styles.noResults}>
-                                            <Text style={styles.noResultsText}>No users found</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            )}
+                                            <MaterialCommunityIcons name="close-circle" size={24} color="#ff5e7a" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
 
                             <TouchableOpacity
                                 style={[styles.confirmBtn, (!canProceed || loading) && styles.disabledBtn]}
@@ -471,32 +477,54 @@ const styles = StyleSheet.create({
         color: '#999',
         marginTop: 6,
     },
+    bookingForSection: {
+        marginBottom: 20,
+    },
     checkboxWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 15,
-    },
-    checkbox: {
-        marginRight: 10,
+        paddingVertical: 8,
+        gap: 10,
     },
     checkboxLabel: {
+        fontSize: 15,
+        color: '#333',
+        fontWeight: '500',
+    },
+    searchPanel: {
+        marginTop: 12,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    searchInput: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        borderRadius: 10,
+        paddingHorizontal: 15,
+        paddingVertical: 12,
         fontSize: 15,
         color: '#333',
     },
     selectedPerson: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(1,123,249,0.1)',
+        backgroundColor: 'rgba(0, 128, 105, 0.08)',
         paddingHorizontal: 15,
         paddingVertical: 12,
         borderRadius: 12,
-        marginBottom: 15,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 128, 105, 0.2)',
     },
     selectedPersonAvatar: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#ff5e7a',
+        backgroundColor: '#008069',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -522,15 +550,12 @@ const styles = StyleSheet.create({
     removeBtn: {
         padding: 4,
     },
-    autocompleteWrapper: {
-        marginBottom: 15,
-    },
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        backgroundColor: '#f8f8f8',
-        borderRadius: 12,
+        backgroundColor: '#fff',
+        borderRadius: 10,
         marginTop: 8,
     },
     loadingText: {
@@ -543,7 +568,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderWidth: 1,
         borderColor: '#e0e0e0',
-        borderRadius: 12,
+        borderRadius: 10,
         marginTop: 8,
     },
     autocompleteItem: {
@@ -557,7 +582,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#ff5e7a',
+        backgroundColor: '#008069',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -581,15 +606,16 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     noResults: {
-        padding: 20,
-        backgroundColor: '#f8f8f8',
-        borderRadius: 12,
+        padding: 24,
+        backgroundColor: '#fff',
+        borderRadius: 10,
         marginTop: 8,
         alignItems: 'center',
     },
     noResultsText: {
         color: '#666',
         fontSize: 14,
+        marginTop: 8,
     },
     confirmBtn: {
         backgroundColor: '#00d285',
