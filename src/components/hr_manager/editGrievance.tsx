@@ -51,7 +51,7 @@ export const EditGrievance: React.FC<EditGrievanceProps> = ({
     loading
 }) => {
     const insets = useSafeAreaInsets();
-    const [selectedStatus, setSelectedStatus] = useState(item.status);
+    const [selectedStatus, setSelectedStatus] = useState<'pending' | 'in_progress' | 'resolved' | 'rejected' | 'cancelled'>(item.status);
 
     const handleSubmit = async () => {
         if (!token) {
@@ -213,7 +213,7 @@ export const EditGrievance: React.FC<EditGrievanceProps> = ({
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        backgroundColor: isSelected ? config.color : '#F8F9FA',
+                                        backgroundColor: isSelected ? config.color + '99'  : '#F8F9FA',
                                         paddingVertical: 16,
                                         paddingHorizontal: 16,
                                         borderRadius: 14,
@@ -223,9 +223,9 @@ export const EditGrievance: React.FC<EditGrievanceProps> = ({
                                         shadowOffset: { width: 0, height: isSelected ? 4 : 2 },
                                         shadowOpacity: isSelected ? 0.2 : 0.05,
                                         shadowRadius: isSelected ? 8 : 4,
-                                        elevation: isSelected ? 4 : 1,
+                                        // elevation: isSelected ? 4 : 1,
                                     }}
-                                    onPress={() => setSelectedStatus(option.value)}
+                                    onPress={() => setSelectedStatus(option.value as 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'cancelled')}
                                     activeOpacity={0.7}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -233,7 +233,7 @@ export const EditGrievance: React.FC<EditGrievanceProps> = ({
                                             width: 44,
                                             height: 44,
                                             borderRadius: 12,
-                                            backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.3)' : config.color + '20',
+                                            backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.25)' : config.color + '20',
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             marginRight: 12,

@@ -14,6 +14,9 @@ import {
     Platform,
     Modal,
     Linking,
+    Animated,
+    Keyboard,
+    KeyboardEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -112,12 +115,66 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     const [currentUserName, setCurrentUserName] = useState<string>('HR Manager');
     const [currentUserEmailLocal, setCurrentUserEmailLocal] = useState<string>('');
 
+    // Keyboard handling state
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+    const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
+
+    // Keyboard event listeners
+    useEffect(() => {
+        const showSubscription = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            handleKeyboardShow
+        );
+        const hideSubscription = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            handleKeyboardHide
+        );
+
+        return () => {
+            showSubscription.remove();
+            hideSubscription.remove();
+        };
+    }, []);
+
+    const handleKeyboardShow = (event: KeyboardEvent) => {
+        setIsKeyboardVisible(true);
+        if (Platform.OS === 'android') {
+            Animated.timing(keyboardHeightAnim, {
+                toValue: event.endCoordinates.height,
+                duration: 250,
+                useNativeDriver: false,
+            }).start();
+        }
+    };
+
+    const handleKeyboardHide = () => {
+        setIsKeyboardVisible(false);
+        if (Platform.OS === 'android') {
+            Animated.timing(keyboardHeightAnim, {
+                toValue: 0,
+                duration: 250,
+                useNativeDriver: false,
+            }).start();
+        }
+    };
+
+    // Auto-scroll when comments change or component mounts
+    useEffect(() => {
+        if (localComments.length > 0) {
+            scrollToBottom(true);
+        }
+    }, [localComments.length]);
+
+    // Set local comments when item changes
     useEffect(() => {
         if (item?.comments) {
             setLocalComments(item.comments);
+            // Auto-scroll after comments are loaded
+            setTimeout(() => scrollToBottom(true), 200);
         }
     }, [item?.comments]);
 
+    // Fetch current user info
     useEffect(() => {
         const fetchUserName = async () => {
             if (token) {
@@ -169,11 +226,12 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
 
     const scrollToBottom = (animated = true) => {
         if (scrollViewRef.current) {
+            // Use a longer timeout to ensure content is rendered
             setTimeout(() => {
                 if (scrollViewRef.current) {
                     scrollViewRef.current.scrollToEnd({ animated });
                 }
-            }, 100);
+            }, 150);
         }
     };
 
@@ -258,6 +316,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         if (!newComment.trim() && attachedFiles.length === 0) {
             return;
         }
+
         const optimisticComment: Comment = {
             id: `temp-${Date.now()}`,
             comment: newComment.trim() || 'Sent attachment(s)',
@@ -276,14 +335,21 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 uploaded_at: new Date().toISOString()
             }))
         };
+
+        // Add optimistic comment to local state
         setLocalComments(prev => [...prev, optimisticComment]);
         const commentText = newComment;
         const files = [...attachedFiles];
+        
+        // Clear input and files
         onCommentChange('');
         setAttachedFiles([]);
+
+        // Scroll to bottom after state updates
         setTimeout(() => {
             scrollToBottom(true);
         }, 100);
+
         setUploadingFile(true);
         try {
             const endpoint = `${BACKEND_URL}/manager/${activeTab === 'requests' ? 'addCommentToARequest' : 'addCommentToAGrievance'}`;
@@ -291,6 +357,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             formData.append('token', token);
             formData.append(activeTab === 'requests' ? 'request_id' : 'grievance_id', item.id);
             formData.append('content', commentText.trim() || 'Sent attachment(s)');
+
             for (const file of files) {
                 let cleanUri = file.uri;
                 if (Platform.OS === 'ios') {
@@ -302,6 +369,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                     type: file.mimeType,
                 } as any);
             }
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -309,11 +377,16 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 },
                 body: formData,
             });
+
             if (response.ok) {
                 console.log('Comment sent successfully');
-                // Refresh comments
-                onAddComment();
+                // ONLY reload if there were attachments, otherwise keep optimistic UI
+                if (files.length > 0) {
+                    onAddComment(); // This will reload to get proper file URLs
+                }
+                // If no files, the optimistic comment stays as-is (no reload!)
             } else {
+                // Remove optimistic comment on error
                 setLocalComments(prev => prev.filter(c => c.id !== optimisticComment.id));
                 const errorText = await response.text();
                 console.error('Upload error:', errorText);
@@ -322,6 +395,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 setAttachedFiles(files);
             }
         } catch (error: any) {
+            // Remove optimistic comment on error
             setLocalComments(prev => prev.filter(c => c.id !== optimisticComment.id));
             console.error('Error sending comment:', error);
             Alert.alert('Error', error.message || 'Failed to send comment. Please try again.');
@@ -485,12 +559,228 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         );
     };
 
+    const renderContent = () => {
+        if (loadingDetails) {
+            return (
+                <View style={styles.centerContent}>
+                    <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+                    <Text style={styles.loadingText}>Loading details...</Text>
+                </View>
+            );
+        }
+
+        if (!item) {
+            return (
+                <View style={styles.centerContent}>
+                    <Ionicons name="alert-circle-outline" size={60} color={WHATSAPP_COLORS.gray} />
+                    <Text style={styles.emptyTitle}>No item selected</Text>
+                    <Text style={styles.emptySubtitle}>
+                        Please go back and select a {activeTab.slice(0, -1)} to view details
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.chatContainer}>
+                <ScrollView
+                    ref={scrollViewRef}
+                    style={styles.chatScrollView}
+                    contentContainerStyle={styles.chatScrollContent}
+                    showsVerticalScrollIndicator={false}
+                    onContentSizeChange={() => {
+                        // Auto-scroll when content size changes (new messages)
+                        if (localComments.length > 0) {
+                            scrollToBottom(false);
+                        }
+                    }}
+                >
+                    <View style={styles.infoCardCompact}>
+                        <View style={styles.infoHeaderCompact}>
+                            <View style={styles.infoTitleRowCompact}>
+                                <View style={styles.infoIconContainerCompact}>
+                                    <Ionicons
+                                        name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
+                                        size={20}
+                                        color={WHATSAPP_COLORS.white}
+                                    />
+                                </View>
+                                <View style={styles.infoTitleContentCompact}>
+                                    <Text style={styles.infoTitleCompact} numberOfLines={1}>
+                                        {item.nature}
+                                    </Text>
+                                    <Text style={styles.infoStatusCompact}>
+                                        <Text style={{ fontWeight: '600' }}>Status: </Text>
+                                        <Text style={{ color: getStatusConfig(item.status).color }}>
+                                            {getStatusConfig(item.status).label}
+                                        </Text>
+                                    </Text>
+                                </View>
+                            </View>
+                            {item.employee_name && (
+                                <Text style={styles.infoEmployeeCompact}>
+                                    Submitted by: {item.employee_name}
+                                    {item.employee_email && ` (${item.employee_email})`}
+                                </Text>
+                            )}
+                            <View style={styles.infoDateCompact}>
+                                <Ionicons name="calendar-outline" size={12} color={WHATSAPP_COLORS.gray} />
+                                <Text style={styles.infoDateTextCompact}>
+                                    Submitted {new Date(item.created_at).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                    })}
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={styles.descriptionContainerCompact}>
+                            <Text style={styles.descriptionLabelCompact}>Description</Text>
+                            <Text style={styles.descriptionTextCompact}>
+                                {item.description || item.issue}
+                            </Text>
+                        </View>
+                        <View style={styles.infoFooterCompact}>
+                            <View style={styles.updateInfoCompact}>
+                                <Ionicons name="time-outline" size={12} color={WHATSAPP_COLORS.gray} />
+                                <Text style={styles.infoFooterTextCompact}>
+                                    Last updated: {new Date(item.updated_at).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.chatMessagesContainer}>
+                        <FlatList
+                            data={getProcessedComments()}
+                            renderItem={renderCommentItem}
+                            keyExtractor={(item) => item.id}
+                            style={styles.messagesList}
+                            contentContainerStyle={styles.messagesListContent}
+                            showsVerticalScrollIndicator={false}
+                            scrollEnabled={false}
+                            ListEmptyComponent={() => (
+                                <View style={styles.noMessages}>
+                                    <Ionicons name="chatbubble-ellipses-outline" size={48} color={WHATSAPP_COLORS.gray} />
+                                    <Text style={styles.noMessagesTitle}>No messages yet</Text>
+                                    <Text style={styles.noMessagesText}>
+                                        Start the conversation by sending a message
+                                    </Text>
+                                </View>
+                            )}
+                        />
+                    </View>
+                </ScrollView>
+
+                {renderAttachedFiles()}
+
+                {Platform.OS === 'android' ? (
+                    <Animated.View style={[styles.chatInputContainer, { marginBottom: keyboardHeightAnim }]}>
+                        <View style={styles.chatInputWrapper}>
+                            <TouchableOpacity
+                                style={styles.attachmentButton}
+                                onPress={() => setShowAttachmentModal(true)}
+                                disabled={uploadingFile || isPickerActive}
+                            >
+                                {uploadingFile ? (
+                                    <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
+                                ) : (
+                                    <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
+                                )}
+                            </TouchableOpacity>
+                            <View style={styles.inputFieldContainer}>
+                                <TextInput
+                                    style={styles.chatInput}
+                                    value={newComment}
+                                    onChangeText={onCommentChange}
+                                    placeholder="Type a message..."
+                                    placeholderTextColor="#999"
+                                    multiline
+                                    maxLength={300}
+                                />
+                            </View>
+                            <TouchableOpacity
+                                style={[
+                                    styles.sendButton,
+                                    (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
+                                ]}
+                                onPress={handleSendComment}
+                                disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
+                                activeOpacity={0.8}
+                            >
+                                {uploadingFile ? (
+                                    <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+                                ) : (
+                                    <Ionicons
+                                        name="send"
+                                        size={20}
+                                        color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </Animated.View>
+                ) : (
+                    <View style={[
+                        styles.chatInputContainer,
+                        { marginBottom: isKeyboardVisible ? 0 : -30 }
+                    ]}>
+                        <View style={styles.chatInputWrapper}>
+                            <TouchableOpacity
+                                style={styles.attachmentButton}
+                                onPress={() => setShowAttachmentModal(true)}
+                                disabled={uploadingFile || isPickerActive}
+                            >
+                                {uploadingFile ? (
+                                    <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
+                                ) : (
+                                    <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
+                                )}
+                            </TouchableOpacity>
+                            <View style={styles.inputFieldContainer}>
+                                <TextInput
+                                    style={styles.chatInput}
+                                    value={newComment}
+                                    onChangeText={onCommentChange}
+                                    placeholder="Type a message..."
+                                    placeholderTextColor="#999"
+                                    multiline
+                                    maxLength={300}
+                                />
+                            </View>
+                            <TouchableOpacity
+                                style={[
+                                    styles.sendButton,
+                                    (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
+                                ]}
+                                onPress={handleSendComment}
+                                disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
+                                activeOpacity={0.8}
+                            >
+                                {uploadingFile ? (
+                                    <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+                                ) : (
+                                    <Ionicons
+                                        name="send"
+                                        size={20}
+                                        color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+            </View>
+        );
+    };
+
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
+        <View style={styles.container}>
             <StatusBar
                 barStyle="light-content"
                 backgroundColor={WHATSAPP_COLORS.primaryDark}
@@ -504,157 +794,19 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                     onPress: onEdit
                 } : undefined}
             />
+            
             <View style={styles.content}>
-                {loadingDetails ? (
-                    <View style={styles.centerContent}>
-                        <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
-                        <Text style={styles.loadingText}>Loading details...</Text>
-                    </View>
-                ) : item ? (
-                    <View style={styles.chatContainer}>
-                        <ScrollView
-                            ref={scrollViewRef}
-                            style={styles.chatScrollView}
-                            contentContainerStyle={styles.chatScrollContent}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            <View style={styles.infoCardCompact}>
-                                <View style={styles.infoHeaderCompact}>
-                                    <View style={styles.infoTitleRowCompact}>
-                                        <View style={styles.infoIconContainerCompact}>
-                                            <Ionicons
-                                                name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
-                                                size={20}
-                                                color={WHATSAPP_COLORS.white}
-                                            />
-                                        </View>
-                                        <View style={styles.infoTitleContentCompact}>
-                                            <Text style={styles.infoTitleCompact} numberOfLines={1}>
-                                                {item.nature}
-                                            </Text>
-                                            <Text style={styles.infoStatusCompact}>
-                                                <Text style={{ fontWeight: '600' }}>Status: </Text>
-                                                <Text style={{ color: getStatusConfig(item.status).color }}>
-                                                    {getStatusConfig(item.status).label}
-                                                </Text>
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    {item.employee_name && (
-                                        <Text style={styles.infoEmployeeCompact}>
-                                            Submitted by: {item.employee_name}
-                                            {item.employee_email && ` (${item.employee_email})`}
-                                        </Text>
-                                    )}
-                                    <View style={styles.infoDateCompact}>
-                                        <Ionicons name="calendar-outline" size={12} color={WHATSAPP_COLORS.gray} />
-                                        <Text style={styles.infoDateTextCompact}>
-                                            Submitted {new Date(item.created_at).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={styles.descriptionContainerCompact}>
-                                    <Text style={styles.descriptionLabelCompact}>Description</Text>
-                                    <Text style={styles.descriptionTextCompact}>
-                                        {item.description || item.issue}
-                                    </Text>
-                                </View>
-                                <View style={styles.infoFooterCompact}>
-                                    <View style={styles.updateInfoCompact}>
-                                        <Ionicons name="time-outline" size={12} color={WHATSAPP_COLORS.gray} />
-                                        <Text style={styles.infoFooterTextCompact}>
-                                            Last updated: {new Date(item.updated_at).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-
-                            <View style={styles.chatMessagesContainer}>
-                                <FlatList
-                                    data={getProcessedComments()}
-                                    renderItem={renderCommentItem}
-                                    keyExtractor={(item) => item.id}
-                                    style={styles.messagesList}
-                                    contentContainerStyle={styles.messagesListContent}
-                                    showsVerticalScrollIndicator={false}
-                                    scrollEnabled={false}
-                                    ListEmptyComponent={() => (
-                                        <View style={styles.noMessages}>
-                                            <Ionicons name="chatbubble-ellipses-outline" size={48} color={WHATSAPP_COLORS.gray} />
-                                            <Text style={styles.noMessagesTitle}>No messages yet</Text>
-                                            <Text style={styles.noMessagesText}>
-                                                Start the conversation by sending a message
-                                            </Text>
-                                        </View>
-                                    )}
-                                />
-                            </View>
-                        </ScrollView>
-
-                        {renderAttachedFiles()}
-
-                        <View style={styles.chatInputContainer}>
-                            <View style={styles.chatInputWrapper}>
-                                <TouchableOpacity
-                                    style={styles.attachmentButton}
-                                    onPress={() => setShowAttachmentModal(true)}
-                                    disabled={uploadingFile || isPickerActive}
-                                >
-                                    {uploadingFile ? (
-                                        <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
-                                    ) : (
-                                        <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
-                                    )}
-                                </TouchableOpacity>
-                                <View style={styles.inputFieldContainer}>
-                                    <TextInput
-                                        style={styles.chatInput}
-                                        value={newComment}
-                                        onChangeText={onCommentChange}
-                                        placeholder="Type a message..."
-                                        placeholderTextColor="#999"
-                                        multiline
-                                        maxLength={300}
-                                    />
-                                </View>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.sendButton,
-                                        (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
-                                    ]}
-                                    onPress={handleSendComment}
-                                    disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
-                                    activeOpacity={0.8}
-                                >
-                                    {uploadingFile ? (
-                                        <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
-                                    ) : (
-                                        <Ionicons
-                                            name="send"
-                                            size={20}
-                                            color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
-                                        />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
+                {Platform.OS === 'ios' ? (
+                    <KeyboardAvoidingView
+                        style={styles.iosContainer}
+                        behavior="padding"
+                        keyboardVerticalOffset={0}
+                    >
+                        {renderContent()}
+                    </KeyboardAvoidingView>
                 ) : (
-                    <View style={styles.centerContent}>
-                        <Ionicons name="alert-circle-outline" size={60} color={WHATSAPP_COLORS.gray} />
-                        <Text style={styles.emptyTitle}>No item selected</Text>
-                        <Text style={styles.emptySubtitle}>
-                            Please go back and select a {activeTab.slice(0, -1)} to view details
-                        </Text>
+                    <View style={styles.androidContainer}>
+                        {renderContent()}
                     </View>
                 )}
             </View>
@@ -758,6 +910,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </KeyboardAvoidingView>
+        </View>
     );
 };

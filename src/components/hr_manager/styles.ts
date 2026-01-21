@@ -1325,8 +1325,7 @@ export const styles = StyleSheet.create({
         borderColor: '#E8E8E8',
         paddingHorizontal: 14,
         paddingVertical: 4,
-        minHeight: 56,
-        transition: 'all 0.2s',
+        minHeight: 56
     },
 
     modernInputContainerFocused: {
@@ -1541,4 +1540,10 @@ export const styles = StyleSheet.create({
         shadowOpacity: 0,
         elevation: 0,
     },
+    androidContainer: { 
+    flex: 1 
+},
+iosContainer: { 
+    flex: 1 
+},
 });

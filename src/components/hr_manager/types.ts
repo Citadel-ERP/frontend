@@ -5,13 +5,12 @@ export interface RequestNature {
 }
 
 export interface CommentDocument {
-  id: number;
+  id: string | number; // Allow both string and number
   document: string;
   document_url: string;
   document_name: string;
   uploaded_at: string;
 }
-
 export interface Comment {
   id: string;
   comment?: string;
@@ -28,18 +27,18 @@ export interface Comment {
 export interface Item {
   id: string;
   nature: string;
-  description: string;
+  description?: string;
   issue?: string;
   status: 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'cancelled';
   created_at: string;
   updated_at: string;
   employee_name?: string;
   employee_email?: string;
-  comments: Comment[];
+  comments?: Comment[];
 }
 
 export type TabType = 'requests' | 'grievances';
-export type ViewMode = 'main' | 'itemDetail' | 'addCommonRequest' | 'addCommonGrievance';
+export type ViewMode = 'main' | 'itemDetail' | 'addCommonRequest' | 'addCommonGrievance' | 'editRequest' | 'editGrievance';
 
 export const OTHER_OPTION: RequestNature = {
   id: 'other',

@@ -29,7 +29,6 @@ interface HRManagerProps {
 
 const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
     const insets = useSafeAreaInsets();
-
     const [token, setToken] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('requests');
     const [loading, setLoading] = useState(false);
@@ -49,7 +48,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
             try {
                 const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
                 setToken(storedToken);
-
                 if (storedToken) {
                     const email = await fetchCurrentUser(storedToken);
                     setCurrentUserEmail(email);
@@ -69,7 +67,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const fetchItems = async () => {
         if (!token) return;
-
         setLoading(true);
         try {
             const endpoint = activeTab === 'requests' ? 'getRequests' : 'getGriviences';
@@ -78,11 +75,9 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token }),
             });
-
             if (response.ok) {
                 const data = await response.json();
                 const itemsData = data[activeTab] || [];
-
                 const transformedItems = itemsData.map((item: any) => ({
                     id: item.id.toString(),
                     nature: item.nature || item.issue_type,
@@ -95,11 +90,9 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     employee_email: item.employee_email || item.user_email,
                     comments: item.comments || []
                 }));
-
                 const sortedItems = transformedItems.sort((a: Item, b: Item) =>
                     new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                 );
-
                 if (activeTab === 'requests') {
                     setRequests(sortedItems);
                 } else {
@@ -123,12 +116,10 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const fetchItemDetails = async (itemId: string) => {
         if (!token) return null;
-
         setLoadingDetails(true);
         try {
             const endpoint = activeTab === 'requests' ? 'getRequest' : 'getGrivience';
             const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
-
             const response = await fetch(`${BACKEND_URL}/manager/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -137,15 +128,12 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     [idField]: parseInt(itemId)
                 }),
             });
-
             if (response.ok) {
                 const data = await response.json();
                 const itemData = activeTab === 'requests' ? data.request : data.grievance;
                 console.log('Raw comment data:', JSON.stringify(itemData.comments, null, 2));
-
                 const transformedComments = itemData.comments?.map((commentWrapper: any) => {
                     const comment = commentWrapper.comment;
-
                     return {
                         id: comment.id.toString(),
                         content: comment.content,
@@ -164,7 +152,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                         })) || []
                     };
                 }) || [];
-
                 const detailedItem: Item = {
                     id: itemData.id.toString(),
                     nature: itemData.nature || itemData.issue_type,
@@ -177,7 +164,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     employee_email: itemData.employee_email || itemData.user_email,
                     comments: transformedComments
                 };
-
                 return detailedItem;
             } else {
                 console.error('Failed to fetch item details');
@@ -213,7 +199,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
     const handleItemPress = async (item: Item) => {
         setSelectedItem(item);
         setViewMode('itemDetail');
-
         const detailedItem = await fetchItemDetails(item.id);
         if (detailedItem) {
             setSelectedItem(detailedItem);
@@ -231,12 +216,10 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const handleUpdateStatus = async (status: string) => {
         if (!token || !selectedItem) return;
-
         setLoading(true);
         try {
             const endpoint = activeTab === 'requests' ? 'updateRequest' : 'updateGrivience';
             const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
-
             const response = await fetch(`${BACKEND_URL}/manager/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -246,15 +229,12 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     status: status
                 }),
             });
-
             if (response.ok) {
                 Alert.alert('Success', 'Status updated successfully!');
-
                 const updatedItem = await fetchItemDetails(selectedItem.id);
                 if (updatedItem) {
                     setSelectedItem(updatedItem);
                 }
-
                 await fetchItems();
             } else {
                 const error = await response.json();
@@ -270,7 +250,7 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const handleAddComment = async () => {
         if (!selectedItem) return;
-
+        // Only fetch if we need fresh data (e.g., after file upload)
         const updatedItem = await fetchItemDetails(selectedItem.id);
         if (updatedItem) {
             setSelectedItem(updatedItem);
@@ -284,12 +264,10 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const handleUpdateItem = async (data: { request_id?: string; grievance_id?: string; status: string }) => {
         if (!token || !selectedItem) return;
-
         setLoading(true);
         try {
             const endpoint = activeTab === 'requests' ? 'updateRequest' : 'updateGrivience';
             const idField = activeTab === 'requests' ? 'request_id' : 'grievance_id';
-
             const response = await fetch(`${BACKEND_URL}/manager/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -299,10 +277,8 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     status: data.status
                 }),
             });
-
             if (response.ok) {
                 Alert.alert('Success', `${activeTab === 'requests' ? 'Request' : 'Grievance'} updated successfully!`);
-
                 if (viewMode.includes('edit')) {
                     setViewMode('main');
                 } else {
@@ -311,7 +287,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                         setSelectedItem(updatedItem);
                     }
                 }
-
                 await fetchItems();
             } else {
                 const error = await response.json();
@@ -327,7 +302,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const handleAddCommonRequest = async (formData: { common_request: string; description: string }) => {
         if (!token) return;
-
         setLoading(true);
         try {
             const response = await fetch(`${BACKEND_URL}/manager/addCommonRequest`, {
@@ -338,7 +312,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     ...formData
                 }),
             });
-
             if (response.ok) {
                 Alert.alert('Success', 'Common request added successfully!');
                 setViewMode('main');
@@ -357,7 +330,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
 
     const handleAddCommonGrievance = async (formData: { common_grievance: string; description: string }) => {
         if (!token) return;
-
         setLoading(true);
         try {
             const response = await fetch(`${BACKEND_URL}/manager/addCommonGrievance`, {
@@ -368,7 +340,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     ...formData
                 }),
             });
-
             if (response.ok) {
                 Alert.alert('Success', 'Common grievance added successfully!');
                 setViewMode('main');
@@ -406,7 +377,6 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
     };
 
     // Render different views based on viewMode
-
     if (viewMode === 'addCommonRequest') {
         return (
             <CommonRequest
@@ -504,14 +474,12 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                 barStyle="light-content"
                 backgroundColor={WHATSAPP_COLORS.primaryDark}
             />
-
             <Header
                 title="HR Manager"
                 subtitle=""
                 onBack={onBack}
                 rightButton={getHeaderRightButton()}
             />
-
             <View style={styles.tabBar}>
                 {([
                     { key: 'requests' as const, label: 'Requests', icon: 'document-text' },
@@ -550,13 +518,12 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     </TouchableOpacity>
                 ))}
             </View>
-
             {activeTab === 'requests' ? (
                 <Requests
                     items={requests}
                     loading={loading}
                     onItemPress={handleItemPress}
-                    onUpdateStatus={handleUpdateStatus}
+                    onUpdateStatus={(item, status) => handleUpdateStatus(status)}
                     activeTab={activeTab}
                     filterStatus={filterStatus}
                     onFilterChange={setFilterStatus}
@@ -566,7 +533,7 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     items={grievances}
                     loading={loading}
                     onItemPress={handleItemPress}
-                    onUpdateStatus={handleUpdateStatus}
+                    onUpdateStatus={(item, status) => handleUpdateStatus(status)}
                     activeTab={activeTab}
                     filterStatus={filterStatus}
                     onFilterChange={setFilterStatus}
