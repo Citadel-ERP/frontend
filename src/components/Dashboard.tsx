@@ -40,10 +40,11 @@ import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
-import EmployeeManagement from './EmployeeManagement';
+import EmployeeManagement from './employee_management/EmployeeManagement';
 import Notifications from './Notifications';
 import { ValidationScreen } from './ValidationScreen';
 import DriverManager from './driver_manager/DriverManager';
+import HR_Manager from './hr_manager/HR_Manager';
 
 // Import components
 import AllModulesModal from './dashboard/allModules';
@@ -418,6 +419,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
   const [showDriverManager, setShowDriverManager] = useState(false);
+  const [showHrManager, setShowHrManager] = useState(false);
 
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -778,6 +780,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         break;
       case 'driver_manager':
         setShowDriverManager(true);
+        break;
+      case 'hr_manager':
+        setShowHrManager(true)
         break;
       default:
         console.log('Unknown page:', page);
@@ -1172,7 +1177,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
-    } else if (key.includes('hr')) {
+    } else if (key.includes('hr') && key != "hr_manager") {
       setShowHR(true);
     } else if (key.includes('cab')) {
       setShowCab(true);
@@ -1197,6 +1202,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
     else if (key.includes('driver_manager') || key.includes('driver manager')) {
       setShowDriverManager(true);
+    }
+    else if(key.includes('hr_manager') || key.includes('hr manager')) {
+      setShowHrManager(true);
     }
     else {
       Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
@@ -1345,6 +1353,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowChatRoom(false);
     setShowValidation(false);
     setShowDriverManager(false);
+    setShowHrManager(false);
     setActiveMenuItem('Dashboard');
   };
 
@@ -1527,6 +1536,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   if (showDriverManager) {
     return (
       <DriverManager onBack={handleBackFromPage} />
+    );
+  }
+
+  if(showHrManager){
+    return (
+      <HR_Manager onBack={handleBackFromPage} />
     );
   }
 
@@ -2472,6 +2487,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-
-// Import the other components (AllModulesModal, BottomBar, QuickActions, UpcomingEvents, UpcomingReminder, WorkStatistics)
-// They remain the same as in your original code, just ensure they have web-responsive styles too

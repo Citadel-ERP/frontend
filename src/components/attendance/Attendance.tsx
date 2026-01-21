@@ -101,7 +101,6 @@ const LEGEND_ITEMS = [
 ];
 
 const AttendanceButtonSection: React.FC<{
-  isAfter11AM: boolean;
   locationPermission: boolean;
   loading: boolean;
   onPress: () => void;
@@ -109,7 +108,9 @@ const AttendanceButtonSection: React.FC<{
   todayAttendance: AttendanceRecord | null;
   attendanceRecords: AttendanceRecord[];
   hasSpecialPermission: boolean;
-}> = ({ isAfter11AM, locationPermission, loading, onPress, token, todayAttendance, attendanceRecords, hasSpecialPermission }) => {
+  canMarkAttendance: boolean;
+  isLateLogin: boolean;
+}> = ({ locationPermission, loading, onPress, token, todayAttendance, attendanceRecords, hasSpecialPermission, canMarkAttendance, isLateLogin }) => {
   const checkTodaysAttendance = () => {
     const today = new Date().toISOString().split('T')[0];
     if (todayAttendance && todayAttendance.check_in_time) {
@@ -120,31 +121,35 @@ const AttendanceButtonSection: React.FC<{
   };
   const attendanceMarked = checkTodaysAttendance();
 
-  if (!isAfter11AM || hasSpecialPermission) {
-    return (
-      <TouchableOpacity
-        style={[
-          styles.markButton,
-          !locationPermission && styles.disabledButton
-        ]}
-        onPress={onPress}
-        disabled={Boolean(loading || !locationPermission || attendanceMarked)}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.markButtonText}>
-            {attendanceMarked ? 'Attendance Already Marked' :
-              !locationPermission ? 'Enable Location to Mark Attendance' : 'Mark Attendance'}
-          </Text>
-        )}
-      </TouchableOpacity>
-    );
-  }
-  if (!attendanceMarked) {
+  if (!canMarkAttendance && !attendanceMarked) {
     return null;
   }
-  return null;
+
+  const buttonText = attendanceMarked 
+    ? 'Attendance Already Marked' 
+    : !locationPermission 
+    ? 'Enable Location to Mark Attendance' 
+    : isLateLogin 
+    ? 'Mark Late Attendance' 
+    : 'Mark Attendance';
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.markButton,
+        !locationPermission && styles.disabledButton,
+        isLateLogin && !attendanceMarked && styles.lateLoginButton
+      ]}
+      onPress={onPress}
+      disabled={Boolean(loading || !locationPermission || attendanceMarked)}
+    >
+      {loading ? (
+        <ActivityIndicator color="#fff" />
+      ) : (
+        <Text style={styles.markButtonText}>{buttonText}</Text>
+      )}
+    </TouchableOpacity>
+  );
 };
 
 const StatusTooltip: React.FC<{
@@ -245,6 +250,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
   const [showAllLegend, setShowAllLegend] = useState(false);
   const legendHeight = useRef(new Animated.Value(0)).current;
+  
+  const [attendanceTimings, setAttendanceTimings] = useState({
+    login_time: '09:00:00',
+    login_allowed_till: '',
+    late_login_allowed_till: '',
+    time_not_allowed: '',
+    logout_time: '18:00:00'
+  });
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -327,17 +340,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}Z`;
   };
 
-  const isBeforeTimeIST = (hours: number, minutes: number): boolean => {
-    const now = new Date();
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const istTime = new Date(utcTime + 19800000);
-    const currentHours = istTime.getHours();
-    const currentMinutes = istTime.getMinutes();
-    if (currentHours < hours) return true;
-    if (currentHours === hours && currentMinutes < minutes) return true;
-    return false;
-  };
-
   const getISTTime = () => {
     const now = new Date();
     const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -345,65 +347,88 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     return istDate;
   };
 
-  const isAfterTimeIST = (hours: number, minutes: number): boolean => {
-    const now = new Date();
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const istTime = new Date(utcTime + 19800000);
-    const currentHours = istTime.getHours();
-    const currentMinutes = istTime.getMinutes();
-    if (currentHours > hours) return true;
-    if (currentHours === hours && currentMinutes >= minutes) return true;
-    return false;
+  const isCurrentTimeAfter = (dateTimeString: string): boolean => {
+    if (!dateTimeString) return false;
+    const targetTime = new Date(dateTimeString);
+    const now = getISTTime();
+    return now >= targetTime;
+  };
+
+  const isCurrentTimeBetween = (startDateTime: string, endDateTime: string): boolean => {
+    if (!startDateTime || !endDateTime) return false;
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    const now = getISTTime();
+    return now >= start && now <= end;
+  };
+
+  // Helper function to format time string (HH:MM:SS) to readable format
+  const formatTimeString = (timeStr: string): string => {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12;
+    return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
   const getAttendanceMessage = (todayAttendance: AttendanceRecord | null, hasSpecialPermission: boolean) => {
-    const istTime = getISTTime();
-    const hours = istTime.getHours();
-    const minutes = istTime.getMinutes();
-
     if (todayAttendance && todayAttendance.check_in_time) {
       return {
         message: "Attendance marked successfully",
         type: 'normal',
-        canMarkAttendance: false
+        canMarkAttendance: false,
+        isLateLogin: false
       };
     }
 
-    if (hours < 10 || (hours === 10 && minutes < 15)) {
+    const now = getISTTime();
+    
+    // Before login allowed time
+    if (!isCurrentTimeAfter(attendanceTimings.login_allowed_till)) {
+      const loginTime = new Date(attendanceTimings.login_allowed_till).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
       return {
-        message: "Mark your attendance between\n10:00 AM - 10:15 AM",
+        message: `Mark your attendance before\n${loginTime}`,
         type: 'normal',
-        canMarkAttendance: true
+        canMarkAttendance: true,
+        isLateLogin: false
       };
     }
 
-    if ((hours === 10 && minutes >= 15) || (hours < 11)) {
+    // Between login_allowed_till and late_login_allowed_till (Late login period)
+    if (isCurrentTimeBetween(attendanceTimings.login_allowed_till, attendanceTimings.late_login_allowed_till)) {
+      const lateLoginTime = new Date(attendanceTimings.late_login_allowed_till).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
       return {
-        message: "Late Login Period\n10:15 AM - 11:00 AM\nYou can still mark attendance",
+        message: `Late Login Period\nYou can still mark attendance until ${lateLoginTime}`,
         type: 'warning',
-        canMarkAttendance: true
+        canMarkAttendance: true,
+        isLateLogin: true
       };
     }
 
-    if (hours >= 11) {
+    // After time_not_allowed
+    if (isCurrentTimeAfter(attendanceTimings.time_not_allowed)) {
       if (hasSpecialPermission) {
         return {
           message: "You have special permission to mark attendance today.",
           type: 'normal',
-          canMarkAttendance: true
+          canMarkAttendance: true,
+          isLateLogin: true
         };
       }
+      const notAllowedTime = new Date(attendanceTimings.time_not_allowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
       return {
-        message: "You cannot mark attendance after 11:00 AM, kindly contact your HR",
+        message: `You cannot mark attendance after ${notAllowedTime}\nKindly contact your HR`,
         type: 'error',
-        canMarkAttendance: false
+        canMarkAttendance: false,
+        isLateLogin: false
       };
     }
 
     return {
-      message: "Kindly mark Attendance before 10:15 AM",
+      message: "Kindly mark Attendance on time",
       type: 'normal',
-      canMarkAttendance: false
+      canMarkAttendance: false,
+      isLateLogin: false
     };
   };
 
@@ -578,14 +603,16 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return;
     }
 
-    if (isAfterTimeIST(11, 0)) {
+    // Check if it's after time_not_allowed and user doesn't have special permission
+    if (isCurrentTimeAfter(attendanceTimings.time_not_allowed)) {
       setLoading(true);
       await checkSpecialPermission(token);
       setLoading(false);
       if (!hasSpecialPermission) {
+        const notAllowedTime = new Date(attendanceTimings.time_not_allowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         Alert.alert(
           'Late Attendance',
-          'You cannot mark attendance after 11:00 AM. Kindly raise a request to your HR to allow you to mark late attendance.',
+          `You cannot mark attendance after ${notAllowedTime}. Kindly raise a request to your HR to allow you to mark late attendance.`,
           [{ text: 'OK' }]
         );
         return;
@@ -608,6 +635,16 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       const checkInTimeIST = getCurrentTimeInIST();
       requestBody.check_in_time = checkInTimeIST;
+
+      // Check if it's late login period
+      const isLateLoginPeriod = isCurrentTimeBetween(
+        attendanceTimings.login_allowed_till,
+        attendanceTimings.late_login_allowed_till
+      );
+      
+      if (isLateLoginPeriod || isCurrentTimeAfter(attendanceTimings.time_not_allowed)) {
+        requestBody.late_login = true;
+      }
 
       if (description && typeof description === 'string' && description.trim()) {
         requestBody.description = description.trim();
@@ -665,14 +702,23 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return;
     }
 
-    if (isBeforeTimeIST(18, 0)) {
+    // Parse logout time properly
+    const logoutTimeStr = attendanceTimings.logout_time || '18:00:00';
+    const [logoutHours, logoutMinutes] = logoutTimeStr.split(':').map(Number);
+
+    const now = getISTTime();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+
+    if (currentHours < logoutHours || (currentHours === logoutHours && currentMinutes < logoutMinutes)) {
       setLoading(true);
       await checkSpecialPermission(token);
       setLoading(false);
       if (!hasSpecialPermission) {
+        const formattedLogoutTime = formatTimeString(logoutTimeStr);
         Alert.alert(
           'Checkout',
-          'You cannot mark checkout before 6:00 PM. Kindly raise a request to your HR to allow early checkout.',
+          `You cannot mark checkout before ${formattedLogoutTime}. Kindly raise a request to your HR to allow early checkout.`,
           [{ text: 'OK' }]
         );
         return;
@@ -847,6 +893,18 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       if (response.ok) {
         const data = await response.json();
+        
+        // Store attendance timings
+        if (data.login_allowed_till && data.late_login_allowed_till && data.time_not_allowed) {
+          setAttendanceTimings({
+            login_time: data.login_time || '09:00:00',
+            login_allowed_till: data.login_allowed_till,
+            late_login_allowed_till: data.late_login_allowed_till,
+            time_not_allowed: data.time_not_allowed,
+            logout_time: data.logout_time || '18:00:00'
+          });
+        }
+        
         if (data.attendances && Array.isArray(data.attendances)) {
           const formattedRecords = data.attendances.map((attendance: any) => ({
             date: attendance.date,
@@ -1230,7 +1288,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 {todayAttendance.check_in_time && !todayAttendance.check_out_time && (
                   <>
                     <Text style={styles.checkoutReminderText}>
-                      Mark your checkout after 6:00 PM
+                      Mark your checkout after {formatTimeString(attendanceTimings.logout_time)}
                     </Text>
                     <TouchableOpacity
                       style={[
@@ -1254,7 +1312,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               </View>
             ) : (
               <AttendanceButtonSection
-                isAfter11AM={isAfterTimeIST(11, 0)}
                 locationPermission={locationPermission}
                 loading={loading}
                 onPress={handleAttendanceButtonPress}
@@ -1262,6 +1319,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 todayAttendance={todayAttendance}
                 attendanceRecords={attendanceRecords}
                 hasSpecialPermission={hasSpecialPermission}
+                canMarkAttendance={attendanceMsg.canMarkAttendance}
+                isLateLogin={attendanceMsg.isLateLogin}
               />
             )}
           </View>
@@ -1333,12 +1392,6 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                     }
                   ]}
                 >
-                  {/* {LEGEND_ITEMS.slice(6).map((item) => (
-                    <View key={item.key} style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                      <Text style={styles.legendText}>{item.label}</Text>
-                    </View>
-                  ))} */}
                   <TouchableOpacity
                     style={styles.viewLessButton}
                     onPress={toggleLegend}
@@ -1591,6 +1644,9 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: '#9ca3af',
   },
+  lateLoginButton: {
+    backgroundColor: '#f59e0b',
+  },
   checkoutButton: {
     backgroundColor: '#FFC107',
     marginTop: 12,
@@ -1682,16 +1738,10 @@ const styles = StyleSheet.create({
     color: '#ffffffff',
   },
   dayTextActive: {
-    // color: '#3c3d3cff',
     fontWeight: '600',
   },
   dayTextInactive: {
     color: '#9ca3af',
-  },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
   },
   legendItem: {
     flexDirection: 'row',
@@ -1799,25 +1849,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-  },
-  viewMoreButtonText: {
-    color: '#3b82f6',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  viewMoreArrow: {
-    marginLeft: 4,
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#3b82f6',
-    transform: [{ rotate: '-45deg' }],
-  },
-  viewMoreArrowContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   viewMoreText: {
     fontSize: 12,

@@ -1,0 +1,10 @@
+export { default as EmployeeManagement } from './EmployeeManagement';
+export { Header } from './header';
+export { EmployeeList } from './list';
+export { default as EmployeeDetails } from './employeeDetails';
+export { Overview } from './overview';
+export { Attendance } from './attendance';
+export { Leaves } from './leaves';
+export * from './types';
+export * from './constants';
+export * from './styles';
