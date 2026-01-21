@@ -47,17 +47,17 @@ const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const STATUS_COLORS = {
-  present: '#31ff31ff',
-  leave: '#ff9a34ff',
-  holiday: '#00bfffff',
+  present: 'rgb(148, 228, 164)',
+  leave: 'rgb(230, 166, 103)',
+  holiday: 'rgb(94, 165, 188)',
   checkout_missing: '#E6CC00',
-  late_login: '#a855f7',
+  late_login: '#c99cf3',
   late_login_checkout_missing: '#C7907C',
   late_login_checkout_pending: '#D9BFDA',
   checkout_pending: '#D9F2D9',
-  pending: '#D3D3D3',
-  weekend: '#FFFFFF',
-  absent: '#ff2929ff',
+  pending: '#ffffff',
+  weekend: '#ffffff',
+  absent: 'rgb(248, 126, 126)',
 };
 
 const STATUS_TEXT_COLORS = {
@@ -78,11 +78,11 @@ const STATUS_NAMES: Record<string, string> = {
   present: 'Present',
   leave: 'Leave',
   holiday: 'Holiday',
-  checkout_missing: 'Checkout Missing',
+  // checkout_missing: 'Checkout Missing',
   late_login: 'Late Login',
-  late_login_checkout_missing: 'Late Login + Checkout Missing',
-  late_login_checkout_pending: 'Late Login + Checkout Pending',
-  checkout_pending: 'Checkout Pending',
+  // late_login_checkout_missing: 'Late Login + Checkout Missing',
+  // late_login_checkout_pending: 'Late Login + Checkout Pending',
+  // checkout_pending: 'Checkout Pending',
   pending: 'Pending',
   weekend: 'Weekend',
   absent: 'Absent/LOP',
@@ -94,10 +94,10 @@ const LEGEND_ITEMS = [
   { key: 'late_login', color: STATUS_COLORS.late_login, label: 'Late Login' },
   { key: 'leave', color: STATUS_COLORS.leave, label: 'Leave' },
   { key: 'holiday', color: STATUS_COLORS.holiday, label: 'Holiday' },
-  { key: 'checkout_missing', color: STATUS_COLORS.checkout_missing, label: 'Checkout Missing' },
-  { key: 'late_login_checkout_missing', color: STATUS_COLORS.late_login_checkout_missing, label: 'Late + Checkout Missing' },
-  { key: 'checkout_pending', color: STATUS_COLORS.checkout_pending, label: 'Checkout Pending' },
-  { key: 'late_login_checkout_pending', color: STATUS_COLORS.late_login_checkout_pending, label: 'Late + Checkout Pending' },
+  // { key: 'checkout_missing', color: STATUS_COLORS.checkout_missing, label: 'Checkout Missing' },
+  // { key: 'late_login_checkout_missing', color: STATUS_COLORS.late_login_checkout_missing, label: 'Late + Checkout Missing' },
+  // { key: 'checkout_pending', color: STATUS_COLORS.checkout_pending, label: 'Checkout Pending' },
+  // { key: 'late_login_checkout_pending', color: STATUS_COLORS.late_login_checkout_pending, label: 'Late + Checkout Pending' },
 ];
 
 const AttendanceButtonSection: React.FC<{

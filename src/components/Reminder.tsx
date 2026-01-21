@@ -1,57 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert, Platform
+  StatusBar, Modal, TextInput, Dimensions, ActivityIndicator, Alert, Platform,
+  Image, RefreshControl
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
 const TOKEN_KEY = 'token_2';
 
-const colors = {
-  primary: '#008069', // WhatsApp green
-  primaryLight: '#25D366',
-  accent: '#007AFF', // iOS blue
-  surface: '#FFFFFF',
-  background: '#F0F2F5', // WhatsApp chat background
-  text: '#111B21', // WhatsApp dark text
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// WhatsApp Color Theme (same as Employee file)
+const WHATSAPP_COLORS = {
+  primary: '#075E54', // WhatsApp dark green
+  primaryLight: '#128C7E', // WhatsApp medium green
+  accent: '#25D366', // WhatsApp light green
+  background: '#ECE5DD', // WhatsApp chat background
+  surface: '#FFFFFF', // White for cards
+  chatBubbleSent: '#DCF8C6', // WhatsApp sent message bubble
+  chatBubbleReceived: '#FFFFFF', // WhatsApp received message bubble
+  textPrimary: '#000000', // Black for primary text
   textSecondary: '#667781', // WhatsApp secondary text
-  textTertiary: '#8696A0',
-  divider: '#E9EDEF', // WhatsApp subtle divider
-  error: '#F44336',
-  success: '#4CAF50',
-  blue: '#0084FF',
-  green: '#00A884', // WhatsApp green variant
-  orange: '#FF6B35',
-  purple: '#7B1FA2',
-  pink: '#E91E63',
-  yellow: '#FFC107',
+  textTertiary: '#8696A0', // WhatsApp tertiary text
+  border: '#E0E0E0', // Light gray border
+  statusOnline: '#25D366', // Online status green
+  statusAway: '#FFB300', // Away status yellow
+  statusOffline: '#9E9E9E', // Offline gray
+  error: '#FF3B30', // Red for errors
+  success: '#34C759', // Green for success
+  warning: '#FF9500', // Orange for warnings
 };
 
+// Custom BackIcon Component (from BUP header)
 const BackIcon = () => (
   <View style={styles.backIcon}>
-    <Text style={styles.backArrow}>‹</Text>
-  </View>
-);
-
-const EditIcon = () => (
-  <View style={styles.iconContainer}>
-    <Text style={styles.editIcon}>✏️</Text>
-  </View>
-);
-
-const DeleteIcon = () => (
-  <View style={styles.iconContainer}>
-    <Text style={styles.deleteIcon}>🗑️</Text>
-  </View>
-);
-
-const DropdownIcon = () => (
-  <View style={styles.dropdownIcon}>
-    <Text style={styles.dropdownArrow}>▼</Text>
+    <View style={styles.backArrow} />
+    <Text style={styles.backText}>Back</Text>
   </View>
 );
 
@@ -98,6 +85,7 @@ const reminderTypes = [
 const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -108,6 +96,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -130,16 +119,16 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [searchingEmployees, setSearchingEmployees] = useState(false);
 
   const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
-  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).filter((_, i) => i % 5 === 0);
   const periods = ['AM', 'PM'];
   
   const eventColors = [
-    { name: 'blue', value: colors.blue },
-    { name: 'green', value: colors.green },
-    { name: 'orange', value: colors.orange },
-    { name: 'purple', value: colors.purple },
-    { name: 'pink', value: colors.pink },
-    { name: 'yellow', value: colors.yellow },
+    { name: 'blue', value: '#2196F3' },
+    { name: 'green', value: '#4CAF50' },
+    { name: 'orange', value: '#FF9800' },
+    { name: 'purple', value: '#9C27B0' },
+    { name: 'pink', value: '#E91E63' },
+    { name: 'yellow', value: '#FFC107' },
   ];
 
   const insets = useSafeAreaInsets();
@@ -188,7 +177,13 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       Alert.alert('Error', 'Failed to load reminders. Please try again.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchReminders();
   };
 
   const searchEmployees = async (query: string) => {
@@ -249,7 +244,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     setSelectedHour('12');
     setSelectedMinute('00');
     setSelectedPeriod('AM');
-    setSelectedColor(colors.blue);
+    setSelectedColor('#2196F3');
     setSelectedDate(null);
     setShowTimePicker(false);
     setSelectedEmployees([]);
@@ -276,9 +271,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   };
 
   const getColorValue = (colorName: string | null): string => {
-    if (!colorName) return colors.blue;
+    if (!colorName) return '#2196F3';
     const colorObj = eventColors.find(c => c.name === colorName);
-    return colorObj ? colorObj.value : colors.blue;
+    return colorObj ? colorObj.value : '#2196F3';
   };
 
   const convertTo24Hour = (hour: string, period: string): string => {
@@ -445,9 +440,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
       const result = await response.json();
 
-     if (response.ok && result.data) {
-  setReminders(reminders.map(r => r.id === selectedReminder.id ? result.data : r));
-        setSelectedReminder(result.data); // ✅ Add this line to update the selected reminder
+      if (response.ok && result.data) {
+        setReminders(reminders.map(r => r.id === selectedReminder.id ? result.data : r));
+        setSelectedReminder(result.data);
         setShowCreateModal(false);
         setShowDetailModal(false);
         resetForm();
@@ -545,16 +540,37 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       Alert.alert('Invalid Date', 'Cannot create reminder for past dates');
       return;
     }
-    setSelectedColor(colors.blue);
+    setSelectedColor('#2196F3');
     setSelectedDate(dateObj);
     setDate(formatDateToYYYYMMDD(dateObj));
     setShowCreateModal(true);
-    
   };
 
+  // Fixed: Handle invalid dates properly
   const formatDate = (dateString: string): string => {
-    const d = new Date(dateString + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (!dateString) return 'Invalid Date';
+    
+    try {
+      // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      
+      // Validate the date
+      if (isNaN(year) || isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+        return 'Invalid Date';
+      }
+      
+      const d = new Date(year, month - 1, day);
+      
+      // Check if date is valid
+      if (isNaN(d.getTime())) {
+        return 'Invalid Date';
+      }
+      
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
   const formatTime = (timeString: string): string => {
@@ -570,10 +586,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
     
-    
     return { daysInMonth, startingDayOfWeek, year, month };
   };
-  
 
   const getRemindersForDate = (dateObj: Date) => {
     const dateStr = formatDateToYYYYMMDD(dateObj);
@@ -593,27 +607,54 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     reminder.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const MonthView = () => {
+  // Helper functions for calendar
+  const getMonthName = (month: number): string => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return months[month];
+  };
+
+  const renderCalendar = () => {
     const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentDate);
     const days = [];
     const today = new Date();
-    const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
+    const currentDay = today.getDate();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
 
+    // Empty days for start of month
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
     }
 
+    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const dayReminders = getRemindersForDate(date);
-      const isToday = isCurrentMonth && today.getDate() === day;
+      const isToday = day === currentDay && month === currentMonth && year === currentYear;
       const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+      let backgroundColor = '#FFFFFF';
+      let textColor = WHATSAPP_COLORS.textPrimary;
+      let borderColor = WHATSAPP_COLORS.border;
+      
+      // If there are reminders for this day, use the first reminder's color
+      if (dayReminders.length > 0) {
+        const firstReminder = dayReminders[0];
+        backgroundColor = getColorValue(firstReminder.color) + '15'; // Add transparency
+        textColor = getColorValue(firstReminder.color);
+        borderColor = getColorValue(firstReminder.color);
+      } else if (isToday) {
+        backgroundColor = WHATSAPP_COLORS.accent + '20';
+        textColor = WHATSAPP_COLORS.primary;
+        borderColor = WHATSAPP_COLORS.accent;
+      }
 
       days.push(
         <TouchableOpacity
           key={day}
           style={styles.calendarDay}
           onPress={() => {
+            const dayReminders = getRemindersForDate(date);
             if (dayReminders.length > 0) {
               setSelectedDate(date);
               setViewMode('agenda');
@@ -624,59 +665,61 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           onLongPress={() => openCreateModalForDate(date)}
           activeOpacity={0.7}
         >
-          <View style={[styles.dayNumberContainer, isToday && styles.dayNumberToday]}>
-            <Text style={[styles.dayNumber, isToday && styles.dayNumberTodayText, isPast && styles.dayNumberPast]}>
+          <View style={[
+            styles.dayCircle,
+            { backgroundColor, borderColor },
+            isToday && styles.todayCircle
+          ]}>
+            <Text style={[styles.dayText, { color: textColor }, isPast && styles.dayNumberPast]}>
               {day}
             </Text>
+            {dayReminders.length > 0 && (
+              <View style={styles.dayEventsIndicator}>
+                <View style={[styles.dayEventDot, { backgroundColor: textColor }]} />
+                {dayReminders.length > 1 && (
+                  <Text style={[styles.dayEventCount, { color: textColor }]}>
+                    +{dayReminders.length - 1}
+                  </Text>
+                )}
+              </View>
+            )}
           </View>
-          {dayReminders.length > 0 && (
-            <View style={styles.dayEventsContainer}>
-              {dayReminders.slice(0, 3).map((reminder) => (
-                <View
-                  key={reminder.id}
-                  style={[styles.dayEventDot, { backgroundColor: getColorValue(reminder.color) }]}
-                />
-              ))}
-              {dayReminders.length > 3 && (
-                <Text style={styles.moreEventsText}>+{dayReminders.length - 3}</Text>
-              )}
-            </View>
-          )}
         </TouchableOpacity>
       );
     }
 
     return (
-      <ScrollView style={styles.monthView} showsVerticalScrollIndicator={false}>
-        <View style={styles.weekDaysRow}>
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => (
-            <View key={idx} style={styles.weekDayCell}>
-              <Text style={styles.weekDayText}>{day}</Text>
-            </View>
+      <View style={styles.calendarContainer}>
+        <View style={styles.weekDays}>
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <Text key={day} style={styles.weekDayText}>{day}</Text>
           ))}
         </View>
-        <View style={styles.calendarGrid}>{days}</View>
-        <View style={{ height: 20 }} />
-      </ScrollView>
+        
+        <View style={styles.calendarGrid}>
+          {days}
+        </View>
+      </View>
     );
   };
 
+  // Redesigned Agenda View
   const AgendaView = () => {
     let displayReminders = filteredReminders;
 
-if (selectedDate) {
-  const selectedDateStr = formatDateToYYYYMMDD(selectedDate);
-  displayReminders = filteredReminders.filter(r => r.reminder_date.split('T')[0] === selectedDateStr);
-} else if (viewMode === 'agenda') {
-  // Filter by current month when no specific date is selected
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  
-  displayReminders = filteredReminders.filter(r => {
-    const reminderDate = new Date(r.reminder_date);
-    return reminderDate.getFullYear() === year && reminderDate.getMonth() === month;
-  });
-}
+    if (selectedDate) {
+      const selectedDateStr = formatDateToYYYYMMDD(selectedDate);
+      displayReminders = filteredReminders.filter(r => r.reminder_date.split('T')[0] === selectedDateStr);
+    } else if (viewMode === 'agenda') {
+      // Filter by current month when no specific date is selected
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      
+      displayReminders = filteredReminders.filter(r => {
+        const reminderDate = new Date(r.reminder_date);
+        return reminderDate.getFullYear() === year && reminderDate.getMonth() === month;
+      });
+    }
 
     const sortedReminders = [...displayReminders].sort((a, b) => {
       const dateA = new Date(`${a.reminder_date.split('T')[0]}T${a.reminder_time}`);
@@ -693,65 +736,112 @@ if (selectedDate) {
       groupedReminders[dateKey].push(reminder);
     });
 
-    return (
-      <View style={styles.agendaView}>
-        {selectedDate && (
-          <View style={styles.selectedDateHeader}>
-            <TouchableOpacity
-              style={styles.backToAllButton}
-              onPress={() => {
-                setSelectedDate(null);
-                setViewMode('agenda');
-              }}
-              activeOpacity={0.7}
+    // If a specific date is selected, show a special header
+    if (selectedDate) {
+      return (
+        <View style={styles.agendaView}>
+          {/* Special Header for Selected Date */}
+          <View style={styles.selectedDateHeaderContainer}>
+            <LinearGradient
+              colors={['#4A5568', '#2D3748']}
+              style={styles.selectedDateHeader}
             >
-              <Text style={styles.backToAllButtonText}>← All Reminders</Text>
-            </TouchableOpacity>
-            <Text style={styles.selectedDateText}>
-              {formatDate(formatDateToYYYYMMDD(selectedDate))}
-            </Text>
-          </View>
-        )}
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {Object.keys(groupedReminders).length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>📅</Text>
-              <Text style={styles.emptyStateTitle}>No Reminders</Text>
-              <Text style={styles.emptyStateSubtitle}>
-                {selectedDate ? 'No reminders for this date' : 'Tap + to add a new reminder'}
-              </Text>
-            </View>
-          ) : (
-            Object.keys(groupedReminders).map(dateKey => (
-              <View key={dateKey} style={styles.agendaSection}>
-                <View style={styles.agendaDateHeaderContainer}>
-                  <Text style={styles.agendaDateHeader}>{formatDate(dateKey)}</Text>
-                  <TouchableOpacity
-                    style={styles.addReminderButton}
-                    onPress={() => {
-                      const [year, month, day] = dateKey.split('-').map(Number);
-                      const dateObj = new Date(year, month - 1, day);
-                      openCreateModalForDate(dateObj);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.addReminderButtonText}>+</Text>
-                  </TouchableOpacity>
+              {/* <TouchableOpacity
+                style={styles.backButtonContainer}
+                onPress={() => {
+                  setSelectedDate(null);
+                  setViewMode('agenda');
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.backButtonText}>Back to Agenda</Text>
+              </TouchableOpacity> */}
+              
+              <View style={styles.selectedDateContent}>
+                <Text style={styles.selectedDateDay}>
+                  {selectedDate.getDate()}
+                </Text>
+                <View>
+                  <Text style={styles.selectedDateMonth}>
+                    {selectedDate.toLocaleDateString('en-US', { month: 'long' })}
+                  </Text>
+                  <Text style={styles.selectedDateYear}>
+                    {selectedDate.getFullYear()}
+                  </Text>
                 </View>
-                {groupedReminders[dateKey].map((reminder) => (
-                  <TouchableOpacity
-                    key={reminder.id}
-                    style={styles.agendaItem}
-                    onPress={() => openDetailModal(reminder)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.agendaItemAccent, { backgroundColor: getColorValue(reminder.color) }]} />
-                    <View style={styles.agendaItemContent}>
-                      <View style={styles.agendaItemHeader}>
-                        <View style={styles.agendaItemTimeContainer}>
-                          <Text style={styles.agendaItemTime}>{formatTime(reminder.reminder_time)}</Text>
+              </View>
+              
+              <Text style={styles.selectedDateRemindersCount}>
+                {sortedReminders.length} reminder{sortedReminders.length !== 1 ? 's' : ''}
+              </Text>
+            </LinearGradient>
+          </View>
+
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[WHATSAPP_COLORS.accent]}
+                tintColor={WHATSAPP_COLORS.accent}
+              />
+            }
+            contentContainerStyle={styles.agendaScrollContent}
+          >
+            {sortedReminders.length === 0 ? (
+              <View style={styles.emptyDateState}>
+                <View style={styles.emptyDateIcon}>
+                  <Ionicons name="calendar-outline" size={64} color={WHATSAPP_COLORS.border} />
+                </View>
+                <Text style={styles.emptyDateTitle}>No Reminders</Text>
+                <Text style={styles.emptyDateSubtitle}>
+                  No reminders scheduled for this date
+                </Text>
+                <TouchableOpacity
+                  style={styles.addReminderButtonLarge}
+                  onPress={() => openCreateModalForDate(selectedDate)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={24} color="#fff" />
+                  <Text style={styles.addReminderButtonTextLarge}>Add Reminder</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.timelineContainer}>
+                {sortedReminders.map((reminder, index) => (
+                  <View key={reminder.id} style={styles.timelineItem}>
+                    {/* Timeline line */}
+                    {index < sortedReminders.length - 1 && (
+                      <View style={styles.timelineLine} />
+                    )}
+                    
+                    {/* Time circle */}
+                    <View style={[styles.timeCircle, { backgroundColor: getColorValue(reminder.color) }]}>
+                      <Text style={styles.timeCircleText}>
+                        {formatTime(reminder.reminder_time).split(' ')[0]}
+                      </Text>
+                      <Text style={styles.timeCirclePeriod}>
+                        {formatTime(reminder.reminder_time).split(' ')[1]}
+                      </Text>
+                    </View>
+                    
+                    {/* Reminder card */}
+                    <TouchableOpacity
+                      style={styles.reminderCard}
+                      onPress={() => openDetailModal(reminder)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.reminderCardHeader, { backgroundColor: getColorValue(reminder.color) + '15' }]}>
+                        <View style={styles.reminderCardTitleContainer}>
+                          <View style={[styles.reminderColorIndicator, { backgroundColor: getColorValue(reminder.color) }]} />
+                          <Text style={styles.reminderCardTitle} numberOfLines={1}>
+                            {reminder.title}
+                          </Text>
                         </View>
-                        <View style={styles.agendaItemActions}>
+                        
+                        <View style={styles.reminderCardActions}>
                           <TouchableOpacity
                             onPress={(e) => {
                               e.stopPropagation();
@@ -759,9 +849,9 @@ if (selectedDate) {
                               openEditMode();
                             }}
                             activeOpacity={0.7}
-                            style={styles.agendaActionButton}
+                            style={styles.cardActionButton}
                           >
-                            <EditIcon />
+                            <Ionicons name="pencil" size={16} color={WHATSAPP_COLORS.textSecondary} />
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={(e) => {
@@ -769,56 +859,227 @@ if (selectedDate) {
                               handleDeleteReminder(reminder.id);
                             }}
                             activeOpacity={0.7}
-                            style={styles.agendaActionButton}
+                            style={styles.cardActionButton}
                           >
-                            <DeleteIcon />
+                            <Ionicons name="trash" size={16} color={WHATSAPP_COLORS.error} />
                           </TouchableOpacity>
                         </View>
                       </View>
-                      <Text style={[
-                        styles.agendaItemTitle,
-                        reminder.is_completed && styles.agendaItemTitleCompleted
-                      ]}>
-                        {reminder.title}
-                      </Text>
-                      {reminder.description && (
-                        <Text style={styles.agendaItemDesc} numberOfLines={2}>
-                          {reminder.description}
-                        </Text>
-                      )}
-                      {reminder.also_share_with.length > 0 && (
-                        <View style={styles.sharedWithContainer}>
-                          <Text style={styles.agendaItemShared}>
-                            👥 Shared with {reminder.also_share_with.length}
+                      
+                      <View style={styles.reminderCardContent}>
+                        {reminder.description && (
+                          <Text style={styles.reminderCardDescription} numberOfLines={3}>
+                            {reminder.description}
                           </Text>
-                        </View>
-                      )}
-                      <TouchableOpacity
-                        style={styles.completeButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleToggleComplete(reminder.id, reminder.is_completed);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[
-                          styles.checkbox,
-                          reminder.is_completed && styles.checkboxCompleted
-                        ]}>
-                          {reminder.is_completed && (
-                            <Text style={styles.checkmark}>✓</Text>
-                          )}
-                        </View>
-                        <Text style={[
-                          styles.completeButtonText,
-                          reminder.is_completed && styles.completeButtonTextCompleted
-                        ]}>
-                          {reminder.is_completed ? 'Completed' : 'Mark as Complete'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
+                        )}
+                        
+                        {reminder.also_share_with.length > 0 && (
+                          <View style={styles.reminderSharedWith}>
+                            <Ionicons name="people" size={14} color={WHATSAPP_COLORS.textTertiary} />
+                            <Text style={styles.reminderSharedText}>
+                              Shared with {reminder.also_share_with.length} person{reminder.also_share_with.length !== 1 ? 's' : ''}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        <TouchableOpacity
+                          style={styles.completeButtonCard}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleToggleComplete(reminder.id, reminder.is_completed);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[
+                            styles.checkboxCard,
+                            reminder.is_completed && styles.checkboxCompletedCard
+                          ]}>
+                            {reminder.is_completed && (
+                              <Ionicons name="checkmark" size={12} color={WHATSAPP_COLORS.surface} />
+                            )}
+                          </View>
+                          <Text style={[
+                            styles.completeButtonTextCard,
+                            reminder.is_completed && styles.completeButtonTextCompletedCard
+                          ]}>
+                            {reminder.is_completed ? 'Completed' : 'Mark Complete'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 ))}
+                
+                {/* Add reminder card at the end */}
+                <TouchableOpacity
+                  style={styles.addTimelineItem}
+                  onPress={() => openCreateModalForDate(selectedDate)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.addTimeCircle}>
+                    <Ionicons name="add" size={20} color={WHATSAPP_COLORS.accent} />
+                  </View>
+                  <View style={styles.addReminderCard}>
+                    <Text style={styles.addReminderText}>Add another reminder</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        </View>
+      );
+    }
+
+    // Regular Agenda View (no specific date selected)
+    return (
+      <View style={styles.agendaView}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[WHATSAPP_COLORS.accent]}
+              tintColor={WHATSAPP_COLORS.accent}
+            />
+          }
+          contentContainerStyle={styles.agendaScrollContent}
+        >
+          {Object.keys(groupedReminders).length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyStateIcon}>
+                <Ionicons name="calendar-outline" size={80} color={WHATSAPP_COLORS.border} />
+              </View>
+              <Text style={styles.emptyStateTitle}>No Reminders</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                Tap the + button to add a new reminder
+              </Text>
+            </View>
+          ) : (
+            Object.keys(groupedReminders).map(dateKey => (
+              <View key={dateKey} style={styles.agendaDateSection}>
+                {/* Date Header */}
+                <View style={styles.agendaDateHeader}>
+                  <Text style={styles.agendaDateText}>
+                    {formatDate(dateKey)}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.addDateReminderButton}
+                    onPress={() => {
+                      const [year, month, day] = dateKey.split('-').map(Number);
+                      const dateObj = new Date(year, month - 1, day);
+                      setSelectedDate(dateObj);
+                      setViewMode('agenda');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.addDateReminderButtonText}>
+                      {groupedReminders[dateKey].length} reminder{groupedReminders[dateKey].length !== 1 ? 's' : ''}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+                  </TouchableOpacity>
+                </View>
+                
+                {/* Reminder Cards */}
+                <View style={styles.agendaRemindersList}>
+                  {groupedReminders[dateKey].slice(0, 3).map((reminder) => (
+                    <TouchableOpacity
+                      key={reminder.id}
+                      style={styles.agendaReminderCard}
+                      onPress={() => openDetailModal(reminder)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.agendaReminderColorBar, { backgroundColor: getColorValue(reminder.color) }]} />
+                      <View style={styles.agendaReminderContent}>
+                        <View style={styles.agendaReminderHeader}>
+                          <Text style={styles.agendaReminderTime}>
+                            {formatTime(reminder.reminder_time)}
+                          </Text>
+                          <View style={styles.agendaReminderStatus}>
+                            {reminder.is_completed ? (
+                              <View style={styles.completedBadge}>
+                                <Ionicons name="checkmark" size={12} color={WHATSAPP_COLORS.success} />
+                                <Text style={styles.completedBadgeText}>Completed</Text>
+                              </View>
+                            ) : (
+                              <View style={styles.pendingBadge}>
+                                <Text style={styles.pendingBadgeText}>Pending</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                        
+                        <Text style={styles.agendaReminderTitle} numberOfLines={2}>
+                          {reminder.title}
+                        </Text>
+                        
+                        {reminder.description && (
+                          <Text style={styles.agendaReminderDescription} numberOfLines={2}>
+                            {reminder.description}
+                          </Text>
+                        )}
+                        
+                        <View style={styles.agendaReminderFooter}>
+                          {reminder.also_share_with.length > 0 && (
+                            <View style={styles.agendaSharedIndicator}>
+                              <Ionicons name="people" size={12} color={WHATSAPP_COLORS.textTertiary} />
+                              <Text style={styles.agendaSharedText}>
+                                {reminder.also_share_with.length}
+                              </Text>
+                            </View>
+                          )}
+                          
+                          <View style={styles.agendaCardActions}>
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedReminder(reminder);
+                                openEditMode();
+                              }}
+                              activeOpacity={0.7}
+                              style={styles.agendaCardActionButton}
+                            >
+                              <Ionicons name="pencil" size={14} color={WHATSAPP_COLORS.textSecondary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleToggleComplete(reminder.id, reminder.is_completed);
+                              }}
+                              activeOpacity={0.7}
+                              style={styles.agendaCardActionButton}
+                            >
+                              <Ionicons 
+                                name={reminder.is_completed ? "checkbox" : "square-outline"} 
+                                size={14} 
+                                color={reminder.is_completed ? WHATSAPP_COLORS.success : WHATSAPP_COLORS.textSecondary} 
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  
+                  {groupedReminders[dateKey].length > 3 && (
+                    <TouchableOpacity
+                      style={styles.viewAllButton}
+                      onPress={() => {
+                        const [year, month, day] = dateKey.split('-').map(Number);
+                        const dateObj = new Date(year, month - 1, day);
+                        setSelectedDate(dateObj);
+                        setViewMode('agenda');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.viewAllButtonText}>
+                        View all {groupedReminders[dateKey].length} reminders
+                      </Text>
+                      <Ionicons name="chevron-forward" size={14} color={WHATSAPP_COLORS.accent} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             ))
           )}
@@ -829,218 +1090,201 @@ if (selectedDate) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      
-      {/* Main Content Container with proper safe area handling */}
-      <View style={[styles.contentContainer, ]}>
-        {/* Header with WhatsApp feel */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <BackIcon />
-              <Text style={styles.backButtonText}>Back</Text>
-            </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Reminder</Text>
-              <View style={styles.viewToggle}>
-                <TouchableOpacity
-                  style={[styles.viewToggleButton, viewMode === 'month' && styles.viewToggleButtonActive]}
-                  onPress={() => {
-                    setViewMode('month');
-                    setSelectedDate(null);
-                  }}
-                  activeOpacity={0.7}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
+
+      {/* BUP Style Header - Same as Employee file */}
+      <View style={styles.headerBanner}>
+        <LinearGradient
+          colors={['#4A5568', '#2D3748']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerBanner}
+        >
+          {/* Background Image */}
+          <Image
+            source={require('../assets/bg.jpeg')}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+          
+          {/* Dark overlay for better text visibility */}
+          <View style={styles.headerOverlay} />
+          
+          {/* Header Content */}
+          <View style={[styles.headerContent, { 
+            paddingTop: Platform.OS === 'ios' ? 50 : 40 
+          }]}>
+            {/* Top row with back button, logo, and actions */}
+            <View style={styles.headerTopRow}>
+              {/* Left side - Back button */}
+              <View style={styles.leftSection}>
+                <TouchableOpacity 
+                  style={styles.backButton} 
+                  onPress={onBack}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={[styles.viewToggleText, viewMode === 'month' && styles.viewToggleTextActive]}>
-                    Month
-                  </Text>
+                  <BackIcon />
                 </TouchableOpacity>
-                <View style={styles.viewToggleDivider} />
-                <TouchableOpacity
-                  style={[styles.viewToggleButton, viewMode === 'agenda' && styles.viewToggleButtonActive]}
-                  onPress={() => setViewMode('agenda')}
-                  activeOpacity={0.7}
+              </View>
+              
+              {/* Center - Logo */}
+              <View style={styles.centerSection}>
+                <Text style={styles.logoText}>CITADEL</Text>
+              </View>
+              
+              {/* Right side - Action buttons */}
+              <View style={styles.rightSection}>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={() => setShowSearch(!showSearch)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={[styles.viewToggleText, viewMode === 'agenda' && styles.viewToggleTextActive]}>
-                    Agenda
-                  </Text>
+                  <Ionicons name="search" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={() => {
+                    setSelectedDate(null);
+                    setShowCreateModal(true);
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+          
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.sectionTitle}>Reminders</Text>
+            <Text style={styles.sectionSubtitle}>
+              {filteredReminders.length} reminder{filteredReminders.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+
+          {/* View Mode Toggle */}
+          <View style={styles.viewToggleContainer}>
             <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => setShowSearch(!showSearch)}
+              style={[styles.viewToggleButton, viewMode === 'month' && styles.viewToggleButtonActive]}
+              onPress={() => {
+                setViewMode('month');
+                setSelectedDate(null);
+              }}
               activeOpacity={0.7}
             >
-              <Text style={styles.searchButtonIcon}>🔍</Text>
+              <Text style={[styles.viewToggleText, viewMode === 'month' && styles.viewToggleTextActive]}>
+                Calendar
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.viewToggleDivider} />
+            <TouchableOpacity
+              style={[styles.viewToggleButton, viewMode === 'agenda' && styles.viewToggleButtonActive]}
+              onPress={() => setViewMode('agenda')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.viewToggleText, viewMode === 'agenda' && styles.viewToggleTextActive]}>
+                Agenda
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {showSearch && (
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search reminders..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={colors.textTertiary}
-            />
-            {searchQuery ? (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchButton}>
-                <Text style={styles.clearSearchButtonText}>✕</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        )}
-
-        {/* Calendar Navigation with Google Calendar feel */}
-        <View style={styles.calendarHeader}>
-          <View style={styles.monthNavigation}>
-            <TouchableOpacity onPress={() => changeMonth(-1)} activeOpacity={0.7} style={styles.navButton}>
-              <Text style={styles.navArrow}>‹</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={goToToday} activeOpacity={0.7} style={styles.todayButton}>
-              <Text style={styles.todayButtonText}>Today</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => changeMonth(1)} activeOpacity={0.7} style={styles.navButton}>
-              <Text style={styles.navArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.monthYearText}>
-            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </Text>
-        </View>
-
-        <View style={styles.content}>
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Loading reminders...</Text>
+          {/* Search Bar */}
+          {showSearch && (
+            <View style={styles.searchContainer}>
+              <View style={[
+                styles.searchInputContainer,
+                searchFocused && styles.searchInputContainerFocused
+              ]}>
+                <Ionicons
+                  name="search"
+                  size={18}
+                  color={searchFocused ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.textTertiary}
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search reminders..."
+                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={() => setSearchQuery('')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-          ) : (
-            <>
-              {viewMode === 'month' && <MonthView />}
-              {(viewMode === 'agenda' || selectedDate) && <AgendaView />}
-            </>
           )}
-        </View>
+        </LinearGradient>
       </View>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={[styles.fab, { bottom: insets.bottom > 0 ? insets.bottom + 20 : 20 }]}
-        onPress={() => {
-          setSelectedDate(null);
-          setShowCreateModal(true);
-        }}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      {/* Content Area */}
+      <View style={styles.content}>
+        {/* Month Navigation */}
+        <View style={styles.monthSelector}>
+          <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton}>
+            <Ionicons name="chevron-back" size={20} color={WHATSAPP_COLORS.primary} />
+          </TouchableOpacity>
+          
+          {/* <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
+            <Text style={styles.todayButtonText}>Today</Text>
+          </TouchableOpacity> */}
+          
+          <Text style={styles.monthYearText}>
+            {getMonthName(currentDate.getMonth())} {currentDate.getFullYear()}
+          </Text>
+          
+          <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNavButton}>
+            <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.primary} />
+          </TouchableOpacity>
+        </View>
 
-      {/* Detail Modal */}
-      <Modal
-        visible={showDetailModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowDetailModal(false)}
-      >
-        {selectedReminder && (
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setShowDetailModal(false)} activeOpacity={0.7}>
-                <Text style={styles.modalHeaderButton}>Done</Text>
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalHeaderTitle}>Reminder Details</Text>
-              </View>
-              <View style={styles.modalHeaderActions}>
-                <TouchableOpacity onPress={openEditMode} activeOpacity={0.7} style={styles.editButton}>
-                  <Text style={styles.modalHeaderEdit}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteReminder(selectedReminder.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.modalHeaderDelete}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.modalTopSection}>
-                <View style={[styles.modalColorIndicator, { backgroundColor: getColorValue(selectedReminder.color) }]} />
-                <Text style={styles.modalTitle}>{selectedReminder.title}</Text>
-                <View style={styles.modalDateTimeContainer}>
-                  <View style={styles.modalDateTimeItem}>
-                    <Text style={styles.modalIcon}>📅</Text>
-                    <Text style={styles.modalText}>{formatDate(selectedReminder.reminder_date)}</Text>
-                  </View>
-                  <View style={styles.modalDateTimeItem}>
-                    <Text style={styles.modalIcon}>🕐</Text>
-                    <Text style={styles.modalText}>{formatTime(selectedReminder.reminder_time)}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {selectedReminder.description && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>Notes</Text>
-                  <Text style={styles.modalDescription}>{selectedReminder.description}</Text>
-                </View>
-              )}
-
-              {selectedReminder.also_share_with.length > 0 && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>Shared With</Text>
-                  {selectedReminder.also_share_with.map((empId, idx) => (
-                    <View key={idx} style={styles.sharedWithItem}>
-                      <Text style={styles.sharedWithDot}>•</Text>
-                      <Text style={styles.modalText}>{empId}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <View style={styles.modalSection}>
-                <TouchableOpacity
-                  style={styles.completeButtonModal}
-                  onPress={() => handleToggleComplete(selectedReminder.id, selectedReminder.is_completed)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.checkboxModal,
-                    selectedReminder.is_completed && styles.checkboxCompletedModal
-                  ]}>
-                    {selectedReminder.is_completed && (
-                      <Text style={styles.checkmarkModal}>✓</Text>
-                    )}
-                  </View>
-                  <Text style={[
-                    styles.completeButtonTextModal,
-                    selectedReminder.is_completed && styles.completeButtonTextCompletedModal
-                  ]}>
-                    {selectedReminder.is_completed ? 'Completed' : 'Mark as Complete'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </SafeAreaView>
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.loadingText}>Loading reminders...</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[WHATSAPP_COLORS.accent]}
+                tintColor={WHATSAPP_COLORS.accent}
+              />
+            }
+          >
+            {viewMode === 'month' && renderCalendar()}
+            {(viewMode === 'agenda' || selectedDate) && <AgendaView />}
+          </ScrollView>
         )}
-      </Modal>
+      </View>
 
-      {/* Create/Edit Modal - RESTORED TITLE DROPDOWN */}
+      {/* Create/Edit Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="formSheet" // Changed from "pageSheet" to reduce height
         onRequestClose={() => {
           setShowCreateModal(false);
           resetForm();
         }}
       >
         <SafeAreaView style={styles.modalContainer}>
+          {/* Modal Header */}
           <View style={styles.modalHeader}>
             <TouchableOpacity
               onPress={() => {
@@ -1067,7 +1311,7 @@ if (selectedDate) {
             style={styles.modalContent} 
             keyboardShouldPersistTaps="handled" 
             showsVerticalScrollIndicator={false}
-            nestedScrollEnabled={true}
+            contentContainerStyle={styles.modalScrollContent} // Added to control modal height
           >
             <View style={styles.modalForm}>
               {/* Title Input */}
@@ -1078,46 +1322,41 @@ if (selectedDate) {
                   placeholder="Add a title"
                   value={title}
                   onChangeText={setTitle}
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
                 />
               </View>
 
-              {/* Type Dropdown - RESTORED */}
-              <View style={styles.typeSection}>
-                <Text style={styles.sectionTitle}>Type</Text>
+              {/* Type Dropdown */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Type</Text>
                 <TouchableOpacity
-                  style={styles.typeDropdownButton}
+                  style={styles.dropdownButton}
                   onPress={() => setShowTypeDropdown(!showTypeDropdown)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.typeDropdownContent}>
+                  <View style={styles.dropdownContent}>
                     {selectedType ? (
-                      <>
-                        <Text style={styles.typeDropdownIcon}>
-                          {reminderTypes.find(t => t.value === selectedType)?.icon}
-                        </Text>
-                        <Text style={styles.typeDropdownText}>
-                          {selectedType === 'other' && customType.trim() 
-                            ? customType 
-                            : reminderTypes.find(t => t.value === selectedType)?.label}
-                        </Text>
-                      </>
+                      <Text style={styles.dropdownText}>
+                        {selectedType === 'other' && customType.trim() 
+                          ? customType 
+                          : reminderTypes.find(t => t.value === selectedType)?.label}
+                      </Text>
                     ) : (
-                      <Text style={styles.typeDropdownPlaceholder}>Select reminder type</Text>
+                      <Text style={styles.dropdownPlaceholder}>Select reminder type</Text>
                     )}
                   </View>
-                  <DropdownIcon />
+                  <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textTertiary} />
                 </TouchableOpacity>
 
                 {showTypeDropdown && (
-                  <View style={styles.typeDropdownList}>
-                    <ScrollView style={styles.typeDropdownScroll} nestedScrollEnabled={true}>
+                  <View style={styles.dropdownList}>
+                    <ScrollView style={styles.dropdownScroll} nestedScrollEnabled={true}>
                       {reminderTypes.map((type) => (
                         <TouchableOpacity
                           key={type.value}
                           style={[
-                            styles.typeDropdownItem,
-                            selectedType === type.value && styles.typeDropdownItemActive
+                            styles.dropdownItem,
+                            selectedType === type.value && styles.dropdownItemActive
                           ]}
                           onPress={() => {
                             setSelectedType(type.value);
@@ -1128,15 +1367,15 @@ if (selectedDate) {
                           }}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.typeDropdownItemIcon}>{type.icon}</Text>
+                          <Text style={styles.dropdownItemIcon}>{type.icon}</Text>
                           <Text style={[
-                            styles.typeDropdownItemText,
-                            selectedType === type.value && styles.typeDropdownItemTextActive
+                            styles.dropdownItemText,
+                            selectedType === type.value && styles.dropdownItemTextActive
                           ]}>
                             {type.label}
                           </Text>
                           {selectedType === type.value && (
-                            <Text style={styles.typeDropdownItemCheck}>✓</Text>
+                            <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.accent} />
                           )}
                         </TouchableOpacity>
                       ))}
@@ -1150,7 +1389,7 @@ if (selectedDate) {
                     placeholder="Enter custom type"
                     value={customType}
                     onChangeText={setCustomType}
-                    placeholderTextColor={colors.textTertiary}
+                    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
                     autoFocus
                   />
                 )}
@@ -1163,7 +1402,7 @@ if (selectedDate) {
                   placeholder="YYYY-MM-DD"
                   value={date}
                   onChangeText={setDate}
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
                   editable={!selectedDate}
                 />
               </View>
@@ -1178,7 +1417,7 @@ if (selectedDate) {
                   <Text style={styles.timeInputText}>
                     {selectedHour}:{selectedMinute} {selectedPeriod}
                   </Text>
-                  <Text style={styles.timeInputArrow}>▼</Text>
+                  <Ionicons name="time" size={16} color={WHATSAPP_COLORS.textTertiary} />
                 </TouchableOpacity>
 
                 {showTimePicker && (
@@ -1187,7 +1426,6 @@ if (selectedDate) {
                       <ScrollView 
                         style={styles.timePickerColumn}
                         showsVerticalScrollIndicator={false}
-                        nestedScrollEnabled={true}
                       >
                         {hours.map(hour => (
                           <TouchableOpacity
@@ -1212,9 +1450,8 @@ if (selectedDate) {
                       <ScrollView 
                         style={styles.timePickerColumn}
                         showsVerticalScrollIndicator={false}
-                        nestedScrollEnabled={true}
                       >
-                        {minutes.filter((_, i) => i % 5 === 0).map(minute => (
+                        {minutes.map(minute => (
                           <TouchableOpacity
                             key={minute}
                             style={[
@@ -1237,7 +1474,6 @@ if (selectedDate) {
                       <ScrollView 
                         style={styles.timePickerColumn}
                         showsVerticalScrollIndicator={false}
-                        nestedScrollEnabled={true}
                       >
                         {periods.map(period => (
                           <TouchableOpacity
@@ -1279,12 +1515,12 @@ if (selectedDate) {
                   onChangeText={setDescription}
                   multiline
                   numberOfLines={4}
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
                 />
               </View>
 
-              <View style={styles.colorPickerSection}>
-                <Text style={styles.sectionTitle}>Color</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Color</Text>
                 <View style={styles.colorPickerRow}>
                   {eventColors.map(color => (
                     <TouchableOpacity
@@ -1301,8 +1537,8 @@ if (selectedDate) {
                 </View>
               </View>
 
-              <View style={styles.employeeSection}>
-                <Text style={styles.sectionTitle}>Share With</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Share With</Text>
                 
                 {selectedEmployees.length > 0 && (
                   <View style={styles.selectedEmployeesContainer}>
@@ -1314,7 +1550,7 @@ if (selectedDate) {
                           activeOpacity={0.7}
                           style={styles.employeeChipRemove}
                         >
-                          <Text style={styles.employeeChipRemoveText}>×</Text>
+                          <Ionicons name="close" size={14} color={WHATSAPP_COLORS.surface} />
                         </TouchableOpacity>
                       </View>
                     ))}
@@ -1326,7 +1562,7 @@ if (selectedDate) {
                   onPress={() => setShowEmployeeSearch(!showEmployeeSearch)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.addEmployeeButtonIcon}>+</Text>
+                  <Ionicons name="person-add" size={18} color={WHATSAPP_COLORS.accent} />
                   <Text style={styles.addEmployeeButtonText}>Add people</Text>
                 </TouchableOpacity>
 
@@ -1337,13 +1573,13 @@ if (selectedDate) {
                       placeholder="Search by name..."
                       value={employeeSearchQuery}
                       onChangeText={setEmployeeSearchQuery}
-                      placeholderTextColor={colors.textTertiary}
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
                       autoFocus
                     />
                     
                     {searchingEmployees ? (
                       <View style={styles.employeeSearchLoading}>
-                        <ActivityIndicator size="small" color={colors.primary} />
+                        <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
                       </View>
                     ) : employeeSearchResults.length > 0 ? (
                       <ScrollView style={styles.employeeSearchResults} nestedScrollEnabled={true}>
@@ -1381,72 +1617,241 @@ if (selectedDate) {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+
+      {/* Detail Modal - Fixed: Changed presentationStyle and improved button alignment */}
+      <Modal
+        visible={showDetailModal}
+        animationType="slide"
+        presentationStyle="formSheet" // Changed from "pageSheet" to reduce height
+        onRequestClose={() => setShowDetailModal(false)}
+      >
+        {selectedReminder && (
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <TouchableOpacity onPress={() => setShowDetailModal(false)} activeOpacity={0.7}>
+                  <Text style={styles.modalHeaderButton}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalHeaderTitle}>Reminder Details</Text>
+              </View>
+              <View style={styles.modalHeaderRight}>
+                <View style={styles.modalHeaderActions}>
+                  <TouchableOpacity onPress={openEditMode} activeOpacity={0.7} style={styles.editButton}>
+                    <Text style={styles.modalHeaderEdit}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteReminder(selectedReminder.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.modalHeaderDelete}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            <ScrollView 
+              style={styles.modalContent} 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent} // Added to control modal height
+            >
+              <View style={styles.modalTopSection}>
+                <View style={[styles.modalColorIndicator, { backgroundColor: getColorValue(selectedReminder.color) }]} />
+                <Text style={styles.modalTitle}>{selectedReminder.title}</Text>
+                <View style={styles.modalDateTimeContainer}>
+                  <View style={styles.modalDateTimeItem}>
+                    <Ionicons name="calendar" size={18} color={WHATSAPP_COLORS.textSecondary} />
+                    <Text style={styles.modalText}>{formatDate(selectedReminder.reminder_date)}</Text>
+                  </View>
+                  <View style={styles.modalDateTimeItem}>
+                    <Ionicons name="time" size={18} color={WHATSAPP_COLORS.textSecondary} />
+                    <Text style={styles.modalText}>{formatTime(selectedReminder.reminder_time)}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {selectedReminder.description && (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>Notes</Text>
+                  <Text style={styles.modalDescription}>{selectedReminder.description}</Text>
+                </View>
+              )}
+
+              {selectedReminder.also_share_with.length > 0 && (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>Shared With</Text>
+                  {selectedReminder.also_share_with.map((empId, idx) => (
+                    <View key={idx} style={styles.sharedWithItem}>
+                      <Text style={styles.sharedWithDot}>•</Text>
+                      <Text style={styles.modalText}>{empId}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.modalSection}>
+                <TouchableOpacity
+                  style={styles.completeButtonModal}
+                  onPress={() => handleToggleComplete(selectedReminder.id, selectedReminder.is_completed)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.checkboxModal,
+                    selectedReminder.is_completed && styles.checkboxCompletedModal
+                  ]}>
+                    {selectedReminder.is_completed && (
+                      <Ionicons name="checkmark" size={14} color={WHATSAPP_COLORS.surface} />
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.completeButtonTextModal,
+                    selectedReminder.is_completed && styles.completeButtonTextCompletedModal
+                  ]}>
+                    {selectedReminder.is_completed ? 'Completed' : 'Mark as Complete'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        )}
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
+  
+  // BUP Header Styles
+  headerBanner: {
+    height: 220,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  // Header Styles (WhatsApp inspired)
-  header: {
-    backgroundColor: colors.primary,
-    paddingBottom: 12,
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 0.8,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   headerContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    position: 'relative',
+    zIndex: 1,
+  },
+  headerTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
   },
-  backIcon: {
-    marginRight: 4,
+  leftSection: {
+    width: 80,
+    alignItems: 'flex-start',
   },
-  backArrow: {
-    fontSize: 24,
-    color: colors.surface,
-    fontWeight: '300',
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: colors.surface,
-    fontWeight: '500',
-  },
-  headerTitleContainer: {
+  centerSection: {
     flex: 1,
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.surface,
-    marginBottom: 8,
+  rightSection: {
+    width: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
-  viewToggle: {
+  backButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    position: 'relative',
+    zIndex: 1,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  backIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  
+  // View Toggle
+  viewToggleContainer: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
     padding: 2,
+    marginHorizontal: 20,
+    marginBottom: 15,
   },
   viewToggleButton: {
+    flex: 1,
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 6,
   },
   viewToggleButtonActive: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
   },
   viewToggleText: {
     fontSize: 14,
@@ -1454,407 +1859,637 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   viewToggleTextActive: {
-    color: colors.primary,
+    color: WHATSAPP_COLORS.primary,
   },
   viewToggleDivider: {
     width: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
-  searchButton: {
-    padding: 8,
-  },
-  searchButtonIcon: {
-    fontSize: 20,
-    color: colors.surface,
-  },
+  
+  // Search
   searchContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+    position: 'relative',
+    zIndex: 1,
+  },
+  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchInputContainerFocused: {
+    borderColor: WHATSAPP_COLORS.accent,
+  },
+  searchIcon: {
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
-    paddingVertical: 8,
+    color: WHATSAPP_COLORS.textPrimary,
+    padding: 0,
   },
-  clearSearchButton: {
-    padding: 8,
+  clearButton: {
+    padding: 4,
   },
-  clearSearchButtonText: {
-    fontSize: 16,
-    color: colors.textTertiary,
-  },
-  // Calendar Header (Google Calendar inspired)
-  calendarHeader: {
-    backgroundColor: colors.surface,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-  },
-  monthNavigation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  navButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    backgroundColor: colors.background,
-  },
-  navArrow: {
-    fontSize: 20,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  todayButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 20,
-  },
-  todayButtonText: {
-    color: colors.surface,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  monthYearText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-  },
+  
+  // Content
   content: {
     flex: 1,
   },
-  loadingContainer: {
+  scrollView: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: colors.textSecondary,
+  scrollContent: {
+    paddingBottom: 32,
   },
-  // Month View Styles
-  monthView: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  weekDaysRow: {
+  
+  // Month Selector
+  monthSelector: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-  },
-  weekDayCell: {
-    flex: 1,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  monthNavButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+  todayButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  todayButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  monthYearText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  
+  // Calendar
+  calendarContainer: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  weekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
   },
   weekDayText: {
-    fontSize: 13,
-    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '600',
+    color: WHATSAPP_COLORS.textSecondary,
+    width: 40,
+    textAlign: 'center',
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    backgroundColor: colors.surface,
-    paddingHorizontal: 4,
-    paddingTop: 8,
   },
   calendarDay: {
     width: `${100 / 7}%`,
-    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.divider,
+    padding: 4,
   },
-  dayNumberContainer: {
-    width: 36,
-    height: 36,
+  dayCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
-    marginBottom: 4,
+    borderWidth: 1,
+    position: 'relative',
   },
-  dayNumberToday: {
-    backgroundColor: colors.primary,
+  todayCircle: {
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.accent,
   },
-  dayNumber: {
-    fontSize: 16,
-    color: colors.text,
+  dayText: {
+    fontSize: 14,
     fontWeight: '500',
   },
-  dayNumberTodayText: {
-    color: colors.surface,
-    fontWeight: '700',
-  },
   dayNumberPast: {
-    color: colors.textTertiary,
+    color: WHATSAPP_COLORS.textTertiary,
   },
-  dayEventsContainer: {
+  dayEventsIndicator: {
+    position: 'absolute',
+    bottom: 2,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
     alignItems: 'center',
-    maxWidth: '80%',
   },
   dayEventDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginHorizontal: 1,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
-  moreEventsText: {
-    fontSize: 10,
-    color: colors.textSecondary,
+  dayEventCount: {
+    fontSize: 8,
     fontWeight: '600',
+    marginLeft: 1,
   },
-  // Agenda View Styles
+  
+  // Agenda View
   agendaView: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  agendaScrollContent: {
+    paddingBottom: 10,
+  },
+  
+  // Selected Date Header
+  selectedDateHeaderContainer: {
+    marginBottom: 10,
   },
   selectedDateHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    padding: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    minHeight: 100,
   },
-  backToAllButton: {
+  backButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  selectedDateContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  selectedDateDay: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginRight: 12,
+  },
+  selectedDateMonth: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  selectedDateYear: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  selectedDateRemindersCount: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  
+  // Empty States
+  emptyDateState: {
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 40,
+  },
+  emptyDateIcon: {
+    marginBottom: 20,
+  },
+  emptyDateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
     marginBottom: 8,
   },
-  backToAllButtonText: {
+  emptyDateSubtitle: {
     fontSize: 15,
-    color: colors.accent,
+    color: WHATSAPP_COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  addReminderButtonLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+  },
+  addReminderButtonTextLarge: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
-  selectedDateText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
+  
+  // Timeline View (for selected date)
+  timelineContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    position: 'relative',
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 29,
+    top: 48,
+    bottom: -24,
+    width: 2,
+    backgroundColor: WHATSAPP_COLORS.border,
+  },
+  timeCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  timeCircleText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  timeCirclePeriod: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
+  },
+  reminderCard: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  reminderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  reminderCardTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reminderColorIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  reminderCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+  },
+  reminderCardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cardActionButton: {
+    padding: 4,
+  },
+  reminderCardContent: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  reminderCardDescription: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  reminderSharedWith: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reminderSharedText: {
+    fontSize: 13,
+    color: WHATSAPP_COLORS.textTertiary,
+    marginLeft: 6,
+  },
+  completeButtonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.border,
+  },
+  checkboxCard: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.textTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxCompletedCard: {
+    backgroundColor: WHATSAPP_COLORS.success,
+    borderColor: WHATSAPP_COLORS.success,
+  },
+  completeButtonTextCard: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  completeButtonTextCompletedCard: {
+    color: WHATSAPP_COLORS.success,
+  },
+  addTimelineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  addTimeCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: WHATSAPP_COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.border,
+    borderStyle: 'dashed',
+  },
+  addReminderCard: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.border,
+    borderStyle: 'dashed',
+  },
+  addReminderText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  
+  // Regular Agenda View
+  agendaDateSection: {
+    marginBottom: 24,
+  },
+  agendaDateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  agendaDateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  addDateReminderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  addDateReminderButtonText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  agendaRemindersList: {
+    paddingHorizontal: 20,
+  },
+  agendaReminderCard: {
+    flexDirection: 'row',
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  agendaReminderColorBar: {
+    width: 6,
+  },
+  agendaReminderContent: {
+    flex: 1,
+    padding: 16,
+  },
+  agendaReminderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  agendaReminderTime: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  agendaReminderStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.success + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  completedBadgeText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.success,
+    fontWeight: '500',
+  },
+  pendingBadge: {
+    backgroundColor: WHATSAPP_COLORS.warning + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pendingBadgeText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.warning,
+    fontWeight: '500',
+  },
+  agendaReminderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  agendaReminderDescription: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  agendaReminderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  agendaSharedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  agendaSharedText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textTertiary,
+  },
+  agendaCardActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  agendaCardActionButton: {
+    padding: 4,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WHATSAPP_COLORS.background,
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  viewAllButtonText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.accent,
+    fontWeight: '500',
+  },
+  
+  // Empty State (regular agenda)
   emptyState: {
     alignItems: 'center',
     paddingTop: 80,
     paddingHorizontal: 40,
   },
   emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-    opacity: 0.3,
+    marginBottom: 20,
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     marginBottom: 8,
   },
   emptyStateSubtitle: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textSecondary,
     textAlign: 'center',
   },
-  agendaSection: {
+  
+  // Loading States
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textSecondary,
     marginTop: 16,
   },
-  agendaDateHeaderContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-  },
-  agendaDateHeader: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  addReminderButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-  },
-  addReminderButtonText: {
-    color: colors.surface,
-    fontSize: 20,
-    fontWeight: '300',
-  },
-  agendaItem: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  agendaItemAccent: {
-    width: 4,
-  },
-  agendaItemContent: {
-    flex: 1,
-    padding: 16,
-  },
-  agendaItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  agendaItemTimeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  agendaItemTime: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  agendaItemActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  agendaActionButton: {
-    padding: 4,
-  },
-  iconContainer: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editIcon: {
-    fontSize: 18,
-  },
-  deleteIcon: {
-    fontSize: 18,
-  },
-  agendaItemTitle: {
-    fontSize: 17,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  agendaItemTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: colors.textSecondary,
-  },
-  agendaItemDesc: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  sharedWithContainer: {
-    marginBottom: 12,
-  },
-  agendaItemShared: {
-    fontSize: 14,
-    color: colors.textTertiary,
-    fontWeight: '500',
-  },
-  completeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.textTertiary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  checkboxCompleted: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-  },
-  checkmark: {
-    color: colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  completeButtonText: {
-    fontSize: 15,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  completeButtonTextCompleted: {
-    color: colors.success,
-  },
-  // FAB
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  fabText: {
-    fontSize: 28,
-    color: colors.surface,
-    fontWeight: '300',
-  },
-  // Modal Styles
+  
+  // Modal Styles - Fixed: Reduced height and improved button alignment
   modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
+     flex: 1,
+  backgroundColor: WHATSAPP_COLORS.background,
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: WHATSAPP_COLORS.surface,
+      borderBottomWidth: 0.5,
+      borderBottomColor: WHATSAPP_COLORS.border,
+      minHeight: 56,
+  },
+  modalHeaderLeft: {
+    width: 60,
+    alignItems: 'flex-start',
   },
   modalHeaderCenter: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  modalHeaderRight: {
+    width: 100,
+    alignItems: 'flex-end',
+  },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
   },
   modalHeaderButton: {
     fontSize: 17,
-    color: colors.accent,
+    color: WHATSAPP_COLORS.accent,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
@@ -1866,34 +2501,36 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 17,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     fontWeight: '600',
   },
-  modalHeaderActions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
   editButton: {
-    padding: 8,
+    paddingHorizontal: 8,
   },
   modalHeaderEdit: {
     fontSize: 17,
-    color: colors.accent,
+    color: WHATSAPP_COLORS.accent,
     fontWeight: '600',
   },
   modalHeaderDelete: {
     fontSize: 17,
-    color: colors.error,
+    color: WHATSAPP_COLORS.error,
     fontWeight: '600',
   },
   modalContent: {
     flex: 1,
   },
+  modalScrollContent: {
+    paddingBottom: 30, // Added to ensure content doesn't get cut off
+  },
+  modalForm: {
+    padding: 16,
+  },
   modalTopSection: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: WHATSAPP_COLORS.border,
   },
   modalColorIndicator: {
     width: 40,
@@ -1904,7 +2541,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     marginBottom: 16,
   },
   modalDateTimeContainer: {
@@ -1915,25 +2552,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  modalIcon: {
-    fontSize: 18,
-    marginRight: 8,
-    color: colors.textSecondary,
-  },
   modalText: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
+    marginLeft: 8,
   },
   modalSection: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     padding: 20,
     marginTop: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: WHATSAPP_COLORS.border,
   },
   modalLabel: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textSecondary,
     fontWeight: '600',
     marginBottom: 12,
     textTransform: 'uppercase',
@@ -1941,7 +2574,7 @@ const styles = StyleSheet.create({
   },
   modalDescription: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     lineHeight: 22,
   },
   sharedWithItem: {
@@ -1951,13 +2584,13 @@ const styles = StyleSheet.create({
   },
   sharedWithDot: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textSecondary,
     marginRight: 8,
   },
   completeButtonModal: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: WHATSAPP_COLORS.background,
     padding: 16,
     borderRadius: 12,
   },
@@ -1966,62 +2599,47 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.textTertiary,
+    borderColor: WHATSAPP_COLORS.textTertiary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   checkboxCompletedModal: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-  },
-  checkmarkModal: {
-    color: colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
+    backgroundColor: WHATSAPP_COLORS.success,
+    borderColor: WHATSAPP_COLORS.success,
   },
   completeButtonTextModal: {
     fontSize: 17,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     fontWeight: '500',
   },
   completeButtonTextCompletedModal: {
-    color: colors.success,
+    color: WHATSAPP_COLORS.success,
   },
-  // Create/Edit Modal Styles - RESTORED DROPDOWN
-  modalForm: {
-    padding: 16,
-  },
+  
+  // Form Inputs
   inputGroup: {
     marginBottom: 20,
   },
   inputLabel: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textSecondary,
     fontWeight: '600',
     marginBottom: 8,
   },
   inputField: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
   },
-  // Type Dropdown Styles - RESTORED
-  typeSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  typeDropdownButton: {
-    backgroundColor: colors.surface,
+  
+  // Dropdown
+  dropdownButton: {
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -2029,102 +2647,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
   },
-  typeDropdownContent: {
+  dropdownContent: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  typeDropdownIcon: {
-    fontSize: 20,
-    marginRight: 10,
-  },
-  typeDropdownText: {
+  dropdownText: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     fontWeight: '500',
   },
-  typeDropdownPlaceholder: {
+  dropdownPlaceholder: {
     fontSize: 16,
-    color: colors.textTertiary,
+    color: WHATSAPP_COLORS.textTertiary,
   },
-  typeDropdownList: {
-    backgroundColor: colors.surface,
+  dropdownList: {
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     marginTop: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
     maxHeight: 280,
   },
-  typeDropdownScroll: {
+  dropdownScroll: {
     maxHeight: 280,
   },
-  typeDropdownItem: {
+  dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
+    borderBottomColor: WHATSAPP_COLORS.border,
   },
-  typeDropdownItemActive: {
-    backgroundColor: colors.background,
+  dropdownItemActive: {
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  typeDropdownItemIcon: {
+  dropdownItemIcon: {
     fontSize: 20,
     marginRight: 12,
     width: 28,
   },
-  typeDropdownItemText: {
+  dropdownItemText: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     flex: 1,
   },
-  typeDropdownItemTextActive: {
+  dropdownItemTextActive: {
     fontWeight: '600',
-    color: colors.primary,
-  },
-  typeDropdownItemCheck: {
-    fontSize: 18,
-    color: colors.accent,
-    fontWeight: '700',
+    color: WHATSAPP_COLORS.primary,
   },
   customTypeInput: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: WHATSAPP_COLORS.accent,
   },
+  
+  // Time Picker
   timeInputButton: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
   },
   timeInputText: {
     fontSize: 16,
-    color: colors.text,
-  },
-  timeInputArrow: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textPrimary,
   },
   timePickerContainer: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
   },
   timePickerRow: {
     flexDirection: 'row',
@@ -2139,42 +2746,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timePickerOptionActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: WHATSAPP_COLORS.primary,
     borderRadius: 4,
   },
   timePickerOptionText: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
   },
   timePickerOptionTextActive: {
-    color: colors.surface,
+    color: WHATSAPP_COLORS.surface,
     fontWeight: '600',
   },
   timePickerDoneButton: {
     padding: 12,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: colors.divider,
+    borderTopColor: WHATSAPP_COLORS.border,
   },
   timePickerDoneButtonText: {
     fontSize: 17,
-    color: colors.accent,
+    color: WHATSAPP_COLORS.accent,
     fontWeight: '600',
   },
+  
+  // Text Area
   inputTextArea: {
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     height: 100,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
   },
-  colorPickerSection: {
-    marginBottom: 20,
-  },
+  
+  // Color Picker
   colorPickerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2187,12 +2795,11 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   colorOptionSelected: {
-    borderColor: colors.text,
+    borderColor: WHATSAPP_COLORS.textPrimary,
     transform: [{ scale: 1.1 }],
   },
-  employeeSection: {
-    marginBottom: 20,
-  },
+  
+  // Employee Sharing
   selectedEmployeesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2202,7 +2809,7 @@ const styles = StyleSheet.create({
   employeeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: WHATSAPP_COLORS.primary,
     borderRadius: 16,
     paddingLeft: 12,
     paddingRight: 8,
@@ -2211,7 +2818,7 @@ const styles = StyleSheet.create({
   },
   employeeChipText: {
     fontSize: 14,
-    color: colors.surface,
+    color: WHATSAPP_COLORS.surface,
     fontWeight: '500',
   },
   employeeChipRemove: {
@@ -2222,46 +2829,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  employeeChipRemoveText: {
-    fontSize: 14,
-    color: colors.surface,
-    fontWeight: '600',
-  },
   addEmployeeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
     borderStyle: 'dashed',
-  },
-  addEmployeeButtonIcon: {
-    fontSize: 18,
-    color: colors.accent,
-    marginRight: 8,
   },
   addEmployeeButtonText: {
     fontSize: 16,
-    color: colors.accent,
+    color: WHATSAPP_COLORS.accent,
     fontWeight: '500',
+    marginLeft: 8,
   },
   employeeSearchContainer: {
     marginTop: 12,
-    backgroundColor: colors.surface,
+    backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: WHATSAPP_COLORS.border,
   },
   employeeSearchInput: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: WHATSAPP_COLORS.border,
   },
   employeeSearchLoading: {
     paddingVertical: 24,
@@ -2276,20 +2874,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
+    borderBottomColor: WHATSAPP_COLORS.border,
   },
   employeeAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.primary,
+    backgroundColor: WHATSAPP_COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   avatarText: {
     fontSize: 16,
-    color: colors.surface,
+    color: WHATSAPP_COLORS.surface,
     fontWeight: '600',
   },
   employeeSearchItemInfo: {
@@ -2297,13 +2895,13 @@ const styles = StyleSheet.create({
   },
   employeeSearchItemName: {
     fontSize: 16,
-    color: colors.text,
+    color: WHATSAPP_COLORS.textPrimary,
     fontWeight: '500',
     marginBottom: 2,
   },
   employeeSearchItemRole: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textSecondary,
   },
   employeeSearchEmpty: {
     paddingVertical: 16,
@@ -2311,17 +2909,7 @@ const styles = StyleSheet.create({
   },
   employeeSearchEmptyText: {
     fontSize: 15,
-    color: colors.textSecondary,
-  },
-  dropdownIcon: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dropdownArrow: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    color: WHATSAPP_COLORS.textSecondary,
   },
 });
 
