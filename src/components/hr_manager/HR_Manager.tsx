@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -300,7 +300,7 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
         }
     };
 
-    const handleAddCommonRequest = async (formData: { common_request: string; description: string }) => {
+    const handleAddCommonRequest = useCallback(async (formData: { common_request: string; description: string }) => {
         if (!token) return;
         setLoading(true);
         try {
@@ -326,9 +326,9 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]);
 
-    const handleAddCommonGrievance = async (formData: { common_grievance: string; description: string }) => {
+    const handleAddCommonGrievance = useCallback(async (formData: { common_grievance: string; description: string }) => {
         if (!token) return;
         setLoading(true);
         try {
@@ -354,25 +354,24 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]); // Only recreate if token changes
 
+    const handleBackToMain = useCallback(() => {
+        setViewMode('main');
+    }, []);
     const getHeaderRightButton = () => {
-        console.log('getHeaderRightButton called, viewMode:', viewMode);
         if (viewMode === 'main') {
-            console.log('Returning right button');
             return {
                 icon: 'add-circle-outline',
                 onPress: () => {
-                    console.log('=== PLUS BUTTON CLICKED ===');
-                    console.log('activeTab:', activeTab);
                     const newMode = activeTab === 'requests' ? 'addCommonRequest' : 'addCommonGrievance';
-                    console.log('Setting viewMode to:', newMode);
-                    setViewMode(newMode);
-                    console.log('After setState');
+                    // Use requestAnimationFrame to ensure state update happens after current render cycle
+                    requestAnimationFrame(() => {
+                        setViewMode(newMode);
+                    });
                 }
             };
         }
-        console.log('Returning undefined (not in main view)');
         return undefined;
     };
 
@@ -381,7 +380,7 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
         return (
             <CommonRequest
                 onSubmit={handleAddCommonRequest}
-                onBack={() => setViewMode('main')}
+                onBack={handleBackToMain}  // ← Use memoized callback
                 loading={loading}
             />
         );
@@ -391,7 +390,7 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
         return (
             <CommonGrievance
                 onSubmit={handleAddCommonGrievance}
-                onBack={() => setViewMode('main')}
+                onBack={handleBackToMain}  // ← Use memoized callback
                 loading={loading}
             />
         );

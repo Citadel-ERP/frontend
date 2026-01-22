@@ -52,28 +52,28 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={WHATSAPP_COLORS.primaryDark}
-      />
-
-      <Header
-        title="Add Common Request"
-        subtitle=""
-        onBack={onBack}
-      />
-
-      <KeyboardAvoidingView 
-        style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    <StatusBar
+      barStyle="light-content"
+      backgroundColor={WHATSAPP_COLORS.primaryDark}
+    />
+    <Header
+      title="Add Common Request"
+      subtitle=""
+      onBack={onBack}
+    />
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }}  // ← CHANGE THIS
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}  // ← CHANGE THIS
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContentPadded}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
       >
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContentPadded}
-          keyboardShouldPersistTaps="handled"
-        >
           {/* Info Card */}
           <View style={styles.infoCardBanner}>
             <View style={styles.infoIconWrapper}>

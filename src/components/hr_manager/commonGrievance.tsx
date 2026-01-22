@@ -36,6 +36,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    console.log('handleSubmit called');  // ADD THIS
     if (!formData.common_grievance.trim()) {
       Alert.alert('Validation Error', 'Please enter a grievance type');
       return;
@@ -44,7 +45,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
       Alert.alert('Validation Error', 'Please enter a description');
       return;
     }
-    
+
     await onSubmit(formData);
   };
 
@@ -63,16 +64,19 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
         onBack={onBack}
       />
 
-      <KeyboardAvoidingView 
-        style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        enabled
       >
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContentPadded}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={true}  // ADD THIS
+          nestedScrollEnabled={true}  // ADD THIS
         >
           {/* Info Card */}
           <View style={styles.infoCardBanner}>
@@ -97,16 +101,16 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   <Text style={styles.requiredBadgeText}>Required</Text>
                 </View>
               </View>
-              
+
               <View style={[
                 styles.modernInputContainer,
                 focusedField === 'grievance_type' && styles.modernInputContainerFocused
               ]}>
                 <View style={styles.inputIconContainer}>
-                  <Ionicons 
-                    name="alert-circle-outline" 
-                    size={20} 
-                    color={focusedField === 'grievance_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray} 
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={20}
+                    color={focusedField === 'grievance_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
                   />
                 </View>
                 <TextInput
@@ -122,9 +126,11 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   maxLength={100}
                   onFocus={() => setFocusedField('grievance_type')}
                   onBlur={() => setFocusedField(null)}
+                  editable={!loading}  // ADD THIS
+                  autoCorrect={false}  // ADD THIS
                 />
               </View>
-              
+
               <View style={styles.inputFooter}>
                 <View style={styles.inputHintContainer}>
                   <Ionicons name="bulb-outline" size={14} color={WHATSAPP_COLORS.gray} />
@@ -152,16 +158,16 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   <Text style={styles.requiredBadgeText}>Required</Text>
                 </View>
               </View>
-              
+
               <View style={[
                 styles.modernTextAreaContainer,
                 focusedField === 'description' && styles.modernInputContainerFocused
               ]}>
                 <View style={styles.textAreaIconContainer}>
-                  <Ionicons 
-                    name="create-outline" 
-                    size={20} 
-                    color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray} 
+                  <Ionicons
+                    name="create-outline"
+                    size={20}
+                    color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
                   />
                 </View>
                 <TextInput
@@ -182,7 +188,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   onBlur={() => setFocusedField(null)}
                 />
               </View>
-              
+
               <View style={styles.inputFooter}>
                 <View style={styles.inputHintContainer}>
                   <Ionicons name="information-circle-outline" size={14} color={WHATSAPP_COLORS.gray} />
