@@ -623,7 +623,13 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
     // Empty days for start of month
     for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
+      days.push(
+        <View key={`empty-${i}`} style={styles.calendarDay}>
+          <View style={styles.calendarDateCell}>
+            <Text style={styles.calendarDateText}></Text>
+          </View>
+        </View>
+      );
     }
 
     // Days of the month
@@ -632,22 +638,10 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       const dayReminders = getRemindersForDate(date);
       const isToday = day === currentDay && month === currentMonth && year === currentYear;
       const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-      let backgroundColor = '#FFFFFF';
-      let textColor = WHATSAPP_COLORS.textPrimary;
-      let borderColor = WHATSAPP_COLORS.border;
-      
-      // If there are reminders for this day, use the first reminder's color
-      if (dayReminders.length > 0) {
-        const firstReminder = dayReminders[0];
-        backgroundColor = getColorValue(firstReminder.color) + '15'; // Add transparency
-        textColor = getColorValue(firstReminder.color);
-        borderColor = getColorValue(firstReminder.color);
-      } else if (isToday) {
-        backgroundColor = WHATSAPP_COLORS.accent + '20';
-        textColor = WHATSAPP_COLORS.primary;
-        borderColor = WHATSAPP_COLORS.accent;
-      }
+      const isSelected = selectedDate && 
+        date.getDate() === selectedDate.getDate() && 
+        date.getMonth() === selectedDate.getMonth() && 
+        date.getFullYear() === selectedDate.getFullYear();
 
       days.push(
         <TouchableOpacity
@@ -666,20 +660,24 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           activeOpacity={0.7}
         >
           <View style={[
-            styles.dayCircle,
-            { backgroundColor, borderColor },
-            isToday && styles.todayCircle
+            styles.calendarDateCell,
+            isToday && styles.calendarTodayCell,
+            isSelected && styles.calendarSelectedCell,
+            dayReminders.length > 0 && styles.calendarHasRemindersCell
           ]}>
-            <Text style={[styles.dayText, { color: textColor }, isPast && styles.dayNumberPast]}>
+            <Text style={[
+              styles.calendarDateText,
+              isToday && styles.calendarTodayText,
+              isSelected && styles.calendarSelectedText,
+              isPast && styles.calendarPastDateText
+            ]}>
               {day}
             </Text>
             {dayReminders.length > 0 && (
-              <View style={styles.dayEventsIndicator}>
-                <View style={[styles.dayEventDot, { backgroundColor: textColor }]} />
+              <View style={styles.calendarReminderIndicator}>
+                <View style={[styles.reminderDot, { backgroundColor: dayReminders[0].color ? getColorValue(dayReminders[0].color) : '#2196F3' }]} />
                 {dayReminders.length > 1 && (
-                  <Text style={[styles.dayEventCount, { color: textColor }]}>
-                    +{dayReminders.length - 1}
-                  </Text>
+                  <Text style={styles.reminderCountText}>+{dayReminders.length - 1}</Text>
                 )}
               </View>
             )}
@@ -690,12 +688,14 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
     return (
       <View style={styles.calendarContainer}>
-        <View style={styles.weekDays}>
+        {/* Week Days Header */}
+        <View style={styles.weekDaysRow}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <Text key={day} style={styles.weekDayText}>{day}</Text>
+            <Text key={day} style={styles.weekDayHeader}>{day}</Text>
           ))}
         </View>
         
+        {/* Calendar Grid */}
         <View style={styles.calendarGrid}>
           {days}
         </View>
@@ -703,7 +703,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     );
   };
 
-  // Redesigned Agenda View
+  // Redesigned Agenda View - UPDATED to fix the bad design
   const AgendaView = () => {
     let displayReminders = filteredReminders;
 
@@ -740,43 +740,40 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     if (selectedDate) {
       return (
         <View style={styles.agendaView}>
-          {/* Special Header for Selected Date */}
-          <View style={styles.selectedDateHeaderContainer}>
-            <LinearGradient
-              colors={['#4A5568', '#2D3748']}
-              style={styles.selectedDateHeader}
-            >
-              {/* <TouchableOpacity
-                style={styles.backButtonContainer}
-                onPress={() => {
-                  setSelectedDate(null);
-                  setViewMode('agenda');
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="arrow-back" size={24} color="#fff" />
-                <Text style={styles.backButtonText}>Back to Agenda</Text>
-              </TouchableOpacity> */}
-              
-              <View style={styles.selectedDateContent}>
-                <Text style={styles.selectedDateDay}>
-                  {selectedDate.getDate()}
-                </Text>
-                <View>
-                  <Text style={styles.selectedDateMonth}>
-                    {selectedDate.toLocaleDateString('en-US', { month: 'long' })}
-                  </Text>
-                  <Text style={styles.selectedDateYear}>
-                    {selectedDate.getFullYear()}
-                  </Text>
-                </View>
-              </View>
-              
-              <Text style={styles.selectedDateRemindersCount}>
-                {sortedReminders.length} reminder{sortedReminders.length !== 1 ? 's' : ''}
-              </Text>
-            </LinearGradient>
-          </View>
+          {/* Selected Date Header - REDESIGNED */}
+<View style={styles.selectedDateHeaderContainer}>
+  <LinearGradient
+    colors={['#02685c', '#075E54']}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 0 }}
+    style={styles.selectedDateHeader}
+  >
+    <View style={styles.selectedDateContent}>
+      <View style={styles.selectedDateLeft}>
+        <Text style={styles.selectedDateDay}>
+          {selectedDate.getDate()}
+        </Text>
+        <View style={styles.selectedDateMonthYear}>
+          <Text style={styles.selectedDateMonth}>
+            {selectedDate.toLocaleDateString('en-US', { month: 'long' })}
+          </Text>
+          <Text style={styles.selectedDateYear}>
+            {selectedDate.getFullYear()}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.selectedDateRight}>
+        <View style={styles.reminderCountBadge}>
+          <Ionicons name="notifications" size={16} color="#fff" />
+          <Text style={styles.reminderCountTextBadge}>
+            {sortedReminders.length}
+          </Text>
+        </View>
+      </View>
+    </View>
+  </LinearGradient>
+</View>
 
           <ScrollView 
             showsVerticalScrollIndicator={false}
@@ -817,28 +814,38 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                       <View style={styles.timelineLine} />
                     )}
                     
-                    {/* Time circle */}
-                    <View style={[styles.timeCircle, { backgroundColor: getColorValue(reminder.color) }]}>
-                      <Text style={styles.timeCircleText}>
-                        {formatTime(reminder.reminder_time).split(' ')[0]}
-                      </Text>
-                      <Text style={styles.timeCirclePeriod}>
-                        {formatTime(reminder.reminder_time).split(' ')[1]}
-                      </Text>
+                    {/* Time indicator - REDESIGNED */}
+                    <View style={styles.timeContainer}>
+                      <View style={[styles.timeBadge, { backgroundColor: getColorValue(reminder.color) }]}>
+                        <Text style={styles.timeBadgeText}>
+                          {formatTime(reminder.reminder_time)}
+                        </Text>
+                      </View>
                     </View>
                     
-                    {/* Reminder card */}
+                    {/* Reminder card - REDESIGNED */}
                     <TouchableOpacity
                       style={styles.reminderCard}
                       onPress={() => openDetailModal(reminder)}
                       activeOpacity={0.7}
                     >
-                      <View style={[styles.reminderCardHeader, { backgroundColor: getColorValue(reminder.color) + '15' }]}>
+                      <View style={[
+                        styles.reminderCardHeader, 
+                        { 
+                          borderLeftColor: getColorValue(reminder.color),
+                          borderLeftWidth: 4
+                        }
+                      ]}>
                         <View style={styles.reminderCardTitleContainer}>
-                          <View style={[styles.reminderColorIndicator, { backgroundColor: getColorValue(reminder.color) }]} />
                           <Text style={styles.reminderCardTitle} numberOfLines={1}>
                             {reminder.title}
                           </Text>
+                          {reminder.is_completed && (
+                            <View style={styles.completedIndicator}>
+                              <Ionicons name="checkmark-circle" size={16} color={WHATSAPP_COLORS.success} />
+                              <Text style={styles.completedText}>Completed</Text>
+                            </View>
+                          )}
                         </View>
                         
                         <View style={styles.reminderCardActions}>
@@ -882,45 +889,56 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                           </View>
                         )}
                         
-                        <TouchableOpacity
-                          style={styles.completeButtonCard}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleToggleComplete(reminder.id, reminder.is_completed);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <View style={[
-                            styles.checkboxCard,
-                            reminder.is_completed && styles.checkboxCompletedCard
-                          ]}>
-                            {reminder.is_completed && (
-                              <Ionicons name="checkmark" size={12} color={WHATSAPP_COLORS.surface} />
-                            )}
+                        <View style={styles.reminderCardFooter}>
+                          <TouchableOpacity
+                            style={styles.completeButtonCard}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleToggleComplete(reminder.id, reminder.is_completed);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={[
+                              styles.checkboxCard,
+                              reminder.is_completed && styles.checkboxCompletedCard
+                            ]}>
+                              {reminder.is_completed && (
+                                <Ionicons name="checkmark" size={12} color={WHATSAPP_COLORS.surface} />
+                              )}
+                            </View>
+                            <Text style={[
+                              styles.completeButtonTextCard,
+                              reminder.is_completed && styles.completeButtonTextCompletedCard
+                            ]}>
+                              {reminder.is_completed ? 'Completed' : 'Mark Complete'}
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <View style={styles.reminderTypeBadge}>
+                            <Text style={styles.reminderTypeText}>
+                              {reminderTypes.find(t => t.label.toLowerCase() === reminder.title.toLowerCase())?.icon || '📝'}
+                            </Text>
                           </View>
-                          <Text style={[
-                            styles.completeButtonTextCard,
-                            reminder.is_completed && styles.completeButtonTextCompletedCard
-                          ]}>
-                            {reminder.is_completed ? 'Completed' : 'Mark Complete'}
-                          </Text>
-                        </TouchableOpacity>
+                        </View>
                       </View>
                     </TouchableOpacity>
                   </View>
                 ))}
                 
-                {/* Add reminder card at the end */}
+                {/* Add reminder card at the end - REDESIGNED */}
                 <TouchableOpacity
                   style={styles.addTimelineItem}
                   onPress={() => openCreateModalForDate(selectedDate)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.addTimeCircle}>
-                    <Ionicons name="add" size={20} color={WHATSAPP_COLORS.accent} />
+                  <View style={styles.addTimeContainer}>
+                    <View style={styles.addTimeBadge}>
+                      <Ionicons name="add" size={20} color={WHATSAPP_COLORS.accent} />
+                    </View>
                   </View>
                   <View style={styles.addReminderCard}>
-                    <Text style={styles.addReminderText}>Add another reminder</Text>
+                    <Ionicons name="add-circle" size={20} color={WHATSAPP_COLORS.accent} style={styles.addReminderIcon} />
+                    <Text style={styles.addReminderText}>Add another reminder for this date</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -931,7 +949,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       );
     }
 
-    // Regular Agenda View (no specific date selected)
+    // Regular Agenda View (no specific date selected) - REMAINS THE SAME
     return (
       <View style={styles.agendaView}>
         <ScrollView 
@@ -1094,14 +1112,14 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
 
       {/* BUP Style Header - Same as Employee file */}
-      <View style={styles.headerBanner}>
+     <View style={[styles.headerBanner, { height: showSearch ? 280 : 220 }]}>
         <LinearGradient
           colors={['#4A5568', '#2D3748']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.headerBanner}
+          style={[styles.headerBanner, { height: showSearch ? 280 : 220 }]}
         >
-          {/* Background Image */}
+                {/* Background Image */}
           <Image
             source={require('../assets/bg.jpeg')}
             style={styles.headerImage}
@@ -1234,10 +1252,6 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
           <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton}>
             <Ionicons name="chevron-back" size={20} color={WHATSAPP_COLORS.primary} />
           </TouchableOpacity>
-          
-          {/* <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
-            <Text style={styles.todayButtonText}>Today</Text>
-          </TouchableOpacity> */}
           
           <Text style={styles.monthYearText}>
             {getMonthName(currentDate.getMonth())} {currentDate.getFullYear()}
@@ -1727,7 +1741,7 @@ const styles = StyleSheet.create({
   
   // BUP Header Styles
   headerBanner: {
-    height: 220,
+    
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: 'hidden',
@@ -1954,7 +1968,7 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textPrimary,
   },
   
-  // Calendar
+  // Calendar - UPDATED STYLES TO MATCH THE IMAGE
   calendarContainer: {
     backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 12,
@@ -1967,14 +1981,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  weekDays: {
+  weekDaysRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  weekDayText: {
+  weekDayHeader: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: WHATSAPP_COLORS.textSecondary,
     width: 40,
     textAlign: 'center',
@@ -1982,46 +1996,66 @@ const styles = StyleSheet.create({
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-around',
   },
   calendarDay: {
     width: `${100 / 7}%`,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 4,
+    paddingVertical: 6,
+    minHeight: 50,
   },
-  dayCircle: {
+  calendarDateCell: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    position: 'relative',
+    borderRadius: 20,
+    backgroundColor: 'transparent',
   },
-  todayCircle: {
-    borderWidth: 2,
+  calendarTodayCell: {
+    backgroundColor: WHATSAPP_COLORS.accent + '20',
+    borderWidth: 1,
     borderColor: WHATSAPP_COLORS.accent,
   },
-  dayText: {
-    fontSize: 14,
-    fontWeight: '500',
+  calendarSelectedCell: {
+    backgroundColor: WHATSAPP_COLORS.primary + '20',
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.primary,
   },
-  dayNumberPast: {
+  calendarHasRemindersCell: {
+    backgroundColor: WHATSAPP_COLORS.chatBubbleSent + '30',
+  },
+  calendarDateText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  calendarTodayText: {
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '600',
+  },
+  calendarSelectedText: {
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '700',
+  },
+  calendarPastDateText: {
     color: WHATSAPP_COLORS.textTertiary,
   },
-  dayEventsIndicator: {
+  calendarReminderIndicator: {
     position: 'absolute',
     bottom: 2,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  dayEventDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+  reminderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  dayEventCount: {
+  reminderCountText: {
     fontSize: 8,
+    color: WHATSAPP_COLORS.textSecondary,
     fontWeight: '600',
     marginLeft: 1,
   },
@@ -2034,52 +2068,73 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   
-  // Selected Date Header
   selectedDateHeaderContainer: {
-    marginBottom: 10,
-  },
-  selectedDateHeader: {
-    padding: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    minHeight: 100,
-  },
-  backButtonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  selectedDateContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  selectedDateDay: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginRight: 12,
-  },
-  selectedDateMonth: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  selectedDateYear: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  selectedDateRemindersCount: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  
+  marginHorizontal: 16,
+  marginTop: 16,
+  marginBottom: 16,
+  borderRadius: 20,
+  overflow: 'hidden',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+  elevation: 8,
+},
+selectedDateHeader: {
+  padding: 24,
+  minHeight: 120,
+},
+selectedDateContent: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+},
+selectedDateLeft: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 16,
+},
+selectedDateDay: {
+  fontSize: 64,
+  fontWeight: '800',
+  color: '#fff',
+  textShadowColor: 'rgba(0, 0, 0, 0.2)',
+  textShadowOffset: { width: 0, height: 2 },
+  textShadowRadius: 4,
+},
+selectedDateMonthYear: {
+  justifyContent: 'center',
+},
+selectedDateMonth: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#fff',
+  marginBottom: 2,
+},
+selectedDateYear: {
+  fontSize: 16,
+  color: 'rgba(255,255,255,0.85)',
+  fontWeight: '500',
+},
+selectedDateRight: {
+  alignItems: 'flex-end',
+},
+reminderCountBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: 'rgba(255,255,255,0.25)',
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 20,
+  gap: 6,
+  borderWidth: 1,
+  borderColor: 'rgba(255,255,255,0.3)',
+},
+reminderCountTextBadge: {
+  fontSize: 16,
+  color: '#fff',
+  fontWeight: '700',
+}, 
   // Empty States
   emptyDateState: {
     alignItems: 'center',
@@ -2116,46 +2171,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // Timeline View (for selected date)
+  // Timeline View (for selected date) - REDESIGNED
   timelineContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
   },
   timelineItem: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 20,
     position: 'relative',
   },
   timelineLine: {
     position: 'absolute',
-    left: 29,
-    top: 48,
-    bottom: -24,
+    left: 34,
+    top: 50,
+    bottom: -20,
     width: 2,
     backgroundColor: WHATSAPP_COLORS.border,
   },
-  timeCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  timeContainer: {
+    width: 70,
+    paddingRight: 12,
+    alignItems: 'flex-end',
+  },
+  timeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 70,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-    zIndex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
-  timeCircleText: {
+  timeBadgeText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  timeCirclePeriod: {
-    color: 'rgba(255,255,255,0.9)',
     fontSize: 12,
+    fontWeight: '600',
   },
   reminderCard: {
     flex: 1,
@@ -2173,23 +2227,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    backgroundColor: WHATSAPP_COLORS.surface,
   },
   reminderCardTitleContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  reminderColorIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+    justifyContent: 'space-between',
   },
   reminderCardTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: WHATSAPP_COLORS.textPrimary,
     flex: 1,
+    marginRight: 12,
+  },
+  completedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.success + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  completedText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.success,
+    fontWeight: '500',
   },
   reminderCardActions: {
     flexDirection: 'row',
@@ -2218,12 +2283,17 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textTertiary,
     marginLeft: 6,
   },
-  completeButtonCard: {
+  reminderCardFooter: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: WHATSAPP_COLORS.border,
+  },
+  completeButtonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   checkboxCard: {
     width: 20,
@@ -2247,39 +2317,61 @@ const styles = StyleSheet.create({
   completeButtonTextCompletedCard: {
     color: WHATSAPP_COLORS.success,
   },
+  reminderTypeBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: WHATSAPP_COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reminderTypeText: {
+    fontSize: 16,
+  },
   addTimelineItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 16,
   },
-  addTimeCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  addTimeContainer: {
+    width: 70,
+    paddingRight: 12,
+    alignItems: 'flex-end',
+  },
+  addTimeBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: WHATSAPP_COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
     borderWidth: 2,
     borderColor: WHATSAPP_COLORS.border,
     borderStyle: 'dashed',
   },
   addReminderCard: {
     flex: 1,
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: WHATSAPP_COLORS.surface,
+    padding: 16,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: WHATSAPP_COLORS.border,
     borderStyle: 'dashed',
+    gap: 12,
+  },
+  addReminderIcon: {
+    color: WHATSAPP_COLORS.accent,
   },
   addReminderText: {
     fontSize: 14,
     color: WHATSAPP_COLORS.textSecondary,
     fontWeight: '500',
+    flex: 1,
   },
   
-  // Regular Agenda View
+  // Regular Agenda View - UNCHANGED
   agendaDateSection: {
     marginBottom: 24,
   },
