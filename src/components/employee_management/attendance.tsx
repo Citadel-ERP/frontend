@@ -10,12 +10,13 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { Employee, AttendanceRecord } from './types';
-import { WHATSAPP_COLORS } from './constants';
+import { WHATSAPP_COLORS,TOKEN_KEY } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 
@@ -42,7 +43,6 @@ const STATUS_COLORS = {
   pending: '#ffffff',
   weekend: '#ffffff',
   absent: 'rgb(255, 96, 96)',
-  wfh: '#9C27B0',
 };
 
 const STATUS_TEXT_COLORS = {
@@ -57,7 +57,6 @@ const STATUS_TEXT_COLORS = {
   pending: '#363636ff',
   weekend: '#363636ff',
   absent: '#ffffffff',
-  wfh: '#ffffffff',
 };
 
 const STATUS_NAMES: Record<string, string> = {
@@ -68,7 +67,6 @@ const STATUS_NAMES: Record<string, string> = {
   pending: 'Pending',
   weekend: 'Weekend',
   absent: 'Absent',
-  wfh: 'WFH',
 };
 
 const LEGEND_ITEMS = [
@@ -77,7 +75,6 @@ const LEGEND_ITEMS = [
   { key: 'late_login', color: STATUS_COLORS.late_login, label: 'Late Login' },
   { key: 'leave', color: STATUS_COLORS.leave, label: 'Leave' },
   { key: 'holiday', color: STATUS_COLORS.holiday, label: 'Holiday' },
-  { key: 'wfh', color: STATUS_COLORS.wfh, label: 'WFH' },
 ];
 
 const mapStatusForDisplay = (status: string): string => {
@@ -103,6 +100,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const [showAllLegend, setShowAllLegend] = useState(false);
   const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
   const legendHeight = useRef(new Animated.Value(0)).current;
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedDate) {
@@ -127,7 +125,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
       return {
         present: 0,
         leave: 0,
-        wfh: 0,
         absent: 0,
         holidays: 0,
         pending: 0,
@@ -138,7 +135,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
     return {
       present: attendanceReport.filter(r => r.attendance_status === 'present' || r.attendance_status === 'checkout_missing' || r.attendance_status === 'checkout_pending').length,
       leave: attendanceReport.filter(r => r.attendance_status === 'leave').length,
-      wfh: attendanceReport.filter(r => r.attendance_status === 'wfh').length,
       absent: attendanceReport.filter(r => r.attendance_status === 'absent').length,
       holidays: attendanceReport.filter(r => r.attendance_status === 'holiday').length,
       pending: attendanceReport.filter(r => r.attendance_status === 'pending').length,
@@ -253,15 +249,26 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
     return days;
   };
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+        setToken(storedToken);
+      } catch (error) {
+        console.error('Error getting token:', error);
+      }
+    };
+    getToken();
+  }, []);
 
   const downloadAttendanceReport = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/manager/getAttendanceReport`, {
+      const response = await fetch(`${BACKEND_URL}/manager/downloadAttendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: employee.token || '',
+          token: token || '',
           employee_id: employee.employee_id,
           month_year: `${String(selectedMonth + 1).padStart(2, '0')}/${String(selectedYear).slice(-2)}`
         }),
@@ -382,16 +389,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
               Absent
             </Text>
           </View>
-          
-          <View style={[styles.summaryCard, { backgroundColor: '#F3E5F5' }]}>
-            <Text style={[styles.summaryValue, { color: '#7B1FA2' }]}>
-              {summary.wfh || 0}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: '#7B1FA2' }]}>
-              WFH
-            </Text>
-          </View>
-          
+                  
           <View style={[styles.summaryCard, { backgroundColor: '#FFF3E0' }]}>
             <Text style={[styles.summaryValue, { color: '#EF6C00' }]}>
               {summary.leave}

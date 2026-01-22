@@ -15,6 +15,7 @@ export interface Employee {
   sick_leaves: number;
   casual_leaves: number;
   reporting_tags?: Array<any>;
+  token: string;
 }
 
 export interface AttendanceRecord {
