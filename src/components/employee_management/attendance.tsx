@@ -35,12 +35,8 @@ const STATUS_COLORS = {
   present: 'rgb(148, 228, 164)',
   leave: 'rgb(255, 185, 114)',
   holiday: 'rgb(113, 220, 255)',
-  checkout_missing: '#E6CC00',
   late_login: '#c99cf3',
-  late_login_checkout_missing: '#C7907C',
-  late_login_checkout_pending: '#D9BFDA',
-  checkout_pending: '#D9F2D9',
-  pending: '#ffffff',
+  pending: '#efefef',
   weekend: '#ffffff',
   absent: 'rgb(255, 96, 96)',
 };
@@ -49,11 +45,7 @@ const STATUS_TEXT_COLORS = {
   present: '#ffffffff',
   leave: '#ffffffff',
   holiday: '#ffffffff',
-  checkout_missing: '#ffffffff',
   late_login: '#ffffffff',
-  late_login_checkout_missing: '#ffffffff',
-  late_login_checkout_pending: '#363636ff',
-  checkout_pending: '#363636ff',
   pending: '#363636ff',
   weekend: '#363636ff',
   absent: '#ffffffff',
@@ -77,10 +69,13 @@ const LEGEND_ITEMS = [
   { key: 'holiday', color: STATUS_COLORS.holiday, label: 'Holiday' },
 ];
 
+// Map backend status to display status
 const mapStatusForDisplay = (status: string): string => {
   const statusMapping: Record<string, string> = {
     'checkout_missing': 'present',
+    'checkout_missed': 'present',
     'late_login_checkout_missing': 'late_login',
+    'late_login_checkout_missed': 'late_login',
     'late_login_checkout_pending': 'late_login',
     'checkout_pending': 'present',
   };
@@ -101,6 +96,17 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
   const legendHeight = useRef(new Animated.Value(0)).current;
   const [token, setToken] = useState<string | null>(null);
+
+  // useEffect(() => {
+  //   console.log('=== ATTENDANCE DEBUG ===');
+  //   console.log('Total records:', attendanceReport.length);
+  //   if (attendanceReport.length > 0) {
+  //     console.log('Sample record structure:', JSON.stringify(attendanceReport[0], null, 2));
+  //     attendanceReport.slice(0, 5).forEach(record => {
+  //       console.log(`Date: ${record.date}, attendance_status: ${record.attendance_status}`);
+  //     });
+  //   }
+  // }, [attendanceReport]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -128,18 +134,50 @@ export const Attendance: React.FC<AttendanceProps> = ({
         absent: 0,
         holidays: 0,
         pending: 0,
-        weekends: 0
+        weekends: 0,
+        lateLogin: 0
       };
     }
 
-    return {
-      present: attendanceReport.filter(r => r.attendance_status === 'present' || r.attendance_status === 'checkout_missing' || r.attendance_status === 'checkout_pending').length,
-      leave: attendanceReport.filter(r => r.attendance_status === 'leave').length,
-      absent: attendanceReport.filter(r => r.attendance_status === 'absent').length,
-      holidays: attendanceReport.filter(r => r.attendance_status === 'holiday').length,
-      pending: attendanceReport.filter(r => r.attendance_status === 'pending').length,
-      weekends: attendanceReport.filter(r => r.attendance_status === 'weekend').length
+    const counts = {
+      present: 0,
+      leave: 0,
+      absent: 0,
+      holidays: 0,
+      pending: 0,
+      weekends: 0,
+      lateLogin: 0
     };
+
+    attendanceReport.forEach(record => {
+      const mappedStatus = mapStatusForDisplay(record.attendance_status);
+      
+      switch (mappedStatus.toLowerCase()) {
+        case 'present':
+          counts.present++;
+          break;
+        case 'late_login':
+          counts.lateLogin++;
+          break;
+        case 'leave':
+          counts.leave++;
+          break;
+        case 'absent':
+          counts.absent++;
+          break;
+        case 'holiday':
+          counts.holidays++;
+          break;
+        case 'pending':
+          counts.pending++;
+          break;
+        case 'weekend':
+          counts.weekends++;
+          break;
+      }
+    });
+
+    return counts;
   };
 
   const summary = calculateAttendanceSummary();
@@ -167,7 +205,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
     }
   };
 
-  // Calendar helper functions
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
   };
@@ -212,12 +249,10 @@ export const Attendance: React.FC<AttendanceProps> = ({
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
-    // Empty cells for days before month starts
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
     }
 
-    // Actual days
     for (let day = 1; day <= daysInMonth; day++) {
       const status = getDateStatus(day);
       const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
@@ -249,6 +284,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
     return days;
   };
+  
   useEffect(() => {
     const getToken = async () => {
       try {
@@ -369,7 +405,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
       style={styles.detailsContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* Attendance Summary Cards */}
       <View style={styles.attendanceSummary}>
         <View style={styles.summaryRow}>
           <View style={[styles.summaryCard, { backgroundColor: '#E8F5E9' }]}>
@@ -389,7 +424,9 @@ export const Attendance: React.FC<AttendanceProps> = ({
               Absent
             </Text>
           </View>
-                  
+        </View>
+        
+        <View style={[styles.summaryRow, { marginTop: 8 }]}>
           <View style={[styles.summaryCard, { backgroundColor: '#FFF3E0' }]}>
             <Text style={[styles.summaryValue, { color: '#EF6C00' }]}>
               {summary.leave}
@@ -398,10 +435,18 @@ export const Attendance: React.FC<AttendanceProps> = ({
               Leave
             </Text>
           </View>
+          
+          <View style={[styles.summaryCard, { backgroundColor: '#F3E5F5' }]}>
+            <Text style={[styles.summaryValue, { color: '#7B1FA2' }]}>
+              {summary.lateLogin}
+            </Text>
+            <Text style={[styles.summaryLabel, { color: '#7B1FA2' }]}>
+              Late Login
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Month Navigation */}
       <View style={styles.calendarContainer}>
         <View style={styles.calendarHeader}>
           <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
@@ -427,7 +472,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
           {renderCalendar()}
         </View>
 
-        {/* Legend */}
         <View style={styles.legendContainer}>
           <View style={styles.legendVisible}>
             {visibleLegendItems.map((item, index) => (
@@ -477,7 +521,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
         </View>
       </View>
 
-      {/* Download Report Button */}
       <View style={styles.downloadContainer}>
         <TouchableOpacity 
           style={styles.downloadButton}
@@ -495,7 +538,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Status Tooltip */}
       {selectedDate && (
         <View style={styles.statusTooltip}>
           <Text style={styles.statusTooltipText}>

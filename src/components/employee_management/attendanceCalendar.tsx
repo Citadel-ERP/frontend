@@ -13,6 +13,20 @@ interface AttendanceCalendarProps {
   selectedYear: number;
 }
 
+// Map backend status to display status - SAME AS YOUR OTHER FILES
+const mapStatusForDisplay = (status: string): string => {
+  const statusMapping: Record<string, string> = {
+    'checkout_missing': 'present',
+    'checkout_missed': 'present',
+    'late_login_checkout_missing': 'late_login',
+    'late_login_checkout_missed': 'late_login',
+    'late_login_checkout_pending': 'late_login',
+    'checkout_pending': 'present',
+  };
+  
+  return statusMapping[status.toLowerCase()] || status;
+};
+
 export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
   attendanceReport,
   selectedMonth,
@@ -32,7 +46,8 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
     const record = attendanceReport.find(r => r.date === dateStr);
     
     if (record) {
-      return record.attendance_status;
+      // FIX: Map the status before returning it!
+      return mapStatusForDisplay(record.attendance_status);
     }
     
     return null;
@@ -60,10 +75,15 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
       let backgroundColor = '#FFFFFF';
       let textColor = WHATSAPP_COLORS.textPrimary;
       
-      switch (status) {
+      // Now it will correctly recognize 'late_login'!
+      switch (status?.toLowerCase()) {
         case 'present':
           backgroundColor = '#E8F5E9';
           textColor = '#2E7D32';
+          break;
+        case 'late_login':
+          backgroundColor = '#F3E5F5';
+          textColor = '#7B1FA2';
           break;
         case 'leave':
           backgroundColor = '#FFF3E0';

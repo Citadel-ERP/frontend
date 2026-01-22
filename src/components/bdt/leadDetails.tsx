@@ -43,6 +43,7 @@ interface LeadDetailsProps {
   theme: ThemeColors;
 }
 
+// WhatsApp Color Scheme (same as CreateLead/EditLead)
 const C = {
   primary: '#075E54',
   primaryLight: '#128C7E',
@@ -51,16 +52,22 @@ const C = {
   accent: '#10B981',
   danger: '#EF4444',
   warning: '#F59E0B',
-  background: '#F0F2F5',
+  background: '#e7e6e5',
   surface: '#FFFFFF',
   textPrimary: '#1F2937',
   textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
   border: '#E5E7EB',
   success: '#25D366',
+  info: '#3B82F6',
+  white: '#FFFFFF',
   chatBg: '#ECE5DD',
   incoming: '#FFFFFF',
-  outgoing: '#DCF8C6'
+  outgoing: '#DCF8C6',
+  leadInfoBg: '#F0F9FF',
+  leadInfoBorder: '#0EA5E9',
+  customFieldBg: '#F5F3FF',
+  customFieldBorder: '#8B5CF6',
 };
 
 const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
@@ -433,7 +440,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           name: fileName,
           mimeType: 'image/jpeg',
           size: asset.fileSize,
-          lastModified: Date.now(), // Add this missing property
+          lastModified: Date.now(),
         };
         setSelectedDocuments(prev => [...prev, newFile]);
         setTimeout(() => inputRef.current?.focus(), 100);
@@ -473,7 +480,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
             name: `image_${Date.now()}_${index}.${extension}`,
             mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
             size: asset.fileSize,
-            lastModified: Date.now(), // Add this missing property
+            lastModified: Date.now(),
           };
         });
         setSelectedDocuments(prev => [...prev, ...newFiles]);
@@ -614,6 +621,37 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   const isSendEnabled = useCallback(() => {
     return newComment.trim().length > 0 || selectedDocuments.length > 0;
   }, [newComment, selectedDocuments]);
+
+  // Get office type label from meta
+  const getOfficeTypeLabel = useCallback(() => {
+    const officeType = lead.meta?.office_type;
+    if (!officeType) return 'Not specified';
+    
+    const OFFICE_TYPE_CHOICES = [
+      { value: 'conventional_office', label: 'Conventional Office' },
+      { value: 'managed_office', label: 'Managed Office' },
+      { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
+    ];
+    
+    const option = OFFICE_TYPE_CHOICES.find(choice => choice.value === officeType);
+    return option ? option.label : beautifyName(officeType);
+  }, [lead.meta?.office_type, beautifyName]);
+
+  // Extract custom fields from meta (excluding known fields)
+  const getCustomFields = useCallback(() => {
+    const customFields: { key: string; value: string }[] = [];
+    if (lead.meta) {
+      Object.entries(lead.meta).forEach(([key, value]) => {
+        if (!['area_requirements', 'office_type', 'location'].includes(key) && value) {
+          customFields.push({
+            key: key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            value: String(value)
+          });
+        }
+      });
+    }
+    return customFields;
+  }, [lead.meta]);
 
   // Render functions for chat items
   const renderDateSeparator = useCallback(({ item }: { item: any }) => {
@@ -852,6 +890,61 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           </View>
         );
 
+      case 'lead-specific-info':
+        return (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <MaterialIcons name="business" size={20} color={C.leadInfoBorder} />
+              <Text style={s.sectionTitle}>Lead Specific Information</Text>
+            </View>
+            
+            {lead.meta?.area_requirements && (
+              <View style={s.leadInfoGroup}>
+                <Text style={s.leadInfoLabel}>Area Requirements</Text>
+                <View style={s.leadInfoValueContainer}>
+                  <Text style={s.leadInfoValue}>{lead.meta.area_requirements}</Text>
+                </View>
+              </View>
+            )}
+
+            {lead.meta?.office_type && (
+              <View style={s.leadInfoGroup}>
+                <Text style={s.leadInfoLabel}>Office Type</Text>
+                <View style={[s.leadInfoValueContainer, { backgroundColor: C.leadInfoBg }]}>
+                  <Ionicons name="business" size={16} color={C.leadInfoBorder} style={s.leadInfoIcon} />
+                  <Text style={[s.leadInfoValue, { color: C.leadInfoBorder }]}>
+                    {getOfficeTypeLabel()}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {lead.meta?.location && (
+              <View style={s.leadInfoGroup}>
+                <Text style={s.leadInfoLabel}>Location Preference</Text>
+                <View style={s.leadInfoValueContainer}>
+                  <Text style={s.leadInfoValue}>{lead.meta.location}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Custom Fields */}
+            {getCustomFields().length > 0 && (
+              <View style={s.customFieldsSection}>
+                <Text style={[s.leadInfoLabel, { marginBottom: 12 }]}>Additional Information</Text>
+                {getCustomFields().map((field, index) => (
+                  <View key={index} style={s.customFieldRow}>
+                    <View style={[s.customFieldContainer, { backgroundColor: C.customFieldBg }]}>
+                      <Text style={s.customFieldKey}>{field.key}</Text>
+                      <Text style={s.customFieldValue}>{field.value}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+
       case 'metadata':
         return (
           <View style={s.section}>
@@ -902,10 +995,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       default:
         return null;
     }
-  }, [lead, collaborators, beautifyName, formatDateTime, getInitials]);
+  }, [lead, collaborators, beautifyName, formatDateTime, getInitials, getOfficeTypeLabel, getCustomFields]);
 
   const modalSections = useMemo(() => {
-    const sections = ['lead-info', 'contact-info', 'metadata'];
+    const sections = ['lead-info', 'contact-info', 'lead-specific-info', 'metadata'];
     if (collaborators.length > 0) sections.push('collaborators');
     if (lead.notes) sections.push('notes');
     return sections;
@@ -918,7 +1011,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      {/* <SafeAreaView style={[s.modalContainer]} edges={['top']}> */}
       <View style={[s.modalHeader, { paddingTop: Platform.OS === 'ios' ? 50 : 15 }]}>
         <TouchableOpacity
           onPress={() => setShowLeadDetailsModal(false)}
@@ -937,7 +1029,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
         contentContainerStyle={s.modalScrollContent}
         ListFooterComponent={<View style={s.modalBottomSpacing} />}
       />
-      {/* </SafeAreaView> */}
     </Modal>
   ), [showLeadDetailsModal, modalSections, renderModalSection]);
 
@@ -1430,9 +1521,9 @@ const s = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16
+    marginBottom: 16,
+    gap: 8,
   },
   detailRow: {
     flexDirection: 'row',
@@ -1493,7 +1584,7 @@ const s = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
-    minWidth: 220,  // Add this line - ensures minimum width for bubbles
+    minWidth: 220,
   },
   currentUserBubble: { borderBottomRightRadius: 2 },
   otherUserBubble: { borderBottomLeftRadius: 2 },
@@ -1524,7 +1615,7 @@ const s = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
     marginBottom: 4,
-    minWidth: 200,  // Add this line
+    minWidth: 200,
     maxWidth: 280,
   },
   documentAttachmentOutgoing: { backgroundColor: 'rgba(7, 94, 84, 0.15)' },
@@ -1585,7 +1676,6 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.border,
     backgroundColor: C.surface,
-    // marginBottom: -30
   },
   androidInputContainer: {
     borderTopWidth: 1,
@@ -1690,8 +1780,6 @@ const s = StyleSheet.create({
   },
   defaultCommentText: { fontSize: 16, color: C.textPrimary, lineHeight: 22 },
   modalBottomSpacing: { height: 40 },
-
-  // New styles for date separators
   dateSeparatorContainer: {
     alignItems: 'center',
     marginVertical: 16,
@@ -1737,6 +1825,61 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: C.textPrimary,
     fontWeight: '500',
+  },
+
+  // Lead Specific Information Styles (matching EditLead)
+  leadInfoGroup: {
+    marginBottom: 16,
+  },
+  leadInfoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginBottom: 8,
+  },
+  leadInfoValueContainer: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: C.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  leadInfoIcon: {
+    marginRight: 8,
+  },
+  leadInfoValue: {
+    fontSize: 15,
+    color: C.textPrimary,
+    flex: 1,
+  },
+  customFieldsSection: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  customFieldRow: {
+    marginBottom: 12,
+  },
+  customFieldContainer: {
+    borderWidth: 1,
+    borderColor: C.customFieldBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: C.customFieldBg,
+  },
+  customFieldKey: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.customFieldBorder,
+    marginBottom: 4,
+  },
+  customFieldValue: {
+    fontSize: 14,
+    color: C.textPrimary,
+    lineHeight: 18,
   },
 });
 
