@@ -16,7 +16,6 @@ import {
     Linking,
     Animated,
     Keyboard,
-    KeyboardEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -123,11 +122,30 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     useEffect(() => {
         const showSubscription = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            handleKeyboardShow
+            (event) => {
+                setIsKeyboardVisible(true);
+                if (Platform.OS === 'android') {
+                    Animated.timing(keyboardHeightAnim, {
+                        toValue: event.endCoordinates.height,
+                        duration: 250,
+                        useNativeDriver: false,
+                    }).start();
+                }
+            }
         );
+        
         const hideSubscription = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            handleKeyboardHide
+            () => {
+                setIsKeyboardVisible(false);
+                if (Platform.OS === 'android') {
+                    Animated.timing(keyboardHeightAnim, {
+                        toValue: 0,
+                        duration: 250,
+                        useNativeDriver: false,
+                    }).start();
+                }
+            }
         );
 
         return () => {
@@ -135,28 +153,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             hideSubscription.remove();
         };
     }, []);
-
-    const handleKeyboardShow = (event: KeyboardEvent) => {
-        setIsKeyboardVisible(true);
-        if (Platform.OS === 'android') {
-            Animated.timing(keyboardHeightAnim, {
-                toValue: event.endCoordinates.height,
-                duration: 250,
-                useNativeDriver: false,
-            }).start();
-        }
-    };
-
-    const handleKeyboardHide = () => {
-        setIsKeyboardVisible(false);
-        if (Platform.OS === 'android') {
-            Animated.timing(keyboardHeightAnim, {
-                toValue: 0,
-                duration: 250,
-                useNativeDriver: false,
-            }).start();
-        }
-    };
 
     // Auto-scroll when comments change or component mounts
     useEffect(() => {
@@ -226,7 +222,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
 
     const scrollToBottom = (animated = true) => {
         if (scrollViewRef.current) {
-            // Use a longer timeout to ensure content is rendered
             setTimeout(() => {
                 if (scrollViewRef.current) {
                     scrollViewRef.current.scrollToEnd({ animated });
@@ -482,7 +477,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                     {comment.documents && comment.documents.length > 0 && (
                         <View style={styles.documentsContainer}>
                             {comment.documents.map((doc: any, index: number) => {
-                                const isImage = doc.document_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                                const isImage = doc.document_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                                 if (isImage) {
                                     return (
                                         <TouchableOpacity
@@ -559,6 +554,60 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         );
     };
 
+    const renderChatInput = () => (
+        <View style={[
+            styles.chatInputContainer,
+            Platform.OS === 'android' && { marginBottom: keyboardHeightAnim }
+        ]}>
+            <View style={styles.chatInputWrapper}>
+                <TouchableOpacity
+                    style={styles.attachmentButton}
+                    onPress={() => setShowAttachmentModal(true)}
+                    disabled={uploadingFile || isPickerActive}
+                >
+                    {uploadingFile ? (
+                        <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
+                    ) : (
+                        <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
+                    )}
+                </TouchableOpacity>
+                <View style={styles.inputFieldContainer}>
+                    <TextInput
+                        style={styles.chatInput}
+                        value={newComment}
+                        onChangeText={onCommentChange}
+                        placeholder="Type a message..."
+                        placeholderTextColor="#999"
+                        multiline
+                        maxLength={300}
+                        onSubmitEditing={handleSendComment}
+                        returnKeyType="send"
+                        blurOnSubmit={false}
+                    />
+                </View>
+                <TouchableOpacity
+                    style={[
+                        styles.sendButton,
+                        (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
+                    ]}
+                    onPress={handleSendComment}
+                    disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
+                    activeOpacity={0.8}
+                >
+                    {uploadingFile ? (
+                        <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+                    ) : (
+                        <Ionicons
+                            name="send"
+                            size={20}
+                            color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
+                        />
+                    )}
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
     const renderContent = () => {
         if (loadingDetails) {
             return (
@@ -582,7 +631,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         }
 
         return (
-            <View style={styles.chatContainer}>
+            <>
                 <ScrollView
                     ref={scrollViewRef}
                     style={styles.chatScrollView}
@@ -678,104 +727,8 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 </ScrollView>
 
                 {renderAttachedFiles()}
-
-                {Platform.OS === 'android' ? (
-                    <Animated.View style={[styles.chatInputContainer, { marginBottom: keyboardHeightAnim }]}>
-                        <View style={styles.chatInputWrapper}>
-                            <TouchableOpacity
-                                style={styles.attachmentButton}
-                                onPress={() => setShowAttachmentModal(true)}
-                                disabled={uploadingFile || isPickerActive}
-                            >
-                                {uploadingFile ? (
-                                    <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
-                                ) : (
-                                    <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
-                                )}
-                            </TouchableOpacity>
-                            <View style={styles.inputFieldContainer}>
-                                <TextInput
-                                    style={styles.chatInput}
-                                    value={newComment}
-                                    onChangeText={onCommentChange}
-                                    placeholder="Type a message..."
-                                    placeholderTextColor="#999"
-                                    multiline
-                                    maxLength={300}
-                                />
-                            </View>
-                            <TouchableOpacity
-                                style={[
-                                    styles.sendButton,
-                                    (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
-                                ]}
-                                onPress={handleSendComment}
-                                disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
-                                activeOpacity={0.8}
-                            >
-                                {uploadingFile ? (
-                                    <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
-                                ) : (
-                                    <Ionicons
-                                        name="send"
-                                        size={20}
-                                        color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
-                                    />
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
-                ) : (
-                    <View style={[
-                        styles.chatInputContainer,
-                        { marginBottom: isKeyboardVisible ? 0 : -30 }
-                    ]}>
-                        <View style={styles.chatInputWrapper}>
-                            <TouchableOpacity
-                                style={styles.attachmentButton}
-                                onPress={() => setShowAttachmentModal(true)}
-                                disabled={uploadingFile || isPickerActive}
-                            >
-                                {uploadingFile ? (
-                                    <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
-                                ) : (
-                                    <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
-                                )}
-                            </TouchableOpacity>
-                            <View style={styles.inputFieldContainer}>
-                                <TextInput
-                                    style={styles.chatInput}
-                                    value={newComment}
-                                    onChangeText={onCommentChange}
-                                    placeholder="Type a message..."
-                                    placeholderTextColor="#999"
-                                    multiline
-                                    maxLength={300}
-                                />
-                            </View>
-                            <TouchableOpacity
-                                style={[
-                                    styles.sendButton,
-                                    (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
-                                ]}
-                                onPress={handleSendComment}
-                                disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
-                                activeOpacity={0.8}
-                            >
-                                {uploadingFile ? (
-                                    <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
-                                ) : (
-                                    <Ionicons
-                                        name="send"
-                                        size={20}
-                                        color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
-                                    />
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
-            </View>
+                {renderChatInput()}
+            </>
         );
     };
 
@@ -795,21 +748,19 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 } : undefined}
             />
             
-            <View style={styles.content}>
-                {Platform.OS === 'ios' ? (
-                    <KeyboardAvoidingView
-                        style={styles.iosContainer}
-                        behavior="padding"
-                        keyboardVerticalOffset={0}
-                    >
-                        {renderContent()}
-                    </KeyboardAvoidingView>
-                ) : (
-                    <View style={styles.androidContainer}>
-                        {renderContent()}
-                    </View>
-                )}
-            </View>
+            {Platform.OS === 'ios' ? (
+                <KeyboardAvoidingView
+                    style={styles.content}
+                    behavior="padding"
+                    keyboardVerticalOffset={0}
+                >
+                    {renderContent()}
+                </KeyboardAvoidingView>
+            ) : (
+                <View style={styles.content}>
+                    {renderContent()}
+                </View>
+            )}
 
             {/* Status Selector Modal */}
             <Modal

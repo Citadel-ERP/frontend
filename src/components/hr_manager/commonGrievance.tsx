@@ -115,10 +115,14 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 </View>
               </View>
 
-              <View style={[
-                styles.modernInputContainer,
-                focusedField === 'grievance_type' && styles.modernInputContainerFocused
-              ]}>
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => grievanceInputRef.current?.focus()}
+                style={[
+                  styles.modernInputContainer,
+                  focusedField === 'grievance_type' && styles.modernInputContainerFocused
+                ]}
+              >
                 <View style={styles.inputIconContainer} pointerEvents="none">
                   <Ionicons
                     name="alert-circle-outline"
@@ -147,7 +151,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   onSubmitEditing={() => descriptionInputRef.current?.focus()}
                   blurOnSubmit={false}
                 />
-              </View>
+              </TouchableOpacity>
 
               <View style={styles.inputFooter}>
                 <View style={styles.inputHintContainer}>
@@ -177,10 +181,14 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 </View>
               </View>
 
-              <View style={[
-                styles.modernTextAreaContainer,
-                focusedField === 'description' && styles.modernInputContainerFocused
-              ]}>
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => descriptionInputRef.current?.focus()}
+                style={[
+                  styles.modernTextAreaContainer,
+                  focusedField === 'description' && styles.modernInputContainerFocused
+                ]}
+              >
                 <View style={styles.textAreaIconContainer} pointerEvents="none">
                   <Ionicons
                     name="create-outline"
@@ -211,7 +219,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   returnKeyType="default"
                   blurOnSubmit={false}
                 />
-              </View>
+              </TouchableOpacity>
 
               <View style={styles.inputFooter}>
                 <View style={styles.inputHintContainer}>
@@ -231,7 +239,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
           </View>
 
           {/* Preview Card */}
-          {(formData.common_grievance.trim() || formData.description.trim()) && (
+          {/* {(formData.common_grievance.trim() || formData.description.trim()) && (
             <View style={styles.previewCard}>
               <View style={styles.previewHeader}>
                 <Ionicons name="eye-outline" size={20} color={WHATSAPP_COLORS.primary} />
@@ -252,7 +260,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 )}
               </View>
             </View>
-          )}
+          )} */}
         </ScrollView>
 
         {/* Fixed Bottom Action Buttons */}

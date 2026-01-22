@@ -114,40 +114,39 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 <TouchableOpacity
                   activeOpacity={1}
                   onPress={() => grievanceInputRef.current?.focus()}
-                >
-                  <View style={[
+                  style={[
                     styles.modernInputContainer,
                     focusedField === 'grievance_type' && styles.modernInputContainerFocused
-                  ]}>
-                    <View style={styles.inputIconContainer}>
-                      <Ionicons
-                        name="alert-circle-outline"
-                        size={20}
-                        color={focusedField === 'grievance_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
-                      />
-                    </View>
-                    <TextInput
-                      ref={grievanceInputRef}
-                      style={styles.modernTextInput}
-                      value={formData.common_grievance}
-                      onChangeText={(text) => {
-                        if (text.length <= 100) {
-                          setFormData({ ...formData, common_grievance: text });
-                        }
-                      }}
-                      placeholder="e.g., Harassment, Discrimination, Workplace Safety"
-                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
-                      maxLength={100}
-                      onFocus={() => setFocusedField('grievance_type')}
-                      onBlur={() => setFocusedField(null)}
-                      editable={!loading}
-                      autoCorrect={false}
-                      autoCapitalize="words"
-                      returnKeyType="next"
-                      onSubmitEditing={() => descriptionInputRef.current?.focus()}
-                      blurOnSubmit={false}
+                  ]}
+                >
+                  <View style={styles.inputIconContainer}>
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={20}
+                      color={focusedField === 'grievance_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
                     />
                   </View>
+                  <TextInput
+                    ref={grievanceInputRef}
+                    style={styles.modernTextInput}
+                    value={formData.common_grievance}
+                    onChangeText={(text) => {
+                      if (text.length <= 100) {
+                        setFormData({ ...formData, common_grievance: text });
+                      }
+                    }}
+                    placeholder="e.g., Harassment, Discrimination, Workplace Safety"
+                    placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                    maxLength={100}
+                    onFocus={() => setFocusedField('grievance_type')}
+                    onBlur={() => setFocusedField(null)}
+                    editable={!loading}
+                    autoCorrect={false}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    onSubmitEditing={() => descriptionInputRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
                 </TouchableOpacity>
                 <View style={styles.inputFooter}>
                   <View style={styles.inputHintContainer}>
@@ -179,41 +178,40 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 <TouchableOpacity
                   activeOpacity={1}
                   onPress={() => descriptionInputRef.current?.focus()}
-                >
-                  <View style={[
+                  style={[
                     styles.modernTextAreaContainer,
                     focusedField === 'description' && styles.modernInputContainerFocused
-                  ]}>
-                    <View style={styles.textAreaIconContainer}>
-                      <Ionicons
-                        name="create-outline"
-                        size={20}
-                        color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
-                      />
-                    </View>
-                    <TextInput
-                      ref={descriptionInputRef}
-                      style={styles.modernTextArea}
-                      value={formData.description}
-                      onChangeText={(text) => {
-                        if (text.length <= 500) {
-                          setFormData({ ...formData, description: text });
-                        }
-                      }}
-                      placeholder="Provide a clear description of when employees should use this grievance type..."
-                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
-                      multiline
-                      numberOfLines={6}
-                      textAlignVertical="top"
-                      maxLength={500}
-                      onFocus={() => setFocusedField('description')}
-                      onBlur={() => setFocusedField(null)}
-                      editable={!loading}
-                      autoCorrect={true}
-                      autoCapitalize="sentences"
-                      returnKeyType="default"
+                  ]}
+                >
+                  <View style={styles.textAreaIconContainer}>
+                    <Ionicons
+                      name="create-outline"
+                      size={20}
+                      color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
                     />
                   </View>
+                  <TextInput
+                    ref={descriptionInputRef}
+                    style={styles.modernTextArea}
+                    value={formData.description}
+                    onChangeText={(text) => {
+                      if (text.length <= 500) {
+                        setFormData({ ...formData, description: text });
+                      }
+                    }}
+                    placeholder="Provide a clear description of when employees should use this grievance type..."
+                    placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                    multiline
+                    numberOfLines={6}
+                    textAlignVertical="top"
+                    maxLength={500}
+                    onFocus={() => setFocusedField('description')}
+                    onBlur={() => setFocusedField(null)}
+                    editable={!loading}
+                    autoCorrect={true}
+                    autoCapitalize="sentences"
+                    returnKeyType="default"
+                  />
                 </TouchableOpacity>
                 <View style={styles.inputFooter}>
                   <View style={styles.inputHintContainer}>
@@ -402,40 +400,39 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
                 <TouchableOpacity
                   activeOpacity={1}
                   onPress={() => requestInputRef.current?.focus()}
-                >
-                  <View style={[
+                  style={[
                     styles.modernInputContainer,
                     focusedField === 'request_type' && styles.modernInputContainerFocused
-                  ]}>
-                    <View style={styles.inputIconContainer}>
-                      <Ionicons
-                        name="document-text-outline"
-                        size={20}
-                        color={focusedField === 'request_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
-                      />
-                    </View>
-                    <TextInput
-                      ref={requestInputRef}
-                      style={styles.modernTextInput}
-                      value={formData.common_request}
-                      onChangeText={(text) => {
-                        if (text.length <= 100) {
-                          setFormData({ ...formData, common_request: text });
-                        }
-                      }}
-                      placeholder="e.g., Leave Request, Travel Allowance"
-                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
-                      maxLength={100}
-                      onFocus={() => setFocusedField('request_type')}
-                      onBlur={() => setFocusedField(null)}
-                      editable={!loading}
-                      autoCorrect={false}
-                      autoCapitalize="words"
-                      returnKeyType="next"
-                      onSubmitEditing={() => descriptionInputRef.current?.focus()}
-                      blurOnSubmit={false}
+                  ]}
+                >
+                  <View style={styles.inputIconContainer}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={20}
+                      color={focusedField === 'request_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
                     />
                   </View>
+                  <TextInput
+                    ref={requestInputRef}
+                    style={styles.modernTextInput}
+                    value={formData.common_request}
+                    onChangeText={(text) => {
+                      if (text.length <= 100) {
+                        setFormData({ ...formData, common_request: text });
+                      }
+                    }}
+                    placeholder="e.g., Leave Request, Travel Allowance"
+                    placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                    maxLength={100}
+                    onFocus={() => setFocusedField('request_type')}
+                    onBlur={() => setFocusedField(null)}
+                    editable={!loading}
+                    autoCorrect={false}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    onSubmitEditing={() => descriptionInputRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
                 </TouchableOpacity>
                 <View style={styles.inputFooter}>
                   <View style={styles.inputHintContainer}>
@@ -467,41 +464,40 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
                 <TouchableOpacity
                   activeOpacity={1}
                   onPress={() => descriptionInputRef.current?.focus()}
-                >
-                  <View style={[
+                  style={[
                     styles.modernTextAreaContainer,
                     focusedField === 'description' && styles.modernInputContainerFocused
-                  ]}>
-                    <View style={styles.textAreaIconContainer}>
-                      <Ionicons
-                        name="create-outline"
-                        size={20}
-                        color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
-                      />
-                    </View>
-                    <TextInput
-                      ref={descriptionInputRef}
-                      style={styles.modernTextArea}
-                      value={formData.description}
-                      onChangeText={(text) => {
-                        if (text.length <= 500) {
-                          setFormData({ ...formData, description: text });
-                        }
-                      }}
-                      placeholder="Provide a clear description of when employees should use this request type..."
-                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
-                      multiline
-                      numberOfLines={6}
-                      textAlignVertical="top"
-                      maxLength={500}
-                      onFocus={() => setFocusedField('description')}
-                      onBlur={() => setFocusedField(null)}
-                      editable={!loading}
-                      autoCorrect={true}
-                      autoCapitalize="sentences"
-                      returnKeyType="default"
+                  ]}
+                >
+                  <View style={styles.textAreaIconContainer}>
+                    <Ionicons
+                      name="create-outline"
+                      size={20}
+                      color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
                     />
                   </View>
+                  <TextInput
+                    ref={descriptionInputRef}
+                    style={styles.modernTextArea}
+                    value={formData.description}
+                    onChangeText={(text) => {
+                      if (text.length <= 500) {
+                        setFormData({ ...formData, description: text });
+                      }
+                    }}
+                    placeholder="Provide a clear description of when employees should use this request type..."
+                    placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                    multiline
+                    numberOfLines={6}
+                    textAlignVertical="top"
+                    maxLength={500}
+                    onFocus={() => setFocusedField('description')}
+                    onBlur={() => setFocusedField(null)}
+                    editable={!loading}
+                    autoCorrect={true}
+                    autoCapitalize="sentences"
+                    returnKeyType="default"
+                  />
                 </TouchableOpacity>
                 <View style={styles.inputFooter}>
                   <View style={styles.inputHintContainer}>
@@ -521,7 +517,7 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
             </View>
 
             {/* Preview Card */}
-            {(formData.common_request.trim() || formData.description.trim()) && (
+            {/* {(formData.common_request.trim() || formData.description.trim()) && (
               <View style={styles.previewCard}>
                 <View style={styles.previewHeader}>
                   <Ionicons name="eye-outline" size={20} color={WHATSAPP_COLORS.primary} />
@@ -542,7 +538,7 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
                   )}
                 </View>
               </View>
-            )}
+            )} */}
           </ScrollView>
 
           {/* Fixed Bottom Action Buttons */}
