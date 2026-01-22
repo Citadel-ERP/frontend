@@ -35,12 +35,12 @@ const STATUS_COLORS = {
   present: 'rgb(148, 228, 164)',
   leave: 'rgb(255, 185, 114)',
   holiday: 'rgb(113, 220, 255)',
-  checkout_missing: '#E6CC00',
+  checkout_missed: 'rgb(148, 228, 164)',
   late_login: '#c99cf3',
-  late_login_checkout_missing: '#C7907C',
-  late_login_checkout_pending: '#D9BFDA',
-  checkout_pending: '#D9F2D9',
-  pending: '#ffffff',
+  late_login_checkout_missing: '#c99cf3',
+  late_login_checkout_pending: '#c99cf3',
+  checkout_pending: 'rgb(148, 228, 164)',
+  pending: '#efefef',
   weekend: '#ffffff',
   absent: 'rgb(255, 96, 96)',
 };
@@ -49,11 +49,11 @@ const STATUS_TEXT_COLORS = {
   present: '#ffffffff',
   leave: '#ffffffff',
   holiday: '#ffffffff',
-  checkout_missing: '#ffffffff',
+  checkout_missed: '#ffffffff',
   late_login: '#ffffffff',
   late_login_checkout_missing: '#ffffffff',
-  late_login_checkout_pending: '#363636ff',
-  checkout_pending: '#363636ff',
+  late_login_checkout_pending: '#ffffffff',
+  checkout_pending: '#ffffffff',
   pending: '#363636ff',
   weekend: '#363636ff',
   absent: '#ffffffff',
@@ -77,12 +77,15 @@ const LEGEND_ITEMS = [
   { key: 'holiday', color: STATUS_COLORS.holiday, label: 'Holiday' },
 ];
 
+// This function maps backend status to display status
 const mapStatusForDisplay = (status: string): string => {
   const statusMapping: Record<string, string> = {
+    'checkout_missed': 'present',
     'checkout_missing': 'present',
-    'late_login_checkout_missing': 'late_login',
-    'late_login_checkout_pending': 'late_login',
     'checkout_pending': 'present',
+    'late_login_checkout_missing': 'late_login',
+    'late_login_checkout_missed': 'late_login',
+    'late_login_checkout_pending': 'late_login',
   };
   
   return statusMapping[status.toLowerCase()] || status;
@@ -128,17 +131,23 @@ export const Attendance: React.FC<AttendanceProps> = ({
         absent: 0,
         holidays: 0,
         pending: 0,
-        weekends: 0
+        weekends: 0,
+        lateLogin: 0
       };
     }
 
+    // Map each status to its display category for counting
+    const presentStatuses = ['present', 'checkout_missing', 'checkout_missed', 'checkout_pending'];
+    const lateLoginStatuses = ['late_login', 'late_login_checkout_missing', 'late_login_checkout_missed', 'late_login_checkout_pending'];
+
     return {
-      present: attendanceReport.filter(r => r.attendance_status === 'present' || r.attendance_status === 'checkout_missing' || r.attendance_status === 'checkout_pending').length,
-      leave: attendanceReport.filter(r => r.attendance_status === 'leave').length,
-      absent: attendanceReport.filter(r => r.attendance_status === 'absent').length,
-      holidays: attendanceReport.filter(r => r.attendance_status === 'holiday').length,
-      pending: attendanceReport.filter(r => r.attendance_status === 'pending').length,
-      weekends: attendanceReport.filter(r => r.attendance_status === 'weekend').length
+      present: attendanceReport.filter(r => presentStatuses.includes(r.attendance_status.toLowerCase())).length,
+      lateLogin: attendanceReport.filter(r => lateLoginStatuses.includes(r.attendance_status.toLowerCase())).length,
+      leave: attendanceReport.filter(r => r.attendance_status.toLowerCase() === 'leave').length,
+      absent: attendanceReport.filter(r => r.attendance_status.toLowerCase() === 'absent').length,
+      holidays: attendanceReport.filter(r => r.attendance_status.toLowerCase() === 'holiday').length,
+      pending: attendanceReport.filter(r => r.attendance_status.toLowerCase() === 'pending').length,
+      weekends: attendanceReport.filter(r => r.attendance_status.toLowerCase() === 'weekend').length
     };
   };
 
@@ -249,6 +258,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
     return days;
   };
+  
   useEffect(() => {
     const getToken = async () => {
       try {
@@ -399,6 +409,20 @@ export const Attendance: React.FC<AttendanceProps> = ({
             </Text>
           </View>
         </View>
+        
+        {/* Add Late Login card in second row */}
+        {summary.lateLogin > 0 && (
+          <View style={styles.summaryRow}>
+            <View style={[styles.summaryCard, { backgroundColor: '#F3E5F5' }]}>
+              <Text style={[styles.summaryValue, { color: '#7B1FA2' }]}>
+                {summary.lateLogin}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: '#7B1FA2' }]}>
+                Late Login
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Month Navigation */}
