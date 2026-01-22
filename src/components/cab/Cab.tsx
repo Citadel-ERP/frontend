@@ -44,6 +44,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
     const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
     const [activePickerType, setActivePickerType] = useState<string | null>(null);
+    const [tempPickerValue, setTempPickerValue] = useState<Date | null>(null);
 
     const [bookingForm, setBookingForm] = useState<BookingFormData>({
         fromLocation: '',
@@ -246,14 +247,48 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         }
     };
 
+    // iOS: Update temp value as user scrolls
     const handlePickerChange = (event: any, selectedDate?: Date) => {
-        if (selectedDate && activePickerType) {
+        if (Platform.OS === 'ios') {
+            // On iOS, just update the temporary value
+            if (selectedDate) {
+                setTempPickerValue(selectedDate);
+            }
+        } else {
+            // On Android, apply immediately and close
+            if (selectedDate && activePickerType) {
+                setBookingForm(prev => ({
+                    ...prev,
+                    [activePickerType]: selectedDate
+                }));
+            }
+            setActivePickerType(null);
+            setTempPickerValue(null);
+        }
+    };
+
+    // iOS: Confirm selection when user presses "Done"
+    const handlePickerConfirm = () => {
+        if (tempPickerValue && activePickerType) {
             setBookingForm(prev => ({
                 ...prev,
-                [activePickerType]: selectedDate
+                [activePickerType]: tempPickerValue
             }));
         }
         setActivePickerType(null);
+        setTempPickerValue(null);
+    };
+
+    // iOS: Cancel selection
+    const handlePickerCancel = () => {
+        setActivePickerType(null);
+        setTempPickerValue(null);
+    };
+
+    // Open picker and initialize temp value
+    const openPicker = (pickerType: string) => {
+        setActivePickerType(pickerType);
+        setTempPickerValue(bookingForm[pickerType as keyof typeof bookingForm] as Date);
     };
 
     const Container = SafeAreaView;
@@ -273,7 +308,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                     loading={loading}
                     onBack={onBack}
                     onSearchCabs={searchCabs}
-                    onSetActivePickerType={setActivePickerType}
+                    onSetActivePickerType={openPicker}
                     formatTimeForDisplay={formatTimeForDisplay}
                     formatDateForDisplay={formatDateForDisplay}
                     token={token}
@@ -394,23 +429,23 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                     visible={true}
                     transparent={true}
                     animationType="slide"
-                    onRequestClose={() => setActivePickerType(null)}
+                    onRequestClose={handlePickerCancel}
                 >
                     <View style={styles.pickerModalOverlay}>
                         <View style={styles.pickerModalContent}>
                             <View style={styles.pickerHeader}>
-                                <TouchableOpacity onPress={() => setActivePickerType(null)}>
+                                <TouchableOpacity onPress={handlePickerCancel}>
                                     <Text style={styles.pickerCancelText}>Cancel</Text>
                                 </TouchableOpacity>
                                 <Text style={styles.pickerTitle}>
                                     {activePickerType.includes('Date') ? 'Select Date' : 'Select Time'}
                                 </Text>
-                                <TouchableOpacity onPress={() => setActivePickerType(null)}>
+                                <TouchableOpacity onPress={handlePickerConfirm}>
                                     <Text style={styles.pickerDoneText}>Done</Text>
                                 </TouchableOpacity>
                             </View>
                             <DateTimePicker
-                                value={bookingForm[activePickerType as keyof typeof bookingForm] as Date}
+                                value={tempPickerValue || bookingForm[activePickerType as keyof typeof bookingForm] as Date}
                                 mode={activePickerType.includes('Date') ? 'date' : 'time'}
                                 display="spinner"
                                 onChange={handlePickerChange}

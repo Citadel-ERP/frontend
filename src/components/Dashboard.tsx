@@ -34,7 +34,7 @@ import BDT from './bdt/BDT';
 import Medical from './Medical';
 import ScoutBoy from './ScoutBoy';
 import CreateSite from './CreateSite';
-import Reminder from './Reminder';
+import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
 import ChatScreen from './chat/ChatScreen';
 import ChatRoomScreen from './chat/ChatRoomScreen';
