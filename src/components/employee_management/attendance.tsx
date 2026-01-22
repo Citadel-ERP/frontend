@@ -4,12 +4,10 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Employee, AttendanceRecord } from './types';
 import { WHATSAPP_COLORS } from './constants';
-import { AttendanceCalendar } from './attendanceCalendar';
 import { styles } from './styles';
 
 interface AttendanceProps {
@@ -54,6 +52,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
   };
 
   const summary = calculateAttendanceSummary();
+  
   const getMonthName = (month: number): string => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     return months[month];
@@ -77,6 +76,91 @@ export const Attendance: React.FC<AttendanceProps> = ({
     }
   };
 
+  // Calendar helper functions
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const getDateStatus = (day: number) => {
+    const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const record = attendanceReport.find(r => r.date === dateStr);
+    return record ? record.attendance_status : null;
+  };
+
+  const getDateColor = (status: string | null) => {
+    if (!status) return 'transparent';
+    
+    const statusColors: Record<string, string> = {
+      'present': '#4ADE80',      // Green
+      'leave': '#FB923C',        // Orange
+      'wfh': '#9C27B0',          // Purple
+      'absent': '#EF5350',       // Red/Coral
+      'holiday': '#60A5FA',      // Blue
+      'late_login': '#C084FC',   // Purple/Lavender
+      'weekend': 'transparent',
+      'pending': 'transparent'
+    };
+    
+    return statusColors[status] || 'transparent';
+  };
+
+  const getDateTextColor = (status: string | null) => {
+    if (!status || status === 'weekend' || status === 'pending') {
+      return '#9CA3AF'; // Gray for non-status days
+    }
+    return '#FFFFFF'; // White for status days
+  };
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(selectedMonth, selectedYear);
+    const firstDay = getFirstDayOfMonth(selectedMonth, selectedYear);
+    const days = [];
+    const today = new Date();
+    const currentDay = today.getDate();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    // Empty cells for days before month starts
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
+    }
+
+    // Actual days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const status = getDateStatus(day);
+      const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
+      const bgColor = getDateColor(status);
+      const textColor = getDateTextColor(status);
+
+      days.push(
+        <View
+          key={day}
+          style={styles.calendarDay}
+        >
+          <View style={[
+            styles.dayCircle,
+            { backgroundColor: bgColor },
+            isToday && styles.todayCircle
+          ]}>
+            <Text style={[
+              styles.dayText,
+              { color: textColor },
+              isToday && !status && { color: '#000000' }
+            ]}>
+              {day}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    return days;
+  };
+
   return (
     <ScrollView 
       style={styles.detailsContent}
@@ -88,6 +172,14 @@ export const Attendance: React.FC<AttendanceProps> = ({
           View and download attendance records
         </Text>
       </View>
+
+      <TouchableOpacity 
+        style={styles.downloadButton}
+        onPress={() => {/* Add download report logic */}}
+      >
+        <Ionicons name="download-outline" size={20} color="#FFFFFF" />
+        <Text style={styles.downloadButtonText}>Download Report</Text>
+      </TouchableOpacity>
 
       {/* Attendance Summary Cards */}
       <View style={styles.attendanceSummary}>
@@ -101,24 +193,6 @@ export const Attendance: React.FC<AttendanceProps> = ({
             </Text>
           </View>
           
-          <View style={[styles.summaryCard, { backgroundColor: '#FFF3E0' }]}>
-            <Text style={[styles.summaryValue, { color: '#EF6C00' }]}>
-              {summary.leave}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: '#EF6C00' }]}>
-              Leave
-            </Text>
-          </View>
-          
-          <View style={[styles.summaryCard, { backgroundColor: '#E3F2FD' }]}>
-            <Text style={[styles.summaryValue, { color: '#1565C0' }]}>
-              {summary.wfh}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: '#1565C0' }]}>
-              WFH
-            </Text>
-          </View>
-          
           <View style={[styles.summaryCard, { backgroundColor: '#FFEBEE' }]}>
             <Text style={[styles.summaryValue, { color: '#D32F2F' }]}>
               {summary.absent}
@@ -127,13 +201,31 @@ export const Attendance: React.FC<AttendanceProps> = ({
               Absent
             </Text>
           </View>
+          
+          <View style={[styles.summaryCard, { backgroundColor: '#F3E5F5' }]}>
+            <Text style={[styles.summaryValue, { color: '#7B1FA2' }]}>
+              {summary.wfh}
+            </Text>
+            <Text style={[styles.summaryLabel, { color: '#7B1FA2' }]}>
+              Late Login
+            </Text>
+          </View>
+          
+          <View style={[styles.summaryCard, { backgroundColor: '#FFF3E0' }]}>
+            <Text style={[styles.summaryValue, { color: '#EF6C00' }]}>
+              {summary.leave}
+            </Text>
+            <Text style={[styles.summaryLabel, { color: '#EF6C00' }]}>
+              Leave
+            </Text>
+          </View>
         </View>
       </View>
 
       {/* Month Navigation */}
       <View style={styles.monthSelector}>
         <TouchableOpacity onPress={prevMonth} style={styles.monthNavButton}>
-          <Ionicons name="chevron-back" size={20} color={WHATSAPP_COLORS.primary} />
+          <Text style={styles.navButtonText}>‹</Text>
         </TouchableOpacity>
         
         <Text style={styles.monthYearText}>
@@ -141,48 +233,55 @@ export const Attendance: React.FC<AttendanceProps> = ({
         </Text>
         
         <TouchableOpacity onPress={nextMonth} style={styles.monthNavButton}>
-          <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.primary} />
+          <Text style={styles.navButtonText}>›</Text>
         </TouchableOpacity>
       </View>
 
       {/* Calendar View */}
-      <AttendanceCalendar
-        attendanceReport={attendanceReport}
-        selectedMonth={selectedMonth}
-        selectedYear={selectedYear}
-      />
-
-      {/* Legend */}
-      <View style={styles.legendContainer}>
-        <View style={styles.legendRow}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
-            <Text style={styles.legendText}>Present</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
-            <Text style={styles.legendText}>Leave</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#9C27B0' }]} />
-            <Text style={styles.legendText}>WFH</Text>
-          </View>
+      <View style={styles.calendarContainer}>
+        <View style={styles.weekDays}>
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <Text key={day} style={styles.weekDayText}>{day}</Text>
+          ))}
         </View>
-        <View style={styles.legendRow}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#2196F3' }]} />
-            <Text style={styles.legendText}>Holiday</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
-            <Text style={styles.legendText}>Absent</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#9E9E9E' }]} />
-            <Text style={styles.legendText}>Weekend</Text>
-          </View>
+
+        <View style={styles.calendarGrid}>
+          {renderCalendar()}
         </View>
       </View>
+
+      {/* Legend */}
+<View style={styles.legendContainer}>
+  <View style={styles.legendRow}>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: '#4ADE80' }]} />
+      <Text style={styles.legendText}>Present</Text>
+    </View>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: '#EF5350' }]} />
+      <Text style={styles.legendText}>Absent</Text>
+    </View>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: '#C084FC' }]} />
+      <Text style={styles.legendText}>Late Login</Text>
+    </View>
+  </View>
+  <View style={styles.legendRow}>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: '#FB923C' }]} />
+      <Text style={styles.legendText}>Leave</Text>
+    </View>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: '#60A5FA' }]} />
+      <Text style={styles.legendText}>Holiday</Text>
+    </View>
+    {/* Empty view for alignment */}
+    <View style={[styles.legendItem, { opacity: 0 }]}>
+      <View style={styles.legendDot} />
+      <Text style={styles.legendText}>Placeholder</Text>
+    </View>
+  </View>
+</View>
     </ScrollView>
   );
 };

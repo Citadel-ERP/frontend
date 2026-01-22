@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
             </View>
             
             {/* Right side - Action buttons */}
-            <View style={styles.rightSection}>
+            {/* <View style={styles.rightSection}>
               {showRefresh && onRefresh && (
                 <TouchableOpacity 
                   style={styles.actionButton} 
@@ -92,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Ionicons name="refresh" size={20} color="#fff" />
                 </TouchableOpacity>
               )}
-            </View>
+            </View> */}
           </View>
         </View>
         

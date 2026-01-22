@@ -8,6 +8,28 @@ export const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: WHATSAPP_COLORS.background,
     },
+    downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+},
+downloadButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+},
     
     // Header Styles
     headerBanner: {
@@ -143,10 +165,12 @@ export const styles = StyleSheet.create({
         marginLeft: 2,
     },
     
+    
     // Search
     searchContainer: {
         paddingHorizontal: 20,
         paddingBottom: 20,
+        paddingTop: 16,
         position: 'relative',
         zIndex: 1,
     },
@@ -673,72 +697,83 @@ export const styles = StyleSheet.create({
         marginBottom: 12,
     },
     weekDayText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: WHATSAPP_COLORS.textSecondary,
-        width: 40,
-        textAlign: 'center',
-    },
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+},
     calendarGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
     },
     calendarDay: {
-        width: `${100 / 7}%`,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 4,
-    },
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+},
     dayCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-    },
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+},
     todayCircle: {
-        borderWidth: 2,
-        borderColor: WHATSAPP_COLORS.accent,
-    },
-    dayText: {
-        fontSize: 14,
-        fontWeight: '500',
-    },
+    borderWidth: 2,
+    borderColor: '#000000',
+},
+
+dayText: {
+    fontSize: 16,
+    fontWeight: '500',
+},
+
+navButtonText: {
+    fontSize: 24,
+    color: '#111827',
+    fontWeight: '300',
+},
     legendContainer: {
-        backgroundColor: WHATSAPP_COLORS.surface,
-        borderRadius: 12,
-        padding: 16,
-        marginHorizontal: 16,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    legendRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    legendItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        justifyContent: 'center',
-    },
-    legendDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        marginRight: 6,
-    },
-    legendText: {
-        fontSize: 12,
-        color: WHATSAPP_COLORS.textSecondary,
-    },
-    
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+},
+
+legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',  
+    alignItems: 'center',            
+    marginBottom: 8,
+},
+
+legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 100,                   
+},
+
+legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,                  
+},
+
+legendText: {
+    fontSize: 13,                    
+    color: WHATSAPP_COLORS.textSecondary,
+},
     // Leaves
     leavesHeader: {
         padding: 16,
