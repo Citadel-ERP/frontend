@@ -8,29 +8,29 @@ export const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: WHATSAPP_COLORS.background,
     },
-    downloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-},
-downloadButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-},
-    
+    // downloadButton: {
+    //     flexDirection: 'row',
+    //     alignItems: 'center',
+    //     justifyContent: 'center',
+    //     backgroundColor: WHATSAPP_COLORS.primary,
+    //     paddingVertical: 12,
+    //     paddingHorizontal: 20,
+    //     borderRadius: 12,
+    //     marginHorizontal: 16,
+    //     marginBottom: 16,
+    //     gap: 8,
+    //     shadowColor: '#000',
+    //     shadowOffset: { width: 0, height: 2 },
+    //     shadowOpacity: 0.1,
+    //     shadowRadius: 4,
+    //     elevation: 2,
+    // },
+    // downloadButtonText: {
+    //     color: '#FFFFFF',
+    //     fontSize: 16,
+    //     fontWeight: '600',
+    // },
+
     // Header Styles
     headerBanner: {
         height: 220,
@@ -164,8 +164,8 @@ downloadButtonText: {
         fontSize: 14,
         marginLeft: 2,
     },
-    
-    
+
+
     // Search
     searchContainer: {
         paddingHorizontal: 20,
@@ -204,7 +204,7 @@ downloadButtonText: {
     clearButton: {
         padding: 4,
     },
-    
+
     // Scroll & Content
     scrollView: {
         flex: 1,
@@ -213,14 +213,14 @@ downloadButtonText: {
     scrollContent: {
         paddingBottom: 32,
     },
-    
+
     // Employee List
     employeesList: {
         paddingHorizontal: 16,
     },
     listHeader: {
         marginBottom: 16,
-        marginTop:10,
+        marginTop: 10,
     },
     listTitle: {
         fontSize: 18,
@@ -232,7 +232,7 @@ downloadButtonText: {
         fontSize: 14,
         color: WHATSAPP_COLORS.textSecondary,
     },
-    
+
     // Employee Card
     employeeCard: {
         backgroundColor: WHATSAPP_COLORS.surface,
@@ -327,7 +327,7 @@ downloadButtonText: {
     chevronIcon: {
         marginLeft: 8,
     },
-    
+
     // List Footer
     listFooter: {
         paddingVertical: 24,
@@ -337,7 +337,7 @@ downloadButtonText: {
         fontSize: 12,
         color: WHATSAPP_COLORS.textTertiary,
     },
-    
+
     // Loading & Error States
     loadingContainer: {
         flex: 1,
@@ -382,7 +382,7 @@ downloadButtonText: {
         fontSize: 16,
         fontWeight: '600',
     },
-    
+
     // Empty State
     emptyState: {
         flex: 1,
@@ -419,13 +419,13 @@ downloadButtonText: {
         fontSize: 16,
         fontWeight: '600',
     },
-    
+
     // Details Content
     detailsContent: {
         flex: 1,
         backgroundColor: WHATSAPP_COLORS.background,
     },
-    
+
     // Tab Navigation
     tabNavigation: {
         flexDirection: 'row',
@@ -459,7 +459,7 @@ downloadButtonText: {
         color: WHATSAPP_COLORS.primary,
         fontWeight: '600',
     },
-    
+
     // Profile Header in Details
     profileHeader: {
         backgroundColor: WHATSAPP_COLORS.surface,
@@ -526,7 +526,7 @@ downloadButtonText: {
         fontSize: 12,
         color: WHATSAPP_COLORS.textTertiary,
     },
-    
+
     // Info Cards
     infoCardsContainer: {
         paddingHorizontal: 16,
@@ -581,7 +581,7 @@ downloadButtonText: {
         backgroundColor: WHATSAPP_COLORS.border,
         marginVertical: 8,
     },
-    
+
     // Leave Balance
     leaveBalanceContainer: {
         flexDirection: 'row',
@@ -603,15 +603,15 @@ downloadButtonText: {
         fontSize: 12,
         fontWeight: '600',
     },
-    
+
     // Attendance
-    attendanceHeader: {
-        padding: 16,
-        backgroundColor: WHATSAPP_COLORS.surface,
-        borderRadius: 12,
-        marginHorizontal: 16,
-        marginBottom: 16,
-    },
+    // attendanceHeader: {
+    //     padding: 16,
+    //     backgroundColor: WHATSAPP_COLORS.surface,
+    //     borderRadius: 12,
+    //     marginHorizontal: 16,
+    //     marginBottom: 16,
+    // },
     attendanceTitle: {
         fontSize: 18,
         fontWeight: '600',
@@ -622,38 +622,38 @@ downloadButtonText: {
         fontSize: 14,
         color: WHATSAPP_COLORS.textSecondary,
     },
-    attendanceSummary: {
-        backgroundColor: WHATSAPP_COLORS.surface,
-        borderRadius: 12,
-        padding: 16,
-        marginHorizontal: 16,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 8,
-    },
-    summaryCard: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderRadius: 8,
-    },
-    summaryValue: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    summaryLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
+    // attendanceSummary: {
+    //     backgroundColor: WHATSAPP_COLORS.surface,
+    //     borderRadius: 12,
+    //     padding: 16,
+    //     marginHorizontal: 16,
+    //     marginBottom: 16,
+    //     shadowColor: '#000',
+    //     shadowOffset: { width: 0, height: 2 },
+    //     shadowOpacity: 0.05,
+    //     shadowRadius: 4,
+    //     elevation: 2,
+    // },
+    // summaryRow: {
+    //     flexDirection: 'row',
+    //     justifyContent: 'space-between',
+    //     gap: 8,
+    // },
+    // summaryCard: {
+    //     flex: 1,
+    //     alignItems: 'center',
+    //     paddingVertical: 12,
+    //     borderRadius: 8,
+    // },
+    // summaryValue: {
+    //     fontSize: 20,
+    //     fontWeight: 'bold',
+    //     marginBottom: 4,
+    // },
+    // summaryLabel: {
+    //     fontSize: 12,
+    //     fontWeight: '600',
+    // },
     monthSelector: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -674,106 +674,106 @@ downloadButtonText: {
         borderRadius: 8,
         backgroundColor: WHATSAPP_COLORS.background,
     },
-    monthYearText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: WHATSAPP_COLORS.textPrimary,
-    },
-    calendarContainer: {
-        backgroundColor: WHATSAPP_COLORS.surface,
-        borderRadius: 12,
-        padding: 16,
-        marginHorizontal: 16,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    weekDays: {
+    // monthYearText: {
+    //     fontSize: 18,
+    //     fontWeight: '600',
+    //     color: WHATSAPP_COLORS.textPrimary,
+    // },
+    // calendarContainer: {
+    //     backgroundColor: WHATSAPP_COLORS.surface,
+    //     borderRadius: 12,
+    //     padding: 16,
+    //     marginHorizontal: 16,
+    //     marginBottom: 16,
+    //     shadowColor: '#000',
+    //     shadowOffset: { width: 0, height: 2 },
+    //     shadowOpacity: 0.05,
+    //     shadowRadius: 4,
+    //     elevation: 2,
+    // },
+    // weekDays: {
+    //     flexDirection: 'row',
+    //     justifyContent: 'space-around',
+    //     marginBottom: 12,
+    // },
+    // weekDayText: {
+    //     fontSize: 14,
+    //     fontWeight: '500',
+    //     color: '#6B7280',
+    //     width: `${100 / 7}%`,
+    //     textAlign: 'center',
+    // },
+    // calendarGrid: {
+    //     flexDirection: 'row',
+    //     flexWrap: 'wrap',
+    // },
+    // calendarDay: {
+    //     width: `${100 / 7}%`,
+    //     aspectRatio: 1,
+    //     alignItems: 'center',
+    //     justifyContent: 'center',
+    //     paddingVertical: 4,
+    // },
+    // dayCircle: {
+    //     width: 44,
+    //     height: 44,
+    //     borderRadius: 22,
+    //     alignItems: 'center',
+    //     justifyContent: 'center',
+    //     backgroundColor: 'transparent',
+    // },
+    // todayCircle: {
+    //     borderWidth: 2,
+    //     borderColor: '#000000',
+    // },
+
+    // dayText: {
+    //     fontSize: 16,
+    //     fontWeight: '500',
+    // },
+
+    // navButtonText: {
+    //     fontSize: 24,
+    //     color: '#111827',
+    //     fontWeight: '300',
+    // },
+    // legendContainer: {
+    //     backgroundColor: WHATSAPP_COLORS.surface,
+    //     borderRadius: 12,
+    //     padding: 16,
+    //     marginHorizontal: 16,
+    //     marginBottom: 16,
+    //     shadowColor: '#000',
+    //     shadowOffset: { width: 0, height: 2 },
+    //     shadowOpacity: 0.05,
+    //     shadowRadius: 4,
+    //     elevation: 2,
+    // },
+
+    legendRow: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        marginBottom: 12,
+        alignItems: 'center',
+        marginBottom: 8,
     },
-    weekDayText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-    width: `${100 / 7}%`,
-    textAlign: 'center',
-},
-    calendarGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-    },
-    calendarDay: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-},
-    dayCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-},
-    todayCircle: {
-    borderWidth: 2,
-    borderColor: '#000000',
-},
 
-dayText: {
-    fontSize: 16,
-    fontWeight: '500',
-},
+    // legendItem: {
+    //     flexDirection: 'row',
+    //     alignItems: 'center',
+    //     minWidth: 100,
+    // },
 
-navButtonText: {
-    fontSize: 24,
-    color: '#111827',
-    fontWeight: '300',
-},
-    legendContainer: {
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-},
+    // legendDot: {
+    //     width: 12,
+    //     height: 12,
+    //     borderRadius: 6,
+    //     marginRight: 8,
+    // },
 
-legendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',  
-    alignItems: 'center',            
-    marginBottom: 8,
-},
-
-legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 100,                   
-},
-
-legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,                  
-},
-
-legendText: {
-    fontSize: 13,                    
-    color: WHATSAPP_COLORS.textSecondary,
-},
+    // legendText: {
+    //     fontSize: 13,
+    //     color: WHATSAPP_COLORS.textSecondary,
+    // },
     // Leaves
     leavesHeader: {
         padding: 16,
@@ -898,7 +898,7 @@ legendText: {
         textAlign: 'center',
         lineHeight: 24,
     },
-    
+
     // Modal
     modalOverlay: {
         flex: 1,
@@ -965,12 +965,280 @@ legendText: {
         fontSize: 16,
         fontWeight: '600',
     },
-    
+
     // Loading Overlay
     loadingOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+
+
+    calendarContainer: {
+        backgroundColor: WHATSAPP_COLORS.surface,
+        borderRadius: 16,
+        padding: 20,
+        marginHorizontal: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+
+    calendarHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+    },
+
+    navButton: {
+        width: 36,
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        backgroundColor: '#f3f4f6',
+    },
+
+    navButtonText: {
+        fontSize: 24,
+        color: '#111827',
+        fontWeight: '300',
+    },
+
+    monthYearText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: WHATSAPP_COLORS.textPrimary,
+    },
+
+    weekDays: {
+        flexDirection: 'row',
+        marginBottom: 12,
+    },
+
+    weekDayText: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#6b7280',
+    },
+
+    calendarGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: 20,
+    },
+
+    calendarDay: {
+        width: `${100 / 7}%`,
+        aspectRatio: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 2,
+    },
+
+    dayCircle: {
+        width: '85%',
+        aspectRatio: 1,
+        borderRadius: 100,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f3f4f6',
+    },
+
+    todayCircle: {
+        borderWidth: 2,
+        borderColor: '#1e1b4b',
+    },
+
+    dayText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+
+    dayTextActive: {
+        fontWeight: '600',
+    },
+
+    dayTextInactive: {
+        color: '#9ca3af',
+    },
+
+    legendContainer: {
+        marginTop: 8,
+    },
+
+    legendVisible: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginRight: 8,
+        marginBottom: 8,
+    },
+
+    legendDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+    },
+
+    legendText: {
+        fontSize: 10,
+        color: '#6b7280',
+    },
+
+    viewMoreButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+    },
+
+    viewMoreText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#3b82f6',
+        marginRight: 4,
+    },
+
+    viewMoreIcon: {
+        fontSize: 10,
+        color: '#3b82f6',
+        marginLeft: 2,
+    },
+
+    legendExpanded: {
+        marginTop: 8,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
+    },
+
+    viewLessButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        paddingVertical: 6,
+    },
+
+    viewLessIcon: {
+        fontSize: 10,
+        color: '#3b82f6',
+        marginLeft: 4,
+    },
+
+    downloadContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 32,
+    },
+
+    downloadButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#ec4899',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        gap: 8,
+        minHeight: 48,
+    },
+
+    downloadButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+
+    statusTooltip: {
+        position: 'absolute',
+        top: 200,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+
+    statusTooltipText: {
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        color: '#fff',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: '600',
+        overflow: 'hidden',
+    },
+
+    tooltipArrow: {
+        width: 0,
+        height: 0,
+        backgroundColor: 'transparent',
+        borderStyle: 'solid',
+        borderLeftWidth: 6,
+        borderRightWidth: 6,
+        borderTopWidth: 6,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: 'rgba(0, 0, 0, 0.9)',
+        marginTop: -1,
+    },
+
+    // Update existing styles
+    attendanceHeader: {
+        display: 'none', // Hide the old header
+    },
+
+    attendanceSummary: {
+        backgroundColor: WHATSAPP_COLORS.surface,
+        borderRadius: 16,
+        padding: 16,
+        marginHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+
+    summaryCard: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderRadius: 12,
+        minHeight: 80,
+        justifyContent: 'center',
+    },
+
+    summaryValue: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+
+    summaryLabel: {
+        fontSize: 12,
+        fontWeight: '600',
     },
 });

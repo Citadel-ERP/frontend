@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,9 +34,11 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
     description: ''
   });
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const descriptionInputRef = useRef<TextInput>(null);
+  const grievanceInputRef = useRef<TextInput>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const handleSubmit = async () => {
-    console.log('handleSubmit called');  // ADD THIS
     if (!formData.common_grievance.trim()) {
       Alert.alert('Validation Error', 'Please enter a grievance type');
       return;
@@ -45,8 +47,17 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
       Alert.alert('Validation Error', 'Please enter a description');
       return;
     }
-
     await onSubmit(formData);
+  };
+
+  const handleDescriptionFocus = () => {
+    setFocusedField('description');
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        y: 200,
+        animated: true,
+      });
+    }, 100);
   };
 
   const isFormValid = formData.common_grievance.trim() && formData.description.trim();
@@ -66,17 +77,19 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        enabled
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContentPadded}
+          contentContainerStyle={[
+            styles.scrollContentPadded,
+            { paddingBottom: insets.bottom + 120 }
+          ]}
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={true}  // ADD THIS
-          nestedScrollEnabled={true}  // ADD THIS
+          keyboardDismissMode="interactive"
         >
           {/* Info Card */}
           <View style={styles.infoCardBanner}>
@@ -106,7 +119,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 styles.modernInputContainer,
                 focusedField === 'grievance_type' && styles.modernInputContainerFocused
               ]}>
-                <View style={styles.inputIconContainer}>
+                <View style={styles.inputIconContainer} pointerEvents="none">
                   <Ionicons
                     name="alert-circle-outline"
                     size={20}
@@ -114,6 +127,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   />
                 </View>
                 <TextInput
+                  ref={grievanceInputRef}
                   style={styles.modernTextInput}
                   value={formData.common_grievance}
                   onChangeText={(text) => {
@@ -126,8 +140,12 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   maxLength={100}
                   onFocus={() => setFocusedField('grievance_type')}
                   onBlur={() => setFocusedField(null)}
-                  editable={!loading}  // ADD THIS
-                  autoCorrect={false}  // ADD THIS
+                  editable={!loading}
+                  autoCorrect={false}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  onSubmitEditing={() => descriptionInputRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -163,7 +181,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 styles.modernTextAreaContainer,
                 focusedField === 'description' && styles.modernInputContainerFocused
               ]}>
-                <View style={styles.textAreaIconContainer}>
+                <View style={styles.textAreaIconContainer} pointerEvents="none">
                   <Ionicons
                     name="create-outline"
                     size={20}
@@ -171,21 +189,27 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                   />
                 </View>
                 <TextInput
-                  style={styles.modernTextArea}
+                  ref={descriptionInputRef}
+                  style={[styles.modernTextArea, { flex: 1 }]}
                   value={formData.description}
                   onChangeText={(text) => {
                     if (text.length <= 500) {
                       setFormData({ ...formData, description: text });
                     }
                   }}
-                  placeholder="Provide a clear description of this grievance type. Include what situations or issues this category covers and any important guidelines..."
+                  placeholder="Provide a clear description of when employees should use this grievance type..."
                   placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
                   multiline
-                  numberOfLines={6}
+                  scrollEnabled={false}
                   textAlignVertical="top"
                   maxLength={500}
-                  onFocus={() => setFocusedField('description')}
+                  onFocus={handleDescriptionFocus}
                   onBlur={() => setFocusedField(null)}
+                  editable={!loading}
+                  autoCorrect={true}
+                  autoCapitalize="sentences"
+                  returnKeyType="default"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -193,7 +217,7 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
                 <View style={styles.inputHintContainer}>
                   <Ionicons name="information-circle-outline" size={14} color={WHATSAPP_COLORS.gray} />
                   <Text style={styles.inputHint}>
-                    Help employees identify the right category
+                    Help employees understand when to use this
                   </Text>
                 </View>
                 <Text style={[
@@ -232,7 +256,10 @@ export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
         </ScrollView>
 
         {/* Fixed Bottom Action Buttons */}
-        <View style={[styles.fixedBottomContainer, { paddingBottom: insets.bottom || 16 }]}>
+        <View style={[
+          styles.fixedBottomContainer,
+          { paddingBottom: Math.max(insets.bottom, 16) }
+        ]}>
           <TouchableOpacity
             style={styles.modernCancelButton}
             onPress={onBack}

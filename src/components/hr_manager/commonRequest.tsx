@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +19,295 @@ import { styles } from './styles';
 import { WHATSAPP_COLORS } from './constants';
 import { Header } from './header';
 
+// =============== Common Grievance Component ===============
+interface CommonGrievanceProps {
+  onSubmit: (data: { common_grievance: string; description: string }) => Promise<void>;
+  onBack: () => void;
+  loading: boolean;
+}
+
+export const CommonGrievance: React.FC<CommonGrievanceProps> = ({
+  onSubmit,
+  onBack,
+  loading
+}) => {
+  const insets = useSafeAreaInsets();
+  const [formData, setFormData] = useState({
+    common_grievance: '',
+    description: ''
+  });
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const descriptionInputRef = useRef<TextInput>(null);
+  const grievanceInputRef = useRef<TextInput>(null);
+
+  const handleSubmit = async () => {
+    if (!formData.common_grievance.trim()) {
+      Alert.alert('Validation Error', 'Please enter a grievance type');
+      return;
+    }
+    if (!formData.description.trim()) {
+      Alert.alert('Validation Error', 'Please enter a description');
+      return;
+    }
+    await onSubmit(formData);
+  };
+
+  const isFormValid = formData.common_grievance.trim() && formData.description.trim();
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+    setFocusedField(null);
+  };
+
+  return (
+    <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
+      <View style={styles.container}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={WHATSAPP_COLORS.primaryDark}
+        />
+        <Header
+          title="Add Common Grievance"
+          subtitle=""
+          onBack={onBack}
+        />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
+        >
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.scrollContentPadded,
+              { paddingBottom: insets.bottom + 100 }
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            bounces={false}
+            overScrollMode="never"
+          >
+            {/* Info Card */}
+            <View style={styles.infoCardBanner}>
+              <View style={styles.infoIconWrapper}>
+                <Ionicons name="alert-circle" size={24} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={styles.infoTextWrapper}>
+                <Text style={styles.infoTitle}>Create Grievance Type</Text>
+                <Text style={styles.infoDescription}>
+                  Define a new grievance category that employees can use when reporting workplace issues
+                </Text>
+              </View>
+            </View>
+
+            {/* Form Card */}
+            <View style={styles.modernFormCard}>
+              {/* Grievance Type Field */}
+              <View style={styles.modernFormSection}>
+                <View style={styles.modernLabelContainer}>
+                  <Text style={styles.modernLabel}>Grievance Type</Text>
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>Required</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => grievanceInputRef.current?.focus()}
+                >
+                  <View style={[
+                    styles.modernInputContainer,
+                    focusedField === 'grievance_type' && styles.modernInputContainerFocused
+                  ]}>
+                    <View style={styles.inputIconContainer}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={20}
+                        color={focusedField === 'grievance_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
+                      />
+                    </View>
+                    <TextInput
+                      ref={grievanceInputRef}
+                      style={styles.modernTextInput}
+                      value={formData.common_grievance}
+                      onChangeText={(text) => {
+                        if (text.length <= 100) {
+                          setFormData({ ...formData, common_grievance: text });
+                        }
+                      }}
+                      placeholder="e.g., Harassment, Discrimination, Workplace Safety"
+                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                      maxLength={100}
+                      onFocus={() => setFocusedField('grievance_type')}
+                      onBlur={() => setFocusedField(null)}
+                      editable={!loading}
+                      autoCorrect={false}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                      onSubmitEditing={() => descriptionInputRef.current?.focus()}
+                      blurOnSubmit={false}
+                    />
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.inputFooter}>
+                  <View style={styles.inputHintContainer}>
+                    <Ionicons name="bulb-outline" size={14} color={WHATSAPP_COLORS.gray} />
+                    <Text style={styles.inputHint}>
+                      This will appear in dropdown menus
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.characterCounter,
+                    formData.common_grievance.length === 100 && styles.characterCounterWarning
+                  ]}>
+                    {formData.common_grievance.length}/100
+                  </Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.formDivider} />
+
+              {/* Description Field */}
+              <View style={styles.modernFormSection}>
+                <View style={styles.modernLabelContainer}>
+                  <Text style={styles.modernLabel}>Description</Text>
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>Required</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => descriptionInputRef.current?.focus()}
+                >
+                  <View style={[
+                    styles.modernTextAreaContainer,
+                    focusedField === 'description' && styles.modernInputContainerFocused
+                  ]}>
+                    <View style={styles.textAreaIconContainer}>
+                      <Ionicons
+                        name="create-outline"
+                        size={20}
+                        color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
+                      />
+                    </View>
+                    <TextInput
+                      ref={descriptionInputRef}
+                      style={styles.modernTextArea}
+                      value={formData.description}
+                      onChangeText={(text) => {
+                        if (text.length <= 500) {
+                          setFormData({ ...formData, description: text });
+                        }
+                      }}
+                      placeholder="Provide a clear description of when employees should use this grievance type..."
+                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                      multiline
+                      numberOfLines={6}
+                      textAlignVertical="top"
+                      maxLength={500}
+                      onFocus={() => setFocusedField('description')}
+                      onBlur={() => setFocusedField(null)}
+                      editable={!loading}
+                      autoCorrect={true}
+                      autoCapitalize="sentences"
+                      returnKeyType="default"
+                    />
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.inputFooter}>
+                  <View style={styles.inputHintContainer}>
+                    <Ionicons name="information-circle-outline" size={14} color={WHATSAPP_COLORS.gray} />
+                    <Text style={styles.inputHint}>
+                      Help employees understand when to use this
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.characterCounter,
+                    formData.description.length === 500 && styles.characterCounterWarning
+                  ]}>
+                    {formData.description.length}/500
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Preview Card */}
+            {(formData.common_grievance.trim() || formData.description.trim()) && (
+              <View style={styles.previewCard}>
+                <View style={styles.previewHeader}>
+                  <Ionicons name="eye-outline" size={20} color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.previewTitle}>Preview</Text>
+                </View>
+                <View style={styles.previewContent}>
+                  {formData.common_grievance.trim() && (
+                    <View style={styles.previewItem}>
+                      <Text style={styles.previewLabel}>Grievance Type:</Text>
+                      <Text style={styles.previewValue}>{formData.common_grievance}</Text>
+                    </View>
+                  )}
+                  {formData.description.trim() && (
+                    <View style={styles.previewItem}>
+                      <Text style={styles.previewLabel}>Description:</Text>
+                      <Text style={styles.previewValue}>{formData.description}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Fixed Bottom Action Buttons */}
+          <View style={[
+            styles.fixedBottomContainer,
+            {
+              backgroundColor: WHATSAPP_COLORS.white,
+              paddingBottom: Math.max(insets.bottom, 16)
+            }
+          ]}>
+            <TouchableOpacity
+              style={styles.modernCancelButton}
+              onPress={() => {
+                dismissKeyboard();
+                onBack();
+              }}
+              disabled={loading}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle-outline" size={20} color={WHATSAPP_COLORS.darkGray} />
+              <Text style={styles.modernCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modernSubmitButton,
+                !isFormValid && styles.modernSubmitButtonDisabled
+              ]}
+              onPress={() => {
+                dismissKeyboard();
+                handleSubmit();
+              }}
+              disabled={loading || !isFormValid}
+              activeOpacity={0.7}
+            >
+              {loading ? (
+                <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color={WHATSAPP_COLORS.white} />
+                  <Text style={styles.modernSubmitButtonText}>
+                    Create Grievance Type
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
+  );
+};
+
+// =============== Common Request Component ===============
 interface CommonRequestProps {
   onSubmit: (data: { common_request: string; description: string }) => Promise<void>;
   onBack: () => void;
@@ -34,6 +325,8 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
     description: ''
   });
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const requestInputRef = useRef<TextInput>(null);
+  const descriptionInputRef = useRef<TextInput>(null);
 
   const handleSubmit = async () => {
     if (!formData.common_request.trim()) {
@@ -44,221 +337,260 @@ export const CommonRequest: React.FC<CommonRequestProps> = ({
       Alert.alert('Validation Error', 'Please enter a description');
       return;
     }
-    
     await onSubmit(formData);
   };
 
   const isFormValid = formData.common_request.trim() && formData.description.trim();
 
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+    setFocusedField(null);
+  };
+
   return (
-    <View style={styles.container}>
-    <StatusBar
-      barStyle="light-content"
-      backgroundColor={WHATSAPP_COLORS.primaryDark}
-    />
-    <Header
-      title="Add Common Request"
-      subtitle=""
-      onBack={onBack}
-    />
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }}  // ← CHANGE THIS
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}  // ← CHANGE THIS
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContentPadded}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={true}
-        nestedScrollEnabled={true}
-      >
-          {/* Info Card */}
-          <View style={styles.infoCardBanner}>
-            <View style={styles.infoIconWrapper}>
-              <Ionicons name="information-circle" size={24} color={WHATSAPP_COLORS.primary} />
-            </View>
-            <View style={styles.infoTextWrapper}>
-              <Text style={styles.infoTitle}>Create Request Type</Text>
-              <Text style={styles.infoDescription}>
-                Define a new request category that employees can use when submitting requests
-              </Text>
-            </View>
-          </View>
-
-          {/* Form Card */}
-          <View style={styles.modernFormCard}>
-            {/* Request Type Field */}
-            <View style={styles.modernFormSection}>
-              <View style={styles.modernLabelContainer}>
-                <Text style={styles.modernLabel}>Request Type</Text>
-                <View style={styles.requiredBadge}>
-                  <Text style={styles.requiredBadgeText}>Required</Text>
-                </View>
-              </View>
-              
-              <View style={[
-                styles.modernInputContainer,
-                focusedField === 'request_type' && styles.modernInputContainerFocused
-              ]}>
-                <View style={styles.inputIconContainer}>
-                  <Ionicons 
-                    name="document-text-outline" 
-                    size={20} 
-                    color={focusedField === 'request_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray} 
-                  />
-                </View>
-                <TextInput
-                  style={styles.modernTextInput}
-                  value={formData.common_request}
-                  onChangeText={(text) => {
-                    if (text.length <= 100) {
-                      setFormData({ ...formData, common_request: text });
-                    }
-                  }}
-                  placeholder="e.g., Leave Request, Travel Allowance"
-                  placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
-                  maxLength={100}
-                  onFocus={() => setFocusedField('request_type')}
-                  onBlur={() => setFocusedField(null)}
-                />
-              </View>
-              
-              <View style={styles.inputFooter}>
-                <View style={styles.inputHintContainer}>
-                  <Ionicons name="bulb-outline" size={14} color={WHATSAPP_COLORS.gray} />
-                  <Text style={styles.inputHint}>
-                    This will appear in dropdown menus
-                  </Text>
-                </View>
-                <Text style={[
-                  styles.characterCounter,
-                  formData.common_request.length === 100 && styles.characterCounterWarning
-                ]}>
-                  {formData.common_request.length}/100
-                </Text>
-              </View>
-            </View>
-
-            {/* Divider */}
-            <View style={styles.formDivider} />
-
-            {/* Description Field */}
-            <View style={styles.modernFormSection}>
-              <View style={styles.modernLabelContainer}>
-                <Text style={styles.modernLabel}>Description</Text>
-                <View style={styles.requiredBadge}>
-                  <Text style={styles.requiredBadgeText}>Required</Text>
-                </View>
-              </View>
-              
-              <View style={[
-                styles.modernTextAreaContainer,
-                focusedField === 'description' && styles.modernInputContainerFocused
-              ]}>
-                <View style={styles.textAreaIconContainer}>
-                  <Ionicons 
-                    name="create-outline" 
-                    size={20} 
-                    color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray} 
-                  />
-                </View>
-                <TextInput
-                  style={styles.modernTextArea}
-                  value={formData.description}
-                  onChangeText={(text) => {
-                    if (text.length <= 500) {
-                      setFormData({ ...formData, description: text });
-                    }
-                  }}
-                  placeholder="Provide a clear description of when employees should use this request type. Include any specific guidelines or requirements..."
-                  placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
-                  multiline
-                  numberOfLines={6}
-                  textAlignVertical="top"
-                  maxLength={500}
-                  onFocus={() => setFocusedField('description')}
-                  onBlur={() => setFocusedField(null)}
-                />
-              </View>
-              
-              <View style={styles.inputFooter}>
-                <View style={styles.inputHintContainer}>
-                  <Ionicons name="information-circle-outline" size={14} color={WHATSAPP_COLORS.gray} />
-                  <Text style={styles.inputHint}>
-                    Help employees understand when to use this
-                  </Text>
-                </View>
-                <Text style={[
-                  styles.characterCounter,
-                  formData.description.length === 500 && styles.characterCounterWarning
-                ]}>
-                  {formData.description.length}/500
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Preview Card */}
-          {(formData.common_request.trim() || formData.description.trim()) && (
-            <View style={styles.previewCard}>
-              <View style={styles.previewHeader}>
-                <Ionicons name="eye-outline" size={20} color={WHATSAPP_COLORS.primary} />
-                <Text style={styles.previewTitle}>Preview</Text>
-              </View>
-              <View style={styles.previewContent}>
-                {formData.common_request.trim() && (
-                  <View style={styles.previewItem}>
-                    <Text style={styles.previewLabel}>Request Type:</Text>
-                    <Text style={styles.previewValue}>{formData.common_request}</Text>
-                  </View>
-                )}
-                {formData.description.trim() && (
-                  <View style={styles.previewItem}>
-                    <Text style={styles.previewLabel}>Description:</Text>
-                    <Text style={styles.previewValue}>{formData.description}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Fixed Bottom Action Buttons */}
-        <View style={[styles.fixedBottomContainer, { paddingBottom: insets.bottom || 16 }]}>
-          <TouchableOpacity
-            style={styles.modernCancelButton}
-            onPress={onBack}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close-circle-outline" size={20} color={WHATSAPP_COLORS.darkGray} />
-            <Text style={styles.modernCancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.modernSubmitButton,
-              !isFormValid && styles.modernSubmitButtonDisabled
+    <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
+      <View style={styles.container}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={WHATSAPP_COLORS.primaryDark}
+        />
+        <Header
+          title="Add Common Request"
+          subtitle=""
+          onBack={onBack}
+        />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
+        >
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.scrollContentPadded,
+              { paddingBottom: insets.bottom + 100 }
             ]}
-            onPress={handleSubmit}
-            disabled={loading || !isFormValid}
-            activeOpacity={0.7}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            bounces={false}
+            overScrollMode="never"
           >
-            {loading ? (
-              <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={20} color={WHATSAPP_COLORS.white} />
-                <Text style={styles.modernSubmitButtonText}>
-                  Create Request Type
+            {/* Info Card */}
+            <View style={styles.infoCardBanner}>
+              <View style={styles.infoIconWrapper}>
+                <Ionicons name="information-circle" size={24} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={styles.infoTextWrapper}>
+                <Text style={styles.infoTitle}>Create Request Type</Text>
+                <Text style={styles.infoDescription}>
+                  Define a new request category that employees can use when submitting requests
                 </Text>
-              </>
+              </View>
+            </View>
+
+            {/* Form Card */}
+            <View style={styles.modernFormCard}>
+              {/* Request Type Field */}
+              <View style={styles.modernFormSection}>
+                <View style={styles.modernLabelContainer}>
+                  <Text style={styles.modernLabel}>Request Type</Text>
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>Required</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => requestInputRef.current?.focus()}
+                >
+                  <View style={[
+                    styles.modernInputContainer,
+                    focusedField === 'request_type' && styles.modernInputContainerFocused
+                  ]}>
+                    <View style={styles.inputIconContainer}>
+                      <Ionicons
+                        name="document-text-outline"
+                        size={20}
+                        color={focusedField === 'request_type' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
+                      />
+                    </View>
+                    <TextInput
+                      ref={requestInputRef}
+                      style={styles.modernTextInput}
+                      value={formData.common_request}
+                      onChangeText={(text) => {
+                        if (text.length <= 100) {
+                          setFormData({ ...formData, common_request: text });
+                        }
+                      }}
+                      placeholder="e.g., Leave Request, Travel Allowance"
+                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                      maxLength={100}
+                      onFocus={() => setFocusedField('request_type')}
+                      onBlur={() => setFocusedField(null)}
+                      editable={!loading}
+                      autoCorrect={false}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                      onSubmitEditing={() => descriptionInputRef.current?.focus()}
+                      blurOnSubmit={false}
+                    />
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.inputFooter}>
+                  <View style={styles.inputHintContainer}>
+                    <Ionicons name="bulb-outline" size={14} color={WHATSAPP_COLORS.gray} />
+                    <Text style={styles.inputHint}>
+                      This will appear in dropdown menus
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.characterCounter,
+                    formData.common_request.length === 100 && styles.characterCounterWarning
+                  ]}>
+                    {formData.common_request.length}/100
+                  </Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.formDivider} />
+
+              {/* Description Field */}
+              <View style={styles.modernFormSection}>
+                <View style={styles.modernLabelContainer}>
+                  <Text style={styles.modernLabel}>Description</Text>
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>Required</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => descriptionInputRef.current?.focus()}
+                >
+                  <View style={[
+                    styles.modernTextAreaContainer,
+                    focusedField === 'description' && styles.modernInputContainerFocused
+                  ]}>
+                    <View style={styles.textAreaIconContainer}>
+                      <Ionicons
+                        name="create-outline"
+                        size={20}
+                        color={focusedField === 'description' ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.gray}
+                      />
+                    </View>
+                    <TextInput
+                      ref={descriptionInputRef}
+                      style={styles.modernTextArea}
+                      value={formData.description}
+                      onChangeText={(text) => {
+                        if (text.length <= 500) {
+                          setFormData({ ...formData, description: text });
+                        }
+                      }}
+                      placeholder="Provide a clear description of when employees should use this request type..."
+                      placeholderTextColor={WHATSAPP_COLORS.placeholderGray}
+                      multiline
+                      numberOfLines={6}
+                      textAlignVertical="top"
+                      maxLength={500}
+                      onFocus={() => setFocusedField('description')}
+                      onBlur={() => setFocusedField(null)}
+                      editable={!loading}
+                      autoCorrect={true}
+                      autoCapitalize="sentences"
+                      returnKeyType="default"
+                    />
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.inputFooter}>
+                  <View style={styles.inputHintContainer}>
+                    <Ionicons name="information-circle-outline" size={14} color={WHATSAPP_COLORS.gray} />
+                    <Text style={styles.inputHint}>
+                      Help employees understand when to use this
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.characterCounter,
+                    formData.description.length === 500 && styles.characterCounterWarning
+                  ]}>
+                    {formData.description.length}/500
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Preview Card */}
+            {(formData.common_request.trim() || formData.description.trim()) && (
+              <View style={styles.previewCard}>
+                <View style={styles.previewHeader}>
+                  <Ionicons name="eye-outline" size={20} color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.previewTitle}>Preview</Text>
+                </View>
+                <View style={styles.previewContent}>
+                  {formData.common_request.trim() && (
+                    <View style={styles.previewItem}>
+                      <Text style={styles.previewLabel}>Request Type:</Text>
+                      <Text style={styles.previewValue}>{formData.common_request}</Text>
+                    </View>
+                  )}
+                  {formData.description.trim() && (
+                    <View style={styles.previewItem}>
+                      <Text style={styles.previewLabel}>Description:</Text>
+                      <Text style={styles.previewValue}>{formData.description}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
             )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </View>
+          </ScrollView>
+
+          {/* Fixed Bottom Action Buttons */}
+          <View style={[
+            styles.fixedBottomContainer,
+            {
+              backgroundColor: WHATSAPP_COLORS.white,
+              paddingBottom: Math.max(insets.bottom, 16)
+            }
+          ]}>
+            <TouchableOpacity
+              style={styles.modernCancelButton}
+              onPress={() => {
+                dismissKeyboard();
+                onBack();
+              }}
+              disabled={loading}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle-outline" size={20} color={WHATSAPP_COLORS.darkGray} />
+              <Text style={styles.modernCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modernSubmitButton,
+                !isFormValid && styles.modernSubmitButtonDisabled
+              ]}
+              onPress={() => {
+                dismissKeyboard();
+                handleSubmit();
+              }}
+              disabled={loading || !isFormValid}
+              activeOpacity={0.7}
+            >
+              {loading ? (
+                <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color={WHATSAPP_COLORS.white} />
+                  <Text style={styles.modernSubmitButtonText}>
+                    Create Request Type
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 };

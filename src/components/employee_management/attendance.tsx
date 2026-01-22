@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  Animated,
+  Dimensions,
+  Alert,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 import { Employee, AttendanceRecord } from './types';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import { BACKEND_URL } from '../../config/config';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AttendanceProps {
   employee: Employee;
@@ -19,6 +30,67 @@ interface AttendanceProps {
   onYearChange: (year: number) => void;
 }
 
+const STATUS_COLORS = {
+  present: 'rgb(148, 228, 164)',
+  leave: 'rgb(255, 185, 114)',
+  holiday: 'rgb(113, 220, 255)',
+  checkout_missing: '#E6CC00',
+  late_login: '#c99cf3',
+  late_login_checkout_missing: '#C7907C',
+  late_login_checkout_pending: '#D9BFDA',
+  checkout_pending: '#D9F2D9',
+  pending: '#ffffff',
+  weekend: '#ffffff',
+  absent: 'rgb(255, 96, 96)',
+  wfh: '#9C27B0',
+};
+
+const STATUS_TEXT_COLORS = {
+  present: '#ffffffff',
+  leave: '#ffffffff',
+  holiday: '#ffffffff',
+  checkout_missing: '#ffffffff',
+  late_login: '#ffffffff',
+  late_login_checkout_missing: '#ffffffff',
+  late_login_checkout_pending: '#363636ff',
+  checkout_pending: '#363636ff',
+  pending: '#363636ff',
+  weekend: '#363636ff',
+  absent: '#ffffffff',
+  wfh: '#ffffffff',
+};
+
+const STATUS_NAMES: Record<string, string> = {
+  present: 'Present',
+  leave: 'Leave',
+  holiday: 'Holiday',
+  late_login: 'Late Login',
+  pending: 'Pending',
+  weekend: 'Weekend',
+  absent: 'Absent',
+  wfh: 'WFH',
+};
+
+const LEGEND_ITEMS = [
+  { key: 'present', color: STATUS_COLORS.present, label: 'Present' },
+  { key: 'absent', color: STATUS_COLORS.absent, label: 'Absent' },
+  { key: 'late_login', color: STATUS_COLORS.late_login, label: 'Late Login' },
+  { key: 'leave', color: STATUS_COLORS.leave, label: 'Leave' },
+  { key: 'holiday', color: STATUS_COLORS.holiday, label: 'Holiday' },
+  { key: 'wfh', color: STATUS_COLORS.wfh, label: 'WFH' },
+];
+
+const mapStatusForDisplay = (status: string): string => {
+  const statusMapping: Record<string, string> = {
+    'checkout_missing': 'present',
+    'late_login_checkout_missing': 'late_login',
+    'late_login_checkout_pending': 'late_login',
+    'checkout_pending': 'present',
+  };
+  
+  return statusMapping[status.toLowerCase()] || status;
+};
+
 export const Attendance: React.FC<AttendanceProps> = ({
   employee,
   attendanceReport,
@@ -27,6 +99,29 @@ export const Attendance: React.FC<AttendanceProps> = ({
   onMonthChange,
   onYearChange,
 }) => {
+  const [loading, setLoading] = useState(false);
+  const [showAllLegend, setShowAllLegend] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
+  const legendHeight = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (selectedDate) {
+      const timer = setTimeout(() => {
+        setSelectedDate(null);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    Animated.spring(legendHeight, {
+      toValue: showAllLegend ? 1 : 0,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: false,
+    }).start();
+  }, [showAllLegend]);
+
   const calculateAttendanceSummary = () => {
     if (!attendanceReport || attendanceReport.length === 0) {
       return {
@@ -41,7 +136,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
     }
 
     return {
-      present: attendanceReport.filter(r => r.attendance_status === 'present').length,
+      present: attendanceReport.filter(r => r.attendance_status === 'present' || r.attendance_status === 'checkout_missing' || r.attendance_status === 'checkout_pending').length,
       leave: attendanceReport.filter(r => r.attendance_status === 'leave').length,
       wfh: attendanceReport.filter(r => r.attendance_status === 'wfh').length,
       absent: attendanceReport.filter(r => r.attendance_status === 'absent').length,
@@ -88,31 +183,28 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const getDateStatus = (day: number) => {
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const record = attendanceReport.find(r => r.date === dateStr);
-    return record ? record.attendance_status : null;
+    if (record) {
+      return mapStatusForDisplay(record.attendance_status);
+    }
+    return null;
   };
 
   const getDateColor = (status: string | null) => {
-    if (!status) return 'transparent';
-    
-    const statusColors: Record<string, string> = {
-      'present': '#4ADE80',      // Green
-      'leave': '#FB923C',        // Orange
-      'wfh': '#9C27B0',          // Purple
-      'absent': '#EF5350',       // Red/Coral
-      'holiday': '#60A5FA',      // Blue
-      'late_login': '#C084FC',   // Purple/Lavender
-      'weekend': 'transparent',
-      'pending': 'transparent'
-    };
-    
-    return statusColors[status] || 'transparent';
+    if (!status) return '#e5e7eb';
+    const statusKey = status.toLowerCase().replace(/ /g, '_');
+    return STATUS_COLORS[statusKey as keyof typeof STATUS_COLORS] || '#e5e7eb';
   };
 
   const getDateTextColor = (status: string | null) => {
-    if (!status || status === 'weekend' || status === 'pending') {
-      return '#9CA3AF'; // Gray for non-status days
+    if (!status) return '#9ca3af';
+    const statusKey = status.toLowerCase().replace(/ /g, '_');
+    return STATUS_TEXT_COLORS[statusKey as keyof typeof STATUS_TEXT_COLORS] || '#9ca3af';
+  };
+
+  const handleDatePress = (day: number, status: string | null) => {
+    if (status) {
+      setSelectedDate({ day, status });
     }
-    return '#FFFFFF'; // White for status days
   };
 
   const renderCalendar = () => {
@@ -133,54 +225,143 @@ export const Attendance: React.FC<AttendanceProps> = ({
     for (let day = 1; day <= daysInMonth; day++) {
       const status = getDateStatus(day);
       const isToday = day === currentDay && selectedMonth === currentMonth && selectedYear === currentYear;
-      const bgColor = getDateColor(status);
-      const textColor = getDateTextColor(status);
 
       days.push(
-        <View
+        <TouchableOpacity
           key={day}
           style={styles.calendarDay}
+          onPress={() => handleDatePress(day, status)}
+          activeOpacity={0.7}
         >
           <View style={[
             styles.dayCircle,
-            { backgroundColor: bgColor },
+            status && { backgroundColor: getDateColor(status) },
             isToday && styles.todayCircle
           ]}>
             <Text style={[
               styles.dayText,
-              { color: textColor },
-              isToday && !status && { color: '#000000' }
+              status && { color: getDateTextColor(status) },
+              status && styles.dayTextActive,
+              !status && styles.dayTextInactive
             ]}>
               {day}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
       );
     }
 
     return days;
   };
 
+  const downloadAttendanceReport = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/getAttendanceReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: employee.token || '',
+          employee_id: employee.employee_id,
+          month_year: `${String(selectedMonth + 1).padStart(2, '0')}/${String(selectedYear).slice(-2)}`
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to generate report');
+      }
+
+      const data = await response.json();
+      if (!data.file_url) {
+        throw new Error('Invalid response from server');
+      }
+
+      const fileUrl = data.file_url;
+      const filename = data.filename || `attendance_report_${employee.employee_id}_${selectedMonth + 1}_${selectedYear}.pdf`;
+
+      Alert.alert(
+        'Download Report',
+        'Choose how you want to access the attendance report:',
+        [
+          {
+            text: 'Open in Browser',
+            onPress: async () => {
+              await WebBrowser.openBrowserAsync(fileUrl);
+            },
+          },
+          {
+            text: 'Download & Share',
+            onPress: async () => {
+              try {
+                setLoading(true);
+                const pdfResponse = await fetch(fileUrl);
+                if (!pdfResponse.ok) {
+                  throw new Error('Failed to fetch PDF from server');
+                }
+                const blob = await pdfResponse.blob();
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                  try {
+                    const base64data = reader.result as string;
+                    const base64Content = base64data.split(',')[1];
+                    const fileUri = FileSystem.documentDirectory + filename;
+                    await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(fileUri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Share Attendance Report',
+                        UTI: 'com.adobe.pdf',
+                      });
+                      Alert.alert('Success', 'Report downloaded successfully!');
+                    } else {
+                      Alert.alert('Info', 'File saved to app directory');
+                    }
+                  } catch (shareError) {
+                    console.error('Share error:', shareError);
+                    Alert.alert('Error', 'Failed to share PDF');
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                reader.onerror = () => {
+                  console.error('FileReader error');
+                  Alert.alert('Error', 'Failed to process PDF');
+                  setLoading(false);
+                };
+                reader.readAsDataURL(blob);
+              } catch (err) {
+                console.error('Download error:', err);
+                Alert.alert('Error', 'Failed to download PDF');
+                setLoading(false);
+              }
+            },
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error downloading report:', error);
+      Alert.alert('Error', error.message || 'Failed to generate report. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const visibleLegendItems = showAllLegend ? LEGEND_ITEMS : LEGEND_ITEMS.slice(0, 3);
+
   return (
     <ScrollView 
       style={styles.detailsContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.attendanceHeader}>
-        <Text style={styles.attendanceTitle}>Attendance Report</Text>
-        <Text style={styles.attendanceSubtitle}>
-          View and download attendance records
-        </Text>
-      </View>
-
-      <TouchableOpacity 
-        style={styles.downloadButton}
-        onPress={() => {/* Add download report logic */}}
-      >
-        <Ionicons name="download-outline" size={20} color="#FFFFFF" />
-        <Text style={styles.downloadButtonText}>Download Report</Text>
-      </TouchableOpacity>
-
       {/* Attendance Summary Cards */}
       <View style={styles.attendanceSummary}>
         <View style={styles.summaryRow}>
@@ -204,10 +385,10 @@ export const Attendance: React.FC<AttendanceProps> = ({
           
           <View style={[styles.summaryCard, { backgroundColor: '#F3E5F5' }]}>
             <Text style={[styles.summaryValue, { color: '#7B1FA2' }]}>
-              {summary.wfh}
+              {summary.wfh || 0}
             </Text>
             <Text style={[styles.summaryLabel, { color: '#7B1FA2' }]}>
-              Late Login
+              WFH
             </Text>
           </View>
           
@@ -223,22 +404,21 @@ export const Attendance: React.FC<AttendanceProps> = ({
       </View>
 
       {/* Month Navigation */}
-      <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={prevMonth} style={styles.monthNavButton}>
-          <Text style={styles.navButtonText}>‹</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.monthYearText}>
-          {getMonthName(selectedMonth)} {selectedYear}
-        </Text>
-        
-        <TouchableOpacity onPress={nextMonth} style={styles.monthNavButton}>
-          <Text style={styles.navButtonText}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Calendar View */}
       <View style={styles.calendarContainer}>
+        <View style={styles.calendarHeader}>
+          <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
+            <Text style={styles.navButtonText}>‹</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.monthYearText}>
+            {getMonthName(selectedMonth)} {selectedYear}
+          </Text>
+          
+          <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
+            <Text style={styles.navButtonText}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.weekDays}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
             <Text key={day} style={styles.weekDayText}>{day}</Text>
@@ -248,40 +428,84 @@ export const Attendance: React.FC<AttendanceProps> = ({
         <View style={styles.calendarGrid}>
           {renderCalendar()}
         </View>
+
+        {/* Legend */}
+        <View style={styles.legendContainer}>
+          <View style={styles.legendVisible}>
+            {visibleLegendItems.map((item, index) => (
+              <View key={item.key} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                <Text style={styles.legendText}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {!showAllLegend && LEGEND_ITEMS.length > 3 && (
+            <TouchableOpacity
+              style={styles.viewMoreButton}
+              onPress={() => setShowAllLegend(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.viewMoreText}>View More</Text>
+              <Text style={styles.viewMoreIcon}>▼</Text>
+            </TouchableOpacity>
+          )}
+
+          {showAllLegend && (
+            <Animated.View
+              style={[
+                styles.legendExpanded,
+                {
+                  opacity: legendHeight,
+                  transform: [{
+                    translateY: legendHeight.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-10, 0]
+                    })
+                  }]
+                }
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.viewLessButton}
+                onPress={() => setShowAllLegend(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.viewMoreText}>View Less</Text>
+                <Text style={styles.viewLessIcon}>▲</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </View>
       </View>
 
-      {/* Legend */}
-<View style={styles.legendContainer}>
-  <View style={styles.legendRow}>
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: '#4ADE80' }]} />
-      <Text style={styles.legendText}>Present</Text>
-    </View>
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: '#EF5350' }]} />
-      <Text style={styles.legendText}>Absent</Text>
-    </View>
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: '#C084FC' }]} />
-      <Text style={styles.legendText}>Late Login</Text>
-    </View>
-  </View>
-  <View style={styles.legendRow}>
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: '#FB923C' }]} />
-      <Text style={styles.legendText}>Leave</Text>
-    </View>
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: '#60A5FA' }]} />
-      <Text style={styles.legendText}>Holiday</Text>
-    </View>
-    {/* Empty view for alignment */}
-    <View style={[styles.legendItem, { opacity: 0 }]}>
-      <View style={styles.legendDot} />
-      <Text style={styles.legendText}>Placeholder</Text>
-    </View>
-  </View>
-</View>
+      {/* Download Report Button */}
+      <View style={styles.downloadContainer}>
+        <TouchableOpacity 
+          style={styles.downloadButton}
+          onPress={downloadAttendanceReport}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.downloadButtonText}>Download Report</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Status Tooltip */}
+      {selectedDate && (
+        <View style={styles.statusTooltip}>
+          <Text style={styles.statusTooltipText}>
+            {STATUS_NAMES[selectedDate.status.toLowerCase()] || selectedDate.status}
+          </Text>
+          <View style={styles.tooltipArrow} />
+        </View>
+      )}
     </ScrollView>
   );
 };
