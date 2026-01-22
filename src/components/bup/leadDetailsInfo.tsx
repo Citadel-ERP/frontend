@@ -8,7 +8,8 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
-  Platform
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -31,7 +32,11 @@ const C = {
   success: '#25D366',
   chatBg: '#ECE5DD',
   incoming: '#FFFFFF',
-  outgoing: '#DCF8C6'
+  outgoing: '#DCF8C6',
+  leadInfoBg: '#F0F9FF',
+  leadInfoBorder: '#0EA5E9',
+  customFieldBg: '#F5F3FF',
+  customFieldBorder: '#8B5CF6',
 };
 
 interface Lead {
@@ -51,6 +56,7 @@ interface Lead {
     full_name?: string;
   };
   city?: string;
+  meta?: any; // Added meta field
 }
 
 interface LeadDetailsInfoProps {
@@ -89,6 +95,15 @@ const LeadDetailsInfo: React.FC<LeadDetailsInfoProps> = ({ lead, token, onBack }
     } else {
       return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
     }
+  };
+
+  const getOfficeTypeLabel = (value: string): string => {
+    const officeTypes: {[key: string]: string} = {
+      'conventional_office': 'Conventional Office',
+      'managed_office': 'Managed Office',
+      'conventional_and_managed_office': 'Conventional and Managed Office'
+    };
+    return officeTypes[value] || beautifyName(value);
   };
 
   const renderSection = ({ item }: { item: string }) => {
@@ -158,6 +173,75 @@ const LeadDetailsInfo: React.FC<LeadDetailsInfoProps> = ({ lead, token, onBack }
           </View>
         );
 
+      case 'lead-specific-info':
+        // Extract lead specific information from meta
+        const hasLeadSpecificInfo = lead.meta && typeof lead.meta === 'object' && (
+          lead.meta.area_requirements || 
+          lead.meta.office_type || 
+          lead.meta.location || 
+          Object.keys(lead.meta).some(key => 
+            !['area_requirements', 'office_type', 'location'].includes(key)
+          )
+        );
+
+        if (!hasLeadSpecificInfo) {
+          return null;
+        }
+
+        const defaultKeys = ['area_requirements', 'office_type', 'location'];
+        const customFields = lead.meta ? Object.entries(lead.meta)
+          .filter(([key]) => !defaultKeys.includes(key))
+          .map(([key, value]) => ({ key, value: String(value) }))
+          : [];
+
+        return (
+          <View style={s.section}>
+            <View style={s.sectionHeaderWithIcon}>
+              <MaterialIcons name="business" size={20} color={C.leadInfoBorder} />
+              <Text style={s.sectionTitle}>Lead Specific Information</Text>
+            </View>
+            
+            {lead.meta?.area_requirements && (
+              <View style={s.metaRow}>
+                <MaterialIcons name="square-foot" size={18} color={C.leadInfoBorder} />
+                <Text style={s.metaLabel}>Area Requirements:</Text>
+                <Text style={s.metaValue}>{lead.meta.area_requirements}</Text>
+              </View>
+            )}
+            
+            {lead.meta?.office_type && (
+              <View style={s.metaRow}>
+                <MaterialIcons name="business-center" size={18} color={C.leadInfoBorder} />
+                <Text style={s.metaLabel}>Office Type:</Text>
+                <Text style={s.metaValue}>{getOfficeTypeLabel(lead.meta.office_type)}</Text>
+              </View>
+            )}
+            
+            {lead.meta?.location && (
+              <View style={s.metaRow}>
+                <MaterialIcons name="location-on" size={18} color={C.leadInfoBorder} />
+                <Text style={s.metaLabel}>Location Preference:</Text>
+                <Text style={s.metaValue}>{lead.meta.location}</Text>
+              </View>
+            )}
+            
+            {customFields.length > 0 && (
+              <View style={s.customFieldsSection}>
+                <Text style={s.customFieldsTitle}>Additional Information</Text>
+                {customFields.map((field, index) => (
+                  <View key={index} style={s.customFieldItem}>
+                    <View style={s.customFieldKeyContainer}>
+                      <MaterialIcons name="category" size={16} color={C.customFieldBorder} />
+                      <Text style={s.customFieldKey}>{beautifyName(field.key)}:</Text>
+                    </View>
+                    <Text style={s.customFieldValue}>{field.value}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+
       case 'metadata':
         return (
           <View style={s.section}>
@@ -195,23 +279,20 @@ const LeadDetailsInfo: React.FC<LeadDetailsInfoProps> = ({ lead, token, onBack }
         return null;
     }
   };
+  
   const BackIcon = () => (
-  <View style={s.backIcon}>
-    <View style={s.backArrow} />
-    {/* <Text style={s.backText}>Back</Text> */}
-  </View>
-);
+    <View style={s.backIcon}>
+      <View style={s.backArrow} />
+    </View>
+  );
 
-  const sections = useMemo(() => [
-    'lead-info',
-    'contact-info',
-    'metadata'
-  ], []);
+  const sections = useMemo(() => {
+    const sectionsArray = ['lead-info', 'contact-info', 'lead-specific-info', 'metadata'];
+    return sectionsArray;
+  }, [lead.meta]);
 
   return (
     <View style={s.container}>
-      {/* <StatusBar barStyle="light-content" backgroundColor={C.primary} /> */}
-
       {/* Header with Back Button */}
       <View style={s.headerSafeArea}>
         <View style={s.header}>
@@ -251,7 +332,6 @@ const s = StyleSheet.create({
     backgroundColor: C.background,
   },
   headerSafeArea: {
-    
     backgroundColor: C.primary,
   },
   header: {
@@ -261,7 +341,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
     minHeight: 56,
-    marginTop:Platform.OS === 'ios' ? 30 : 20,
+    marginTop: Platform.OS === 'ios' ? 30 : 20,
   },
   backButton: {
     padding: 6,
@@ -273,7 +353,6 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
     flex: 1,
-    
     textAlign: 'center',
   },
   headerPlaceholder: {
@@ -353,6 +432,12 @@ const s = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
   },
+  sectionHeaderWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '600',
@@ -420,10 +505,71 @@ const s = StyleSheet.create({
     borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
-  backText: {
-    color: '#fff',
+
+  // Lead Specific Information Styles
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    padding: 10,
+    backgroundColor: C.leadInfoBg,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: C.leadInfoBorder,
+  },
+  metaLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginLeft: 8,
+    marginRight: 4,
+    minWidth: 120,
+  },
+  metaValue: {
+    fontSize: 13,
+    color: C.textPrimary,
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  customFieldsSection: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingTop: 12,
+  },
+  customFieldsTitle: {
     fontSize: 14,
-    marginLeft: 2,
+    fontWeight: '600',
+    color: C.customFieldBorder,
+    marginBottom: 8,
+  },
+  customFieldItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    padding: 10,
+    backgroundColor: C.customFieldBg,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: C.customFieldBorder,
+  },
+  customFieldKeyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 120,
+  },
+  customFieldKey: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginLeft: 6,
+  },
+  customFieldValue: {
+    fontSize: 13,
+    color: C.textPrimary,
+    flex: 1,
+    marginLeft: 12,
+    flexWrap: 'wrap',
   },
 });
 

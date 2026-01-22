@@ -48,8 +48,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const STATUS_COLORS = {
   present: 'rgb(148, 228, 164)',
-  leave: 'rgb(230, 166, 103)',
-  holiday: 'rgb(94, 165, 188)',
+  leave: 'rgb(255, 185, 114)',
+  holiday: 'rgb(113, 220, 255)',
   checkout_missing: '#E6CC00',
   late_login: '#c99cf3',
   late_login_checkout_missing: '#C7907C',
@@ -57,7 +57,7 @@ const STATUS_COLORS = {
   checkout_pending: '#D9F2D9',
   pending: '#ffffff',
   weekend: '#ffffff',
-  absent: 'rgb(248, 126, 126)',
+  absent: 'rgb(255, 96, 96)',
 };
 
 const STATUS_TEXT_COLORS = {
@@ -99,6 +99,18 @@ const LEGEND_ITEMS = [
   // { key: 'checkout_pending', color: STATUS_COLORS.checkout_pending, label: 'Checkout Pending' },
   // { key: 'late_login_checkout_pending', color: STATUS_COLORS.late_login_checkout_pending, label: 'Late + Checkout Pending' },
 ];
+
+// Map backend status to display status
+const mapStatusForDisplay = (status: string): string => {
+  const statusMapping: Record<string, string> = {
+    'checkout_missing': 'present',
+    'late_login_checkout_missing': 'late_login',
+    'late_login_checkout_pending': 'late_login',
+    'checkout_pending': 'present',
+  };
+  
+  return statusMapping[status.toLowerCase()] || status;
+};
 
 const AttendanceButtonSection: React.FC<{
   locationPermission: boolean;
@@ -249,6 +261,8 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [hasSpecialPermission, setHasSpecialPermission] = useState(false);
   const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
   const [showAllLegend, setShowAllLegend] = useState(false);
+  const [attendanceForTodayMarked, setAttendanceForTodayMarked] = useState(false);
+  const [checkoutForTodayMarked, setCheckoutForTodayMarked] = useState(false);
   const legendHeight = useRef(new Animated.Value(0)).current;
   
   const [attendanceTimings, setAttendanceTimings] = useState({
@@ -905,6 +919,14 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
           });
         }
         
+        // Store today's attendance status flags
+        if (typeof data.attendance_for_today_marked !== 'undefined') {
+          setAttendanceForTodayMarked(data.attendance_for_today_marked);
+        }
+        if (typeof data.checkout_for_today_marked !== 'undefined') {
+          setCheckoutForTodayMarked(data.checkout_for_today_marked);
+        }
+        
         if (data.attendances && Array.isArray(data.attendances)) {
           const formattedRecords = data.attendances.map((attendance: any) => ({
             date: attendance.date,
@@ -1111,7 +1133,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const record = attendanceRecords.find(r => r.date === dateStr);
     if (record) {
-      return record.status;
+      return mapStatusForDisplay(record.status);
     }
     return null;
   };
@@ -1273,19 +1295,25 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
               </View>
             )}
 
-            {todayAttendance ? (
+            {(todayAttendance || attendanceForTodayMarked) ? (
               <View style={styles.markedContainer}>
                 <View style={styles.checkmarkCircle}>
                   <Text style={styles.checkmark}>✓</Text>
                 </View>
                 <Text style={styles.markedText}>Attendance Marked</Text>
-                {todayAttendance.check_in_time && (
+                {todayAttendance?.check_in_time && (
                   <Text style={styles.markedTime}>Check-in: {todayAttendance.check_in_time}</Text>
                 )}
-                {todayAttendance.check_out_time && (
+                {todayAttendance?.check_out_time && (
                   <Text style={styles.markedTime}>Check-out: {todayAttendance.check_out_time}</Text>
                 )}
-                {todayAttendance.check_in_time && !todayAttendance.check_out_time && (
+                
+                {/* Show appropriate message/button based on checkout status */}
+                {checkoutForTodayMarked ? (
+                  <Text style={styles.checkoutCompletedText}>
+                    You have already marked your attendance for today
+                  </Text>
+                ) : attendanceForTodayMarked && !todayAttendance?.check_out_time ? (
                   <>
                     <Text style={styles.checkoutReminderText}>
                       Mark your checkout after {formatTimeString(attendanceTimings.logout_time)}
@@ -1308,7 +1336,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                       )}
                     </TouchableOpacity>
                   </>
-                )}
+                ) : null}
               </View>
             ) : (
               <AttendanceButtonSection
@@ -1834,6 +1862,13 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 8,
     marginBottom: 8,
+    textAlign: 'center',
+  },
+  checkoutCompletedText: {
+    fontSize: 14,
+    color: '#10b981',
+    marginTop: 8,
+    fontWeight: '600',
     textAlign: 'center',
   },
   legendContainer: {

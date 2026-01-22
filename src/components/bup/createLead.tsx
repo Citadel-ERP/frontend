@@ -35,6 +35,10 @@ const WHATSAPP_COLORS = {
   chatBg: '#ECE5DD',
   incoming: '#FFFFFF',
   outgoing: '#DCF8C6',
+  leadInfoBg: '#F0F9FF',
+  leadInfoBorder: '#0EA5E9',
+  customFieldBg: '#F5F3FF',
+  customFieldBorder: '#8B5CF6',
 };
 
 interface CreateLeadProps {
@@ -44,6 +48,12 @@ interface CreateLeadProps {
   token: string | null;
   theme: ThemeColors;
   fetchSubphases: (phase: string) => Promise<void>;
+}
+
+interface CustomField {
+  id: string;
+  key: string;
+  value: string;
 }
 
 // Debounce hook for search optimization
@@ -92,11 +102,18 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'assigned' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'assigned' | 'officeType' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Lead Specific Information States
+  const [areaRequirements, setAreaRequirements] = useState('');
+  const [officeType, setOfficeType] = useState('');
+  const [location, setLocation] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFieldErrors, setCustomFieldErrors] = useState<{[key: string]: string}>({});
 
   // Assigned person states
   const [assignedToSearch, setAssignedToSearch] = useState('');
@@ -113,6 +130,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     { value: 'no_requirement', label: 'No Requirement' },
     { value: 'transaction_complete', label: 'Transaction Complete' },
     { value: 'non_responsive', label: 'Non Responsive' }
+  ];
+
+  const OFFICE_TYPE_CHOICES: FilterOption[] = [
+    { value: 'conventional_office', label: 'Conventional Office' },
+    { value: 'managed_office', label: 'Managed Office' },
+    { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
   ];
 
   useEffect(() => {
@@ -325,6 +348,45 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     setEditingPhones(editingPhones.filter((_, i) => i !== index));
   };
 
+  const handleAddCustomField = (): void => {
+    const newId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setCustomFields([...customFields, { id: newId, key: '', value: '' }]);
+  };
+
+  const handleRemoveCustomField = (id: string): void => {
+    setCustomFields(customFields.filter(field => field.id !== id));
+    const newErrors = {...customFieldErrors};
+    delete newErrors[id];
+    setCustomFieldErrors(newErrors);
+  };
+
+  const handleCustomFieldChange = (id: string, field: 'key' | 'value', text: string): void => {
+    setCustomFields(customFields.map(fieldItem => 
+      fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem
+    ));
+    
+    if (customFieldErrors[id]) {
+      const newErrors = {...customFieldErrors};
+      delete newErrors[id];
+      setCustomFieldErrors(newErrors);
+    }
+  };
+
+  const validateCustomFields = (): boolean => {
+    const errors: {[key: string]: string} = {};
+    let isValid = true;
+
+    customFields.forEach(field => {
+      if (field.key.trim() === '' && field.value.trim() !== '') {
+        errors[field.id] = 'Key is required when value is provided';
+        isValid = false;
+      }
+    });
+
+    setCustomFieldErrors(errors);
+    return isValid;
+  };
+
   const handlePhaseSelection = async (phase: string): Promise<void> => {
     setFormData({ ...formData, phase: phase, subphase: '' });
     await fetchSubphases(phase);
@@ -343,6 +405,9 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       case 'subphase': 
         choices = allSubphases; 
         break;
+      case 'officeType': 
+        choices = OFFICE_TYPE_CHOICES; 
+        break;
     }
     const option = choices.find(choice => choice.value === value);
     return option ? option.label : beautifyName(value);
@@ -352,6 +417,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     if (!formData.assigned_to) return 'Unassigned';
     return formData.assigned_to.full_name || 
            `${formData.assigned_to.first_name} ${formData.assigned_to.last_name}`;
+  };
+
+  const getOfficeTypeLabel = (): string => {
+    const option = OFFICE_TYPE_CHOICES.find(choice => choice.value === officeType);
+    return option ? option.label : 'Select office type...';
   };
 
   const handleCreate = async (): Promise<void> => {
@@ -366,7 +436,27 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         return;
       }
 
+      if (!validateCustomFields()) {
+        Alert.alert('Validation Error', 'Please check your custom fields. Key is required when value is provided.');
+        return;
+      }
+
       setLoading(true);
+
+      // Build meta object
+      const meta: {[key: string]: any} = {};
+      
+      // Add lead specific information
+      if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
+      if (officeType) meta.office_type = officeType;
+      if (location.trim()) meta.location = location.trim();
+      
+      // Add custom fields
+      customFields.forEach(field => {
+        if (field.key.trim() && field.value.trim()) {
+          meta[field.key.trim()] = field.value.trim();
+        }
+      });
 
       const createPayload: any = {
         token: token,
@@ -391,7 +481,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
       // Add assigned_to if selected
       if (formData.assigned_to) {
-        createPayload.assigned_to_email = formData.assigned_to.email;
+        createPayload.assigned_to = formData.assigned_to.email;
+      }
+
+      // Add meta if it has data
+      if (Object.keys(meta).length > 0) {
+        createPayload.meta = meta;
       }
 
       const response = await fetch(`${BACKEND_URL}/manager/createLead`, {
@@ -422,6 +517,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       });
       setEditingEmails([]);
       setEditingPhones([]);
+      setAreaRequirements('');
+      setOfficeType('');
+      setLocation('');
+      setCustomFields([]);
+      setCustomFieldErrors({});
       
       // Call onCreate callback to refresh leads list
       onCreate();
@@ -512,6 +612,98 @@ const CreateLead: React.FC<CreateLeadProps> = ({
               <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Lead Specific Information */}
+        <View style={styles.detailCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="business" size={20} color={WHATSAPP_COLORS.leadInfoBorder} />
+            <Text style={styles.sectionTitle}>Lead Specific Information</Text>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Area Requirements</Text>
+            <TextInput
+              style={styles.input}
+              value={areaRequirements}
+              onChangeText={setAreaRequirements}
+              placeholder="e.g., 1000 sq ft, 5 desks, etc."
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              multiline
+              numberOfLines={2}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Office Type</Text>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setActiveDropdown('officeType')}
+            >
+              <View style={styles.assignedToContent}>
+                <Ionicons name="business" size={18} color={WHATSAPP_COLORS.leadInfoBorder} />
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                  {getOfficeTypeLabel()}
+                </Text>
+              </View>
+              <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Location Preference</Text>
+            <TextInput
+              style={styles.input}
+              value={location}
+              onChangeText={setLocation}
+              placeholder="e.g., Downtown, Business District, etc."
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+            />
+          </View>
+
+          {/* Custom Fields */}
+          {customFields.length > 0 && (
+            <View style={styles.customFieldsSection}>
+              <Text style={[styles.inputLabel, {marginBottom: 12}]}>Additional Information</Text>
+              {customFields.map((field) => (
+                <View key={field.id} style={styles.customFieldRow}>
+                  <View style={styles.customFieldInputs}>
+                    <TextInput
+                      style={[styles.customFieldInput, customFieldErrors[field.id] && styles.inputError]}
+                      value={field.key}
+                      onChangeText={(text) => handleCustomFieldChange(field.id, 'key', text)}
+                      placeholder="Field name"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    />
+                    <TextInput
+                      style={[styles.customFieldInput, customFieldErrors[field.id] && styles.inputError]}
+                      value={field.value}
+                      onChangeText={(text) => handleCustomFieldChange(field.id, 'value', text)}
+                      placeholder="Value"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    />
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.removeCustomFieldButton}
+                    onPress={() => handleRemoveCustomField(field.id)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={WHATSAPP_COLORS.danger} />
+                  </TouchableOpacity>
+                  {customFieldErrors[field.id] && (
+                    <Text style={styles.errorText}>{customFieldErrors[field.id]}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={styles.addCustomFieldButton}
+            onPress={handleAddCustomField}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={WHATSAPP_COLORS.leadInfoBorder} />
+            <Text style={styles.addCustomFieldText}>Add Custom Field</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Email Addresses */}
@@ -716,6 +908,22 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         options={allSubphases}
         onSelect={(value) => setFormData({ ...formData, subphase: value })}
         title="Select Subphase"
+        theme={{
+          ...theme,
+          primary: WHATSAPP_COLORS.primary,
+          background: WHATSAPP_COLORS.background,
+          cardBg: WHATSAPP_COLORS.surface,
+          text: WHATSAPP_COLORS.textPrimary,
+          border: WHATSAPP_COLORS.border,
+        }}
+      />
+
+      <DropdownModal
+        visible={activeDropdown === 'officeType'}
+        onClose={() => setActiveDropdown(null)}
+        options={OFFICE_TYPE_CHOICES}
+        onSelect={(value) => setOfficeType(value)}
+        title="Select Office Type"
         theme={{
           ...theme,
           primary: WHATSAPP_COLORS.primary,
@@ -1167,6 +1375,51 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textTertiary,
     textAlign: 'center',
   },
+
+  // Lead Specific Information Styles
+  customFieldsSection: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  customFieldRow: {
+    marginBottom: 12,
+  },
+  customFieldInputs: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  customFieldInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    backgroundColor: WHATSAPP_COLORS.customFieldBg,
+  },
+  removeCustomFieldButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  addCustomFieldButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.leadInfoBg,
+    marginTop: 12,
+  },
+  addCustomFieldText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.leadInfoBorder,
+  },
 });
 
-export default CreateLead
+export default CreateLead;
