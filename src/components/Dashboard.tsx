@@ -45,6 +45,7 @@ import Notifications from './Notifications';
 import { ValidationScreen } from './ValidationScreen';
 import DriverManager from './driver_manager/DriverManager';
 import HR_Manager from './hr_manager/HR_Manager';
+import HREmployeeManager from './hr_employee_management/hr_employee_management';
 
 // Import components
 import AllModulesModal from './dashboard/allModules';
@@ -414,6 +415,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showBUP, setShowBUP] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
+  const[showHREmployeeManager, setShowHREmployeeManagement] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showChatRoom, setShowChatRoom] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -783,6 +785,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         break;
       case 'hr_manager':
         setShowHrManager(true)
+        break;
+      case 'hr_employee_management':
+        setShowHREmployeeManagement(true);
         break;
       default:
         console.log('Unknown page:', page);
@@ -1177,7 +1182,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (key.includes('attendance')) {
       setAttendanceKey(prev => prev + 1);
       setShowAttendance(true);
-    } else if (key.includes('hr') && key != "hr_manager") {
+    } else if (key.includes('hr') && key != "hr_manager" && key !="hr_employee_management") {
       setShowHR(true);
     } else if (key.includes('cab')) {
       setShowCab(true);
@@ -1196,9 +1201,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       // Alert.alert('Reminder', 'Reminder feature will be available soon!');
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
-    } else if (key.includes('employee_management')) {
+    } else if (key.includes('employee_management') && key != "hr_employee_management") {
       setShowEmployeeManagement(true);
       // Alert.alert('Employee Management', 'Employee Management feature will be available soon!');
+    }
+    else if(key.includes('hr_employee_management')){
+      setShowHREmployeeManagement(true)
     }
     else if (key.includes('driver_manager') || key.includes('driver manager')) {
       setShowDriverManager(true);
@@ -1349,6 +1357,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowNotifications(false);
     setShowSettings(false);
     setShowEmployeeManagement(false);
+    setShowHREmployeeManagement(false);
     setShowChat(false);
     setShowChatRoom(false);
     setShowValidation(false);
@@ -1614,6 +1623,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   if (showEmployeeManagement) {
     return (
       <EmployeeManagement onBack={handleBackFromPage} />
+    );
+  }
+
+  if (showHREmployeeManager){
+    return (
+      <HREmployeeManager onBack={handleBackFromPage} />
     );
   }
 
