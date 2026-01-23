@@ -1654,7 +1654,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 <TouchableOpacity
                                     style={styles.searchBtn}
                                     onPress={() => {
-                                        // Navigate to create car screen
+                                        setCurrentView('create-vehicle');
                                     }}
                                 >
                                     <Text style={styles.searchBtnText}>Add First Vehicle</Text>
@@ -1682,12 +1682,20 @@ const Vehicles: React.FC<VehiclesProps> = ({
             case 'update-vehicle':
                 return renderUpdateVehiclePage();
             case 'create-vehicle':
-                return <CreateCar
-                    token={token}
-                    city={city}
-                    onBack={() => setCurrentView('main')}
-                    onCarCreated={fetchVehicles}
-                />;
+                return (
+                    <CreateCar
+                        token={token}
+                        city={city}
+                        onBack={() => {
+                            setCurrentView('main');
+                            fetchVehicles(); // Refresh the vehicles list after creating a new one
+                        }}
+                        onCarCreated={() => {
+                            setCurrentView('main');
+                            fetchVehicles(); // Refresh the vehicles list
+                        }}
+                    />
+                );
             default:
                 return renderMainView();
         }
