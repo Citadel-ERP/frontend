@@ -20,6 +20,7 @@ export interface ReminderItem {
   also_share_with: string[];
   color: string | null;
   created_by: number;
+  type?: string;
 }
 
 export type ViewMode = 'month' | 'agenda';

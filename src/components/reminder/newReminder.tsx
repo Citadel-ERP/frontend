@@ -30,7 +30,9 @@ const IMPROVED_REMINDER_TYPES = [
   { value: 'deadline', label: 'Deadline', icon: '⏰', color: '#FF3B30' },
   { value: 'followup', label: 'Follow-up', icon: '🔄', color: '#5856D6' },
   { value: 'other', label: 'Other', icon: '📝', color: '#FF9500' },
- ];
+];
+
+const DEFAULT_COLORS = ['#007AFF', '#34C759', '#FF9500', '#FF2D55', '#FF3B30', '#5856D6', '#8E8E93', '#32D74B', '#FFD60A', '#0A84FF'];
 
 const NewReminder: React.FC<NewReminderProps> = ({
   visible,
@@ -48,7 +50,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
   const [time, setTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [selectedColor, setSelectedColor] = useState<string>('#007AFF');
+  const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLORS[0]);
   const [submitting, setSubmitting] = useState(false);
   const [selectedType, setSelectedType] = useState('');
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
@@ -56,6 +58,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
   const [employeeSearchResults, setEmployeeSearchResults] = useState<Employee[]>([]);
   const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
   const [searchingEmployees, setSearchingEmployees] = useState(false);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -72,6 +75,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
         setTime(timeDate);
         
         setSelectedColor(getColorValue(selectedReminder.color));
+        setSelectedType(selectedReminder.type || '');
       } else {
         // New reminder mode
         setTitle('');
@@ -85,10 +89,13 @@ const NewReminder: React.FC<NewReminderProps> = ({
         defaultTime.setHours(9, 0, 0);
         setTime(defaultTime);
         
-        setSelectedColor('#007AFF');
+        setSelectedColor(DEFAULT_COLORS[0]);
         setSelectedType('');
         setSelectedEmployees([]);
       }
+      setShowTypeDropdown(false);
+      setShowDatePicker(false);
+      setShowTimePicker(false);
     }
   }, [visible, isEditMode, selectedReminder, selectedDate]);
 
@@ -144,17 +151,34 @@ const NewReminder: React.FC<NewReminderProps> = ({
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setDate(selectedDate);
+    if (Platform.OS === 'ios') {
+      // For iOS, we handle Done button separately via handleDateDone
+    } else {
+      setShowDatePicker(false);
+      if (selectedDate) {
+        setDate(selectedDate);
+      }
     }
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
-    if (selectedTime) {
-      setTime(selectedTime);
+    if (Platform.OS === 'ios') {
+      // For iOS, we handle Done button separately via handleTimeDone
+    } else {
+      setShowTimePicker(false);
+      if (selectedTime) {
+        setTime(selectedTime);
+      }
     }
+  };
+
+  // iOS-specific handlers for Done button
+  const handleDateDone = () => {
+    setShowDatePicker(false);
+  };
+
+  const handleTimeDone = () => {
+    setShowTimePicker(false);
   };
 
   const formatDisplayDate = (date: Date) => {
@@ -194,6 +218,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
       time: timeString,
       employees: selectedEmployees,
       color: getColorName(selectedColor),
+      type: selectedType,
     };
 
     setSubmitting(true);
@@ -209,16 +234,41 @@ const NewReminder: React.FC<NewReminderProps> = ({
     }
   };
 
+  // Handle tap outside pickers for iOS
+  const handleBackdropPress = () => {
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  };
+
+  const handleTypeSelect = (typeValue: string) => {
+    setSelectedType(typeValue);
+    setShowTypeDropdown(false);
+  };
+
+  // Close all dropdowns when modal is closing
+  const handleClose = () => {
+    setShowTypeDropdown(false);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setShowEmployeeSearch(false);
+    onClose();
+  };
+
+  const getSelectedTypeLabel = () => {
+    const selected = IMPROVED_REMINDER_TYPES.find(t => t.value === selectedType);
+    return selected ? selected.label : 'Select Type';
+  };
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={styles.backButton}>
+          <TouchableOpacity onPress={handleClose} activeOpacity={0.7} style={styles.backButton}>
             <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.modalTitle}>{isEditMode ? 'Edit Reminder' : 'New Reminder'}</Text>
@@ -246,30 +296,86 @@ const NewReminder: React.FC<NewReminderProps> = ({
             />
           </View>
 
-          {/* Type */}
+          {/* Type Dropdown */}
           <View style={styles.formSection}>
             <Text style={styles.sectionLabel}>TYPE</Text>
-            <View style={styles.typeSelector}>
-              {IMPROVED_REMINDER_TYPES.map((type) => (
+            <View style={styles.typeDropdownContainer}>
+              <TouchableOpacity
+                style={styles.typeDropdownButton}
+                onPress={() => {
+                  setShowTypeDropdown(!showTypeDropdown);
+                  // Close other pickers if open
+                  setShowDatePicker(false);
+                  setShowTimePicker(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.typeDropdownButtonLeft}>
+                  <Ionicons name="pricetag-outline" size={22} color="#075E54" />
+                  <Text style={styles.typeDropdownLabel}>Type</Text>
+                </View>
+                <Text style={styles.typeDropdownValue}>
+                  {getSelectedTypeLabel()}
+                </Text>
+                <Ionicons 
+                  name={showTypeDropdown ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#075E54" 
+                />
+              </TouchableOpacity>
+              
+              {showTypeDropdown && (
+                <View style={styles.typeDropdownList}>
+                  {IMPROVED_REMINDER_TYPES.map((type) => (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={[
+                        styles.typeDropdownItem,
+                        selectedType === type.value && { 
+                          backgroundColor: type.color + '20', // 20 opacity
+                        }
+                      ]}
+                      onPress={() => handleTypeSelect(type.value)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.typeDropdownItemIcon}>{type.icon}</Text>
+                      <Text style={[
+                        styles.typeDropdownItemText,
+                        selectedType === type.value && { 
+                          color: type.color,
+                          fontWeight: '600'
+                        }
+                      ]}>
+                        {type.label}
+                      </Text>
+                      {selectedType === type.value && (
+                        <Ionicons name="checkmark" size={20} color={type.color} style={styles.typeDropdownCheckmark} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Color Selection */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>COLOR</Text>
+            <View style={styles.colorPicker}>
+              {DEFAULT_COLORS.map((color: string, index: number) => (
                 <TouchableOpacity
-                  key={type.value}
+                  key={`color-${index}`}
                   style={[
-                    styles.typeChip,
-                    selectedType === type.value && { 
-                      backgroundColor: type.color,
-                      borderColor: type.color 
-                    }
+                    styles.colorOption,
+                    { backgroundColor: color },
+                    selectedColor === color && styles.colorOptionSelected,
                   ]}
-                  onPress={() => setSelectedType(type.value)}
+                  onPress={() => setSelectedColor(color)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.typeChipIcon}>{type.icon}</Text>
-                  <Text style={[
-                    styles.typeChipText,
-                    selectedType === type.value && styles.typeChipTextSelected
-                  ]}>
-                    {type.label}
-                  </Text>
+                  {selectedColor === color && (
+                    <Ionicons name="checkmark" size={24} color="#fff" />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -303,7 +409,12 @@ const NewReminder: React.FC<NewReminderProps> = ({
 
             <TouchableOpacity
               style={styles.addEmployeeButton}
-              onPress={() => setShowEmployeeSearch(!showEmployeeSearch)}
+              onPress={() => {
+                setShowEmployeeSearch(!showEmployeeSearch);
+                setShowTypeDropdown(false);
+                setShowDatePicker(false);
+                setShowTimePicker(false);
+              }}
               activeOpacity={0.7}
             >
               <Ionicons name="person-add-outline" size={20} color="#075E54" />
@@ -361,7 +472,12 @@ const NewReminder: React.FC<NewReminderProps> = ({
             
             <TouchableOpacity 
               style={styles.dateTimeButton}
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => {
+                setShowDatePicker(true);
+                setShowTimePicker(false);
+                setShowTypeDropdown(false);
+                setShowEmployeeSearch(false);
+              }}
               activeOpacity={0.7}
             >
               <View style={styles.dateTimeButtonLeft}>
@@ -373,7 +489,12 @@ const NewReminder: React.FC<NewReminderProps> = ({
 
             <TouchableOpacity 
               style={[styles.dateTimeButton, styles.dateTimeButtonLast]}
-              onPress={() => setShowTimePicker(true)}
+              onPress={() => {
+                setShowTimePicker(true);
+                setShowDatePicker(false);
+                setShowTypeDropdown(false);
+                setShowEmployeeSearch(false);
+              }}
               activeOpacity={0.7}
             >
               <View style={styles.dateTimeButtonLeft}>
@@ -400,23 +521,106 @@ const NewReminder: React.FC<NewReminderProps> = ({
           </View>
         </ScrollView>
 
-        {/* Date Picker */}
-        {showDatePicker && (
+        {/* Date Picker Modal for iOS */}
+        {showDatePicker && Platform.OS === 'ios' && (
+          <View style={styles.iosPickerContainer}>
+            <TouchableOpacity 
+              style={styles.iosPickerBackdrop}
+              onPress={handleBackdropPress}
+              activeOpacity={1}
+            />
+            <View style={styles.iosPickerContent}>
+              <View style={styles.iosPickerHeader}>
+                <TouchableOpacity 
+                  onPress={handleDateDone}
+                  style={styles.iosPickerCancelButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.iosPickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.iosPickerTitle}>Select Date</Text>
+                <TouchableOpacity 
+                  onPress={handleDateDone}
+                  style={styles.iosPickerDoneButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.iosPickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="spinner"
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    setDate(selectedDate);
+                  }
+                }}
+                minimumDate={new Date()}
+                style={styles.iosDateTimePicker}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Time Picker Modal for iOS */}
+        {showTimePicker && Platform.OS === 'ios' && (
+          <View style={styles.iosPickerContainer}>
+            <TouchableOpacity 
+              style={styles.iosPickerBackdrop}
+              onPress={handleBackdropPress}
+              activeOpacity={1}
+            />
+            <View style={styles.iosPickerContent}>
+              <View style={styles.iosPickerHeader}>
+                <TouchableOpacity 
+                  onPress={handleTimeDone}
+                  style={styles.iosPickerCancelButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.iosPickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.iosPickerTitle}>Select Time</Text>
+                <TouchableOpacity 
+                  onPress={handleTimeDone}
+                  style={styles.iosPickerDoneButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.iosPickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={time}
+                mode="time"
+                display="spinner"
+                onChange={(event, selectedTime) => {
+                  if (selectedTime) {
+                    setTime(selectedTime);
+                  }
+                }}
+                style={styles.iosDateTimePicker}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Android Date Picker */}
+        {showDatePicker && Platform.OS === 'android' && (
           <DateTimePicker
             value={date}
             mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            display="default"
             onChange={handleDateChange}
             minimumDate={new Date()}
           />
         )}
 
-        {/* Time Picker */}
-        {showTimePicker && (
+        {/* Android Time Picker */}
+        {showTimePicker && Platform.OS === 'android' && (
           <DateTimePicker
             value={time}
             mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            display="default"
             onChange={handleTimeChange}
           />
         )}
@@ -501,34 +705,89 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     letterSpacing: 0.5,
   },
-  typeSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  typeDropdownContainer: {
     paddingHorizontal: 16,
-    gap: 10,
   },
-  typeChip: {
+  typeDropdownButton: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 2,
-    borderColor: '#F0F0F0',
-    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    backgroundColor: '#F9F9F9',
   },
-  typeChipIcon: {
-    fontSize: 18,
+  typeDropdownButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  typeChipText: {
-    fontSize: 15,
+  typeDropdownLabel: {
+    fontSize: 16,
     color: '#000',
     fontWeight: '500',
   },
-  typeChipTextSelected: {
-    color: '#fff',
+  typeDropdownValue: {
+    fontSize: 16,
+    color: '#075E54',
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+    marginRight: 8,
+  },
+  typeDropdownList: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  typeDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
+  },
+  typeDropdownItemIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  typeDropdownItemText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500',
+    flex: 1,
+  },
+  typeDropdownCheckmark: {
+    marginLeft: 8,
+  },
+  colorPicker: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 14,
+    flexWrap: 'wrap',
+  },
+  colorOption: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorOptionSelected: {
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   dateTimeButton: {
     flexDirection: 'row',
@@ -564,28 +823,63 @@ const styles = StyleSheet.create({
     color: '#000',
     minHeight: 100,
   },
-  colorPicker: {
+  iosPickerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+    zIndex: 1000,
+  },
+  iosPickerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  iosPickerContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: 'hidden',
+  },
+  iosPickerHeader: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 14,
-    flexWrap: 'wrap',
-  },
-  colorOption: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
-    borderColor: 'transparent',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
+    backgroundColor: '#F9F9F9',
   },
-  colorOptionSelected: {
-    borderColor: '#000',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+  iosPickerCancelButton: {
+    padding: 8,
+  },
+  iosPickerCancelText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '400',
+  },
+  iosPickerTitle: {
+    fontSize: 17,
+    color: '#000',
+    fontWeight: '600',
+  },
+  iosPickerDoneButton: {
+    padding: 8,
+  },
+  iosPickerDoneText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  iosDateTimePicker: {
+    backgroundColor: '#fff',
+    height: 200,
   },
   selectedEmployeesContainer: {
     paddingHorizontal: 16,
