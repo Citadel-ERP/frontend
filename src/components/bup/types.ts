@@ -51,6 +51,7 @@ export interface Lead {
   collaborators?: CollaboratorData[];
   comments?: ApiComment[];
   incentive_present?: boolean;
+  notes?: string; // Added this line
 }
 
 export interface DocumentType {

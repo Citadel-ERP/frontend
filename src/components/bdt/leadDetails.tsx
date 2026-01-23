@@ -66,8 +66,8 @@ const C = {
   outgoing: '#DCF8C6',
   leadInfoBg: '#F0F9FF',
   leadInfoBorder: '#0EA5E9',
-  customFieldBg: '#F5F3FF',
-  customFieldBorder: '#8B5CF6',
+  customFieldBg: '#f3fffa',
+  customFieldBorder: '#25D366',
 };
 
 const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
@@ -829,35 +829,42 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
 
   const renderModalSection = useCallback(({ item }: { item: string }) => {
     switch (item) {
+      // ============ CONTAINER 1: Lead Basic Info ============
       case 'lead-info':
         return (
-          <View style={s.infoCard}>
-            <View style={s.infoCardHeader}>
-              <View style={s.infoAvatarContainer}>
-                <View style={s.infoAvatar}>
-                  <Text style={s.infoAvatarText}>
+          <View style={s.containerBox}>
+            <View style={s.leadInfoContainer}>
+              <View style={s.leadAvatarSection}>
+                <View style={s.leadAvatar}>
+                  <Text style={s.leadAvatarText}>
                     {getInitials(lead.name || 'L')}
                   </Text>
                 </View>
               </View>
-              <View style={s.infoHeaderText}>
-                <Text style={s.infoName}>{lead.name || 'Lead'}</Text>
-                {lead.company && <Text style={s.infoCompany}>{lead.company}</Text>}
+              
+              <View style={s.leadHeaderSection}>
+                <Text style={s.leadNameText}>{lead.name || 'Lead'}</Text>
+                {lead.company && (
+                  <Text style={s.leadCompanyText}>{lead.company}</Text>
+                )}
               </View>
             </View>
-            <View style={s.statusBadges}>
-              <View style={[s.statusBadge, { backgroundColor: C.primary + '15' }]}>
-                <Text style={[s.statusBadgeText, { color: C.primary }]}>
+
+            <View style={s.statusBadgesContainer}>
+              <View style={[s.statusBadgeBox, { backgroundColor: C.primary + '15', borderColor: C.primary + '30' }]}>
+                <Text style={[s.statusBadgeBoxText, { color: C.primary }]}>
                   {beautifyName(lead.phase)}
                 </Text>
               </View>
-              <View style={[s.statusBadge, { backgroundColor: C.secondary + '15' }]}>
-                <Text style={[s.statusBadgeText, { color: C.secondary }]}>
+              
+              <View style={[s.statusBadgeBox, { backgroundColor: C.secondary + '15', borderColor: C.secondary + '30' }]}>
+                <Text style={[s.statusBadgeBoxText, { color: C.secondary }]}>
                   {beautifyName(lead.subphase)}
                 </Text>
               </View>
-              <View style={[s.statusBadge, { backgroundColor: C.accent + '15' }]}>
-                <Text style={[s.statusBadgeText, { color: C.accent }]}>
+              
+              <View style={[s.statusBadgeBox, { backgroundColor: C.accent + '15', borderColor: C.accent + '30' }]}>
+                <Text style={[s.statusBadgeBoxText, { color: C.accent }]}>
                   {beautifyName(lead.status)}
                 </Text>
               </View>
@@ -865,79 +872,44 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           </View>
         );
 
+      // ============ CONTAINER 2: Contact Information ============
       case 'contact-info':
         return (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Contact Information</Text>
-            {lead.emails.map((email, idx) => (
-              <View key={idx} style={s.detailRow}>
-                <MaterialIcons name="email" size={20} color={C.primary} />
-                <Text style={s.detailValue}>{email.email}</Text>
-                <TouchableOpacity style={s.copyButton}>
-                  <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {lead.phone_numbers.map((phone, idx) => (
-              <View key={idx} style={s.detailRow}>
-                <MaterialIcons name="phone" size={20} color={C.primary} />
-                <Text style={s.detailValue}>{phone.number}</Text>
-                <TouchableOpacity style={s.copyButton}>
-                  <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        );
-
-      case 'lead-specific-info':
-        return (
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <MaterialIcons name="business" size={20} color={C.leadInfoBorder} />
-              <Text style={s.sectionTitle}>Lead Specific Information</Text>
+          <View style={s.containerBox}>
+            <View style={s.containerHeader}>
+              <MaterialIcons name="phone" size={20} color={C.primary} />
+              <Text style={s.containerTitle}>Contact Information</Text>
             </View>
-            
-            {lead.meta?.area_requirements && (
-              <View style={s.leadInfoGroup}>
-                <Text style={s.leadInfoLabel}>Area Requirements</Text>
-                <View style={s.leadInfoValueContainer}>
-                  <Text style={s.leadInfoValue}>{lead.meta.area_requirements}</Text>
-                </View>
-              </View>
-            )}
 
-            {lead.meta?.office_type && (
-              <View style={s.leadInfoGroup}>
-                <Text style={s.leadInfoLabel}>Office Type</Text>
-                <View style={[s.leadInfoValueContainer, { backgroundColor: C.leadInfoBg }]}>
-                  <Ionicons name="business" size={16} color={C.leadInfoBorder} style={s.leadInfoIcon} />
-                  <Text style={[s.leadInfoValue, { color: C.leadInfoBorder }]}>
-                    {getOfficeTypeLabel()}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {lead.meta?.location && (
-              <View style={s.leadInfoGroup}>
-                <Text style={s.leadInfoLabel}>Location Preference</Text>
-                <View style={s.leadInfoValueContainer}>
-                  <Text style={s.leadInfoValue}>{lead.meta.location}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Custom Fields */}
-            {getCustomFields().length > 0 && (
-              <View style={s.customFieldsSection}>
-                <Text style={[s.leadInfoLabel, { marginBottom: 12 }]}>Additional Information</Text>
-                {getCustomFields().map((field, index) => (
-                  <View key={index} style={s.customFieldRow}>
-                    <View style={[s.customFieldContainer, { backgroundColor: C.customFieldBg }]}>
-                      <Text style={s.customFieldKey}>{field.key}</Text>
-                      <Text style={s.customFieldValue}>{field.value}</Text>
+            {lead.emails.length > 0 && (
+              <View style={s.containerContent}>
+                <Text style={s.subLabel}>Emails</Text>
+                {lead.emails.map((email, idx) => (
+                  <View key={idx} style={s.detailBox}>
+                    <View style={s.detailContent}>
+                      <Ionicons name="mail" size={16} color={C.primary} />
+                      <Text style={s.detailText}>{email.email}</Text>
                     </View>
+                    <TouchableOpacity style={s.copyButton}>
+                      <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {lead.phone_numbers.length > 0 && (
+              <View style={s.containerContent}>
+                <Text style={s.subLabel}>Phone Numbers</Text>
+                {lead.phone_numbers.map((phone, idx) => (
+                  <View key={idx} style={s.detailBox}>
+                    <View style={s.detailContent}>
+                      <Ionicons name="call" size={16} color={C.primary} />
+                      <Text style={s.detailText}>{phone.number}</Text>
+                    </View>
+                    <TouchableOpacity style={s.copyButton}>
+                      <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
@@ -945,49 +917,133 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           </View>
         );
 
-      case 'metadata':
+      // ============ CONTAINER 3: Lead Specific Information ============
+      case 'lead-specific-info':
         return (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Metadata</Text>
-            <View style={s.metadataRow}>
-              <MaterialIcons name="calendar-today" size={18} color={C.textTertiary} />
-              <Text style={s.metadataLabel}>Created:</Text>
-              <Text style={s.metadataValue}>
-                {formatDateTime(lead.created_at || lead.createdAt)}
-              </Text>
+          <View style={s.containerBox}>
+            <View style={s.containerHeader}>
+              <MaterialIcons name="business" size={20} color={C.primary} />
+              <Text style={s.containerTitle}>Lead Specific Information</Text>
+            </View>
+
+            <View style={s.containerContent}>
+              {lead.meta?.area_requirements && (
+                <View style={s.infoItem}>
+                  <Text style={s.infoItemLabel}>Area Requirements</Text>
+                  <View style={s.infoItemBox}>
+                    <Text style={s.infoItemValue}>{lead.meta.area_requirements}</Text>
+                  </View>
+                </View>
+              )}
+
+              {lead.meta?.office_type && (
+                <View style={s.infoItem}>
+                  <Text style={s.infoItemLabel}>Office Type</Text>
+                  <View style={[s.infoItemBox]}>
+                    <Ionicons name="business" size={16} color={C.primary} style={{ marginRight: 8 }} />
+                    <Text style={[s.infoItemValue]}>
+                      {getOfficeTypeLabel()}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {lead.meta?.location && (
+                <View style={s.infoItem}>
+                  <Text style={s.infoItemLabel}>Location Preference</Text>
+                  <View style={s.infoItemBox}>
+                    <Ionicons name="location" size={16} color={C.primary} style={{ marginRight: 8 }} />
+                    <Text style={s.infoItemValue}>{lead.meta.location}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Custom Fields */}
+              {getCustomFields().length > 0 && (
+                <View style={s.customFieldsContainer}>
+                  <Text style={s.subLabel}>Additional Information</Text>
+                  {getCustomFields().map((field, index) => (
+                    <View key={index} style={s.customFieldBox}>
+                      <Text style={s.customFieldKeyText}>{field.key}</Text>
+                      <Text style={s.customFieldValueText}>{field.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         );
 
-      case 'collaborators':
-        return collaborators.length > 0 ? (
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>Team ({collaborators.length})</Text>
+      // ============ CONTAINER 4: Metadata ============
+      case 'metadata':
+        return (
+          <View style={s.containerBox}>
+            <View style={s.containerHeader}>
+              <MaterialIcons name="calendar-today" size={20} color={C.primary} />
+              <Text style={s.containerTitle}>Metadata</Text>
             </View>
-            <View style={s.collaboratorsGrid}>
-              {collaborators.map((collab) => (
-                <View key={collab.id} style={s.collaboratorItem}>
-                  <View style={s.collaboratorAvatar}>
-                    <Text style={s.collaboratorAvatarText}>
-                      {getInitials(collab.user.full_name || 'U')}
-                    </Text>
-                  </View>
-                  <Text style={s.collaboratorName} numberOfLines={1}>
-                    {collab.user.full_name}
+
+            <View style={s.containerContent}>
+              <View style={s.metadataItem}>
+                <Text style={s.metadataLabel}>Created</Text>
+                <Text style={s.metadataValue}>
+                  {formatDateTime(lead.created_at || lead.createdAt)}
+                </Text>
+              </View>
+
+              {lead.updated_at && (
+                <View style={s.metadataItem}>
+                  <Text style={s.metadataLabel}>Updated</Text>
+                  <Text style={s.metadataValue}>
+                    {formatDateTime(lead.updated_at)}
                   </Text>
                 </View>
-              ))}
+              )}
+            </View>
+          </View>
+        );
+
+      // ============ CONTAINER 5: Team/Collaborators ============
+      case 'collaborators':
+        return collaborators.length > 0 ? (
+          <View style={s.containerBox}>
+            <View style={s.containerHeader}>
+              <MaterialIcons name="group" size={20} color={C.primary} />
+              <Text style={s.containerTitle}>Team ({collaborators.length})</Text>
+            </View>
+
+            <View style={s.containerContent}>
+              <View style={s.collaboratorsGrid}>
+                {collaborators.map((collab) => (
+                  <View key={collab.id} style={s.collaboratorCard}>
+                    <View style={s.collaboratorAvatar}>
+                      <Text style={s.collaboratorAvatarText}>
+                        {getInitials(collab.user.full_name || 'U')}
+                      </Text>
+                    </View>
+                    <Text style={s.collaboratorName} numberOfLines={1}>
+                      {collab.user.full_name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
         ) : null;
 
+      // ============ CONTAINER 6: Notes ============
       case 'notes':
         return lead.notes ? (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Notes</Text>
-            <View style={s.notesContainer}>
-              <Text style={s.notesText}>{lead.notes}</Text>
+          <View style={s.containerBox}>
+            <View style={s.containerHeader}>
+              <MaterialIcons name="notes" size={20} color={C.primary} />
+              <Text style={s.containerTitle}>Notes</Text>
+            </View>
+
+            <View style={s.containerContent}>
+              <View style={s.notesBox}>
+                <Text style={s.notesText}>{lead.notes}</Text>
+              </View>
             </View>
           </View>
         ) : null;
@@ -1475,41 +1531,286 @@ const s = StyleSheet.create({
     paddingVertical: 16,
     flexGrow: 1
   },
-  infoCard: {
+
+  // ============ CONTAINER BOX STYLES ============
+  containerBox: {
     backgroundColor: C.surface,
-    marginBottom: 16,
+    marginBottom: 12,
     borderRadius: 12,
-    padding: 20
+    borderWidth: 1,
+    borderColor: C.border,
+    overflow: 'hidden'
   },
-  infoCardHeader: {
+
+  // ============ LEAD INFO CONTAINER STYLES ============
+  leadInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    gap: 16
   },
-  infoAvatarContainer: { marginRight: 16 },
-  infoAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+
+  leadAvatarSection: {
+    alignItems: 'center'
+  },
+
+  leadAvatar: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: C.primaryLight,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: C.primary
+  },
+
+  leadAvatarText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFF'
+  },
+
+  leadHeaderSection: {
+    flex: 1,
     justifyContent: 'center'
   },
-  infoAvatarText: { fontSize: 24, fontWeight: '600', color: '#FFF' },
-  infoHeaderText: { flex: 1 },
-  infoName: {
+
+  leadNameText: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '700',
     color: C.textPrimary,
     marginBottom: 4
   },
-  infoCompany: { fontSize: 16, color: C.textSecondary },
-  statusBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  statusBadgeText: { fontSize: 12, fontWeight: '500' },
+
+  leadCompanyText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: C.textSecondary
+  },
+
+  // ============ STATUS BADGES CONTAINER ============
+  statusBadgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10
+  },
+
+  statusBadgeBox: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+
+  statusBadgeBoxText: {
+    fontSize: 13,
+    fontWeight: '600'
+  },
+
+  containerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: C.primary + '08',
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    gap: 10
+  },
+
+  containerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: C.primary,
+    flex: 1
+  },
+
+  containerContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12
+  },
+
+  // ============ DETAIL BOX STYLES ============
+  detailBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.background,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
+
+  detailContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10
+  },
+
+  detailText: {
+    fontSize: 14,
+    color: C.textPrimary,
+    flex: 1
+  },
+
+  subLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginBottom: 8,
+    marginTop: 4
+  },
+
+  // ============ INFO ITEM STYLES ============
+  infoItem: {
+    marginBottom: 12
+  },
+
+  infoItemLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginBottom: 6
+  },
+
+  infoItemBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.background,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border
+  },
+
+  infoItemValue: {
+    fontSize: 14,
+    color: C.textPrimary,
+    flex: 1
+  },
+
+  // ============ CUSTOM FIELDS STYLES ============
+  customFieldsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border
+  },
+
+  customFieldBox: {
+    backgroundColor: C.customFieldBg,
+    borderWidth: 1,
+    borderColor: C.customFieldBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8
+  },
+
+  customFieldKeyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.customFieldBorder,
+    marginBottom: 4
+  },
+
+  customFieldValueText: {
+    fontSize: 14,
+    color: C.textPrimary,
+    lineHeight: 18
+  },
+
+  // ============ METADATA STYLES ============
+  metadataItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+
+  metadataLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginBottom: 4
+  },
+
+  metadataValue: {
+    fontSize: 14,
+    color: C.textPrimary
+  },
+
+  // ============ COLLABORATORS STYLES ============
+  collaboratorsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between'
+  },
+
+  collaboratorCard: {
+    alignItems: 'center',
+    width: '48%',
+    backgroundColor: C.background,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginBottom: 8
+  },
+
+  collaboratorAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8
+  },
+
+  collaboratorAvatarText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFF'
+  },
+
+  collaboratorName: {
+    fontSize: 12,
+    color: C.textSecondary,
+    textAlign: 'center'
+  },
+
+  // ============ NOTES STYLES ============
+  notesBox: {
+    backgroundColor: C.background,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border
+  },
+
+  notesText: {
+    fontSize: 14,
+    color: C.textPrimary,
+    lineHeight: 20
+  },
+
+  // Original styles
   section: {
     backgroundColor: C.surface,
-    marginBottom: 12,
+    marginBottom: 10,
     borderRadius: 12,
     padding: 20
   },
@@ -1541,32 +1842,9 @@ const s = StyleSheet.create({
   },
   copyButton: { padding: 4 },
   metadataRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  metadataLabel: {
-    fontSize: 14,
-    color: C.textSecondary,
-    marginLeft: 8,
-    marginRight: 4
-  },
-  metadataValue: { fontSize: 14, color: C.textPrimary, flex: 1 },
-  collaboratorsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  collaboratorsGridOld: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   collaboratorItem: { alignItems: 'center', width: 80 },
-  collaboratorAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8
-  },
-  collaboratorAvatarText: { fontSize: 18, fontWeight: '600', color: '#FFF' },
-  collaboratorName: {
-    fontSize: 12,
-    color: C.textSecondary,
-    textAlign: 'center'
-  },
   notesContainer: { backgroundColor: C.background, padding: 16, borderRadius: 8 },
-  notesText: { fontSize: 15, color: C.textPrimary, lineHeight: 22 },
   chatContainer: { flex: 1, backgroundColor: C.chatBg },
   chatListContent: {
     paddingHorizontal: 8,
@@ -1839,7 +2117,7 @@ const s = StyleSheet.create({
   },
   leadInfoValueContainer: {
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: '#ffffff',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1864,11 +2142,11 @@ const s = StyleSheet.create({
   },
   customFieldContainer: {
     borderWidth: 1,
-    borderColor: C.customFieldBorder,
+    borderColor: '#ffffff',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: C.customFieldBg,
+    backgroundColor: '#9CA3AF',
   },
   customFieldKey: {
     fontSize: 13,
