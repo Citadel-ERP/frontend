@@ -2,47 +2,67 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   ActivityIndicator, Alert, SafeAreaView, StatusBar, Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption, AssignedTo } from './types';
 import DropdownModal from './dropdownModal';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// Beautiful WhatsApp-inspired color scheme with vibrant accents
-const WA_COLORS = {
-  primary: '#075E54',
-  primaryLight: '#128C7E',
-  secondary: '#25D366',
-  accent: '#DCF8C6',
-  background: '#E8F5E9',
-  chatBubble: '#FFFFFF',
-  chatBubbleSent: '#D1F4CC',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#5E6C84',
-  textTertiary: '#8696A0',
-  border: '#C8E6C9',
-  danger: '#FF5252',
-  success: '#00C853',
-  warning: '#FFB300',
-  info: '#2196F3',
-  purple: '#9C27B0',
-  orange: '#FF6F00',
-  white: '#FFFFFF',
-  divider: '#E0E0E0',
-  gradient1: '#0D7377',
-  gradient2: '#14FFEC',
-  emailBg: '#E3F2FD',
-  emailBorder: '#2196F3',
-  phoneBg: '#FFF3E0',
-  phoneBorder: '#FF9800',
-  collabBg: '#F3E5F5',
-  collabBorder: '#9C27B0',
-  managementBg: '#FFF8E1',
-  managementBorder: '#FFC107',
-  leadInfoBg: '#F0F9FF',
-  leadInfoBorder: '#0EA5E9',
-  customFieldBg: '#F5F3FF',
+interface FilterOptionWithColor extends FilterOption {
+  color?: string;
+}
+
+// Updated color scheme with green as primary
+const THEME_COLORS = {
+  // Primary Greens (Your main brand colors)
+  primary: '#0D9488',      // Teal green (more professional than WhatsApp green)
+  primaryLight: '#14B8A6', // Lighter teal
+  primaryDark: '#0F766E',  // Darker teal
+  
+  // Secondary & Accent
+  secondary: '#10B981',    // Emerald green
+  accent: '#A7F3D0',       // Light mint
+  
+  // Backgrounds
+  background: '#F9FAFB',   // Light gray background
+  card: '#FFFFFF',         // White cards
+  surface: '#F8FAFC',      // Slightly off-white
+  
+  // Text
+  textPrimary: '#111827',   // Near black
+  textSecondary: '#6B7280', // Medium gray
+  textTertiary: '#9CA3AF',  // Light gray
+  
+  // Borders & Dividers
+  border: '#E5E7EB',       // Light gray border
+  divider: '#F3F4F6',      // Very light divider
+  
+  // Status Colors
+  success: '#10B981',      // Green
+  warning: '#F59E0B',      // Amber
+  danger: '#EF4444',       // Red
+  info: '#3B82F6',        // Blue
+  
+  // Category-specific backgrounds with green tints
+  emailBg: '#F0F9FF',      // Light blue with green tint
+  emailBorder: '#0EA5E9',
+  phoneBg: '#FEF3C7',      // Light amber with green tint
+  phoneBorder: '#F59E0B',
+  collabBg: '#F0FDF4',     // Light green
+  collabBorder: '#10B981',
+  leadInfoBg: '#F0F9FF',   // Light cyan
+  leadInfoBorder: '#06B6D4',
+  customFieldBg: '#FAF5FF', // Light purple
   customFieldBorder: '#8B5CF6',
+  managementBg: '#FFFBEB',  // Light yellow
+  managementBorder: '#F59E0B',
+  
+  // Interactive States
+  hover: '#ECFDF5',        // Very light green
+  active: '#D1FAE5',       // Light green
+  disabled: '#F3F4F6',     // Light gray
+  white: '#FFFFFF',        // White
 };
 
 interface EditLeadProps {
@@ -147,14 +167,14 @@ const EditLead: React.FC<EditLeadProps> = ({
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
 
-  const STATUS_CHOICES: FilterOption[] = [
-    { value: 'active', label: 'Active' },
-    { value: 'hold', label: 'Hold' },
-    { value: 'mandate', label: 'Mandate' },
-    { value: 'closed', label: 'Closed' },
-    { value: 'no_requirement', label: 'No Requirement' },
-    { value: 'transaction_complete', label: 'Transaction Complete' },
-    { value: 'non_responsive', label: 'Non Responsive' }
+  const STATUS_CHOICES: FilterOptionWithColor[] = [
+    { value: 'active', label: 'Active', color: THEME_COLORS.success },
+    { value: 'hold', label: 'Hold', color: THEME_COLORS.warning },
+    { value: 'mandate', label: 'Mandate', color: THEME_COLORS.info },
+    { value: 'closed', label: 'Closed', color: THEME_COLORS.textSecondary },
+    { value: 'no_requirement', label: 'No Requirement', color: THEME_COLORS.textTertiary },
+    { value: 'transaction_complete', label: 'Transaction Complete', color: THEME_COLORS.success },
+    { value: 'non_responsive', label: 'Non Responsive', color: THEME_COLORS.danger }
   ];
 
   const OFFICE_TYPE_CHOICES: FilterOption[] = [
@@ -178,6 +198,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     if (activeDropdown === 'assigned') searchAssignedToUsers(debouncedAssignedSearch);
   }, [debouncedAssignedSearch, activeDropdown]);
 
+  // Keep your exact header as requested
   const ModernHeader = () => (
     <SafeAreaView style={s.header}>
       <View style={s.headerContent}>
@@ -475,14 +496,12 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   const handleAddCustomField = () => {
-    // Find a unique ID for the new field
     const newId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setCustomFields([...customFields, { id: newId, key: '', value: '' }]);
   };
 
   const handleRemoveCustomField = (id: string) => {
     setCustomFields(customFields.filter(field => field.id !== id));
-    // Remove any error for this field
     const newErrors = { ...customFieldErrors };
     delete newErrors[id];
     setCustomFieldErrors(newErrors);
@@ -493,7 +512,6 @@ const EditLead: React.FC<EditLeadProps> = ({
       fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem
     ));
 
-    // Clear error for this field when user types
     if (customFieldErrors[id]) {
       const newErrors = { ...customFieldErrors };
       delete newErrors[id];
@@ -525,22 +543,18 @@ const EditLead: React.FC<EditLeadProps> = ({
 
       setLoading(true);
 
-      // Build meta object
       const meta: { [key: string]: any } = {};
 
-      // Add lead specific information
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
 
-      // Add custom fields
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
           meta[field.key.trim()] = field.value.trim();
         }
       });
 
-      // Create updated lead with meta
       const updatedLead: Lead = {
         ...editedLead,
         meta: Object.keys(meta).length > 0 ? meta : null
@@ -585,18 +599,31 @@ const EditLead: React.FC<EditLeadProps> = ({
     return option ? option.label : 'Select office type...';
   };
 
+  const getStatusColor = (status: string): string => {
+    const option = STATUS_CHOICES.find(choice => choice.value === status);
+    return option?.color || THEME_COLORS.primary;
+  };
+
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <ModernHeader />
 
-      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
-        {/* Basic Information */}
-        <View style={[s.bubble, { borderLeftWidth: 4, borderLeftColor: WA_COLORS.primary }]}>
-          <View style={s.bubbleHeader}>
-            <View style={[s.iconCircle, { backgroundColor: WA_COLORS.primary + '20' }]}>
-              <Ionicons name="person-circle-outline" size={22} color={WA_COLORS.primary} />
+      <ScrollView 
+        style={s.scrollView} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={s.scrollContent}
+      >
+        {/* Basic Information Card */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.primary + '15' }]}>
+              <Ionicons name="person-outline" size={20} color={THEME_COLORS.primary} />
             </View>
-            <Text style={s.bubbleTitle}>Basic Information</Text>
+            <Text style={s.cardTitle}>Basic Information</Text>
           </View>
 
           <View style={s.field}>
@@ -606,7 +633,7 @@ const EditLead: React.FC<EditLeadProps> = ({
               value={editedLead.name}
               onChangeText={(text) => setEditedLead({ ...editedLead, name: text })}
               placeholder="Enter lead name"
-              placeholderTextColor={WA_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
@@ -617,26 +644,30 @@ const EditLead: React.FC<EditLeadProps> = ({
               value={editedLead.company || ''}
               onChangeText={(text) => setEditedLead({ ...editedLead, company: text })}
               placeholder="Enter company name"
-              placeholderTextColor={WA_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
           <View style={s.field}>
             <Text style={s.label}>City</Text>
-            <View style={s.readOnly}>
-              <Ionicons name="location" size={16} color={WA_COLORS.danger} style={{ marginRight: 8 }} />
+            <View style={s.readOnlyField}>
+              <Ionicons name="location" size={16} color={THEME_COLORS.primary} style={s.fieldIcon} />
               <Text style={s.readOnlyText}>{selectedCity}</Text>
             </View>
           </View>
 
           <View style={s.field}>
             <Text style={s.label}>Assigned To</Text>
-            <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('assigned')}>
+            <TouchableOpacity 
+              style={s.selector} 
+              onPress={() => setActiveDropdown('assigned')}
+              activeOpacity={0.7}
+            >
               <View style={s.selectorContent}>
                 {editedLead.assigned_to ? (
                   <>
-                    <View style={[s.iconCircleSmall, { backgroundColor: WA_COLORS.success + '20' }]}>
-                      <Ionicons name="person" size={14} color={WA_COLORS.success} />
+                    <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.accent }]}>
+                      <Ionicons name="person" size={14} color={THEME_COLORS.primary} />
                     </View>
                     <Text style={s.selectorText} numberOfLines={1}>{getAssignedToLabel()}</Text>
                   </>
@@ -644,28 +675,28 @@ const EditLead: React.FC<EditLeadProps> = ({
                   <Text style={s.selectorPlaceholder}>Select assignee...</Text>
                 )}
               </View>
-              <Ionicons name="chevron-down" size={20} color={WA_COLORS.textSecondary} />
+              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Lead Specific Information */}
-        <View style={[s.bubble, { borderLeftWidth: 4, borderLeftColor: WA_COLORS.leadInfoBorder }]}>
-          <View style={s.bubbleHeader}>
-            <View style={[s.iconCircle, { backgroundColor: WA_COLORS.leadInfoBg }]}>
-              <Ionicons name="business-outline" size={22} color={WA_COLORS.leadInfoBorder} />
+        {/* Lead Specific Information Card */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
+              <Ionicons name="business-outline" size={20} color={THEME_COLORS.leadInfoBorder} />
             </View>
-            <Text style={s.bubbleTitle}>Lead Specific Information</Text>
+            <Text style={s.cardTitle}>Lead Specific Information</Text>
           </View>
 
           <View style={s.field}>
             <Text style={s.label}>Area Requirements</Text>
             <TextInput
-              style={s.input}
+              style={[s.input, s.textArea]}
               value={areaRequirements}
               onChangeText={setAreaRequirements}
               placeholder="e.g., 1000 sq ft, 5 desks, etc."
-              placeholderTextColor={WA_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
               multiline
               numberOfLines={2}
             />
@@ -673,16 +704,20 @@ const EditLead: React.FC<EditLeadProps> = ({
 
           <View style={s.field}>
             <Text style={s.label}>Office Type</Text>
-            <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('officeType')}>
+            <TouchableOpacity 
+              style={s.selector} 
+              onPress={() => setActiveDropdown('officeType')}
+              activeOpacity={0.7}
+            >
               <View style={s.selectorContent}>
-                <View style={[s.iconCircleSmall, { backgroundColor: WA_COLORS.leadInfoBg }]}>
-                  <Ionicons name="business" size={14} color={WA_COLORS.leadInfoBorder} />
+                <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
+                  <Ionicons name="business" size={14} color={THEME_COLORS.leadInfoBorder} />
                 </View>
                 <Text style={s.selectorText} numberOfLines={1}>
                   {getOfficeTypeLabel()}
                 </Text>
               </View>
-              <Ionicons name="chevron-down" size={20} color={WA_COLORS.textSecondary} />
+              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -693,7 +728,7 @@ const EditLead: React.FC<EditLeadProps> = ({
               value={location}
               onChangeText={setLocation}
               placeholder="e.g., Downtown, Business District, etc."
-              placeholderTextColor={WA_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
@@ -709,26 +744,25 @@ const EditLead: React.FC<EditLeadProps> = ({
                       value={field.key}
                       onChangeText={(text) => handleCustomFieldChange(field.id, 'key', text)}
                       placeholder="Field name"
-                      placeholderTextColor={WA_COLORS.textTertiary}
+                      placeholderTextColor={THEME_COLORS.textTertiary}
                     />
                     <TextInput
                       style={[s.customFieldInput, customFieldErrors[field.id] && s.inputError]}
                       value={field.value}
                       onChangeText={(text) => handleCustomFieldChange(field.id, 'value', text)}
                       placeholder="Value"
-                      placeholderTextColor={WA_COLORS.textTertiary}
+                      placeholderTextColor={THEME_COLORS.textTertiary}
                     />
                     <TouchableOpacity
                       style={s.removeCustomFieldBtn}
                       onPress={() => handleRemoveCustomField(field.id)}
                     >
-                      <Ionicons name="trash-outline" size={20} color={WA_COLORS.danger} />
+                      <Ionicons name="trash-outline" size={18} color={THEME_COLORS.danger} />
                     </TouchableOpacity>
-                    {customFieldErrors[field.id] && (
-                      <Text style={s.error}>{customFieldErrors[field.id]}</Text>
-                    )}
                   </View>
-
+                  {customFieldErrors[field.id] && (
+                    <Text style={s.error}>{customFieldErrors[field.id]}</Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -737,29 +771,34 @@ const EditLead: React.FC<EditLeadProps> = ({
           <TouchableOpacity
             style={s.addCustomFieldBtn}
             onPress={handleAddCustomField}
+            activeOpacity={0.7}
           >
-            <Ionicons name="add-circle-outline" size={20} color={WA_COLORS.leadInfoBorder} />
+            <Ionicons name="add-circle-outline" size={18} color={THEME_COLORS.primary} />
             <Text style={s.addCustomFieldText}>Add Custom Field</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Email Addresses */}
-        <View style={[s.bubble, { borderLeftWidth: 4, borderLeftColor: WA_COLORS.emailBorder }]}>
-          <View style={s.bubbleHeader}>
-            <View style={[s.iconCircle, { backgroundColor: WA_COLORS.emailBg }]}>
-              <Ionicons name="mail-outline" size={22} color={WA_COLORS.emailBorder} />
+        {/* Email Addresses Card */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.emailBg }]}>
+              <Ionicons name="mail-outline" size={20} color={THEME_COLORS.emailBorder} />
             </View>
-            <Text style={s.bubbleTitle}>Email Addresses ({editingEmails.length})</Text>
+            <Text style={s.cardTitle}>Email Addresses ({editingEmails.length})</Text>
           </View>
 
           {editingEmails.map((email, idx) => (
-            <View key={idx} style={[s.listItem, { backgroundColor: WA_COLORS.emailBg, borderLeftColor: WA_COLORS.emailBorder }]}>
+            <View key={idx} style={s.listItem}>
               <View style={s.listItemContent}>
-                <Ionicons name="mail" size={16} color={WA_COLORS.emailBorder} />
+                <Ionicons name="mail" size={16} color={THEME_COLORS.emailBorder} />
                 <Text style={s.listItemText}>{email}</Text>
               </View>
-              <TouchableOpacity onPress={() => handleRemoveEmail(idx)} style={s.deleteBtn}>
-                <Ionicons name="close-circle" size={22} color={WA_COLORS.danger} />
+              <TouchableOpacity 
+                onPress={() => handleRemoveEmail(idx)} 
+                style={s.deleteBtn}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           ))}
@@ -769,35 +808,43 @@ const EditLead: React.FC<EditLeadProps> = ({
               style={[s.input, emailError && s.inputError, { flex: 1 }]}
               value={newEmail}
               onChangeText={(text) => { setNewEmail(text); setEmailError(null); }}
-              placeholder="Add email..."
-              placeholderTextColor={WA_COLORS.textTertiary}
+              placeholder="Add new email..."
+              placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TouchableOpacity style={[s.addBtn, { backgroundColor: WA_COLORS.emailBg }]} onPress={handleAddEmail}>
-              <Ionicons name="add-circle" size={28} color={WA_COLORS.emailBorder} />
+            <TouchableOpacity 
+              style={s.addBtn} 
+              onPress={handleAddEmail}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
           {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
 
-        {/* Phone Numbers */}
-        <View style={[s.bubble, { borderLeftWidth: 4, borderLeftColor: WA_COLORS.phoneBorder }]}>
-          <View style={s.bubbleHeader}>
-            <View style={[s.iconCircle, { backgroundColor: WA_COLORS.phoneBg }]}>
-              <Ionicons name="call-outline" size={22} color={WA_COLORS.phoneBorder} />
+        {/* Phone Numbers Card */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.phoneBg }]}>
+              <Ionicons name="call-outline" size={20} color={THEME_COLORS.phoneBorder} />
             </View>
-            <Text style={s.bubbleTitle}>Phone Numbers ({editingPhones.length})</Text>
+            <Text style={s.cardTitle}>Phone Numbers ({editingPhones.length})</Text>
           </View>
 
           {editingPhones.map((phone, idx) => (
-            <View key={idx} style={[s.listItem, { backgroundColor: WA_COLORS.phoneBg, borderLeftColor: WA_COLORS.phoneBorder }]}>
+            <View key={idx} style={s.listItem}>
               <View style={s.listItemContent}>
-                <Ionicons name="call" size={16} color={WA_COLORS.phoneBorder} />
+                <Ionicons name="call" size={16} color={THEME_COLORS.phoneBorder} />
                 <Text style={s.listItemText}>{phone}</Text>
               </View>
-              <TouchableOpacity onPress={() => handleRemovePhone(idx)} style={s.deleteBtn}>
-                <Ionicons name="close-circle" size={22} color={WA_COLORS.danger} />
+              <TouchableOpacity 
+                onPress={() => handleRemovePhone(idx)} 
+                style={s.deleteBtn}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           ))}
@@ -807,38 +854,47 @@ const EditLead: React.FC<EditLeadProps> = ({
               style={[s.input, phoneError && s.inputError, { flex: 1 }]}
               value={newPhone}
               onChangeText={(text) => { setNewPhone(text); setPhoneError(null); }}
-              placeholder="Add phone..."
-              placeholderTextColor={WA_COLORS.textTertiary}
+              placeholder="Add new phone number..."
+              placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="phone-pad"
             />
-            <TouchableOpacity style={[s.addBtn, { backgroundColor: WA_COLORS.phoneBg }]} onPress={handleAddPhone}>
-              <Ionicons name="add-circle" size={28} color={WA_COLORS.phoneBorder} />
+            <TouchableOpacity 
+              style={s.addBtn} 
+              onPress={handleAddPhone}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
           {phoneError && <Text style={s.error}>{phoneError}</Text>}
         </View>
 
-        {/* Collaborators */}
-        <View style={[s.bubble, { borderLeftWidth: 4, borderLeftColor: WA_COLORS.collabBorder }]}>
-          <View style={s.bubbleHeader}>
-            <View style={[s.iconCircle, { backgroundColor: WA_COLORS.collabBg }]}>
-              <Ionicons name="people-outline" size={22} color={WA_COLORS.collabBorder} />
+        {/* Collaborators Card */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.collabBg }]}>
+              <Ionicons name="people-outline" size={20} color={THEME_COLORS.collabBorder} />
             </View>
-            <Text style={s.bubbleTitle}>Colleagues ({collaborators.length})</Text>
-            {loadingCollaborators && <ActivityIndicator size="small" color={WA_COLORS.collabBorder} style={{ marginLeft: 8 }} />}
+            <Text style={s.cardTitle}>Colleagues ({collaborators.length})</Text>
+            {loadingCollaborators && <ActivityIndicator size="small" color={THEME_COLORS.collabBorder} style={{ marginLeft: 8 }} />}
           </View>
 
           {collaborators.map((collab) => (
-            <View key={collab.id} style={[s.listItem, { backgroundColor: WA_COLORS.collabBg, borderLeftColor: WA_COLORS.collabBorder }]}>
+            <View key={collab.id} style={s.listItem}>
               <View style={s.listItemContent}>
-                <Ionicons name="person" size={16} color={WA_COLORS.collabBorder} />
+                <Ionicons name="person" size={16} color={THEME_COLORS.collabBorder} />
                 <Text style={s.listItemText}>{collab.user.full_name}</Text>
               </View>
-              <TouchableOpacity onPress={() => removeCollaborator(collab.id)} disabled={loadingCollaborators} style={s.deleteBtn}>
+              <TouchableOpacity 
+                onPress={() => removeCollaborator(collab.id)} 
+                disabled={loadingCollaborators} 
+                style={s.deleteBtn}
+                activeOpacity={0.6}
+              >
                 {loadingCollaborators ? (
-                  <ActivityIndicator size="small" color={WA_COLORS.danger} />
+                  <ActivityIndicator size="small" color={THEME_COLORS.danger} />
                 ) : (
-                  <Ionicons name="close-circle" size={22} color={WA_COLORS.danger} />
+                  <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
                 )}
               </TouchableOpacity>
             </View>
@@ -850,11 +906,11 @@ const EditLead: React.FC<EditLeadProps> = ({
                 style={s.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search colleagues (min 2 chars)..."
-                placeholderTextColor={WA_COLORS.textTertiary}
+                placeholder="Search colleagues..."
+                placeholderTextColor={THEME_COLORS.textTertiary}
                 autoCapitalize="none"
               />
-              {searchLoading && <ActivityIndicator size="small" color={WA_COLORS.collabBorder} style={s.searchLoader} />}
+              {searchLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
             </View>
           </View>
 
@@ -868,14 +924,15 @@ const EditLead: React.FC<EditLeadProps> = ({
                     style={s.resultItem}
                     onPress={() => addCollaborator(employee.value)}
                     disabled={loadingCollaborators}
+                    activeOpacity={0.7}
                   >
                     <View style={s.resultContent}>
-                      <View style={[s.iconCircleSmall, { backgroundColor: WA_COLORS.collabBg }]}>
-                        <Ionicons name="person-add" size={14} color={WA_COLORS.collabBorder} />
+                      <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.collabBg }]}>
+                        <Ionicons name="person-add" size={14} color={THEME_COLORS.collabBorder} />
                       </View>
                       <Text style={s.resultText} numberOfLines={2}>{employee.label}</Text>
                     </View>
-                    <Ionicons name="add-circle" size={24} color={WA_COLORS.success} />
+                    <Ionicons name="add-circle" size={22} color={THEME_COLORS.success} />
                   </TouchableOpacity>
                 ))
               }
@@ -883,60 +940,78 @@ const EditLead: React.FC<EditLeadProps> = ({
           )}
         </View>
 
-        {/* Lead Management */}
-        <View style={[s.bubble, { borderLeftWidth: 4, borderLeftColor: WA_COLORS.managementBorder }]}>
-          <View style={s.bubbleHeader}>
-            <View style={[s.iconCircle, { backgroundColor: WA_COLORS.managementBg }]}>
-              <Ionicons name="settings-outline" size={22} color={WA_COLORS.managementBorder} />
+        {/* Lead Management Card */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.managementBg }]}>
+              <Ionicons name="settings-outline" size={20} color={THEME_COLORS.managementBorder} />
             </View>
-            <Text style={s.bubbleTitle}>Lead Management</Text>
+            <Text style={s.cardTitle}>Lead Management</Text>
           </View>
 
           <View style={s.row}>
             <View style={s.halfField}>
               <Text style={s.label}>Status</Text>
-              <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('status')}>
+              <TouchableOpacity 
+                style={[s.selector, { borderLeftWidth: 4, borderLeftColor: getStatusColor(editedLead.status) }]} 
+                onPress={() => setActiveDropdown('status')}
+                activeOpacity={0.7}
+              >
                 <Text style={s.selectorText} numberOfLines={1}>
                   {getFilterLabel('status', editedLead.status)}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color={WA_COLORS.textSecondary} />
+                <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <View style={s.halfField}>
               <Text style={s.label}>Phase</Text>
-              <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('phase')}>
+              <TouchableOpacity 
+                style={s.selector} 
+                onPress={() => setActiveDropdown('phase')}
+                activeOpacity={0.7}
+              >
                 <Text style={s.selectorText} numberOfLines={1}>
                   {getFilterLabel('phase', editedLead.phase)}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color={WA_COLORS.textSecondary} />
+                <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={s.field}>
             <Text style={s.label}>Subphase</Text>
-            <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('subphase')}>
+            <TouchableOpacity 
+              style={s.selector} 
+              onPress={() => setActiveDropdown('subphase')}
+              activeOpacity={0.7}
+            >
               <Text style={s.selectorText} numberOfLines={1}>
                 {getFilterLabel('subphase', editedLead.subphase)}
               </Text>
-              <Ionicons name="chevron-down" size={20} color={WA_COLORS.textSecondary} />
+              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <TouchableOpacity style={[s.saveBtn, loading && s.saveBtnDisabled]} onPress={handleSave} disabled={loading}>
+        {/* Save Button */}
+        <TouchableOpacity 
+          style={[s.saveBtn, loading && s.saveBtnDisabled]} 
+          onPress={handleSave} 
+          disabled={loading}
+          activeOpacity={0.8}
+        >
           {loading ? (
-            <ActivityIndicator color={WA_COLORS.white} size="small" />
+            <ActivityIndicator color={THEME_COLORS.white} size="small" />
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={22} color={WA_COLORS.white} />
+              <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.white} />
               <Text style={s.saveBtnText}>Save Changes</Text>
             </>
           )}
         </TouchableOpacity>
 
-        <View style={{ height: 30 }} />
+        <View style={s.bottomSpacer} />
       </ScrollView>
 
       {/* Dropdown Modals */}
@@ -946,7 +1021,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={STATUS_CHOICES}
         onSelect={(value) => setEditedLead({ ...editedLead, status: value as Lead['status'] })}
         title="Select Status"
-        theme={{ ...theme, primary: WA_COLORS.primary, background: WA_COLORS.background, cardBg: WA_COLORS.chatBubble, text: WA_COLORS.textPrimary, border: WA_COLORS.border }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
       <DropdownModal
         visible={activeDropdown === 'phase'}
@@ -954,7 +1029,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={allPhases}
         onSelect={handlePhaseSelection}
         title="Select Phase"
-        theme={{ ...theme, primary: WA_COLORS.primary, background: WA_COLORS.background, cardBg: WA_COLORS.chatBubble, text: WA_COLORS.textPrimary, border: WA_COLORS.border }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
       <DropdownModal
         visible={activeDropdown === 'subphase'}
@@ -962,7 +1037,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={allSubphases}
         onSelect={(value) => setEditedLead({ ...editedLead, subphase: value })}
         title="Select Subphase"
-        theme={{ ...theme, primary: WA_COLORS.primary, background: WA_COLORS.background, cardBg: WA_COLORS.chatBubble, text: WA_COLORS.textPrimary, border: WA_COLORS.border }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
       <DropdownModal
         visible={activeDropdown === 'officeType'}
@@ -970,7 +1045,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={OFFICE_TYPE_CHOICES}
         onSelect={(value) => setOfficeType(value)}
         title="Select Office Type"
-        theme={{ ...theme, primary: WA_COLORS.primary, background: WA_COLORS.background, cardBg: WA_COLORS.chatBubble, text: WA_COLORS.textPrimary, border: WA_COLORS.border }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
 
       {/* Assigned To Modal */}
@@ -979,8 +1054,11 @@ const EditLead: React.FC<EditLeadProps> = ({
           <View style={s.modalContent}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Assign Lead To</Text>
-              <TouchableOpacity onPress={() => setActiveDropdown(null)}>
-                <Ionicons name="close" size={24} color={WA_COLORS.textPrimary} />
+              <TouchableOpacity 
+                onPress={() => setActiveDropdown(null)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -990,23 +1068,28 @@ const EditLead: React.FC<EditLeadProps> = ({
                 value={assignedToSearch}
                 onChangeText={setAssignedToSearch}
                 placeholder="Search employees..."
-                placeholderTextColor={WA_COLORS.textTertiary}
+                placeholderTextColor={THEME_COLORS.textTertiary}
                 autoCapitalize="none"
               />
-              {assignedToLoading && <ActivityIndicator size="small" color={WA_COLORS.primary} style={s.searchLoader} />}
+              {assignedToLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
             </View>
 
-            <ScrollView style={s.modalScroll}>
+            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
               {assignedToResults.length > 0 ? (
                 assignedToResults.map((user) => (
                   <TouchableOpacity
                     key={user.email}
                     style={[s.modalItem, editedLead.assigned_to?.email === user.email && s.modalItemSelected]}
                     onPress={() => handleAssignToUser(user)}
+                    activeOpacity={0.7}
                   >
                     <View style={s.modalItemContent}>
-                      <Ionicons name="person" size={18} color={editedLead.assigned_to?.email === user.email ? WA_COLORS.secondary : WA_COLORS.primary} />
-                      <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Ionicons 
+                        name="person" 
+                        size={18} 
+                        color={editedLead.assigned_to?.email === user.email ? THEME_COLORS.primary : THEME_COLORS.textSecondary} 
+                      />
+                      <View style={s.modalItemInfo}>
                         <Text style={s.modalItemName} numberOfLines={1}>
                           {user.full_name || `${user.first_name} ${user.last_name}`}
                         </Text>
@@ -1014,7 +1097,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                       </View>
                     </View>
                     {editedLead.assigned_to?.email === user.email && (
-                      <Ionicons name="checkmark-circle" size={22} color={WA_COLORS.secondary} />
+                      <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.primary} />
                     )}
                   </TouchableOpacity>
                 ))
@@ -1029,78 +1112,492 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: WA_COLORS.background },
-  header: { backgroundColor: WA_COLORS.primary, borderBottomWidth: 1, borderBottomColor: WA_COLORS.primaryLight, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, height: 60 },
-  backButton: { padding: 8, marginRight: 8 },
-  headerTextContainer: { flex: 1 },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: WA_COLORS.white, marginBottom: 2 },
-  headerSubtitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)' },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
-  saveHeaderButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: WA_COLORS.secondary, borderRadius: 20 },
-  saveHeaderText: { fontSize: 14, fontWeight: '600', color: WA_COLORS.white },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingTop: 12, paddingBottom: 32 },
-  bubble: { marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, backgroundColor: WA_COLORS.chatBubble, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  bubbleHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 10 },
-  bubbleTitle: { fontSize: 16, fontWeight: '600', color: WA_COLORS.textPrimary },
-  iconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  iconCircleSmall: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  field: { marginBottom: 12 },
-  label: { fontSize: 13, fontWeight: '600', color: WA_COLORS.textSecondary, marginBottom: 6, letterSpacing: 0.3 },
-  input: { borderWidth: 1.5, borderColor: WA_COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15, color: WA_COLORS.textPrimary, backgroundColor: WA_COLORS.white },
-  inputError: { borderColor: WA_COLORS.danger, borderWidth: 2 },
-  readOnly: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: WA_COLORS.divider, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, backgroundColor: '#F5F5F5' },
-  readOnlyText: { fontSize: 15, color: WA_COLORS.textPrimary, fontWeight: '500' },
-  selector: { borderWidth: 1.5, borderColor: WA_COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: WA_COLORS.white },
-  selectorContent: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  selectorText: { fontSize: 15, color: WA_COLORS.textPrimary, flex: 1, fontWeight: '500' },
-  selectorPlaceholder: { fontSize: 15, color: WA_COLORS.textTertiary },
-  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 8, borderLeftWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  listItemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  listItemText: { fontSize: 14, fontWeight: '500', color: WA_COLORS.textPrimary, flex: 1 },
-  deleteBtn: { padding: 4 },
-  addRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1.5, borderTopColor: WA_COLORS.divider },
-  addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  error: { fontSize: 12, color: WA_COLORS.danger, marginTop: 6, marginLeft: 4, fontWeight: '500' },
-  searchContainer: { flex: 1, position: 'relative' },
-  searchInput: { borderWidth: 1.5, borderColor: WA_COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15, color: WA_COLORS.textPrimary, backgroundColor: WA_COLORS.white, paddingRight: 40 },
-  searchLoader: { position: 'absolute', right: 12, top: 11 },
-  resultsBox: { marginTop: 12, borderTopWidth: 1.5, borderTopColor: WA_COLORS.divider, paddingTop: 12 },
-  resultItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 8, backgroundColor: WA_COLORS.white, borderWidth: 1.5, borderColor: WA_COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  resultContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  resultText: { fontSize: 13, color: WA_COLORS.textPrimary, flex: 1, fontWeight: '500' },
-  row: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  halfField: { flex: 1 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, paddingHorizontal: 24, borderRadius: 12, backgroundColor: WA_COLORS.secondary, marginHorizontal: 12, marginTop: 8, shadowColor: WA_COLORS.secondary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { fontSize: 16, fontWeight: '700', color: WA_COLORS.white, letterSpacing: 0.5 },
-  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalContent: { width: '90%', maxHeight: '80%', backgroundColor: WA_COLORS.chatBubble, borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 2, borderBottomColor: WA_COLORS.divider },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: WA_COLORS.textPrimary },
-  modalScroll: { maxHeight: 400 },
-  modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 10, marginBottom: 8, backgroundColor: WA_COLORS.white, borderWidth: 1.5, borderColor: WA_COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  modalItemSelected: { backgroundColor: WA_COLORS.accent, borderLeftWidth: 4, borderLeftColor: WA_COLORS.secondary, borderColor: WA_COLORS.secondary },
-  modalItemContent: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  modalItemName: { fontSize: 15, fontWeight: '600', color: WA_COLORS.textPrimary },
-  modalItemEmail: { fontSize: 12, color: WA_COLORS.textTertiary, marginTop: 2 },
-  emptyState: { padding: 30, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontSize: 14, color: WA_COLORS.textTertiary, fontStyle: 'italic' },
-
-  // New styles for Lead Specific Information
-  customFieldsSection: { marginTop: 8, marginBottom: 12 },
-  customFieldRow: { marginBottom: 12 },
-  customFieldInputs: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  customFieldInput: { flex: 1, borderWidth: 1.5, borderColor: WA_COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: WA_COLORS.textPrimary, backgroundColor: WA_COLORS.customFieldBg },
-  removeCustomFieldBtn: { padding: 8, marginLeft: 8 },
-  addCustomFieldBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, backgroundColor: WA_COLORS.leadInfoBg, marginTop: 12 },
-  addCustomFieldText: { fontSize: 14, fontWeight: '600', color: WA_COLORS.leadInfoBorder },
+  container: { 
+    flex: 1, 
+    backgroundColor: THEME_COLORS.background 
+  },
+  
+  // Header (Kept exactly as requested)
+  header: { 
+    backgroundColor: '#075E54', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#128C7E', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 3, 
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
+  headerContent: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    height: 60 
+  },
+  backButton: { 
+    padding: 8, 
+    marginRight: 8 
+  },
+  headerTextContainer: { 
+    flex: 1 
+  },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: '#FFFFFF', 
+    marginBottom: 2 
+  },
+  headerSubtitle: { 
+    fontSize: 14, 
+    color: 'rgba(255, 255, 255, 0.8)' 
+  },
+  headerActions: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  saveHeaderButton: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    backgroundColor: '#25D366', 
+    borderRadius: 20 
+  },
+  saveHeaderText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#FFFFFF' 
+  },
+  
+  // Main Content
+  scrollView: { 
+    flex: 1 
+  },
+  scrollContent: { 
+    paddingTop: 16, 
+    paddingBottom: 32 
+  },
+  
+  // Cards
+  card: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: THEME_COLORS.card,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.border,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 12,
+  },
+  cardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: THEME_COLORS.textPrimary,
+    letterSpacing: -0.3,
+  },
+  
+  // Form Fields
+  field: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME_COLORS.textSecondary,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: THEME_COLORS.textPrimary,
+    backgroundColor: THEME_COLORS.surface,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  inputError: {
+    borderColor: THEME_COLORS.danger,
+    backgroundColor: '#FEF2F2',
+  },
+  
+  // Read-only fields
+  readOnlyField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.divider,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: THEME_COLORS.surface,
+  },
+  fieldIcon: {
+    marginRight: 10,
+  },
+  readOnlyText: {
+    fontSize: 15,
+    color: THEME_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  
+  // Selectors
+  selector: {
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: THEME_COLORS.surface,
+  },
+  selectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  selectorText: {
+    fontSize: 15,
+    color: THEME_COLORS.textPrimary,
+    flex: 1,
+    fontWeight: '500',
+  },
+  selectorPlaceholder: {
+    fontSize: 15,
+    color: THEME_COLORS.textTertiary,
+    fontStyle: 'italic',
+  },
+  
+  // List Items
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: THEME_COLORS.surface,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.border,
+  },
+  listItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  listItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: THEME_COLORS.textPrimary,
+    flex: 1,
+  },
+  deleteBtn: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  
+  // Add Rows
+  addRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1.5,
+    borderTopColor: THEME_COLORS.divider,
+  },
+  addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME_COLORS.hover,
+  },
+  
+  // Error Messages
+  error: {
+    fontSize: 12,
+    color: THEME_COLORS.danger,
+    marginTop: 6,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  
+  // Search
+  searchContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  searchInput: {
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: THEME_COLORS.textPrimary,
+    backgroundColor: THEME_COLORS.surface,
+    paddingRight: 40,
+  },
+  searchLoader: {
+    position: 'absolute',
+    right: 14,
+    top: 12,
+  },
+  
+  // Results
+  resultsBox: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1.5,
+    borderTopColor: THEME_COLORS.divider,
+  },
+  resultItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: THEME_COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+  },
+  resultContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  resultText: {
+    fontSize: 13,
+    color: THEME_COLORS.textPrimary,
+    flex: 1,
+    fontWeight: '500',
+  },
+  
+  // Layout
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  halfField: {
+    flex: 1,
+  },
+  
+  // Icons
+  iconCircleSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  // Custom Fields
+  customFieldsSection: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  customFieldRow: {
+    marginBottom: 12,
+  },
+  customFieldInputs: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  customFieldInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: THEME_COLORS.textPrimary,
+    backgroundColor: THEME_COLORS.customFieldBg,
+  },
+  removeCustomFieldBtn: {
+    padding: 10,
+  },
+  addCustomFieldBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: THEME_COLORS.hover,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderStyle: 'dashed',
+  },
+  addCustomFieldText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: THEME_COLORS.primary,
+  },
+  
+  // Save Button
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: THEME_COLORS.primary,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    shadowColor: THEME_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveBtnDisabled: {
+    opacity: 0.6,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: THEME_COLORS.white,
+    letterSpacing: 0.3,
+  },
+  
+  // Modal
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '70%',
+    backgroundColor: THEME_COLORS.card,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: THEME_COLORS.divider,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: THEME_COLORS.textPrimary,
+  },
+  modalScroll: {
+    maxHeight: 350,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: THEME_COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+  },
+  modalItemSelected: {
+    backgroundColor: THEME_COLORS.accent,
+    borderLeftWidth: 4,
+    borderLeftColor: THEME_COLORS.primary,
+    borderColor: THEME_COLORS.primary,
+  },
+  modalItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalItemInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  modalItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: THEME_COLORS.textPrimary,
+  },
+  modalItemEmail: {
+    fontSize: 12,
+    color: THEME_COLORS.textTertiary,
+    marginTop: 2,
+  },
+  
+  // Empty States
+  emptyState: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: THEME_COLORS.textTertiary,
+    fontStyle: 'italic',
+  },
+  
+  // Spacing
+  bottomSpacer: {
+    height: 30,
+  },
 });
 
 export default EditLead;

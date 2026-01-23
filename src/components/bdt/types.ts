@@ -39,6 +39,7 @@ export interface Lead {
   emails: ContactEmail[];
   phone_numbers: ContactPhone[];
   company: string | null;
+  city: string;
   status: 'active' | 'hold' | 'no-requirement' | 'closed' | 'mandate' | 'transaction-complete' | 'non-responsive';
   assigned_by: string | null;
   assigned_to: AssignedTo;
