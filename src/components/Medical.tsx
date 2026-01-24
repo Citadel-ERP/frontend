@@ -144,7 +144,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         body: JSON.stringify({ token }),
       });
 
-      if (!response.status === 200) {
+      if (response.status !== 200) {
         Alert.alert('Error', 'Failed to download PDF');
         setDownloadingPDF(false);
         return;
@@ -210,10 +210,11 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
   };
 
   const pickDocument = async (type: 'aadhar' | 'pan' | 'signature') => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: type === 'signature' ? 'image/*' : ['image/*', 'application/pdf'],
-      });
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: type === 'signature' ? ['image/jpeg', 'image/png', 'image/jpg'] : ['image/*', 'application/pdf'],
+      copyToCacheDirectory: true,
+    });
       if (!result.canceled) {
         const file = result.assets?.[0];
         if (file) {
@@ -280,10 +281,16 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
   };
 
   const handleEditFamilyMember = (index: number) => {
-    setNewFamilyMember(familyMembers[index]);
-    setEditingFamilyIndex(index);
-    setShowAddFamily(true);
-  };
+  const member = familyMembers[index];
+  // Convert string URLs to null for editing - user needs to re-upload if they want to change
+  setNewFamilyMember({
+    ...member,
+    aadhar_card: (typeof member.aadhar_card === 'string') ? null : member.aadhar_card,
+    pan_card: (typeof member.pan_card === 'string') ? null : member.pan_card,
+  });
+  setEditingFamilyIndex(index);
+  setShowAddFamily(true);
+};
 
   const handleDeleteFamilyMember = (index: number) => {
     Alert.alert(
@@ -362,26 +369,24 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         
         console.log('Attaching files...');
         familyMembers.forEach((member, index) => {
-          if (member.aadhar_card?.uri) {
-            console.log(`Appending aadhar for ${member.first_name} ${member.last_name}`);
-            const key = `aadhar_card_${member.first_name}_${member.last_name}`;
-            familyFormData.append(key, {
-              uri: member.aadhar_card.uri,
-              type: 'application/pdf',
-              name: member.aadhar_card.name || `aadhar_${index}.pdf`,
-            } as any);
-          }
+          if (member.aadhar_card && typeof member.aadhar_card === 'object' && member.aadhar_card.uri) { console.log(`Appending aadhar for ${member.first_name} ${member.last_name}`);
+        const key = `aadhar_card_${member.first_name}_${member.last_name}`;
+        familyFormData.append(key, {
+          uri: member.aadhar_card.uri,
+          type: 'application/pdf',
+          name: member.aadhar_card.name || `aadhar_${index}.pdf`,
+        } as any);
+      }
           
-          if (member.pan_card?.uri) {
-            console.log(`Appending pan for ${member.first_name} ${member.last_name}`);
-            const key = `pan_card_${member.first_name}_${member.last_name}`;
-            familyFormData.append(key, {
-              uri: member.pan_card.uri,
-              type: 'application/pdf',
-              name: member.pan_card.name || `pan_${index}.pdf`,
-            } as any);
-          }
-        });
+          if (member.pan_card && typeof member.pan_card === 'object' && member.pan_card.uri) {console.log(`Appending pan for ${member.first_name} ${member.last_name}`);
+          const key = `pan_card_${member.first_name}_${member.last_name}`;
+          familyFormData.append(key, {
+            uri: member.pan_card.uri,
+            type: 'application/pdf',
+            name: member.pan_card.name || `pan_${index}.pdf`,
+          } as any);
+        }
+      });
         
         console.log('Sending family members update...');
         response = await fetch(`${BACKEND_URL}/core/updateMediclaim`, {
@@ -399,19 +404,24 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         }
       }
       
-      if (signature) {
-        console.log('=== STEP 3: Uploading signature ===');
-        const signatureFormData = new FormData();
-        signatureFormData.append('token', token || '');
-        signatureFormData.append('family_members', JSON.stringify([]));
-        
-        console.log('Signature URI:', signature.uri);
-        signatureFormData.append('employee_sign', {
-          uri: signature.uri,
-          type: signature.mimeType || 'image/jpeg',
-          name: signature.name || 'signature.jpg',
-        } as any);
-        
+      if (signature && signature.uri) {
+          console.log('=== STEP 3: Uploading signature ===');
+          const signatureFormData = new FormData();
+          signatureFormData.append('token', token || '');
+          signatureFormData.append('family_members', JSON.stringify([]));
+          
+          console.log('Signature details:', signature);
+          
+          // Determine the correct mime type
+          const mimeType = signature.mimeType || signature.type || 'image/jpeg';
+          const fileName = signature.name || `signature_${Date.now()}.jpg`;
+          
+          signatureFormData.append('employee_sign', {
+            uri: signature.uri,
+            type: mimeType,
+            name: fileName,
+          } as any);
+                
         console.log('Sending signature upload...');
         response = await fetch(`${BACKEND_URL}/core/updateMediclaim`, {
           method: 'POST',
@@ -435,7 +445,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
     } catch (error) {
       console.error('Error updating mediclaim:', error);
       console.error('Error stack:', JSON.stringify(error, null, 2));
-      Alert.alert('Error', 'Failed to update mediclaim: ' + error.message);
+      Alert.alert('Error', 'Failed to update mediclaim: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
@@ -573,18 +583,22 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         </View>
 
         {/* Edit Button */}
-        {canUpdate && !isEditing && (
-          <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editFloatingButton}>
-            <Ionicons name="create-outline" size={20} color="white" />
-            <Text style={styles.editFloatingText}>Edit Details</Text>
-          </TouchableOpacity>
-        )}
+        {/* Move edit button to Policy Details section header */}
 
         {/* Policy Details Card */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="policy" size={20} color={policyColor} />
             <Text style={styles.sectionTitle}>Policy Details</Text>
+            {canUpdate && !isEditing && (
+              <TouchableOpacity 
+                onPress={() => setIsEditing(true)} 
+                style={styles.editButton}
+              >
+                <Ionicons name="create-outline" size={18} color="#25D366" />
+                <Text style={styles.editButtonText}>Edit Details</Text>
+              </TouchableOpacity>
+            )}
           </View>
           
           <View style={styles.detailCard}>
@@ -1205,6 +1219,21 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 12,
   },
+  editButton: {
+  marginLeft: 'auto',
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#E8F5E9',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 8,
+  gap: 4,
+},
+editButtonText: {
+  color: '#25D366',
+  fontSize: 13,
+  fontWeight: '600',
+},
   detailValue: {
     fontSize: 14,
     fontWeight: '600',
