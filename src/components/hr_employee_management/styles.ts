@@ -13,7 +13,7 @@ export const styles = StyleSheet.create({
 
   // Header styles
   headerBanner: {
-    height: 180,
+    height: 250,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: 'hidden',
@@ -120,7 +120,8 @@ export const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',  // Slightly transparent white
+    marginTop: 4,
   },
   detailsSectionSubtitle: {
     fontSize: 14,
@@ -152,7 +153,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 12,
+    gap: 2,
     backgroundColor: WHATSAPP_COLORS.background,
   },
   searchInputContainer: {
@@ -1211,9 +1212,10 @@ export const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
+    fontSize: 26,  
+    fontWeight: '700',
+    color: '#FFFFFF',  
+    letterSpacing: 0.5,
   },
   assetItem: {
     flexDirection: 'row',

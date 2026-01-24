@@ -19,7 +19,7 @@ export const WHATSAPP_COLORS = {
   warning: '#FF9500',
 };
 
-export const TOKEN_KEY = 'user_token';
+export const TOKEN_KEY = 'token_2';
 
 export const getAvatarColor = (id: string): string => {
   const colors = [

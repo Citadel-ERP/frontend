@@ -102,12 +102,12 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
       }
     >
       <View style={styles.employeesList}>
-        <View style={styles.listHeader}>
+        {/* <View style={styles.listHeader}>
           <Text style={styles.listTitle}>Employees</Text>
           <Text style={styles.listSubtitle}>
             {searchQuery ? `Results for "${searchQuery}"` : 'All employees'}
           </Text>
-        </View>
+        </View> */}
         
         {employees.map((employee) => (
           <TouchableOpacity

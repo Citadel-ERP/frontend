@@ -1,23 +1,26 @@
 // hr_employee_management/holiday.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Modal,
   Alert,
-  TextInput,
-  FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  StyleSheet,
+  Platform,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { WHATSAPP_COLORS } from './constants';
-import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
+import AddHoliday from './addHoliday';
+import EditHoliday from './editHoliday';
 
 interface Holiday {
-  id: string;
+  holiday_id: string | number;
   name: string;
   date: string;
   cities: string[];
@@ -31,349 +34,538 @@ interface HolidayManagementProps {
 
 const HolidayManagement: React.FC<HolidayManagementProps> = ({ token, onBack }) => {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
-  const [newHoliday, setNewHoliday] = useState({
-    name: '',
-    date: new Date(),
-    cities: ['All'],
-    description: '',
-  });
-  const [bulkHolidays, setBulkHolidays] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAddHoliday, setShowAddHoliday] = useState(false);
+  const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
 
   useEffect(() => {
     fetchHolidays();
   }, []);
 
   const fetchHolidays = async () => {
-    setLoading(true);
     try {
-      // This would be a new endpoint to fetch holidays
-      // For now, we'll use mock data
-      const mockHolidays: Holiday[] = [
-        {
-          id: '1',
-          name: 'Republic Day',
-          date: '2024-01-26',
-          cities: ['All'],
-          description: 'National Holiday'
-        },
-        {
-          id: '2',
-          name: 'Holi',
-          date: '2024-03-25',
-          cities: ['Delhi', 'Mumbai'],
-          description: 'Festival'
+      const response = await fetch(`${BACKEND_URL}/manager/getHolidays`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.holidays && Array.isArray(data.holidays)) {
+          // Map the backend response to our Holiday interface
+          const mappedHolidays: Holiday[] = data.holidays.map((holiday: any) => ({
+            holiday_id: holiday.id || holiday.holiday_id,
+            name: holiday.name,
+            date: holiday.date,
+            cities: Array.isArray(holiday.cities) ? holiday.cities : [],
+            description: holiday.description || '',
+          }));
+          
+          console.log('Mapped holidays:', mappedHolidays.length);
+          if (mappedHolidays.length > 0) {
+            console.log('First holiday sample:', {
+              id: mappedHolidays[0].holiday_id,
+              name: mappedHolidays[0].name
+            });
+          }
+          
+          // Sort holidays by date
+          const sortedHolidays = mappedHolidays.sort((a, b) => 
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+          
+          setHolidays(sortedHolidays);
+        } else {
+          setHolidays([]);
         }
-      ];
-      setHolidays(mockHolidays);
+      } else {
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.message || 'Failed to fetch holidays');
+        setHolidays([]);
+      }
     } catch (error) {
       console.error('Error fetching holidays:', error);
+      Alert.alert('Error', 'Network error occurred while fetching holidays');
+      setHolidays([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const addHoliday = async () => {
-    if (!newHoliday.name.trim() || !newHoliday.cities.length) {
-      Alert.alert('Error', 'Please fill all required fields');
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchHolidays();
+  }, []);
+
+  const handleHolidayPress = (holiday: Holiday) => {
+    console.log('=== Holiday Selected ===');
+    console.log('Holiday ID:', holiday.holiday_id);
+    console.log('Holiday Name:', holiday.name);
+    
+    if (!holiday.holiday_id) {
+      Alert.alert('Error', 'Holiday ID is missing');
       return;
     }
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/addHoliday`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          name: newHoliday.name,
-          date: newHoliday.date.toISOString().split('T')[0],
-          cities: newHoliday.cities,
-          description: newHoliday.description
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Holiday added successfully');
-        setShowAddModal(false);
-        setNewHoliday({
-          name: '',
-          date: new Date(),
-          cities: ['All'],
-          description: '',
-        });
-        fetchHolidays();
-      } else {
-        Alert.alert('Error', 'Failed to add holiday');
-      }
-    } catch (error) {
-      console.error('Error adding holiday:', error);
-      Alert.alert('Error', 'Network error occurred');
-    }
+    
+    setSelectedHoliday(holiday);
   };
 
-  const addBulkHolidays = async () => {
-    if (!bulkHolidays.trim()) {
-      Alert.alert('Error', 'Please enter holiday data');
-      return;
-    }
-
-    try {
-      // Parse bulk holidays - expecting JSON array
-      const holidaysArray = JSON.parse(bulkHolidays);
-      
-      const response = await fetch(`${BACKEND_URL}/hr_manager/addHolidays`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          holidays: holidaysArray
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Holidays added successfully');
-        setShowBulkAddModal(false);
-        setBulkHolidays('');
-        fetchHolidays();
-      } else {
-        Alert.alert('Error', 'Failed to add holidays');
-      }
-    } catch (error) {
-      console.error('Error adding bulk holidays:', error);
-      Alert.alert('Error', 'Invalid JSON format or network error');
-    }
+  const handleBackFromAdd = () => {
+    setShowAddHoliday(false);
+    fetchHolidays();
   };
 
-  const deleteHoliday = async (id: string) => {
-    Alert.alert(
-      'Delete Holiday',
-      'Are you sure you want to delete this holiday?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // API call to delete holiday
-              setHolidays(holidays.filter(h => h.id !== id));
-              Alert.alert('Success', 'Holiday deleted successfully');
-            } catch (error) {
-              console.error('Error deleting holiday:', error);
-              Alert.alert('Error', 'Failed to delete holiday');
-            }
-          }
-        }
-      ]
-    );
+  const handleBackFromEdit = () => {
+    setSelectedHoliday(null);
+    fetchHolidays();
   };
 
-  const renderHolidayItem = ({ item }: { item: Holiday }) => (
-    <View style={styles.holidayItem}>
-      <View style={styles.holidayInfo}>
-        <Text style={styles.holidayName}>{item.name}</Text>
-        <Text style={styles.holidayDate}>
-          {new Date(item.date).toLocaleDateString()}
-        </Text>
-        <Text style={styles.holidayCities}>
-          Cities: {item.cities.join(', ')}
-        </Text>
-        {item.description && (
-          <Text style={styles.holidayDescription}>{item.description}</Text>
-        )}
-      </View>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => deleteHoliday(item.id)}
-      >
-        <Ionicons name="trash-outline" size={20} color="#D32F2F" />
-      </TouchableOpacity>
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
+
+  const getMonthDay = (dateString: string) => {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return {
+      month: months[date.getMonth()],
+      day: date.getDate()
+    };
+  };
+
+  const getHolidayGradient = (index: number) => {
+    const gradients = [
+      ['#667eea', '#764ba2'],
+      ['#f093fb', '#f5576c'],
+      ['#4facfe', '#00f2fe'],
+      ['#43e97b', '#38f9d7'],
+      ['#fa709a', '#fee140'],
+      ['#30cfd0', '#330867'],
+      ['#a8edea', '#fed6e3'],
+      ['#ff9a9e', '#fecfef'],
+      ['#ffecd2', '#fcb69f'],
+      ['#ff6e7f', '#bfe9ff'],
+    ];
+    return gradients[index % gradients.length];
+  };
+
+  const getHolidayIcon = (name: string) => {
+    const nameLower = name.toLowerCase();
+    if (nameLower.includes('christmas')) return '🎄';
+    if (nameLower.includes('new year')) return '🎊';
+    if (nameLower.includes('diwali')) return '🪔';
+    if (nameLower.includes('holi')) return '🎨';
+    if (nameLower.includes('eid')) return '🌙';
+    if (nameLower.includes('independence') || nameLower.includes('republic')) return '🇮🇳';
+    if (nameLower.includes('gandhi')) return '🕊️';
+    if (nameLower.includes('valentine')) return '❤️';
+    if (nameLower.includes('durga')) return '🙏';
+    if (nameLower.includes('navratri')) return '💃';
+    if (nameLower.includes('ugadi')) return '🌸';
+    return '✨';
+  };
+
+  const BackIcon = () => (
+    <View style={localStyles.backIcon}>
+      <View style={localStyles.backArrow} />
+      <Text style={localStyles.backText}>Back</Text>
     </View>
   );
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Holiday Management</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => setShowBulkAddModal(true)}
-          >
-            <Ionicons name="add-circle-outline" size={20} color="#fff" />
-            <Text style={styles.headerButtonText}>Bulk Add</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.headerButtonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+  // Show Add Holiday screen
+  if (showAddHoliday) {
+    return <AddHoliday token={token} onBack={handleBackFromAdd} />;
+  }
 
-      <ScrollView style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Holidays</Text>
-          
+  // Show Edit Holiday screen
+  if (selectedHoliday) {
+    console.log('Rendering EditHoliday with:', {
+      holiday_id: selectedHoliday.holiday_id,
+      name: selectedHoliday.name,
+    });
+    
+    return (
+      <EditHoliday
+        token={token}
+        holiday={selectedHoliday}
+        onBack={handleBackFromEdit}
+      />
+    );
+  }
+
+  // Main Holiday List screen
+  return (
+    <View style={localStyles.container}>
+      <ScrollView
+        style={localStyles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#fff"
+            colors={['#fff']}
+          />
+        }
+      >
+        {/* Header */}
+        <View style={[localStyles.header, localStyles.headerBanner]}>
+          <Image
+            source={require('../../assets/attendance_bg.jpg')}
+            style={localStyles.headerImage}
+            resizeMode="cover"
+          />
+          <View style={localStyles.headerOverlay} />
+
+          <View style={[localStyles.headerContent, { marginTop: Platform.OS === 'ios' ? 20 : 0 }]}>
+            <TouchableOpacity style={localStyles.backButton} onPress={onBack}>
+              <BackIcon />
+            </TouchableOpacity>
+            <Text style={localStyles.logoText}>CITADEL</Text>
+            <TouchableOpacity 
+              style={localStyles.addButton} 
+              onPress={() => setShowAddHoliday(true)}
+            >
+              <Ionicons name="add" size={26} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={localStyles.titleSection}>
+            <Text style={localStyles.sectionTitle}>Holidays</Text>
+            <Text style={localStyles.sectionSubtitle}>
+              {holidays.length} holiday{holidays.length !== 1 ? 's' : ''} scheduled
+            </Text>
+          </View>
+        </View>
+
+        {/* Content */}
+        <View style={localStyles.holidaysContent}>
           {loading ? (
-            <Text>Loading...</Text>
+            <View style={localStyles.loadingContainer}>
+              <ActivityIndicator color="#5b21b6" size="large" />
+              <Text style={localStyles.loadingText}>Loading holidays...</Text>
+            </View>
           ) : holidays.length > 0 ? (
-            <FlatList
-              data={holidays}
-              renderItem={renderHolidayItem}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-            />
+            holidays.map((holiday, index) => {
+              const dateInfo = getMonthDay(holiday.date);
+              const gradientColors = getHolidayGradient(index);
+              const icon = getHolidayIcon(holiday.name);
+
+              return (
+                <TouchableOpacity
+                  key={String(holiday.holiday_id)}
+                  style={localStyles.holidayCard}
+                  onPress={() => handleHolidayPress(holiday)}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={gradientColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={localStyles.holidayCardGradient}
+                  >
+                    <View style={localStyles.holidayCardOverlay} />
+                    <View style={localStyles.holidayContent}>
+                      <View style={localStyles.holidayLeft}>
+                        <View style={localStyles.holidayIconContainer}>
+                          <Text style={localStyles.holidayIcon}>{icon}</Text>
+                        </View>
+                        <View style={localStyles.holidayTextContainer}>
+                          <Text style={localStyles.holidayName}>{holiday.name}</Text>
+                          <Text style={localStyles.holidayDate}>{formatDate(holiday.date)}</Text>
+                          <Text style={localStyles.holidayCities}>
+                            {Array.isArray(holiday.cities) 
+                              ? holiday.cities.join(', ') 
+                              : holiday.cities}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={localStyles.dateBadge}>
+                        <Text style={localStyles.dateBadgeMonth}>{dateInfo.month}</Text>
+                        <Text style={localStyles.dateBadgeDay}>{dateInfo.day}</Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })
           ) : (
-            <Text style={styles.noDataText}>No holidays found</Text>
+            <View style={localStyles.emptyState}>
+              <View style={localStyles.emptyStateIconContainer}>
+                <Text style={localStyles.emptyStateIcon}>📅</Text>
+              </View>
+              <Text style={localStyles.emptyStateTitle}>No Holidays Added</Text>
+              <Text style={localStyles.emptyStateText}>
+                Add holidays for your organization by tapping the + button above
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>
-
-      <Modal
-        visible={showAddModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Holiday</Text>
-            </View>
-            
-            <Text style={styles.modalLabel}>Holiday Name *</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newHoliday.name}
-              onChangeText={(text) => setNewHoliday({...newHoliday, name: text})}
-              placeholder="Enter holiday name"
-            />
-            
-            <Text style={styles.modalLabel}>Date *</Text>
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.datePickerText}>
-                {newHoliday.date.toDateString()}
-              </Text>
-            </TouchableOpacity>
-            
-            {showDatePicker && (
-              <DateTimePicker
-                value={newHoliday.date}
-                mode="date"
-                display="default"
-                onChange={(event, date) => {
-                  setShowDatePicker(false);
-                  if (date) setNewHoliday({...newHoliday, date});
-                }}
-              />
-            )}
-            
-            <Text style={styles.modalLabel}>Cities (comma-separated) *</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newHoliday.cities.join(', ')}
-              onChangeText={(text) => setNewHoliday({...newHoliday, cities: text.split(',').map(c => c.trim())})}
-              placeholder="Delhi, Mumbai, All"
-            />
-            
-            <Text style={styles.modalLabel}>Description</Text>
-            <TextInput
-              style={[styles.modalInput, { height: 80 }]}
-              value={newHoliday.description}
-              onChangeText={(text) => setNewHoliday({...newHoliday, description: text})}
-              placeholder="Enter description"
-              multiline
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddModal(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={addHoliday}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.submitButtonText}>Add Holiday</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showBulkAddModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowBulkAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bulk Add Holidays</Text>
-            </View>
-            
-            <Text style={styles.modalLabel}>Holidays (JSON Format)</Text>
-            <Text style={styles.modalDescription}>
-              Enter holidays in JSON array format:
-              {'\n\n'}[
-              {'\n'}  {"{"}
-              {'\n'}    "name": "Holiday Name",
-              {'\n'}    "date": "YYYY-MM-DD",
-              {'\n'}    "cities": ["City1", "City2"],
-              {'\n'}    "description": "Optional description"
-              {'\n'}  {"}"}
-              {'\n'}]
-            </Text>
-            
-            <TextInput
-              style={[styles.modalInput, { height: 200, fontFamily: 'monospace' }]}
-              value={bulkHolidays}
-              onChangeText={setBulkHolidays}
-              placeholder="Paste JSON array here"
-              multiline
-              textAlignVertical="top"
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowBulkAddModal(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={addBulkHolidays}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.submitButtonText}>Add Holidays</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
     </View>
   );
 };
+
+const localStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#e7e6e5',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
+    zIndex: 10,
+  },
+  addButton: {
+    padding: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    zIndex: 10,
+    marginTop: 8,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    width: '96%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 0,
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 4,
+  },
+  headerBanner: {
+    height: 250,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 1,
+  },
+  holidaysContent: {
+    padding: 20,
+    paddingBottom: 32,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 12,
+    fontWeight: '500',
+  },
+  holidayCard: {
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  holidayCardGradient: {
+    padding: 0,
+    position: 'relative',
+  },
+  holidayCardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  holidayContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+  },
+  holidayLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  holidayIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  holidayIcon: {
+    fontSize: 32,
+  },
+  holidayTextContainer: {
+    flex: 1,
+  },
+  holidayName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+    letterSpacing: 0.2,
+  },
+  holidayDate: {
+    fontSize: 13,
+    color: '#fff',
+    opacity: 0.95,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  holidayCities: {
+    fontSize: 11,
+    color: '#fff',
+    opacity: 0.85,
+    fontWeight: '500',
+  },
+  dateBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 14,
+    padding: 12,
+    minWidth: 64,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dateBadgeMonth: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  dateBadgeDay: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111827',
+    lineHeight: 30,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emptyStateIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f3f0ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+  },
+  emptyStateTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center'
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
+  },
+});
 
 export default HolidayManagement;
