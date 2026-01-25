@@ -532,8 +532,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [16, 9],
+            allowsEditing: false,  
             quality: 0.8,
         });
 
@@ -978,6 +977,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                             <Image
                                                 source={{ uri: photo.uri || photo.photo }}
                                                 style={styles.photoImage}
+                                                resizeMode="contain"
                                             />
                                             <TouchableOpacity
                                                 style={styles.removePhotoButton}
@@ -1247,7 +1247,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                         <Image
                                             source={{ uri: photo.photo }}
                                             style={styles.photo}
-                                            resizeMode="cover"
+                                            resizeMode="contain" 
                                         />
                                     </View>
                                 ))}
@@ -1594,7 +1594,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
 
                         <View style={styles.titleSection}>
                             <Text style={styles.headerTitle}>Vehicles</Text>
-                            <Text style={styles.headerSubtitle}>
+                            <Text style={[styles.headerSubtitle,{textAlign: 'left'}]}>
                                 {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} in {city}
                             </Text>
                         </View>

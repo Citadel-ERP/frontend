@@ -18,7 +18,7 @@ export const VehicleImage: React.FC<VehicleImageProps> = ({ vehicle, size = 'sma
       <Image
         source={imageSource}
         style={size === 'small' ? styles.vehicleImage : styles.vehicleImageLarge}
-        resizeMode="cover"
+        resizeMode="contain"
       />
     );
   }

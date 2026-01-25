@@ -307,14 +307,15 @@ export const styles = StyleSheet.create({
     },
     photoContainer: {
         width: CARD_WIDTH,
-        height: 220,
-        borderRadius: 12,
-        overflow: 'hidden',
-        backgroundColor: '#f5f5f5',
+            height: 250, 
+            backgroundColor: '#FFFFFF', 
+            justifyContent: 'center',
+            alignItems: 'center',
     },
     photo: {
         width: '100%',
         height: '100%',
+        backgroundColor: '#FFFFFF',
     },
     pagination: {
         flexDirection: 'row',
@@ -608,11 +609,13 @@ export const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
+        backgroundColor: '#FFFFFF',
     },
     vehicleImageLarge: {
         width: 80,
         height: 80,
         borderRadius: 40,
+        backgroundColor: '#FFFFFF',
     },
     vehicleIconContainerLarge: {
         width: 80,
@@ -1420,6 +1423,7 @@ export const styles = StyleSheet.create({
     photoImage: {
         width: '100%',
         height: '100%',
+        backgroundColor: '#FFFFFF',
     },
     removePhotoButton: {
         position: 'absolute',
@@ -2025,7 +2029,7 @@ export const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 2,
-        transition: 'all 0.2s ease',
+        // transition: 'all 0.2s ease',
     },
     selectedCard: {
         borderColor: '#008069',
