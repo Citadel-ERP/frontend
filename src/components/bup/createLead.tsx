@@ -8,37 +8,50 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
+  StatusBar,
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, FilterOption, AssignedTo } from './types';
 import DropdownModal from './dropdownModal';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// WhatsApp Color Scheme
-const WHATSAPP_COLORS = {
-  primary: '#075E54',
-  primaryLight: '#128C7E',
-  primaryDark: '#054D44',
-  secondary: '#25D366',
-  accent: '#10B981',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  background: '#e7e6e5',
-  surface: '#FFFFFF',
-  textPrimary: '#1F2937',
+const THEME_COLORS = {
+  primary: '#0D9488',
+  primaryLight: '#14B8A6',
+  primaryDark: '#0F766E',
+  secondary: '#10B981',
+  accent: '#A7F3D0',
+  background: '#F9FAFB',
+  card: '#FFFFFF',
+  surface: '#F8FAFC',
+  textPrimary: '#111827',
   textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
   border: '#E5E7EB',
-  success: '#25D366',
+  divider: '#F3F4F6',
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
   info: '#3B82F6',
-  white: '#FFFFFF',
-  chatBg: '#ECE5DD',
-  incoming: '#FFFFFF',
-  outgoing: '#DCF8C6',
+  emailBg: '#F0F9FF',
+  emailBorder: '#0EA5E9',
+  phoneBg: '#FEF3C7',
+  phoneBorder: '#F59E0B',
+  collabBg: '#F0FDF4',
+  collabBorder: '#10B981',
   leadInfoBg: '#F0F9FF',
-  leadInfoBorder: '#0EA5E9',
-  customFieldBg: '#F5F3FF',
+  leadInfoBorder: '#06B6D4',
+  customFieldBg: '#FAF5FF',
   customFieldBorder: '#8B5CF6',
+  managementBg: '#FFFBEB',
+  managementBorder: '#F59E0B',
+  hover: '#ECFDF5',
+  active: '#D1FAE5',
+  disabled: '#F3F4F6',
+  white: '#FFFFFF',
 };
 
 interface CreateLeadProps {
@@ -56,7 +69,6 @@ interface CustomField {
   value: string;
 }
 
-// Debounce hook for search optimization
 const useDebounce = (value: string, delay: number): string => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -107,15 +119,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
-
-  // Lead Specific Information States
   const [areaRequirements, setAreaRequirements] = useState('');
   const [officeType, setOfficeType] = useState('');
   const [location, setLocation] = useState('');
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customFieldErrors, setCustomFieldErrors] = useState<{[key: string]: string}>({});
-
-  // Assigned person states
   const [assignedToSearch, setAssignedToSearch] = useState('');
   const [assignedToResults, setAssignedToResults] = useState<AssignedTo[]>([]);
   const [assignedToLoading, setAssignedToLoading] = useState(false);
@@ -150,6 +158,8 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       searchAssignedToUsers(debouncedAssignedSearch);
     }
   }, [debouncedAssignedSearch, activeDropdown]);
+
+  
 
   const fetchPhases = async (): Promise<void> => {
     try {
@@ -222,7 +232,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
       setAssignedToLoading(true);
 
-      // If query is empty, fetch all users
       if (query.length === 0) {
         const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
           method: 'POST',
@@ -241,7 +250,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         return;
       }
 
-      // If query has at least 2 characters, search
       if (query.length >= 2) {
         const response = await fetch(
           `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
@@ -443,15 +451,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
       setLoading(true);
 
-      // Build meta object
       const meta: {[key: string]: any} = {};
       
-      // Add lead specific information
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
       
-      // Add custom fields
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
           meta[field.key.trim()] = field.value.trim();
@@ -479,12 +484,10 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         createPayload.phone_numbers = editingPhones;
       }
 
-      // Add assigned_to if selected
       if (formData.assigned_to) {
         createPayload.assigned_to = formData.assigned_to.email;
       }
 
-      // Add meta if it has data
       if (Object.keys(meta).length > 0) {
         createPayload.meta = meta;
       }
@@ -506,7 +509,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       
       Alert.alert('Success', 'Lead created successfully!');
       
-      // Reset form
       setFormData({
         name: '',
         company: '',
@@ -523,7 +525,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       setCustomFields([]);
       setCustomFieldErrors({});
       
-      // Call onCreate callback to refresh leads list
       onCreate();
       
     } catch (error: any) {
@@ -535,341 +536,353 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      
+
       <ScrollView 
-        style={styles.detailScrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        style={s.scrollView} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={s.scrollContent}
       >
-        {/* Basic Information */}
-        <View style={styles.detailCard}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="person" size={20} color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.sectionTitle}>Basic Information</Text>
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.primary + '15' }]}>
+              <Ionicons name="person-outline" size={20} color={THEME_COLORS.primary} />
+            </View>
+            <Text style={s.cardTitle}>Basic Information</Text>
           </View>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Lead Name *</Text>
+
+          <View style={s.field}>
+            <Text style={s.label}>Lead Name *</Text>
             <TextInput
-              style={styles.input}
+              style={s.input}
               value={formData.name}
               onChangeText={(text) => setFormData({ ...formData, name: text })}
               placeholder="Enter lead name"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Company</Text>
+          <View style={s.field}>
+            <Text style={s.label}>Company</Text>
             <TextInput
-              style={styles.input}
+              style={s.input}
               value={formData.company}
               onChangeText={(text) => setFormData({ ...formData, company: text })}
               placeholder="Enter company name (optional)"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>City</Text>
-            <View style={styles.readOnlyField}>
-              <Ionicons name="location" size={16} color={WHATSAPP_COLORS.primaryDark} style={styles.fieldIcon} />
-              <Text style={styles.readOnlyText}>{selectedCity}</Text>
+          <View style={s.field}>
+            <Text style={s.label}>City</Text>
+            <View style={s.readOnlyField}>
+              <Ionicons name="location" size={16} color={THEME_COLORS.primary} style={s.fieldIcon} />
+              <Text style={s.readOnlyText}>{selectedCity}</Text>
             </View>
           </View>
 
-          {/* Assigned To Section */}
-          <View style={styles.inputGroup}>
-            <View style={styles.assignedToHeader}>
-              <Text style={styles.inputLabel}>Assigned To</Text>
-              {formData.assigned_to && (
-                <TouchableOpacity
-                  onPress={() => setFormData({ ...formData, assigned_to: null })}
-                  style={styles.clearAssignmentButton}
-                >
-                  <Text style={styles.clearAssignmentText}>Clear</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.dropdown}
+          <View style={s.field}>
+            <Text style={s.label}>Assigned To</Text>
+            <TouchableOpacity 
+              style={s.selector} 
               onPress={() => setActiveDropdown('assigned')}
+              activeOpacity={0.7}
             >
-              <View style={styles.assignedToContent}>
+              <View style={s.selectorContent}>
                 {formData.assigned_to ? (
                   <>
-                    <Ionicons name="person" size={18} color={WHATSAPP_COLORS.primary} />
-                    <Text style={styles.assignedToText} numberOfLines={1}>
-                      {getAssignedToLabel()}
-                    </Text>
+                    <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.accent }]}>
+                      <Ionicons name="person" size={14} color={THEME_COLORS.primary} />
+                    </View>
+                    <Text style={s.selectorText} numberOfLines={1}>{getAssignedToLabel()}</Text>
                   </>
                 ) : (
-                  <Text style={styles.dropdownPlaceholder} numberOfLines={1}>
-                    Select assignee (optional)
-                  </Text>
+                  <Text style={s.selectorPlaceholder}>Select assignee (optional)</Text>
                 )}
               </View>
-              <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Lead Specific Information */}
-        <View style={styles.detailCard}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="business" size={20} color={WHATSAPP_COLORS.leadInfoBorder} />
-            <Text style={styles.sectionTitle}>Lead Specific Information</Text>
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
+              <Ionicons name="business-outline" size={20} color={THEME_COLORS.leadInfoBorder} />
+            </View>
+            <Text style={s.cardTitle}>Lead Specific Information</Text>
           </View>
           
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Area Requirements</Text>
+          <View style={s.field}>
+            <Text style={s.label}>Area Requirements</Text>
             <TextInput
-              style={styles.input}
+              style={[s.input, s.textArea]}
               value={areaRequirements}
               onChangeText={setAreaRequirements}
               placeholder="e.g., 1000 sq ft, 5 desks, etc."
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
               multiline
               numberOfLines={2}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Office Type</Text>
-            <TouchableOpacity
-              style={styles.dropdown}
+          <View style={s.field}>
+            <Text style={s.label}>Office Type</Text>
+            <TouchableOpacity 
+              style={s.selector} 
               onPress={() => setActiveDropdown('officeType')}
+              activeOpacity={0.7}
             >
-              <View style={styles.assignedToContent}>
-                <Ionicons name="business" size={18} color={WHATSAPP_COLORS.leadInfoBorder} />
-                <Text style={styles.dropdownText} numberOfLines={1}>
+              <View style={s.selectorContent}>
+                <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
+                  <Ionicons name="business" size={14} color={THEME_COLORS.leadInfoBorder} />
+                </View>
+                <Text style={s.selectorText} numberOfLines={1}>
                   {getOfficeTypeLabel()}
                 </Text>
               </View>
-              <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Location Preference</Text>
+          <View style={s.field}>
+            <Text style={s.label}>Location Preference</Text>
             <TextInput
-              style={styles.input}
+              style={s.input}
               value={location}
               onChangeText={setLocation}
               placeholder="e.g., Downtown, Business District, etc."
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
-          {/* Custom Fields */}
           {customFields.length > 0 && (
-            <View style={styles.customFieldsSection}>
-              <Text style={[styles.inputLabel, {marginBottom: 12}]}>Additional Information</Text>
+            <View style={s.customFieldsSection}>
+              <Text style={[s.label, {marginBottom: 12}]}>Additional Information</Text>
               {customFields.map((field) => (
-                <View key={field.id} style={styles.customFieldRow}>
-                  <View style={styles.customFieldInputs}>
+                <View key={field.id} style={s.customFieldRow}>
+                  <View style={s.customFieldInputs}>
                     <TextInput
-                      style={[styles.customFieldInput, customFieldErrors[field.id] && styles.inputError]}
+                      style={[s.customFieldInput, customFieldErrors[field.id] && s.inputError]}
                       value={field.key}
                       onChangeText={(text) => handleCustomFieldChange(field.id, 'key', text)}
                       placeholder="Field name"
-                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      placeholderTextColor={THEME_COLORS.textTertiary}
                     />
                     <TextInput
-                      style={[styles.customFieldInput, customFieldErrors[field.id] && styles.inputError]}
+                      style={[s.customFieldInput, customFieldErrors[field.id] && s.inputError]}
                       value={field.value}
                       onChangeText={(text) => handleCustomFieldChange(field.id, 'value', text)}
                       placeholder="Value"
-                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      placeholderTextColor={THEME_COLORS.textTertiary}
                     />
+                    <TouchableOpacity
+                      style={s.removeCustomFieldBtn}
+                      onPress={() => handleRemoveCustomField(field.id)}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={THEME_COLORS.danger} />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.removeCustomFieldButton}
-                    onPress={() => handleRemoveCustomField(field.id)}
-                  >
-                    <Ionicons name="trash-outline" size={20} color={WHATSAPP_COLORS.danger} />
-                  </TouchableOpacity>
                   {customFieldErrors[field.id] && (
-                    <Text style={styles.errorText}>{customFieldErrors[field.id]}</Text>
+                    <Text style={s.error}>{customFieldErrors[field.id]}</Text>
                   )}
                 </View>
               ))}
             </View>
           )}
 
-          <TouchableOpacity 
-            style={styles.addCustomFieldButton}
+          <TouchableOpacity
+            style={s.addCustomFieldBtn}
             onPress={handleAddCustomField}
+            activeOpacity={0.7}
           >
-            <Ionicons name="add-circle-outline" size={20} color={WHATSAPP_COLORS.leadInfoBorder} />
-            <Text style={styles.addCustomFieldText}>Add Custom Field</Text>
+            <Ionicons name="add-circle-outline" size={18} color={THEME_COLORS.primary} />
+            <Text style={s.addCustomFieldText}>Add Custom Field</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Email Addresses */}
-        <View style={styles.detailCard}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="email" size={20} color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.sectionTitle}>Email Addresses ({editingEmails.length})</Text>
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.emailBg }]}>
+              <Ionicons name="mail-outline" size={20} color={THEME_COLORS.emailBorder} />
+            </View>
+            <Text style={s.cardTitle}>Email Addresses ({editingEmails.length})</Text>
           </View>
           
           {editingEmails.length > 0 ? editingEmails.map((email, index) => (
-            <View key={index} style={styles.contactItemContainer}>
-              <View style={styles.contactItemContent}>
-                <Ionicons name="mail" size={16} color={WHATSAPP_COLORS.primaryLight} style={styles.contactIcon} />
-                <Text style={styles.contactItemText}>{email}</Text>
+            <View key={index} style={s.listItem}>
+              <View style={s.listItemContent}>
+                <Ionicons name="mail" size={16} color={THEME_COLORS.emailBorder} />
+                <Text style={s.listItemText}>{email}</Text>
               </View>
               <TouchableOpacity 
-                style={styles.removeContactButton}
-                onPress={() => handleRemoveEmail(index)}
+                onPress={() => handleRemoveEmail(index)} 
+                style={s.deleteBtn}
+                activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={22} color={WHATSAPP_COLORS.danger} />
+                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           )) : (
-            <View style={styles.emptyContactContainer}>
-              <Ionicons name="mail-outline" size={24} color={WHATSAPP_COLORS.textTertiary} />
-              <Text style={styles.emptyContactText}>No emails added yet</Text>
+            <View style={s.emptyContactContainer}>
+              <Ionicons name="mail-outline" size={24} color={THEME_COLORS.textTertiary} />
+              <Text style={s.emptyContactText}>No emails added yet</Text>
             </View>
           )}
 
-          <View style={styles.addContactContainer}>
+          <View style={s.addRow}>
             <TextInput
-              style={[styles.input, emailError && styles.inputError, { width: '83%' }]}
+              style={[s.input, emailError && s.inputError, { flex: 1 }]}
               value={newEmail}
               onChangeText={(text) => {
                 setNewEmail(text);
                 setEmailError(null);
               }}
               placeholder="Add email address..."
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TouchableOpacity style={styles.addButton} onPress={handleAddEmail}>
-              <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
+            <TouchableOpacity 
+              style={s.addBtn} 
+              onPress={handleAddEmail}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
-          {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+          {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
 
-        {/* Phone Numbers */}
-        <View style={styles.detailCard}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="phone" size={20} color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.sectionTitle}>Phone Numbers ({editingPhones.length})</Text>
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.phoneBg }]}>
+              <Ionicons name="call-outline" size={20} color={THEME_COLORS.phoneBorder} />
+            </View>
+            <Text style={s.cardTitle}>Phone Numbers ({editingPhones.length})</Text>
           </View>
           
           {editingPhones.length > 0 ? editingPhones.map((phone, index) => (
-            <View key={index} style={styles.contactItemContainer}>
-              <View style={styles.contactItemContent}>
-                <Ionicons name="call" size={16} color={WHATSAPP_COLORS.primaryLight} style={styles.contactIcon} />
-                <Text style={styles.contactItemText}>{phone}</Text>
+            <View key={index} style={s.listItem}>
+              <View style={s.listItemContent}>
+                <Ionicons name="call" size={16} color={THEME_COLORS.phoneBorder} />
+                <Text style={s.listItemText}>{phone}</Text>
               </View>
               <TouchableOpacity 
-                style={styles.removeContactButton}
-                onPress={() => handleRemovePhone(index)}
+                onPress={() => handleRemovePhone(index)} 
+                style={s.deleteBtn}
+                activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={22} color={WHATSAPP_COLORS.danger} />
+                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           )) : (
-            <View style={styles.emptyContactContainer}>
-              <Ionicons name="call-outline" size={24} color={WHATSAPP_COLORS.textTertiary} />
-              <Text style={styles.emptyContactText}>No phone numbers added yet</Text>
+            <View style={s.emptyContactContainer}>
+              <Ionicons name="call-outline" size={24} color={THEME_COLORS.textTertiary} />
+              <Text style={s.emptyContactText}>No phone numbers added yet</Text>
             </View>
           )}
 
-          <View style={styles.addContactContainer}>
+          <View style={s.addRow}>
             <TextInput
-              style={[styles.input, phoneError && styles.inputError, { width: "85%" }]}
+              style={[s.input, phoneError && s.inputError, { flex: 1 }]}
               value={newPhone}
               onChangeText={(text) => {
                 setNewPhone(text);
                 setPhoneError(null);
               }}
               placeholder="Add phone number..."
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="phone-pad"
             />
-            <TouchableOpacity style={styles.addButton} onPress={handleAddPhone}>
-              <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
+            <TouchableOpacity 
+              style={s.addBtn} 
+              onPress={handleAddPhone}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
-          {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+          {phoneError && <Text style={s.error}>{phoneError}</Text>}
         </View>
 
-        {/* Lead Management */}
-        <View style={styles.detailCard}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="settings" size={20} color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.sectionTitle}>Lead Management</Text>
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.managementBg }]}>
+              <Ionicons name="settings-outline" size={20} color={THEME_COLORS.managementBorder} />
+            </View>
+            <Text style={s.cardTitle}>Lead Management</Text>
           </View>
           
-          <View style={styles.managementRow}>
-            <View style={styles.managementItem}>
-              <Text style={styles.inputLabel}>Status</Text>
-              <TouchableOpacity
-                style={styles.dropdown}
+          <View style={s.row}>
+            <View style={s.halfField}>
+              <Text style={s.label}>Status</Text>
+              <TouchableOpacity 
+                style={s.selector} 
                 onPress={() => setActiveDropdown('status')}
+                activeOpacity={0.7}
               >
-                <Text style={styles.dropdownText} numberOfLines={1}>
+                <Text style={s.selectorText} numberOfLines={1}>
                   {getFilterLabel('status', formData.status)}
                 </Text>
-                <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+                <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.managementItem}>
-              <Text style={styles.inputLabel}>Phase</Text>
-              <TouchableOpacity
-                style={styles.dropdown}
+            <View style={s.halfField}>
+              <Text style={s.label}>Phase</Text>
+              <TouchableOpacity 
+                style={s.selector} 
                 onPress={() => setActiveDropdown('phase')}
+                activeOpacity={0.7}
               >
-                <Text style={styles.dropdownText} numberOfLines={1}>
+                <Text style={s.selectorText} numberOfLines={1}>
                   {getFilterLabel('phase', formData.phase)}
                 </Text>
-                <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+                <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Subphase</Text>
-            <TouchableOpacity
-              style={styles.dropdown}
+          <View style={s.field}>
+            <Text style={s.label}>Subphase</Text>
+            <TouchableOpacity 
+              style={s.selector} 
               onPress={() => setActiveDropdown('subphase')}
+              activeOpacity={0.7}
             >
-              <Text style={styles.dropdownText} numberOfLines={1}>
+              <Text style={s.selectorText} numberOfLines={1}>
                 {getFilterLabel('subphase', formData.subphase)}
               </Text>
-              <MaterialIcons name="arrow-drop-down" size={24} color={WHATSAPP_COLORS.textSecondary} />
+              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Create Button */}
-        <View style={styles.detailCard}>
-          <TouchableOpacity 
-            style={[styles.createButton, loading && styles.buttonDisabled]} 
-            onPress={handleCreate}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
-            ) : (
-              <>
-                <Ionicons name="person-add" size={20} color={WHATSAPP_COLORS.white} />
-                <Text style={styles.createButtonText}>Create Lead</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={[s.saveBtn, loading && s.saveBtnDisabled]} 
+          onPress={handleCreate}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color={THEME_COLORS.white} size="small" />
+          ) : (
+            <>
+              <Ionicons name="person-add" size={20} color={THEME_COLORS.white} />
+              <Text style={s.saveBtnText}>Create Lead</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-        <View style={styles.bottomSpacing} />
+        <View style={s.bottomSpacer} />
       </ScrollView>
 
-      {/* Dropdown Modals */}
       <DropdownModal
         visible={activeDropdown === 'status'}
         onClose={() => setActiveDropdown(null)}
@@ -878,11 +891,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         title="Select Status"
         theme={{
           ...theme,
-          primary: WHATSAPP_COLORS.primary,
-          background: WHATSAPP_COLORS.background,
-          cardBg: WHATSAPP_COLORS.surface,
-          text: WHATSAPP_COLORS.textPrimary,
-          border: WHATSAPP_COLORS.border,
+          primary: THEME_COLORS.primary,
+          background: THEME_COLORS.background,
+          cardBg: THEME_COLORS.card,
+          text: THEME_COLORS.textPrimary,
+          border: THEME_COLORS.border,
         }}
       />
 
@@ -894,11 +907,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         title="Select Phase"
         theme={{
           ...theme,
-          primary: WHATSAPP_COLORS.primary,
-          background: WHATSAPP_COLORS.background,
-          cardBg: WHATSAPP_COLORS.surface,
-          text: WHATSAPP_COLORS.textPrimary,
-          border: WHATSAPP_COLORS.border,
+          primary: THEME_COLORS.primary,
+          background: THEME_COLORS.background,
+          cardBg: THEME_COLORS.card,
+          text: THEME_COLORS.textPrimary,
+          border: THEME_COLORS.border,
         }}
       />
 
@@ -910,11 +923,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         title="Select Subphase"
         theme={{
           ...theme,
-          primary: WHATSAPP_COLORS.primary,
-          background: WHATSAPP_COLORS.background,
-          cardBg: WHATSAPP_COLORS.surface,
-          text: WHATSAPP_COLORS.textPrimary,
-          border: WHATSAPP_COLORS.border,
+          primary: THEME_COLORS.primary,
+          background: THEME_COLORS.background,
+          cardBg: THEME_COLORS.card,
+          text: THEME_COLORS.textPrimary,
+          border: THEME_COLORS.border,
         }}
       />
 
@@ -926,70 +939,62 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         title="Select Office Type"
         theme={{
           ...theme,
-          primary: WHATSAPP_COLORS.primary,
-          background: WHATSAPP_COLORS.background,
-          cardBg: WHATSAPP_COLORS.surface,
-          text: WHATSAPP_COLORS.textPrimary,
-          border: WHATSAPP_COLORS.border,
+          primary: THEME_COLORS.primary,
+          background: THEME_COLORS.background,
+          cardBg: THEME_COLORS.card,
+          text: THEME_COLORS.textPrimary,
+          border: THEME_COLORS.border,
         }}
       />
 
-      {/* Assigned To Dropdown Modal */}
       {activeDropdown === 'assigned' && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Lead To</Text>
-              <TouchableOpacity onPress={() => setActiveDropdown(null)}>
-                <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Assign Lead To</Text>
+              <TouchableOpacity 
+                onPress={() => setActiveDropdown(null)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.searchInputContainer}>
+            <View style={s.searchContainer}>
               <TextInput
-                style={styles.searchInput}
+                style={s.searchInput}
                 value={assignedToSearch}
                 onChangeText={setAssignedToSearch}
                 placeholder="Search employees..."
-                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                placeholderTextColor={THEME_COLORS.textTertiary}
                 autoCapitalize="none"
               />
-              {assignedToLoading && (
-                <ActivityIndicator 
-                  size="small" 
-                  color={WHATSAPP_COLORS.primary} 
-                  style={styles.searchLoading} 
-                />
-              )}
+              {assignedToLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
             </View>
             
-            <ScrollView style={styles.modalScrollView}>              
-              {/* Search results */}
+            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>              
               {assignedToResults.length > 0 ? (
                 assignedToResults.map((user) => (
                   <TouchableOpacity
                     key={user.email}
-                    style={[
-                      styles.searchResultItem,
-                      formData.assigned_to?.email === user.email && styles.selectedItem,
-                      { backgroundColor: "#fff" },
-                    ]}
+                    style={[s.modalItem, formData.assigned_to?.email === user.email && s.modalItemSelected]}
                     onPress={() => handleAssignToUser(user)}
+                    activeOpacity={0.7}
                   >
-                    <View style={styles.searchResultContent}>
+                    <View style={s.modalItemContent}>
                       <Ionicons 
                         name="person" 
                         size={18} 
                         color={formData.assigned_to?.email === user.email 
-                          ? WHATSAPP_COLORS.success 
-                          : WHATSAPP_COLORS.primary
+                          ? THEME_COLORS.primary 
+                          : THEME_COLORS.textSecondary
                         } 
                       />
-                      <View style={styles.assignedToUserInfo}>
-                        <Text style={styles.searchResultText} numberOfLines={1}>
+                      <View style={s.modalItemInfo}>
+                        <Text style={s.modalItemName} numberOfLines={1}>
                           {user.full_name || `${user.first_name} ${user.last_name}`}
                         </Text>
-                        <Text style={styles.assignedToEmail} numberOfLines={1}>
+                        <Text style={s.modalItemEmail} numberOfLines={1}>
                           {user.email}
                         </Text>
                       </View>
@@ -997,16 +1002,16 @@ const CreateLead: React.FC<CreateLeadProps> = ({
                     {formData.assigned_to?.email === user.email && (
                       <Ionicons 
                         name="checkmark-circle" 
-                        size={22} 
-                        color={WHATSAPP_COLORS.success} 
+                        size={20} 
+                        color={THEME_COLORS.primary} 
                       />
                     )}
                   </TouchableOpacity>
                 ))
               ) : (
                 !assignedToLoading && assignedToResults.length === 0 && (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateText}>No users found</Text>
+                  <View style={s.emptyState}>
+                    <Text style={s.emptyText}>No users found</Text>
                   </View>
                 )
               )}
@@ -1014,267 +1019,353 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           </View>
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WHATSAPP_COLORS.background,
+    backgroundColor: THEME_COLORS.background,
   },
   
-  // Scroll View
-  detailScrollView: {
-    flex: 1,
+  // header: { 
+  //   backgroundColor: '#075E54', 
+  //   borderBottomWidth: 1, 
+  //   borderBottomColor: '#128C7E', 
+  //   shadowColor: '#000', 
+  //   shadowOffset: { width: 0, height: 2 }, 
+  //   shadowOpacity: 0.1, 
+  //   shadowRadius: 3, 
+  //   elevation: 3, 
+  //   paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  // },
+  headerContent: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    height: 60 
   },
-  scrollContent: {
-    paddingTop: 16,
-    paddingBottom: 32,
+  backButton: { 
+    padding: 8, 
+    marginRight: 8 
+  },
+  headerTextContainer: { 
+    flex: 1 
+  },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: '#FFFFFF', 
+    marginBottom: 2 
+  },
+  headerSubtitle: { 
+    fontSize: 14, 
+    color: 'rgba(255, 255, 255, 0.8)' 
+  },
+  headerActions: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  saveHeaderButton: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    backgroundColor: '#25D366', 
+    borderRadius: 20 
+  },
+  saveHeaderText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#FFFFFF' 
   },
   
-  // Detail Cards
-  detailCard: {
+  scrollView: { 
+    flex: 1 
+  },
+  scrollContent: { 
+    paddingTop: 16, 
+    paddingBottom: 32 
+  },
+  
+  card: {
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 20,
     borderRadius: 16,
-    backgroundColor: WHATSAPP_COLORS.surface,
+    backgroundColor: THEME_COLORS.card,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.border,
   },
-  
-  // Section Headers
-  sectionHeader: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 20,
+    gap: 12,
   },
-  sectionTitle: {
-    fontSize: 16,
+  cardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 17,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
+    color: THEME_COLORS.textPrimary,
+    letterSpacing: -0.3,
   },
   
-  // Input Groups
-  inputGroup: {
-    marginBottom: 15,
+  field: {
+    marginBottom: 16,
   },
-  inputLabel: {
-    fontSize: 14,
+  label: {
+    fontSize: 13,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.textSecondary,
+    color: THEME_COLORS.textSecondary,
     marginBottom: 8,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
   input: {
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: WHATSAPP_COLORS.textPrimary,
-    backgroundColor: "#fff",
+    color: THEME_COLORS.textPrimary,
+    backgroundColor: THEME_COLORS.surface,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   inputError: {
-    borderColor: WHATSAPP_COLORS.danger,
+    borderColor: THEME_COLORS.danger,
+    backgroundColor: '#FEF2F2',
   },
+  
   readOnlyField: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.divider,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: WHATSAPP_COLORS.background,
+    backgroundColor: THEME_COLORS.surface,
   },
   fieldIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   readOnlyText: {
     fontSize: 15,
-    color: WHATSAPP_COLORS.textPrimary,
+    color: THEME_COLORS.textPrimary,
+    fontWeight: '500',
   },
   
-  // Assigned To Section
-  assignedToHeader: {
+  selector: {
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    backgroundColor: THEME_COLORS.surface,
   },
-  clearAssignmentButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: WHATSAPP_COLORS.danger + '15',
-  },
-  clearAssignmentText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.danger,
-  },
-  assignedToContent: {
+  selectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     flex: 1,
   },
-  assignedToText: {
+  selectorText: {
     fontSize: 15,
-    color: WHATSAPP_COLORS.textPrimary,
+    color: THEME_COLORS.textPrimary,
     flex: 1,
+    fontWeight: '500',
   },
-  dropdownPlaceholder: {
+  selectorPlaceholder: {
     fontSize: 15,
-    color: WHATSAPP_COLORS.textTertiary,
+    color: THEME_COLORS.textTertiary,
+    fontStyle: 'italic',
+  },
+  
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: THEME_COLORS.surface,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.border,
+  },
+  listItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  listItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: THEME_COLORS.textPrimary,
     flex: 1,
   },
-  assignedToUserInfo: {
-    flex: 1,
+  deleteBtn: {
+    padding: 4,
     marginLeft: 8,
   },
-  assignedToEmail: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.textTertiary,
-    marginTop: 2,
-  },
-  selectedItem: {
-    backgroundColor: WHATSAPP_COLORS.primary + '10',
-    borderLeftWidth: 3,
-    borderLeftColor: WHATSAPP_COLORS.primary,
-  },
   
-  // Contact Items
-  contactItemContainer: {
+  addRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: WHATSAPP_COLORS.background,
-    borderLeftWidth: 3,
-    borderLeftColor: WHATSAPP_COLORS.primary,
-  },
-  contactItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  contactIcon: {
-    marginRight: 8,
-  },
-  contactItemText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: WHATSAPP_COLORS.textPrimary,
-    flex: 1,
-  },
-  removeContactButton: {
-    padding: 4,
-  },
-  
-  // Empty Contact
-  emptyContactContainer: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: WHATSAPP_COLORS.background,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  emptyContactText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textTertiary,
-  },
-  
-  // Add Contact
-  addContactContainer: {
-    flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     alignItems: 'center',
     marginTop: 16,
     paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: WHATSAPP_COLORS.border,
+    borderTopWidth: 1.5,
+    borderTopColor: THEME_COLORS.divider,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: WHATSAPP_COLORS.background,
+    backgroundColor: THEME_COLORS.hover,
   },
   
-  // Error Text
-  errorText: {
+  error: {
     fontSize: 12,
-    color: WHATSAPP_COLORS.danger,
-    marginTop: 4,
+    color: THEME_COLORS.danger,
+    marginTop: 6,
     marginLeft: 4,
+    fontWeight: '500',
   },
   
-  // Management
-  managementRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 20,
-  },
-  managementItem: {
+  searchContainer: {
     flex: 1,
+    position: 'relative',
   },
-  dropdown: {
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: "#fff",
-  },
-  dropdownText: {
+  searchInput: {
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 15,
-    color: WHATSAPP_COLORS.textPrimary,
-    flex: 1,
-    marginRight: 8,
+    color: THEME_COLORS.textPrimary,
+    backgroundColor: THEME_COLORS.surface,
+    paddingRight: 40,
+  },
+  searchLoader: {
+    position: 'absolute',
+    right: 14,
+    top: 12,
   },
   
-  // Create Button
-  createButton: {
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  halfField: {
+    flex: 1,
+  },
+  
+  iconCircleSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  customFieldsSection: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  customFieldRow: {
+    marginBottom: 12,
+  },
+  customFieldInputs: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  customFieldInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: THEME_COLORS.textPrimary,
+    backgroundColor: THEME_COLORS.customFieldBg,
+  },
+  removeCustomFieldBtn: {
+    padding: 10,
+  },
+  addCustomFieldBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: THEME_COLORS.hover,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+    borderStyle: 'dashed',
+  },
+  addCustomFieldText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: THEME_COLORS.primary,
+  },
+  
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,
-    backgroundColor: WHATSAPP_COLORS.primary,
+    backgroundColor: THEME_COLORS.primary,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    shadowColor: THEME_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  buttonDisabled: {
+  saveBtnDisabled: {
     opacity: 0.6,
   },
-  createButtonText: {
+  saveBtnText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.white,
+    fontWeight: '700',
+    color: THEME_COLORS.white,
+    letterSpacing: 0.3,
   },
   
-  // Bottom Spacing
-  bottomSpacing: {
-    height: 20,
-  },
-  
-  // Modal Styles
   modalOverlay: {
     position: 'absolute',
     top: 0,
@@ -1288,137 +1379,97 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '90%',
-    maxHeight: '80%',
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 16,
+    maxHeight: '70%',
+    backgroundColor: THEME_COLORS.card,
+    borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: THEME_COLORS.divider,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
+    fontWeight: '700',
+    color: THEME_COLORS.textPrimary,
   },
-  modalScrollView: {
-    maxHeight: 400,
+  modalScroll: {
+    maxHeight: 350,
   },
-  
-  // Search Input
-  searchInputContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: WHATSAPP_COLORS.textPrimary,
-    backgroundColor: '#fff',
-    paddingRight: 40,
-  },
-  searchLoading: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-  },
-  
-  // Search Results
-  searchResultItem: {
+  modalItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 8,
-    backgroundColor: "#fff",
-    borderLeftWidth: 4,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderColor: WHATSAPP_COLORS.accent,
+    backgroundColor: THEME_COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
   },
-  searchResultContent: {
+  modalItemSelected: {
+    backgroundColor: THEME_COLORS.accent,
+    borderLeftWidth: 4,
+    borderLeftColor: THEME_COLORS.primary,
+    borderColor: THEME_COLORS.primary,
+  },
+  modalItemContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
-  searchResultText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textPrimary,
+  modalItemInfo: {
     flex: 1,
+    marginLeft: 12,
+  },
+  modalItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: THEME_COLORS.textPrimary,
+  },
+  modalItemEmail: {
+    fontSize: 12,
+    color: THEME_COLORS.textTertiary,
+    marginTop: 2,
   },
   
-  // Empty State
-  emptyState: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: WHATSAPP_COLORS.background,
+  emptyContactContainer: {
+    padding: 16,
     borderRadius: 12,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textTertiary,
-    textAlign: 'center',
-  },
-
-  // Lead Specific Information Styles
-  customFieldsSection: {
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  customFieldRow: {
-    marginBottom: 12,
-  },
-  customFieldInputs: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  customFieldInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textPrimary,
-    backgroundColor: WHATSAPP_COLORS.customFieldBg,
-  },
-  removeCustomFieldButton: {
-    padding: 8,
-    marginLeft: 8,
-  },
-  addCustomFieldButton: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: THEME_COLORS.background,
+    flexDirection: 'row',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: WHATSAPP_COLORS.leadInfoBg,
-    marginTop: 12,
   },
-  addCustomFieldText: {
+  emptyContactText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.leadInfoBorder,
+    color: THEME_COLORS.textTertiary,
+  },
+  
+  emptyState: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: THEME_COLORS.textTertiary,
+    fontStyle: 'italic',
+  },
+  
+  bottomSpacer: {
+    height: 30,
   },
 });
 
