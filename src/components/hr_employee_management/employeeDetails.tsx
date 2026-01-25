@@ -15,14 +15,16 @@ import { TabNavigation } from './tabNavigation';
 import { Overview } from './overview';
 import { Attendance } from './attendance';
 import { Leaves } from './leaves';
+import EditLeaves from './editLeaves';
 import { EmployeeDetailsProps, ActiveTab, LeaveRequest } from './types';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 
-const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, token }) => {
+const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmployee, onBack, token }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   const [loading, setLoading] = useState(false);
+  const [employee, setEmployee] = useState(initialEmployee); // Add local state for employee
   const [employeeDetails, setEmployeeDetails] = useState<any>(null);
   const [attendanceReport, setAttendanceReport] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -30,6 +32,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
   const [rejectionModalVisible, setRejectionModalVisible] = useState(false);
   const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showEditLeaves, setShowEditLeaves] = useState(false);
 
   useEffect(() => {
     fetchEmployeeDetails();
@@ -44,7 +47,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
   const fetchEmployeeDetails = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/getEmployee`, {
+      const response = await fetch(`${BACKEND_URL}/manager/HRgetEmployee`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -55,7 +58,20 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Employee details fetched:', data);
         setEmployeeDetails(data);
+        
+        // Update the employee state with fresh data from API
+        // This ensures leave balances and other fields are updated
+        setEmployee({
+          ...employee,
+          earned_leaves: data.earned_leaves,
+          sick_leaves: data.sick_leaves,
+          casual_leaves: data.casual_leaves,
+          birth_date: data.birth_date,
+          joining_date: data.joining_date,
+          // Add any other fields that might be updated
+        });
       } else {
         Alert.alert('Error', 'Failed to fetch employee details');
       }
@@ -72,7 +88,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
       const startDate = new Date(selectedYear, selectedMonth, 1);
       const endDate = new Date(selectedYear, selectedMonth + 1, 0);
       
-      const response = await fetch(`${BACKEND_URL}/hr_manager/attendanceReport`, {
+      const response = await fetch(`${BACKEND_URL}/manager/attendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -103,7 +119,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
           style: 'default',
           onPress: async () => {
             try {
-              const response = await fetch(`${BACKEND_URL}/hr_manager/approveLeave`, {
+              const response = await fetch(`${BACKEND_URL}/manager/HrapproveLeave`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -141,7 +157,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     }
 
     try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/rejectLeave`, {
+      const response = await fetch(`${BACKEND_URL}/manager/HrrejectLeave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,6 +182,26 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
     }
   };
 
+  const handleEditLeaves = () => {
+    setShowEditLeaves(true);
+  };
+
+  const handleBackFromEditLeaves = () => {
+    setShowEditLeaves(false);
+    fetchEmployeeDetails(); // Refresh data when coming back
+  };
+
+  if (showEditLeaves) {
+    return (
+      <EditLeaves
+        employee={employee}
+        employeeDetails={employeeDetails}
+        onBack={handleBackFromEditLeaves}
+        token={token}
+      />
+    );
+  }
+
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'overview':
@@ -175,6 +211,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
             employeeDetails={employeeDetails}
             token={token}
             onRefresh={fetchEmployeeDetails}
+            onEditLeaves={handleEditLeaves}
           />
         );
       case 'attendance':
@@ -206,10 +243,10 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, onBack, tok
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#2D3748" />
-
+      
       <Header
         title={employee.full_name}
-        subtitle={employee.designation || employee.role}
+        subtitle={employee.designation}
         onBack={onBack}
         onRefresh={fetchEmployeeDetails}
         showRefresh={true}

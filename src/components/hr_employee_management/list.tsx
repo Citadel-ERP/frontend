@@ -150,7 +150,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                 </View>
                 
                 <Text style={styles.employeeDesignation} numberOfLines={1}>
-                  {employee.designation || employee.role}
+                  {employee.designation || employee.designation}
                 </Text>
                 
                 <Text style={styles.employeeLastMessage} numberOfLines={1}>

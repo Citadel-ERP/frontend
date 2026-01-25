@@ -19,7 +19,6 @@ interface SearchAndDownloadProps {
   onDownloadEmployees: () => void;
   onDownloadAttendance: () => void;
   onOpenHolidays: () => void;
-  onOpenAssets: () => void;
   placeholder: string;
 }
 
@@ -29,7 +28,6 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
   onDownloadEmployees,
   onDownloadAttendance,
   onOpenHolidays,
-  onOpenAssets,
   placeholder,
 }) => {
   const [searchFocused, setSearchFocused] = React.useState(false);
@@ -93,17 +91,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
           onPress={() => setOptionsVisible(false)}
         >
           <View style={localStyles.modalContent}>
-            <TouchableOpacity
-              style={localStyles.optionItem}
-              onPress={() => handleOptionPress(onOpenAssets)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="briefcase-outline" size={20} color="#2D3748" />
-              <Text style={localStyles.optionText}>Assets</Text>
-            </TouchableOpacity>
-
-            <View style={localStyles.optionDivider} />
-
+            
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onOpenHolidays)}

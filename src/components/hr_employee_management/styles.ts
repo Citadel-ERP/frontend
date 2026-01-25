@@ -527,7 +527,7 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     minWidth: 200,
-    zIndex: 1000,
+    zIndex: 10000,
   },
   actionMenuItem: {
     flexDirection: 'row',
@@ -544,6 +544,7 @@ export const styles = StyleSheet.create({
   infoCardsContainer: {
     paddingHorizontal: 16,
     paddingBottom: 32,
+    zIndex: 1,
   },
   infoCard: {
     backgroundColor: WHATSAPP_COLORS.surface,
@@ -555,6 +556,7 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    zIndex: 1,
   },
   infoCardHeader: {
     flexDirection: 'row',
@@ -1208,13 +1210,19 @@ export const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 26,  
+    fontSize: 26,
     fontWeight: '700',
-    color: '#FFFFFF',  
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  sectionTitleAlt: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#000000',
     letterSpacing: 0.5,
   },
   assetItem: {
@@ -1373,4 +1381,1037 @@ export const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
+  backIcon: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  uploadPayslipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  uploadPayslipButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  yearSection: {
+    marginBottom: 24,
+  },
+  yearHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  yearHeaderText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+  },
+  yearBadge: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  yearBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  payslipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    gap: 12,
+  },
+  payslipIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payslipInfo: {
+    flex: 1,
+  },
+  payslipMonth: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  payslipDate: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  downloadButtonAlt: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerContainer: {
+    marginBottom: 16,
+  },
+  monthPicker: {
+    flexDirection: 'row',
+  },
+  monthButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  },
+  monthButtonActive: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    borderColor: WHATSAPP_COLORS.primary,
+  },
+  monthButtonText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  monthButtonTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  yearPickerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  yearButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.background,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  },
+  yearButtonActive: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    borderColor: WHATSAPP_COLORS.primary,
+  },
+  yearButtonText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  yearButtonTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  filePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.border,
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    padding: 16,
+    backgroundColor: WHATSAPP_COLORS.background,
+    gap: 12,
+  },
+  filePickerText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    flex: 1,
+  },
+  selectedFileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  selectedFileName: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
+    fontWeight: '500',
+  },
+  documentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    gap: 12,
+  },
+  documentIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  documentInfo: {
+    flex: 1,
+  },
+  documentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  documentDate: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  documentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  documentActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: WHATSAPP_COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  }, statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  statusIcon: {
+    marginRight: 12,
+  },
+  statusContent: {
+    flex: 1,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
+  },
+  statusSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+  statusBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Family Member Card Styles
+  familyCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  familyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  memberInitials: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#075E54',
+  },
+  memberRelationship: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  familyDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+
+  // HR Signature Card Styles
+  hrCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  hrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  hrTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#25D366',
+  },
+  signatureImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: '#F8F8F8',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  hrDate: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  // Action Button Styles
+  actionContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 24,
+    marginTop: 16,
+  },
+  actionButtonLarge: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  saveButton: {
+    backgroundColor: '#25D366',
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Utility Styles
+  bottomSpacer: {
+    height: 40,
+  },
+  sectionAlt: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+  },
+  // Add these styles to your styles.ts file (inside StyleSheet.create({...}))
+// These are the missing professional-grade styles for the mediclaim modal
+
+// Detail Card and Row Styles
+detailCard: {
+  backgroundColor: WHATSAPP_COLORS.surface,
+  borderRadius: 12,
+  padding: 16,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
+detailRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 10,
+  minHeight: 44, // For better touch targets
+},
+
+detailLabel: {
+  flex: 1,
+  fontSize: 14,
+  color: '#666',
+  marginLeft: 12,
+  fontWeight: '500',
+},
+
+detailValue: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#075E54',
+  textAlign: 'right',
+  maxWidth: '60%', // Prevent overflow
+},
+
+detailDivider: {
+  height: 1,
+  backgroundColor: '#F0F0F0',
+  marginVertical: 4,
+},
+
+// Detail Badge Styles (for family member tags)
+detailBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#F8F8F8',
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 16,
+  gap: 4,
+  borderWidth: 1,
+  borderColor: '#E0E0E0',
+},
+
+badgeText: {
+  fontSize: 12,
+  color: '#666',
+  fontWeight: '500',
+},
+
+// Warning Card Style
+warningCard: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#FFF2F2',
+  borderRadius: 12,
+  padding: 16,
+  borderLeftWidth: 4,
+  borderLeftColor: '#D32F2F',
+  gap: 12,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.03,
+  shadowRadius: 3,
+  elevation: 1,
+},
+
+warningText: {
+  flex: 1,
+  fontSize: 14,
+  color: '#D32F2F',
+  fontWeight: '500',
+  lineHeight: 20,
+},
+
+// Section Styles (different from the header section)
+// sectionAlt: {
+//   marginHorizontal: 16,
+//   marginBottom: 20,
+// },
+
+// sectionHeader: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   justifyContent: 'space-between',
+//   marginBottom: 12,
+//   paddingBottom: 8,
+//   borderBottomWidth: 2,
+//   borderBottomColor: '#F0F0F0',
+// },
+
+// sectionTitle: {
+//   fontSize: 16,
+//   fontWeight: '700',
+//   color: '#075E54',
+//   marginLeft: 8,
+//   letterSpacing: 0.3,
+// },
+
+// // Edit Input Styles (enhanced)
+// editLabel: {
+//   fontSize: 14,
+//   fontWeight: '600',
+//   color: '#075E54',
+//   marginBottom: 8,
+//   marginTop: 16,
+//   letterSpacing: 0.2,
+// },
+
+// editInput: {
+//   borderWidth: 1,
+//   borderColor: '#E0E0E0',
+//   borderRadius: 10,
+//   padding: 14,
+//   fontSize: 16,
+//   color: '#075E54',
+//   backgroundColor: '#FAFAFA',
+//   fontWeight: '500',
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 1 },
+//   shadowOpacity: 0.02,
+//   shadowRadius: 2,
+//   elevation: 1,
+// },
+
+// // File Picker Styles (enhanced)
+// filePickerButton: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   borderWidth: 2,
+//   borderColor: '#E0E0E0',
+//   borderStyle: 'dashed',
+//   borderRadius: 12,
+//   padding: 18,
+//   backgroundColor: '#FAFAFA',
+//   gap: 12,
+//   minHeight: 60,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 1 },
+//   shadowOpacity: 0.02,
+//   shadowRadius: 2,
+//   elevation: 1,
+// },
+
+// filePickerText: {
+//   fontSize: 14,
+//   color: '#666',
+//   flex: 1,
+//   fontWeight: '500',
+// },
+
+// selectedFileContainer: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   backgroundColor: '#E8F5E9',
+//   padding: 14,
+//   borderRadius: 10,
+//   marginTop: 12,
+//   gap: 10,
+//   borderWidth: 1,
+//   borderColor: '#A5D6A7',
+//   shadowColor: '#25D366',
+//   shadowOffset: { width: 0, height: 1 },
+//   shadowOpacity: 0.05,
+//   shadowRadius: 3,
+//   elevation: 1,
+// },
+
+// selectedFileName: {
+//   fontSize: 14,
+//   color: '#2E7D32',
+//   flex: 1,
+//   fontWeight: '600',
+// },
+
+// // Status Banner Styles (enhanced with more variants)
+// statusBanner: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   padding: 18,
+//   borderRadius: 16,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 3 },
+//   shadowOpacity: 0.12,
+//   shadowRadius: 8,
+//   elevation: 4,
+//   borderWidth: 1,
+//   borderColor: 'rgba(255, 255, 255, 0.2)',
+// },
+
+// statusIcon: {
+//   marginRight: 14,
+//   width: 32,
+//   height: 32,
+//   borderRadius: 16,
+//   backgroundColor: 'rgba(255, 255, 255, 0.2)',
+//   alignItems: 'center',
+//   justifyContent: 'center',
+// },
+
+// statusContent: {
+//   flex: 1,
+// },
+
+// statusTitle: {
+//   fontSize: 17,
+//   fontWeight: '700',
+//   color: 'white',
+//   letterSpacing: 0.3,
+//   marginBottom: 3,
+// },
+
+// statusSubtitle: {
+//   fontSize: 14,
+//   color: 'rgba(255,255,255,0.95)',
+//   fontWeight: '500',
+//   letterSpacing: 0.2,
+// },
+
+// statusBadge: {
+//   backgroundColor: 'rgba(255,255,255,0.25)',
+//   paddingHorizontal: 14,
+//   paddingVertical: 7,
+//   borderRadius: 14,
+//   borderWidth: 1,
+//   borderColor: 'rgba(255,255,255,0.3)',
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 1 },
+//   shadowOpacity: 0.1,
+//   shadowRadius: 2,
+//   elevation: 1,
+// },
+
+// statusBadgeText: {
+//   color: 'white',
+//   fontSize: 13,
+//   fontWeight: '700',
+//   letterSpacing: 0.5,
+// },
+
+// // Family Card Styles (enhanced)
+// familyCard: {
+//   backgroundColor: 'white',
+//   borderRadius: 14,
+//   padding: 18,
+//   marginBottom: 14,
+//   borderLeftWidth: 5,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 2 },
+//   shadowOpacity: 0.08,
+//   shadowRadius: 6,
+//   elevation: 3,
+// },
+
+// familyHeader: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   marginBottom: 14,
+// },
+
+// memberAvatar: {
+//   width: 44,
+//   height: 44,
+//   borderRadius: 22,
+//   justifyContent: 'center',
+//   alignItems: 'center',
+//   marginRight: 14,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 2 },
+//   shadowOpacity: 0.15,
+//   shadowRadius: 4,
+//   elevation: 2,
+// },
+
+// memberInitials: {
+//   color: 'white',
+//   fontSize: 17,
+//   fontWeight: '800',
+//   letterSpacing: 0.5,
+// },
+
+// memberInfo: {
+//   flex: 1,
+// },
+
+// memberName: {
+//   fontSize: 17,
+//   fontWeight: '700',
+//   color: '#075E54',
+//   letterSpacing: 0.2,
+//   marginBottom: 3,
+// },
+
+// memberRelationship: {
+//   fontSize: 13,
+//   color: '#666',
+//   fontWeight: '500',
+//   letterSpacing: 0.1,
+// },
+
+// familyDetails: {
+//   flexDirection: 'row',
+//   flexWrap: 'wrap',
+//   gap: 8,
+//   marginTop: 4,
+// },
+
+// // HR Card Styles (enhanced)
+// hrCard: {
+//   backgroundColor: 'white',
+//   borderRadius: 14,
+//   padding: 18,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 2 },
+//   shadowOpacity: 0.08,
+//   shadowRadius: 6,
+//   elevation: 3,
+//   borderWidth: 1,
+//   borderColor: '#E8F5E9',
+// },
+
+// hrHeader: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   marginBottom: 14,
+//   paddingBottom: 12,
+//   borderBottomWidth: 1,
+//   borderBottomColor: '#F0F0F0',
+// },
+
+// hrTitle: {
+//   flex: 1,
+//   fontSize: 15,
+//   fontWeight: '700',
+//   color: '#25D366',
+//   letterSpacing: 0.3,
+// },
+
+// signatureImage: {
+//   width: '100%',
+//   height: 140,
+//   borderRadius: 10,
+//   backgroundColor: '#FAFAFA',
+//   borderWidth: 2,
+//   borderColor: '#E0E0E0',
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 1 },
+//   shadowOpacity: 0.05,
+//   shadowRadius: 3,
+//   elevation: 1,
+// },
+
+// hrDate: {
+//   fontSize: 12,
+//   color: '#999',
+//   marginTop: 10,
+//   textAlign: 'center',
+//   fontWeight: '500',
+//   fontStyle: 'italic',
+//   letterSpacing: 0.2,
+// },
+
+// // Action Container and Buttons (enhanced)
+// actionContainer: {
+//   flexDirection: 'row',
+//   gap: 14,
+//   marginHorizontal: 16,
+//   marginBottom: 24,
+//   marginTop: 20,
+// },
+
+// actionButtonLarge: {
+//   flex: 1,
+//   padding: 17,
+//   borderRadius: 14,
+//   alignItems: 'center',
+//   justifyContent: 'center',
+//   flexDirection: 'row',
+//   minHeight: 56,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 3 },
+//   shadowOpacity: 0.15,
+//   shadowRadius: 6,
+//   elevation: 4,
+// },
+
+// cancelButton: {
+//   backgroundColor: '#F5F5F5',
+//   borderWidth: 2,
+//   borderColor: '#E0E0E0',
+// },
+
+// cancelButtonText: {
+//   color: '#666',
+//   fontSize: 16,
+//   fontWeight: '700',
+//   letterSpacing: 0.3,
+// },
+
+// saveButton: {
+//   backgroundColor: '#25D366',
+//   borderWidth: 2,
+//   borderColor: '#1EA952',
+// },
+
+// saveButtonText: {
+//   color: 'white',
+//   fontSize: 16,
+//   fontWeight: '700',
+//   letterSpacing: 0.4,
+// },
+
+// // Modal Styles (enhanced)
+// modalOverlay: {
+//   flex: 1,
+//   backgroundColor: 'rgba(0, 0, 0, 0.6)',
+//   justifyContent: 'center',
+//   alignItems: 'center',
+//   padding: 24,
+// },
+
+// modalContainer: {
+//   backgroundColor: WHATSAPP_COLORS.surface,
+//   borderRadius: 20,
+//   padding: 26,
+//   width: '100%',
+//   maxWidth: 420,
+//   maxHeight: '85%',
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 8 },
+//   shadowOpacity: 0.25,
+//   shadowRadius: 16,
+//   elevation: 10,
+// },
+
+// modalHeader: {
+//   marginBottom: 12,
+//   paddingBottom: 16,
+//   borderBottomWidth: 2,
+//   borderBottomColor: '#F0F0F0',
+// },
+
+// modalTitle: {
+//   fontSize: 22,
+//   fontWeight: '800',
+//   color: '#075E54',
+//   letterSpacing: 0.3,
+// },
+
+// modalButtons: {
+//   flexDirection: 'row',
+//   gap: 12,
+//   marginTop: 28,
+// },
+
+// modalButton: {
+//   flex: 1,
+//   padding: 16,
+//   borderRadius: 12,
+//   alignItems: 'center',
+//   justifyContent: 'center',
+//   minHeight: 52,
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 2 },
+//   shadowOpacity: 0.1,
+//   shadowRadius: 4,
+//   elevation: 2,
+// },
+
+// submitButton: {
+//   backgroundColor: WHATSAPP_COLORS.primary,
+//   borderWidth: 2,
+//   borderColor: '#1EA952',
+// },
+
+// submitButtonText: {
+//   color: '#FFFFFF',
+//   fontSize: 16,
+//   fontWeight: '700',
+//   letterSpacing: 0.4,
+// },
+
+// // Loading and Empty States (enhanced)
+// loadingContainer: {
+//   flex: 1,
+//   alignItems: 'center',
+//   justifyContent: 'center',
+//   minHeight: 350,
+//   paddingHorizontal: 24,
+//   backgroundColor: WHATSAPP_COLORS.background,
+// },
+
+// loadingText: {
+//   fontSize: 16,
+//   color: '#666',
+//   marginTop: 18,
+//   fontWeight: '500',
+//   letterSpacing: 0.2,
+// },
+
+// emptyState: {
+//   flex: 1,
+//   alignItems: 'center',
+//   justifyContent: 'center',
+//   minHeight: 450,
+//   paddingHorizontal: 28,
+//   backgroundColor: WHATSAPP_COLORS.background,
+// },
+
+// emptyStateTitle: {
+//   fontSize: 22,
+//   fontWeight: '700',
+//   color: '#075E54',
+//   marginTop: 20,
+//   marginBottom: 10,
+//   textAlign: 'center',
+//   letterSpacing: 0.3,
+// },
+
+// emptyStateMessage: {
+//   fontSize: 16,
+//   color: '#666',
+//   textAlign: 'center',
+//   lineHeight: 24,
+//   marginBottom: 28,
+//   letterSpacing: 0.2,
+//   fontWeight: '500',
+// },
+
+// // Upload Button Style
+// uploadPayslipButton: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   backgroundColor: WHATSAPP_COLORS.primary,
+//   paddingHorizontal: 20,
+//   paddingVertical: 12,
+//   borderRadius: 12,
+//   gap: 8,
+//   shadowColor: WHATSAPP_COLORS.primary,
+//   shadowOffset: { width: 0, height: 3 },
+//   shadowOpacity: 0.3,
+//   shadowRadius: 6,
+//   elevation: 4,
+//   borderWidth: 2,
+//   borderColor: '#1EA952',
+// },
+
+// uploadPayslipButtonText: {
+//   color: '#fff',
+//   fontSize: 15,
+//   fontWeight: '700',
+//   letterSpacing: 0.4,
+// },
+
+// // Disabled Button State
+// disabledButton: {
+//   opacity: 0.5,
+//   shadowOpacity: 0,
+//   elevation: 0,
+// },
+
+// // Content Scroll Area
+// content: {
+//   flex: 1,
+//   backgroundColor: WHATSAPP_COLORS.background,
+// },
+
+// // Bottom Spacer
+// bottomSpacer: {
+//   height: 50,
+// },
+
+// // Assets Modal Styles (if not already present)
+// assetsModalOverlay: {
+//   flex: 1,
+//   backgroundColor: 'rgba(0, 0, 0, 0.6)',
+// },
+
+// assetsModalContainer: {
+//   flex: 1,
+//   backgroundColor: WHATSAPP_COLORS.background,
+//   marginTop: 60,
+//   borderTopLeftRadius: 24,
+//   borderTopRightRadius: 24,
+//   overflow: 'hidden',
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: -4 },
+//   shadowOpacity: 0.2,
+//   shadowRadius: 12,
+//   elevation: 8,
+// },
+
+// assetsModalHeader: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   justifyContent: 'space-between',
+//   padding: 22,
+//   backgroundColor: WHATSAPP_COLORS.surface,
+//   borderBottomWidth: 2,
+//   borderBottomColor: '#F0F0F0',
+//   shadowColor: '#000',
+//   shadowOffset: { width: 0, height: 2 },
+//   shadowOpacity: 0.05,
+//   shadowRadius: 4,
+//   elevation: 2,
+// },
+
+// assetsModalTitle: {
+//   fontSize: 20,
+//   fontWeight: '700',
+//   color: '#075E54',
+//   flex: 1,
+//   letterSpacing: 0.3,
+// },
 });

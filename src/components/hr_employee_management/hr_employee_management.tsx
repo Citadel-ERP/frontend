@@ -17,7 +17,7 @@ import { BACKEND_URL } from '../../config/config';
 import SearchAndDownload from './searchAndDownload';
 import AddEmployeeModal from './addEmployeeModal';
 import HolidayManagement from './holiday';
-import AssetsManagement from './assets';
+// import AssetsManagement from './assets';
 
 const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
@@ -32,7 +32,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [showHolidayManagement, setShowHolidayManagement] = useState(false);
-  const [showAssetsManagement, setShowAssetsManagement] = useState(false);
+  // const [showAssetsManagement, setShowAssetsManagement] = useState(false);
 
   // Get token on mount - with enhanced debugging
   useEffect(() => {
@@ -294,14 +294,14 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     );
   }
 
-  if (showAssetsManagement) {
-    return (
-      <AssetsManagement
-        token={token || ''}
-        onBack={() => setShowAssetsManagement(false)}
-      />
-    );
-  }
+  // if (showAssetsManagement) {
+  //   return (
+  //     <AssetsManagement
+  //       token={token || ''}
+  //       onBack={() => setShowAssetsManagement(false)}
+  //     />
+  //   );
+  // }
 
   return (
     <View style={styles.container}>
@@ -324,7 +324,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onDownloadEmployees={downloadAllEmployees}
         onDownloadAttendance={downloadAttendanceReport}
         onOpenHolidays={() => setShowHolidayManagement(true)}
-        onOpenAssets={() => setShowAssetsManagement(true)}
+        // onOpenAssets={() => setShowAssetsManagement(true)}
         placeholder="Search employees..."
       />
 

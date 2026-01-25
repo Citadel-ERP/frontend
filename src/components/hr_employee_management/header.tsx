@@ -30,7 +30,12 @@ export const Header: React.FC<HeaderProps> = ({
   variant = 'main',
 }) => {
   const headerStyle = variant === 'details' ? styles.detailsHeaderBanner : styles.headerBanner;
-
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+    <Text style={styles.backText}>Back</Text>
+  </View>
+);
   return (
     <View style={headerStyle}>
       <LinearGradient
@@ -58,7 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onPress={onBack}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="arrow-back" size={24} color="#fff" />
+                  <BackIcon />
                 </TouchableOpacity>
               )}
             </View>

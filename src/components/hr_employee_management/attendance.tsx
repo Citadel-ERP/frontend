@@ -6,24 +6,21 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  Dimensions,
   Alert,
   ActivityIndicator,
-  Platform,
   Modal,
-  TextInput
+  TextInput,
+  Platform
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { Employee, AttendanceRecord } from './types';
-import { WHATSAPP_COLORS, TOKEN_KEY } from './constants';
+import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AttendanceProps {
   employee: Employee;
@@ -33,6 +30,24 @@ interface AttendanceProps {
   onMonthChange: (month: number) => void;
   onYearChange: (year: number) => void;
   token: string;
+}
+
+interface DayData {
+  user: any;
+  date: string;
+  attendance: any;
+  login_time: string | null;
+  logout_time: string | null;
+  login_location: {
+    id: number;
+    reason: string;
+  } | null;
+  logout_location: {
+    id: number;
+    reason: string;
+  } | null;
+  user_login_reason?: string | null;  
+  user_logout_reason?: string | null;  
 }
 
 const STATUS_COLORS = {
@@ -63,20 +78,6 @@ const STATUS_TEXT_COLORS = {
   absent: '#ffffffff',
 };
 
-const STATUS_NAMES: Record<string, string> = {
-  present: 'Present',
-  leave: 'Leave',
-  holiday: 'Holiday',
-  late_login: 'Late Login',
-  pending: 'Pending',
-  weekend: 'Weekend',
-  absent: 'Absent',
-  checkout_missing: 'Checkout Missing',
-  late_login_checkout_missing: 'Late Login - Checkout Missing',
-  checkout_pending: 'Checkout Pending',
-  late_login_checkout_pending: 'Late Login - Checkout Pending',
-};
-
 const LEGEND_ITEMS = [
   { key: 'present', color: STATUS_COLORS.present, label: 'Present' },
   { key: 'absent', color: STATUS_COLORS.absent, label: 'Absent' },
@@ -98,25 +99,25 @@ export const Attendance: React.FC<AttendanceProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [showAllLegend, setShowAllLegend] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<{ day: number; status: string } | null>(null);
   const legendHeight = React.useRef(new Animated.Value(0)).current;
-  const [showMarkAttendanceModal, setShowMarkAttendanceModal] = useState(false);
-  const [showMarkCheckoutModal, setShowMarkCheckoutModal] = useState(false);
-  const [attendanceData, setAttendanceData] = useState({
-    date: new Date(),
-    check_in_time: '09:00',
-    check_out_time: '18:00',
-    description: '',
+  const [showDayDetailsModal, setShowDayDetailsModal] = useState(false);
+  const [dayData, setDayData] = useState<DayData | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  
+  // Time picker states
+  const [showLoginTimePicker, setShowLoginTimePicker] = useState(false);
+  const [showLogoutTimePicker, setShowLogoutTimePicker] = useState(false);
+  const [loginTime, setLoginTime] = useState<Date>(new Date());
+  const [logoutTime, setLogoutTime] = useState<Date>(new Date());
+  
+  // Form data
+  const [editData, setEditData] = useState({
+    login_time: '',
+    logout_time: '',
+    login_reason: '',
+    logout_reason: '',
   });
-
-  useEffect(() => {
-    if (selectedDate) {
-      const timer = setTimeout(() => {
-        setSelectedDate(null);
-      }, 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedDate]);
 
   useEffect(() => {
     Animated.spring(legendHeight, {
@@ -127,26 +128,18 @@ export const Attendance: React.FC<AttendanceProps> = ({
     }).start();
   }, [showAllLegend]);
 
+  useEffect(() => {
+    if (!showDayDetailsModal) {
+      setIsEditMode(false);
+    }
+  }, [showDayDetailsModal]);
+
   const calculateAttendanceSummary = () => {
     if (!attendanceReport || attendanceReport.length === 0) {
-      return {
-        present: 0,
-        leave: 0,
-        absent: 0,
-        holidays: 0,
-        pending: 0,
-        weekends: 0
-      };
+      return { present: 0, leave: 0, absent: 0, holidays: 0, pending: 0, weekends: 0 };
     }
 
-    const summary = {
-      present: 0,
-      leave: 0,
-      absent: 0,
-      holidays: 0,
-      pending: 0,
-      weekends: 0
-    };
+    const summary = { present: 0, leave: 0, absent: 0, holidays: 0, pending: 0, weekends: 0 };
 
     attendanceReport.forEach(record => {
       const status = record.day || record.attendance_status;
@@ -220,9 +213,220 @@ export const Attendance: React.FC<AttendanceProps> = ({
     return STATUS_TEXT_COLORS[status as keyof typeof STATUS_TEXT_COLORS] || '#9ca3af';
   };
 
-  const handleDatePress = (day: number, status: string | null) => {
-    if (status) {
-      setSelectedDate({ day, status });
+  const parseTimeString = (timeStr: string | null): Date => {
+    const now = new Date();
+    if (!timeStr) return new Date();
+    
+    const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours || 0, minutes || 0, seconds || 0);
+    return date;
+  };
+
+  const formatTimeForDisplay = (timeStr: string | null): string => {
+    if (!timeStr) return 'Not marked';
+    
+    const [hours, minutes, seconds] = timeStr.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    const minuteStr = minutes || '00';
+    return `${displayHour}:${minuteStr} ${ampm}`;
+  };
+
+  const formatTimeForAPI = (date: Date): string => {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  };
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const fetchDayData = async (day: number) => {
+    const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/getDayData`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          employee_id: employee.employee_id,
+          date: dateStr
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setDayData(result.data);
+        
+        // Initialize edit data and time pickers
+        setEditData({
+          login_time: result.data.login_time || '',
+          logout_time: result.data.logout_time || '',
+          login_reason: result.data.login_location?.reason || '',
+          logout_reason: result.data.logout_location?.reason || '',
+        });
+        
+        setLoginTime(result.data.login_time ? parseTimeString(result.data.login_time) : new Date());
+        setLogoutTime(result.data.logout_time ? parseTimeString(result.data.logout_time) : new Date());
+        
+        setShowDayDetailsModal(true);
+        setIsEditMode(false);
+      } else {
+        Alert.alert('Error', 'Failed to fetch day data');
+      }
+    } catch (error) {
+      console.error('Error fetching day data:', error);
+      Alert.alert('Error', 'Network error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDatePress = (day: number) => {
+    fetchDayData(day);
+  };
+
+  const handleLoginTimeChange = (event: any, selectedDate?: Date) => {
+    setShowLoginTimePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setLoginTime(selectedDate);
+      setEditData({
+        ...editData,
+        login_time: formatTimeForAPI(selectedDate)
+      });
+    }
+  };
+
+  const handleLogoutTimeChange = (event: any, selectedDate?: Date) => {
+    setShowLogoutTimePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setLogoutTime(selectedDate);
+      setEditData({
+        ...editData,
+        logout_time: formatTimeForAPI(selectedDate)
+      });
+    }
+  };
+
+  const handleClearLoginTime = () => {
+    setEditData({
+      ...editData,
+      login_time: '',
+      login_reason: '',
+    });
+    setLoginTime(new Date());
+  };
+
+  const handleClearLogoutTime = () => {
+    setEditData({
+      ...editData,
+      logout_time: '',
+      logout_reason: '',
+    });
+    setLogoutTime(new Date());
+  };
+
+  const validateAndUpdateDayData = async () => {
+    // Validation: If login_time is provided, login_reason should be provided
+    if (editData.login_time && editData.login_time.trim() !== '') {
+      if (!editData.login_reason || !editData.login_reason.trim()) {
+        Alert.alert('Validation Error', 'Login reason is required when login time is provided');
+        return;
+      }
+    }
+
+    // Validation: If logout_time is provided, logout_reason should be provided
+    if (editData.logout_time && editData.logout_time.trim() !== '') {
+      if (!editData.logout_reason || !editData.logout_reason.trim()) {
+        Alert.alert('Validation Error', 'Logout reason is required when logout time is provided');
+        return;
+      }
+    }
+
+    setActionLoading(true);
+    try {
+      const payload: any = {
+        token,
+        employee_id: employee.employee_id,
+        date: dayData?.date,
+      };
+
+      // Add login time and location if provided
+      if (editData.login_time && editData.login_time.trim() !== '') {
+        payload.login_time = editData.login_time;
+        payload.login_location = {
+          reason: editData.login_reason.trim(),
+        };
+      } else {
+        // If empty, set to null to delete
+        payload.login_time = '';
+        payload.login_location = null;
+      }
+
+      // Add logout time and location if provided
+      if (editData.logout_time && editData.logout_time.trim() !== '') {
+        payload.logout_time = editData.logout_time;
+        payload.logout_location = {
+          reason: editData.logout_reason.trim(),
+        };
+      } else {
+        // If empty, set to null to delete
+        payload.logout_time = '';
+        payload.logout_location = null;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/manager/updateDayData`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Attendance updated successfully', [{
+          text: 'OK',
+          onPress: () => {
+            setIsEditMode(false);
+            if (dayData?.date) {
+              const day = parseInt(dayData.date.split('-')[2]);
+              fetchDayData(day);
+            }
+          }
+        }]);
+      } else {
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.message || 'Failed to update attendance');
+      }
+    } catch (error) {
+      console.error('Error updating day data:', error);
+      Alert.alert('Error', 'Network error occurred');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    // Reset to original data
+    if (dayData) {
+      setEditData({
+        login_time: dayData.login_time || '',
+        logout_time: dayData.logout_time || '',
+        login_reason: dayData.login_location?.reason || '',
+        logout_reason: dayData.logout_location?.reason || '',
+      });
+      setLoginTime(dayData.login_time ? parseTimeString(dayData.login_time) : new Date());
+      setLogoutTime(dayData.logout_time ? parseTimeString(dayData.logout_time) : new Date());
     }
   };
 
@@ -247,7 +451,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
         <TouchableOpacity
           key={day}
           style={styles.calendarDay}
-          onPress={() => handleDatePress(day, status)}
+          onPress={() => handleDatePress(day)}
           activeOpacity={0.7}
         >
           <View style={[
@@ -274,7 +478,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const downloadAttendanceReport = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/downloadAttendanceReport`, {
+      const response = await fetch(`${BACKEND_URL}/manager/HrdownloadAttendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -373,65 +577,321 @@ export const Attendance: React.FC<AttendanceProps> = ({
     }
   };
 
-  const markAttendanceForEmployee = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/markAttendanceForEmployee`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          employee_id: employee.employee_id,
-          date: attendanceData.date.toISOString().split('T')[0],
-          check_in_time: attendanceData.check_in_time,
-          description: attendanceData.description
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Attendance marked successfully');
-        setShowMarkAttendanceModal(false);
-      } else {
-        Alert.alert('Error', 'Failed to mark attendance');
-      }
-    } catch (error) {
-      console.error('Error marking attendance:', error);
-      Alert.alert('Error', 'Network error occurred');
-    }
-  };
-
-  const markCheckoutForEmployee = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/markCheckoutForEmployee`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          employee_id: employee.employee_id,
-          date: attendanceData.date.toISOString().split('T')[0],
-          check_out_time: attendanceData.check_out_time,
-          description: attendanceData.description
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Checkout marked successfully');
-        setShowMarkCheckoutModal(false);
-      } else {
-        Alert.alert('Error', 'Failed to mark checkout');
-      }
-    } catch (error) {
-      console.error('Error marking checkout:', error);
-      Alert.alert('Error', 'Network error occurred');
-    }
-  };
-
   const visibleLegendItems = showAllLegend ? LEGEND_ITEMS : LEGEND_ITEMS.slice(0, 3);
+
+  const renderDayDetailsModal = () => {
+    return (
+      <Modal
+        visible={showDayDetailsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowDayDetailsModal(false);
+          setIsEditMode(false);
+        }}
+      >
+        <View style={styles.assetsModalOverlay}>
+          <View style={styles.assetsModalContainer}>
+            {/* Modal Header */}
+            <View style={styles.assetsModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <MaterialIcons name="event" size={24} color={WHATSAPP_COLORS.primary} />
+                <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
+                  {dayData?.date ? formatDate(dayData.date) : 'Attendance Details'}
+                </Text>
+              </View>
+              {!isEditMode && (
+                <TouchableOpacity
+                  style={{ marginRight: 12 }}
+                  onPress={() => setIsEditMode(true)}
+                >
+                  <MaterialIcons name="edit" size={24} color={WHATSAPP_COLORS.primary} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDayDetailsModal(false);
+                  setIsEditMode(false);
+                }}
+              >
+                <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+              {isEditMode ? (
+                // Edit Mode
+                <>
+                  {/* Login Section */}
+                  <View style={styles.sectionAlt}>
+                    <View style={[styles.sectionHeader,{marginTop:20}]}>
+                      <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
+                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
+                    </View>
+
+                    <View style={styles.detailCard}>
+                      <Text style={styles.editLabel}>Login Time</Text>
+                      <TouchableOpacity
+                        style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                        onPress={() => setShowLoginTimePicker(true)}
+                      >
+                        <Text style={{ color: editData.login_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
+                          {editData.login_time ? formatTimeForDisplay(editData.login_time) : 'Select time'}
+                        </Text>
+                        <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
+
+                      {editData.login_time && (
+                        <TouchableOpacity
+                          onPress={handleClearLoginTime}
+                          style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                        >
+                          <Text style={{ color: '#D32F2F', fontSize: 14, fontWeight: '500' }}>Clear Login Time</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {(editData.login_time || dayData?.login_time) && (
+                        <>
+                          <Text style={[styles.editLabel, { marginTop: 16, color: '#000000' }]}>Login Location *</Text>
+                          <TextInput
+                            style={[styles.editInput, { height: 80 }]}
+                            value={editData.login_reason}
+                            onChangeText={(text) => setEditData({ ...editData, login_reason: text })}
+                            placeholder="Enter reason for check-in location"
+                            placeholderTextColor="#888"
+                            multiline
+                            textAlignVertical="top"
+                          />
+                        </>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Logout Section */}
+                  <View style={styles.sectionAlt}>
+                    <View style={styles.sectionHeader}>
+                      <MaterialIcons name="logout" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
+                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-out Details</Text>
+                    </View>
+
+                    <View style={styles.detailCard}>
+                      <Text style={styles.editLabel}>Logout Time</Text>
+                      <TouchableOpacity
+                        style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                        onPress={() => setShowLogoutTimePicker(true)}
+                      >
+                        <Text style={{ color: editData.logout_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
+                          {editData.logout_time ? formatTimeForDisplay(editData.logout_time) : 'Select time'}
+                        </Text>
+                        <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
+
+                      {editData.logout_time && (
+                        <TouchableOpacity
+                          onPress={handleClearLogoutTime}
+                          style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                        >
+                          <Text style={{ color: '#D32F2F', fontSize: 14, fontWeight: '500' }}>Clear Logout Time</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {(editData.logout_time || dayData?.logout_time) && (
+                        <>
+                          <Text style={[styles.editLabel, { marginTop: 16, color: '#000000' }]}>Logout Location *</Text>
+                          <TextInput
+                            style={[styles.editInput, { height: 80 }]}
+                            value={editData.logout_reason}
+                            onChangeText={(text) => setEditData({ ...editData, logout_reason: text })}
+                            placeholder="Enter reason for check-out location"
+                            placeholderTextColor="#888"
+                            multiline
+                            textAlignVertical="top"
+                          />
+                        </>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Action Buttons */}
+                  <View style={styles.actionContainer}>
+                    <TouchableOpacity
+                      onPress={handleCancelEdit}
+                      style={[styles.actionButtonLarge, styles.cancelButton]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={validateAndUpdateDayData}
+                      style={[
+                        styles.actionButtonLarge,
+                        styles.saveButton,
+                        actionLoading && styles.disabledButton
+                      ]}
+                      disabled={actionLoading}
+                      activeOpacity={0.7}
+                    >
+                      {actionLoading ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="save" size={20} color="#fff" />
+                          <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>Save Changes</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.bottomSpacer} />
+                </>
+              ) : (
+                // View Mode
+                <>
+                  {/* Login Section */}
+                  <View style={styles.sectionAlt}>
+                    <View style={[styles.sectionHeader,{marginTop:20}]}>
+                      <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
+                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
+                    </View>
+
+                    <View style={styles.detailCard}>
+                      <View style={styles.detailRow}>
+                        <MaterialIcons name="access-time" size={20} color="#666" />
+                        <Text style={styles.detailLabel}>Login Time</Text>
+                        <Text style={[styles.detailValue, { color: '#25D366', fontWeight: '700' }]}>
+                          {formatTimeForDisplay(dayData?.login_time)}
+                        </Text>
+                      </View>
+
+                      {/* Show location reason if it exists */}
+                      {dayData?.login_location?.reason && (
+                        <>
+                          <View style={styles.detailDivider} />
+                          <View style={styles.detailRow}>
+                            <MaterialIcons name="location-on" size={20} color="#666" />
+                            <Text style={styles.detailLabel}>Location Reason</Text>
+                            <Text style={[styles.detailValue, { color: WHATSAPP_COLORS.textPrimary }]}>
+                              {dayData.login_location.reason}
+                            </Text>
+                          </View>
+                        </>
+                      )}
+
+                      {/* Show user comment if it exists */}
+                      {dayData?.user_login_reason && (
+                        <>
+                          <View style={styles.detailDivider} />
+                          <View style={styles.detailRow}>
+                            <MaterialIcons name="comment" size={20} color="#666" />
+                            <Text style={styles.detailLabel}>Employee Comment</Text>
+                            <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
+                              {dayData.user_login_reason}
+                            </Text>
+                          </View>
+                        </>
+                      )}
+
+                      {!dayData?.login_time && (
+                        <View style={styles.warningCard}>
+                          <MaterialIcons name="info-outline" size={20} color="#FF9500" />
+                          <Text style={[styles.warningText, { color: '#FF9500' }]}>
+                            No check-in recorded for this date
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Logout Section */}
+                  <View style={styles.sectionAlt}>
+                    <View style={styles.sectionHeader}>
+                      <MaterialIcons name="logout" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
+                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-out Details</Text>
+                    </View>
+
+                    <View style={styles.detailCard}>
+                      <View style={styles.detailRow}>
+                        <MaterialIcons name="access-time" size={20} color="#666" />
+                        <Text style={styles.detailLabel}>Logout Time</Text>
+                        <Text style={[styles.detailValue, { color: '#FF6B6B', fontWeight: '700' }]}>
+                          {formatTimeForDisplay(dayData?.logout_time)}
+                        </Text>
+                      </View>
+
+                      {/* Show location reason if it exists */}
+                      {dayData?.logout_location?.reason && (
+                        <>
+                          <View style={styles.detailDivider} />
+                          <View style={styles.detailRow}>
+                            <MaterialIcons name="location-on" size={20} color="#666" />
+                            <Text style={styles.detailLabel}>Location Reason</Text>
+                            <Text style={[styles.detailValue, { color: WHATSAPP_COLORS.textPrimary }]}>
+                              {dayData.logout_location.reason}
+                            </Text>
+                          </View>
+                        </>
+                      )}
+
+                      {/* Show user comment if it exists */}
+                      {dayData?.user_logout_reason && (
+                        <>
+                          <View style={styles.detailDivider} />
+                          <View style={styles.detailRow}>
+                            <MaterialIcons name="comment" size={20} color="#666" />
+                            <Text style={styles.detailLabel}>Employee Comment</Text>
+                            <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
+                              {dayData.user_logout_reason}
+                            </Text>
+                          </View>
+                        </>
+                      )}
+
+                      {!dayData?.logout_time && (
+                        <View style={styles.warningCard}>
+                          <MaterialIcons name="info-outline" size={20} color="#FF9500" />
+                          <Text style={[styles.warningText, { color: '#FF9500' }]}>
+                            No check-out recorded for this date
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.bottomSpacer} />
+                </>
+              )}
+            </ScrollView>
+
+            {/* Time Pickers (rendered outside ScrollView) */}
+            {showLoginTimePicker && (
+              <DateTimePicker
+                value={loginTime}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleLoginTimeChange}
+              />
+            )}
+
+            {showLogoutTimePicker && (
+              <DateTimePicker
+                value={logoutTime}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleLogoutTimeChange}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   return (
     <ScrollView 
       style={styles.detailsContent}
       showsVerticalScrollIndicator={false}
     >
+      {/* Attendance Summary */}
       <View style={styles.attendanceSummary}>
         <View style={styles.summaryRow}>
           <View style={[styles.summaryCard, { backgroundColor: '#E8F5E9' }]}>
@@ -463,6 +923,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
         </View>
       </View>
 
+      {/* Calendar */}
       <View style={styles.calendarContainer}>
         <View style={styles.calendarHeader}>
           <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
@@ -488,9 +949,10 @@ export const Attendance: React.FC<AttendanceProps> = ({
           {renderCalendar()}
         </View>
 
+        {/* Legend */}
         <View style={styles.legendContainer}>
           <View style={styles.legendVisible}>
-            {visibleLegendItems.map((item, index) => (
+            {visibleLegendItems.map((item) => (
               <View key={item.key} style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: item.color }]} />
                 <Text style={styles.legendText}>{item.label}</Text>
@@ -537,27 +999,10 @@ export const Attendance: React.FC<AttendanceProps> = ({
         </View>
       </View>
 
-      <View style={styles.attendanceActions}>
-        <TouchableOpacity
-          style={styles.attendanceActionButton}
-          onPress={() => setShowMarkAttendanceModal(true)}
-        >
-          <Ionicons name="time-outline" size={20} color="#fff" />
-          <Text style={styles.attendanceActionText}>Mark Attendance</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.attendanceActionButton}
-          onPress={() => setShowMarkCheckoutModal(true)}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#fff" />
-          <Text style={styles.attendanceActionText}>Mark Checkout</Text>
-        </TouchableOpacity>
-      </View>
-
+      {/* Download Button */}
       <View style={styles.downloadContainer}>
         <TouchableOpacity 
-          style={styles.downloadButton}
+          style={[styles.downloadButton, { alignSelf: 'center', paddingHorizontal: 24, width:'100%', display:'flex', justifyContent:'center', alignItems:'center' }]}
           onPress={downloadAttendanceReport}
           disabled={loading}
         >
@@ -572,138 +1017,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
         </TouchableOpacity>
       </View>
 
-      {selectedDate && (
-        <View style={styles.statusTooltip}>
-          <Text style={styles.statusTooltipText}>
-            {STATUS_NAMES[selectedDate.status] || selectedDate.status}
-          </Text>
-          <View style={styles.tooltipArrow} />
-        </View>
-      )}
-
-      <Modal
-        visible={showMarkAttendanceModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowMarkAttendanceModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Mark Attendance</Text>
-            </View>
-            
-            <Text style={styles.modalLabel}>Date</Text>
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => {
-                // Show date picker
-              }}
-            >
-              <Text style={styles.datePickerText}>
-                {attendanceData.date.toDateString()}
-              </Text>
-            </TouchableOpacity>
-            
-            <Text style={styles.modalLabel}>Check-in Time</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={attendanceData.check_in_time}
-              onChangeText={(text) => setAttendanceData({...attendanceData, check_in_time: text})}
-              placeholder="HH:MM"
-            />
-            
-            <Text style={styles.modalLabel}>Description</Text>
-            <TextInput
-              style={[styles.modalInput, { height: 80 }]}
-              value={attendanceData.description}
-              onChangeText={(text) => setAttendanceData({...attendanceData, description: text})}
-              placeholder="Enter description"
-              multiline
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowMarkAttendanceModal(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={markAttendanceForEmployee}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.submitButtonText}>Mark Attendance</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showMarkCheckoutModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowMarkCheckoutModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Mark Checkout</Text>
-            </View>
-            
-            <Text style={styles.modalLabel}>Date</Text>
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => {
-                // Show date picker
-              }}
-            >
-              <Text style={styles.datePickerText}>
-                {attendanceData.date.toDateString()}
-              </Text>
-            </TouchableOpacity>
-            
-            <Text style={styles.modalLabel}>Check-out Time</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={attendanceData.check_out_time}
-              onChangeText={(text) => setAttendanceData({...attendanceData, check_out_time: text})}
-              placeholder="HH:MM"
-            />
-            
-            <Text style={styles.modalLabel}>Description</Text>
-            <TextInput
-              style={[styles.modalInput, { height: 80 }]}
-              value={attendanceData.description}
-              onChangeText={(text) => setAttendanceData({...attendanceData, description: text})}
-              placeholder="Enter description"
-              multiline
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowMarkCheckoutModal(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={markCheckoutForEmployee}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.submitButtonText}>Mark Checkout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Day Details Modal */}
+      {renderDayDetailsModal()}
     </ScrollView>
   );
 };

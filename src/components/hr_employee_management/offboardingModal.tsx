@@ -37,7 +37,7 @@ const OffboardingModal: React.FC<OffboardingModalProps> = ({
   const validateOffboarding = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/offboardEmployee`, {
+      const response = await fetch(`${BACKEND_URL}/manager/offboardEmployee`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,7 +66,7 @@ const OffboardingModal: React.FC<OffboardingModalProps> = ({
   const completeOffboarding = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/hr_manager/offboardEmployee`, {
+      const response = await fetch(`${BACKEND_URL}/manager/offboardEmployee`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
