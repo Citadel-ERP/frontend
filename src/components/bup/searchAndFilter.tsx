@@ -170,7 +170,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       {/* Search Section */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color="#017bf9" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color="#01620e" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search Leads"
@@ -189,7 +189,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               onPress={() => setActiveDropdown('filter')}
               style={styles.filterButton}
             >
-              <Ionicons name="filter" size={20} color="#017bf9" />
+              <Ionicons name="filter" size={20} color="#01620e" />
             </TouchableOpacity>
           )}
         </View>
