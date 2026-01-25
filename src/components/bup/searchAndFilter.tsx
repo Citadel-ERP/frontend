@@ -100,7 +100,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             setActiveDropdown('filter-phase');
           }
         } else if (filterType === 'assigned_to') {
-          setActiveDropdown('assigned-to'); // ADD THIS
+          setActiveDropdown('assigned-to');
         }
       }, 300);
     }
@@ -133,7 +133,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       case 'status': choices = STATUS_CHOICES; break;
       case 'phase': choices = allPhases; break;
       case 'subphase': choices = allSubphases; break;
-      case 'assigned_to': choices = allAssignedTo; break; // ADD THIS LINE
+      case 'assigned_to': choices = allAssignedTo; break;
     }
     const option = choices.find(choice => choice.value === value);
     return option ? option.label : beautifyName(value);
@@ -170,7 +170,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       {/* Search Section */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color="#017bf9" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color="#01620e" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search Leads"
@@ -180,12 +180,18 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             returnKeyType="search"
             placeholderTextColor="#666"
           />
-          <TouchableOpacity
-            style={styles.gearButton}
-            onPress={() => setActiveDropdown('filter')}
-          >
-            <Text style={styles.gearIcon}>⚙️</Text>
-          </TouchableOpacity>
+          {searchQuery ? (
+            <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setActiveDropdown('filter')}
+              style={styles.filterButton}
+            >
+              <Ionicons name="filter" size={20} color="#01620e" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -325,21 +331,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     zIndex: 1,
-    fontSize: 20,
   },
-  gearButton: {
+  clearButton: {
     position: 'absolute',
     right: 20,
     zIndex: 1,
+    padding: 4,
   },
-  gearIcon: {
-    fontSize: 20,
+  filterButton: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 1,
+    padding: 4,
   },
   tabsContainer: {
     paddingHorizontal: 15,
     paddingVertical: 10,
     maxHeight: 55,
-    // marginBottom: 15,
   },
   tab: {
     paddingHorizontal: 16,

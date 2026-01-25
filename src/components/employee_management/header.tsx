@@ -77,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
             </View>
             
             {/* Center - Logo */}
-            <View style={styles.centerSection}>
+            <View style={styles.centerSectionFull}>
               <Text style={styles.logoText}>CITADEL</Text>
             </View>
             

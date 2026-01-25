@@ -59,6 +59,13 @@ export const styles = StyleSheet.create({
         width: 80,
         alignItems: 'flex-start',
     },
+    centerSectionFull: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        },
     centerSection: {
         flex: 1,
         alignItems: 'center',

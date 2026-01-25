@@ -429,7 +429,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                         <Image
                                             source={{ uri: photo.photo }}
                                             style={styles.photo}
-                                            resizeMode="cover"
+                                            resizeMode="contain"
                                         />
                                     </View>
                                 ))}
@@ -608,6 +608,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 <Image
                     source={{ uri: vehicleImageUrl }}
                     style={styles.cabImage}
+                    resizeMode="contain"
                 />
                 <View style={styles.cabInfo}>
                     <Text style={styles.cabName}>{item.make} {item.model}</Text>

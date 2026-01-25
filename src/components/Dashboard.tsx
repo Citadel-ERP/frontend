@@ -282,9 +282,9 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         >
           {/* Header Section - WhatsApp Style */}
           <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }, isWeb && styles.menuHeaderWeb]}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            {/* <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <View style={[styles.userInfoContainer, isWeb && styles.userInfoContainerWeb]}>
               {userData?.profile_picture ? (
