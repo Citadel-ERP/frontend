@@ -90,7 +90,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const [offices, setOffices] = useState<Office[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedReportingTags, setSelectedReportingTags] = useState<string[]>([]);
+  const [selectedReportingTag, setSelectedReportingTag] = useState<string>('');
   const [documents, setDocuments] = useState<Document[]>([]);
 
   const [showOfficePicker, setShowOfficePicker] = useState<boolean>(false);
@@ -150,13 +150,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       tags.find(t => t.tag_id === tagId)?.tag_name || tagId
     ),
     [selectedTags, tags]
-  );
-
-  const selectedReportingTagNames = useMemo(() =>
-    selectedReportingTags.map(tagId =>
-      tags.find(t => t.tag_id === tagId)?.tag_name || tagId
-    ),
-    [selectedReportingTags, tags]
   );
 
   // ==================== EFFECTS ====================
@@ -274,13 +267,9 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     );
   }, []);
 
-  const toggleReportingTagSelection = useCallback((tagId: string) => {
-    setSelectedReportingTags(prev =>
-      prev.includes(tagId)
-        ? prev.filter(id => id !== tagId)
-        : [...prev, tagId]
-    );
-  }, []);
+  const selectReportingTag = useCallback((tagId: string) => {
+  setSelectedReportingTag(tagId);
+}, []);
 
   const pickDocuments = async () => {
     try {
@@ -380,14 +369,14 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   };
 
   const validateStep4 = (): StepValidationResult => {
-    if (selectedReportingTags.length === 0) {
-      return {
-        isValid: false,
-        errorMessage: 'Please select at least one reporting tag',
-      };
-    }
-    return { isValid: true };
-  };
+  if (!selectedReportingTag) {
+    return {
+      isValid: false,
+      errorMessage: 'Please select a reporting tag',
+    };
+  }
+  return { isValid: true };
+};
 
   const handleNext = () => {
     setShowOfficePicker(false);
@@ -478,9 +467,9 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       });
 
       // Add reporting tags
-      selectedReportingTags.forEach(tagId => {
-        formData.append('reporting_tag_ids', tagId);
-      });
+      if (selectedReportingTag) {
+        formData.append('reporting_tag_ids', selectedReportingTag);
+      }
 
       // Add documents
       documents.forEach((doc, index) => {
@@ -581,52 +570,52 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
   // ==================== RENDER COMPONENTS ====================
   const renderStepIndicator = () => (
-  <View style={styles.stepProgress}>
-    {/* Circles Row */}
-    <View style={styles.stepIndicatorContainer}>
-      {[1, 2, 3, 4, 5].map((step, index) => (
-        <React.Fragment key={step}>
-          <View style={[
-            styles.stepIndicator,
-            currentStep >= step ? styles.stepIndicatorActive : styles.stepIndicatorInactive,
-          ]}>
-            <Text style={[
-              styles.stepIndicatorText,
-              currentStep >= step ? styles.stepIndicatorTextActive : styles.stepIndicatorTextInactive,
-            ]}>
-              {step}
-            </Text>
-          </View>
-          {step < 5 && (
+    <View style={styles.stepProgress}>
+      {/* Circles Row */}
+      <View style={styles.stepIndicatorContainer}>
+        {[1, 2, 3, 4, 5].map((step, index) => (
+          <React.Fragment key={step}>
             <View style={[
-              styles.stepConnector,
-              currentStep > step ? styles.stepConnectorActive : styles.stepConnectorInactive,
-            ]} />
-          )}
-        </React.Fragment>
-      ))}
+              styles.stepIndicator,
+              currentStep >= step ? styles.stepIndicatorActive : styles.stepIndicatorInactive,
+            ]}>
+              <Text style={[
+                styles.stepIndicatorText,
+                currentStep >= step ? styles.stepIndicatorTextActive : styles.stepIndicatorTextInactive,
+              ]}>
+                {step}
+              </Text>
+            </View>
+            {step < 5 && (
+              <View style={[
+                styles.stepConnector,
+                currentStep > step ? styles.stepConnectorActive : styles.stepConnectorInactive,
+              ]} />
+            )}
+          </React.Fragment>
+        ))}
+      </View>
+      
+      {/* Labels Row */}
+      <View style={styles.stepLabelsContainer}>
+        <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}>
+          Basic Info
+        </Text>
+        <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
+          Address
+        </Text>
+        <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
+          Tags
+        </Text>
+        <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
+          Reporting
+        </Text>
+        <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive]}>
+          Documents
+        </Text>
+      </View>
     </View>
-    
-    {/* Labels Row */}
-    <View style={styles.stepLabelsContainer}>
-      <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}>
-        Basic Info
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
-        Address
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
-        Tags
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
-        Reporting
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive]}>
-        Documents
-      </Text>
-    </View>
-  </View>
-);
+  );
 
   const renderStepLabels = () => (
     <View style={styles.stepLabelsContainer}>
@@ -819,7 +808,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               <View style={[styles.formGroup, { flex: 1, marginHorizontal: 8 }]}>
                 <Text style={styles.label}>Sick Leaves</Text>
                 <TextInput
-                  style={[styles.input, { marginTop: 16 }]}
+                  style={[styles.input, { marginTop: Platform.OS === 'ios' ? 0 : 16 }]}
                   value={basicInfo.sick_leaves}
                   onChangeText={value => handleBasicInfoChange('sick_leaves', value)}
                   keyboardType="numeric"
@@ -846,6 +835,89 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
   const renderStep2 = () => (
     <ScrollView showsVerticalScrollIndicator={false}>
+
+      <View style={[styles.section,{marginTop:10}]}>
+        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
+          Office Assignment *
+        </Text>
+
+        {loading ? (
+          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+        ) : (
+          <View style={[styles.formGroup,{marginBottom:20}]}>
+            <TouchableOpacity
+              style={[
+                styles.input,
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 12
+                }
+              ]}
+              onPress={() => setShowOfficePicker(true)}
+            >
+              <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
+                {addressInfo.office_id
+                  ? selectedOffice?.name || 'Select Office'
+                  : 'Select Office'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
+
+            {showOfficePicker && (
+              <View style={styles.officePickerContainer}>
+                <ScrollView>
+                  {offices.map(office => (
+                    <TouchableOpacity
+                      key={office.id}
+                      style={[
+                        styles.officeOption,
+                        addressInfo.office_id === office.id && styles.officeOptionSelected
+                      ]}
+                      onPress={() => {
+                        setAddressInfo(prev => ({ ...prev, office_id: office.id }));
+                        setShowOfficePicker(false);
+                      }}
+                    >
+                      <View style={[
+                        styles.officeIconContainer,
+                        addressInfo.office_id === office.id && styles.officeIconSelected
+                      ]}>
+                        <Ionicons
+                          name="business"
+                          size={20}
+                          color={addressInfo.office_id === office.id ? '#fff' : '#666'}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[
+                          styles.officeName,
+                          addressInfo.office_id === office.id && styles.officeNameSelected
+                        ]}>
+                          {office.name}
+                        </Text>
+                        <Text style={styles.officeLocation}>
+                          {office.city}, {office.state}
+                        </Text>
+                      </View>
+                      {addressInfo.office_id === office.id && (
+                        <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
+                  style={styles.officePickerCloseButton}
+                  onPress={() => setShowOfficePicker(false)}
+                >
+                  <Text style={styles.officePickerCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Home Address *
@@ -997,88 +1069,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
-          Office Assignment *
-        </Text>
-
-        {loading ? (
-          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-        ) : (
-          <View style={[styles.formGroup,{marginBottom:20}]}>
-            <TouchableOpacity
-              style={[
-                styles.input,
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingVertical: 12
-                }
-              ]}
-              onPress={() => setShowOfficePicker(true)}
-            >
-              <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
-                {addressInfo.office_id
-                  ? selectedOffice?.name || 'Select Office'
-                  : 'Select Office'}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#666" />
-            </TouchableOpacity>
-
-            {showOfficePicker && (
-              <View style={styles.officePickerContainer}>
-                <ScrollView>
-                  {offices.map(office => (
-                    <TouchableOpacity
-                      key={office.id}
-                      style={[
-                        styles.officeOption,
-                        addressInfo.office_id === office.id && styles.officeOptionSelected
-                      ]}
-                      onPress={() => {
-                        setAddressInfo(prev => ({ ...prev, office_id: office.id }));
-                        setShowOfficePicker(false);
-                      }}
-                    >
-                      <View style={[
-                        styles.officeIconContainer,
-                        addressInfo.office_id === office.id && styles.officeIconSelected
-                      ]}>
-                        <Ionicons
-                          name="business"
-                          size={20}
-                          color={addressInfo.office_id === office.id ? '#fff' : '#666'}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[
-                          styles.officeName,
-                          addressInfo.office_id === office.id && styles.officeNameSelected
-                        ]}>
-                          {office.name}
-                        </Text>
-                        <Text style={styles.officeLocation}>
-                          {office.city}, {office.state}
-                        </Text>
-                      </View>
-                      {addressInfo.office_id === office.id && (
-                        <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.primary} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                <TouchableOpacity
-                  style={styles.officePickerCloseButton}
-                  onPress={() => setShowOfficePicker(false)}
-                >
-                  <Text style={styles.officePickerCloseText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
+      
     </ScrollView>
   );
 
@@ -1126,84 +1117,47 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   );
 
   const renderStep4 = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
-          Assign Reporting Tags *
-        </Text>
-        <Text style={styles.sectionSubtitle}>
-          Select which tags this employee should report to
-        </Text>
+  <ScrollView showsVerticalScrollIndicator={false}>
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
+        Assign Reporting Tag *
+      </Text>
+      <Text style={styles.sectionSubtitle}>
+        Select one tag this employee should report to
+      </Text>
 
-        {selectedTags.length === 0 ? (
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={24} color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.infoText}>
-              Please select employee tags in the previous step first
-            </Text>
-          </View>
-        ) : reportingTags.length === 0 ? (
-          <Text style={styles.noDataText}>No reporting tags available</Text>
-        ) : (
-          <>
-            <View style={styles.selectedTagsPreview}>
-              <Text style={styles.selectedTagsLabel}>Selected Employee Tags:</Text>
-              <View style={styles.selectedTagsContainer}>
-                {selectedTagNames.map((tagName, index) => (
-                  <View key={index} style={styles.selectedTagBadge}>
-                    <Text style={styles.selectedTagText}>{tagName}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <Text style={[styles.sectionSubtitle, { marginTop: 20, marginBottom: 10 }]}>
-              Choose reporting tags from the selected tags above:
-            </Text>
-
-            <View style={styles.tagsContainer}>
-              {reportingTags.map(tag => (
-                <TouchableOpacity
-                  key={tag.tag_id}
-                  style={[
-                    styles.tagItem,
-                    selectedReportingTags.includes(tag.tag_id) && styles.tagItemSelected,
-                  ]}
-                  onPress={() => toggleReportingTagSelection(tag.tag_id)}
-                >
-                  <View style={styles.tagContent}>
-                    <Ionicons
-                      name="person-circle-outline"
-                      size={18}
-                      color={selectedReportingTags.includes(tag.tag_id) ? '#fff' : '#666'}
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text style={[
-                      styles.tagText,
-                      selectedReportingTags.includes(tag.tag_id) && styles.tagTextSelected,
-                    ]}>
-                      {tag.tag_name}
-                    </Text>
-                  </View>
-                  {tag.tag_type && (
-                    <Text style={[
-                      styles.tagType,
-                      selectedReportingTags.includes(tag.tag_id) && styles.tagTypeSelected,
-                    ]}>
-                      {tag.tag_type}
-                    </Text>
-                  )}
-                  {selectedReportingTags.includes(tag.tag_id) && (
-                    <Ionicons name="checkmark" size={16} color="#fff" style={styles.tagCheck} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-      </View>
-    </ScrollView>
-  );
+      {tags.length === 0 ? (
+        <Text style={styles.noDataText}>No tags available</Text>
+      ) : (
+        <View style={styles.tagsContainer}>
+          {tags.map(tag => (
+            <TouchableOpacity
+              key={tag.tag_id}
+              style={[
+                styles.tagItem,
+                selectedReportingTag === tag.tag_id && styles.tagItemSelected,
+              ]}
+              onPress={() => selectReportingTag(tag.tag_id)}
+            >
+              <Text style={[
+                styles.tagText,
+                selectedReportingTag === tag.tag_id && styles.tagTextSelected,
+              ]}>
+                {tag.tag_name}
+              </Text>
+              {tag.tag_type && (
+                <Text style={styles.tagType}>{tag.tag_type}</Text>
+              )}
+              {selectedReportingTag === tag.tag_id && (
+                <Ionicons name="checkmark" size={16} color="#fff" style={styles.tagCheck} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  </ScrollView>
+);
 
   const renderStep5 = () => (
     <ScrollView showsVerticalScrollIndicator={false}>
@@ -1304,20 +1258,11 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           />
 
           <ReviewSection
-            label="Reporting Tags:"
-            customContent={
-              selectedReportingTags.length > 0 ? (
-                <View style={styles.reviewTags}>
-                  {selectedReportingTagNames.map((tagName, index) => (
-                    <View key={index} style={[styles.reviewTag, styles.reportingTag]}>
-                      <Ionicons name="person-circle" size={14} color="#fff" />
-                      <Text style={styles.reviewTagText}>{tagName}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.noDataText}>No reporting tags selected</Text>
-              )
+            label="Reporting Tag:"
+            value={
+              selectedReportingTag
+                ? tags.find(t => t.tag_id === selectedReportingTag)?.tag_name || selectedReportingTag
+                : 'Not selected'
             }
           />
 
@@ -1343,56 +1288,65 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
   // ==================== MAIN RENDER ====================
   return (
-    <View style={styles.container}>
-      <Header
-        title="Add New Employee"
-        subtitle={`Step ${currentStep} of 5`}
-        onBack={handlePrevious}
-      />
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+    >
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <Header
+          title="Add New Employee"
+          subtitle={`Step ${currentStep} of 5`}
+          onBack={handlePrevious}
+        />
 
-      <View style={styles.stepProgress}>
-        {renderStepIndicator()}
-        {/* {renderStepLabels()} */}
-      </View>
+        <View style={styles.stepProgress}>
+          {renderStepIndicator()}
+          {/* {renderStepLabels()} */}
+        </View>
 
-      <View style={styles.content}>
-        {currentStep === 1 && renderStep1()}
-        {currentStep === 2 && renderStep2()}
-        {currentStep === 3 && renderStep3()}
-        {currentStep === 4 && renderStep4()}
-        {currentStep === 5 && renderStep5()}
-      </View>
+        <View style={styles.content}>
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && renderStep4()}
+          {currentStep === 5 && renderStep5()}
+        </View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.footerButton, styles.secondaryButton]}
-          onPress={handlePrevious}
-          disabled={submitting}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {currentStep === 1 ? 'Cancel' : 'Back'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.footerButton,
-            styles.primaryButton,
-            submitting && styles.disabledButton
-          ]}
-          onPress={currentStep === 5 ? handleSubmit : handleNext}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {currentStep === 5 ? 'Create Employee' : 'Next'}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.footerButton, styles.secondaryButton]}
+            onPress={handlePrevious}
+            disabled={submitting}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {currentStep === 1 ? 'Cancel' : 'Back'}
             </Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.footerButton,
+              styles.primaryButton,
+              submitting && styles.disabledButton
+            ]}
+            onPress={currentStep === 5 ? handleSubmit : handleNext}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {currentStep === 5 ? 'Create Employee' : 'Next'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
