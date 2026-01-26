@@ -96,6 +96,7 @@ interface ModalContent {
 interface ProfileProps {
   onBack: () => void;
   userData?: UserData;
+  onProfileUpdate?: (updatedData: UserData) => void; // NEW: Callback to notify parent
 }
 
 interface MenuItemProps {
@@ -205,18 +206,6 @@ const AddressInputs: React.FC<AddressInputsProps> = React.memo(({
           placeholderTextColor="#8696A0"
         />
       </View>
-
-      {/* <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
-        <Text style={[styles.inputLabel, { color: '#667781' }]}>Zip Code</Text>
-        <TextInput
-          style={[styles.input, { color: '#000000' }]}
-          value={addressData.zip_code}
-          onChangeText={(text) => onChange(type, 'zip_code', text)}
-          placeholder="Postal/Zip Code"
-          placeholderTextColor="#8696A0"
-          keyboardType="numeric"
-        />
-      </View> */}
 
       <View style={[styles.inputContainer, { borderBottomColor: '#E9EDEF' }]}>
         <Text style={[styles.inputLabel, { color: '#667781' }]}>Country</Text>
@@ -411,7 +400,7 @@ const EditProfileSection: React.FC<EditProfileSectionProps> = React.memo(({
   );
 });
 
-const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => {
+const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onProfileUpdate }) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(!propUserData);
   const [userData, setUserData] = useState<UserData | null>(propUserData || null);
@@ -488,6 +477,43 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
     return () => { };
   }, []);
 
+  // NEW: Function to refresh user data from backend
+  const refreshUserData = async () => {
+    try {
+      const storedToken = await AsyncStorage.getItem('token_2');
+      if (!storedToken) return;
+
+      const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: storedToken }),
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch user data');
+
+      const data = await response.json();
+      if (data.message === "Get modules successful" && data.user) {
+        const updatedUser = data.user;
+        setUserData(updatedUser);
+        
+        // Update AsyncStorage with fresh data
+        await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
+        
+        // Notify parent component (Dashboard) about the update
+        if (onProfileUpdate) {
+          onProfileUpdate(updatedUser);
+        }
+        
+        // Also update the form data
+        populateFormData(updatedUser);
+        
+        return updatedUser;
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
+
   const initializeData = async () => {
     try {
       const storedToken = await AsyncStorage.getItem('token_2');
@@ -520,7 +546,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       }
     }
 
-    // Parse home address - FIXED: Ensure zip_code is included
+    // Parse home address
     const homeAddress = user.home_address || {};
     const currentLocation = user.current_location || {};
 
@@ -537,14 +563,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         address: homeAddress.address || '',
         city: homeAddress.city || '',
         state: homeAddress.state || '',
-        zip_code: homeAddress.zip_code || '', // This should now be populated
+        zip_code: homeAddress.zip_code || '',
         country: homeAddress.country || '',
       },
       currentLocation: {
         address: currentLocation.address || '',
         city: currentLocation.city || '',
         state: currentLocation.state || '',
-        zip_code: currentLocation.zip_code || '', // This should now be populated
+        zip_code: currentLocation.zip_code || '',
         country: currentLocation.country || '',
       },
     });
@@ -611,16 +637,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
 
     // Validate address fields
     if (!formData.homeAddress.address || !formData.homeAddress.city ||
-      !formData.homeAddress.state ||
-      !formData.homeAddress.country) {
-      Alert.alert('Validation Error', 'Please fill all home address fields (address, city, state, zip code, country)');
+      !formData.homeAddress.state || !formData.homeAddress.country) {
+      Alert.alert('Validation Error', 'Please fill all home address fields (address, city, state, country)');
       return;
     }
 
     if (!formData.currentLocation.address || !formData.currentLocation.city ||
-      !formData.currentLocation.state ||
-      !formData.currentLocation.country) {
-      Alert.alert('Validation Error', 'Please fill all current address fields (address, city, state, zip code, country)');
+      !formData.currentLocation.state || !formData.currentLocation.country) {
+      Alert.alert('Validation Error', 'Please fill all current address fields (address, city, state, country)');
       return;
     }
 
@@ -639,14 +663,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
             address: formData.homeAddress.address,
             city: formData.homeAddress.city,
             state: formData.homeAddress.state,
-            zip_code: formData.homeAddress.zip_code, // Make sure this is sent
+            zip_code: formData.homeAddress.zip_code,
             country: formData.homeAddress.country,
           },
           current_address: {
             address: formData.currentLocation.address,
             city: formData.currentLocation.city,
             state: formData.currentLocation.state,
-            zip_code: formData.currentLocation.zip_code, // Make sure this is sent
+            zip_code: formData.currentLocation.zip_code,
             country: formData.currentLocation.country,
           }
         }),
@@ -656,27 +680,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       if (response.ok) {
         Alert.alert('Success', 'Profile updated successfully!');
         setIsEditing(false);
-        setUserData(prev => prev ? {
-          ...prev,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          bio: formData.bio,
-          date_of_birth: formData.dateOfBirth,
-          home_address: {
-            address: formData.homeAddress.address,
-            city: formData.homeAddress.city,
-            state: formData.homeAddress.state,
-            zip_code: formData.homeAddress.zip_code,
-            country: formData.homeAddress.country,
-          },
-          current_location: {
-            address: formData.currentLocation.address,
-            city: formData.currentLocation.city,
-            state: formData.currentLocation.state,
-            zip_code: formData.currentLocation.zip_code,
-            country: formData.currentLocation.country,
-          }
-        } : prev);
+        
+        // NEW: Refresh user data from backend after successful update
+        await refreshUserData();
+        
       } else {
         throw new Error(result.message || 'Update failed');
       }
@@ -840,11 +847,11 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
       console.log('Upload response:', result);
 
       if (uploadResponse.ok) {
-        setUserData(prev => prev ? {
-          ...prev,
-          profile_picture: result.profile_picture_url || result.image_url || result.url
-        } : prev);
         Alert.alert('Success', 'Profile picture updated successfully!');
+        
+        // NEW: Refresh user data after image upload
+        await refreshUserData();
+        
       } else {
         throw new Error(result.message || result.error || 'Upload failed');
       }
@@ -1016,26 +1023,6 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
         <Text style={[styles.profileName, { color: colors.text }]}>
           {userData?.first_name || ''} {userData?.last_name || ''}
         </Text>
-
-        {/* <TextInput
-          ref={bioInputRef}
-          style={[
-            styles.bioInput,
-            {
-              color: isEditing ? colors.text : colors.textTertiary,
-              borderBottomColor: isEditing ? colors.border : 'transparent'
-            }
-          ]}
-          value={bioText}
-          onChangeText={handleBioChange}
-          placeholder="Add about"
-          placeholderTextColor={colors.textTertiary}
-          multiline
-          editable={isEditing}
-          returnKeyType="done"
-          onSubmitEditing={() => Keyboard.dismiss()}
-          pointerEvents={isEditing ? 'auto' : 'none'}
-        /> */}
       </View>
     );
   });
@@ -1229,24 +1216,6 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData }) => 
                 )}
               </View>
             </View>
-
-            {/* <TouchableOpacity
-              style={[styles.downloadButton, { backgroundColor: colors.headerBackground }]}
-              onPress={handleDownloadIDCard}
-              disabled={downloading}
-              activeOpacity={0.8}
-            >
-              {downloading ? (
-                <ActivityIndicator size="small" color={colors.background} />
-              ) : (
-                <>
-                  <Ionicons name="download-outline" size={20} color={colors.background} />
-                  <Text style={[styles.downloadButtonText, { color: colors.background }]}>
-                    Download ID Card
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity> */}
           </View>
         );
       case 'assets':

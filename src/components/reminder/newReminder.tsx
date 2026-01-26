@@ -359,7 +359,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
           </View>
 
           {/* Color Selection */}
-          <View style={styles.formSection}>
+          {/* <View style={styles.formSection}>
             <Text style={styles.sectionLabel}>COLOR</Text>
             <View style={styles.colorPicker}>
               {DEFAULT_COLORS.map((color: string, index: number) => (
@@ -379,7 +379,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
+          </View> */}
 
           {/* Share With */}
           <View style={styles.formSection}>

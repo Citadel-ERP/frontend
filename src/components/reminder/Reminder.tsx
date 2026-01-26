@@ -382,7 +382,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               activeOpacity={0.7}
             >
               <Ionicons name="chevron-back" size={24} color="#fff" />
-              <Text style={styles.backToDayText}>Back to Calendar</Text>
+              <Text style={styles.backToDayText}>Back</Text>
             </TouchableOpacity>
             
             <TouchableOpacity

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -282,10 +282,6 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         >
           {/* Header Section - WhatsApp Style */}
           <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }, isWeb && styles.menuHeaderWeb]}>
-            {/* <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="white" />
-            </TouchableOpacity> */}
-
             <View style={[styles.userInfoContainer, isWeb && styles.userInfoContainerWeb]}>
               {userData?.profile_picture ? (
                 <Image
@@ -415,7 +411,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showBUP, setShowBUP] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
-  const[showHREmployeeManager, setShowHREmployeeManagement] = useState(false);
+  const [showHREmployeeManager, setShowHREmployeeManagement] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showChatRoom, setShowChatRoom] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -437,6 +433,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Refresh state
+  const [refreshing, setRefreshing] = useState(false);
 
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
@@ -461,6 +460,106 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const defaultLastOpened: IconItem[] = [
     { name: 'Attendance', color: '#ffb157', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
   ];
+
+  // NEW: Function to refresh user data from backend
+  const refreshUserData = useCallback(async () => {
+    if (!token) return;
+    
+    try {
+      console.log('🔄 Refreshing user data...');
+      setRefreshing(true);
+      const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      if (response.ok) {
+        const data: ApiResponse = await response.json();
+        if (data.message === "Get modules successful") {
+          const transformedUserData: UserData = {
+            ...data.user,
+            profile_picture: data.user.profile_picture || undefined
+          };
+          
+          // Update state
+          setUserData(transformedUserData);
+          setModules(data.modules || []);
+          
+          // Update AsyncStorage
+          await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
+          await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
+          if (data.city) {
+            await AsyncStorage.setItem('city', data.city);
+          }
+          
+          setUpcomingBirthdays(data.upcoming_birthdays || []);
+          setUpcomingAnniversaries(data.upcoming_anniversary || []);
+          
+          if (Array.isArray(data.upcoming_reminder)) {
+            setReminders(data.upcoming_reminder);
+          } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
+            setReminders([data.upcoming_reminder]);
+          } else {
+            setReminders([]);
+          }
+
+          setHoursWorked(data.hours_worked_last_7_attendance || []);
+          setOvertimeHours(data.overtime_hours || []);
+
+          const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
+          setUpcomingEvents(events);
+
+          // Update last opened modules with fresh data
+          const storedModules = await AsyncStorage.getItem('last_opened_modules');
+          if (storedModules) {
+            let modulesArray = JSON.parse(storedModules);
+            if (data.modules && data.modules.length > 0) {
+              modulesArray = modulesArray.map((storedModule: any) => {
+                const backendModule = data.modules.find(
+                  (m: any) => m.module_unique_name === storedModule.module_unique_name
+                );
+                if (backendModule) {
+                  return {
+                    ...storedModule,
+                    iconUrl: backendModule.module_icon,
+                    title: backendModule.module_name.charAt(0).toUpperCase() +
+                      backendModule.module_name.slice(1).replace('_', ' ')
+                  };
+                }
+                return storedModule;
+              });
+              const uniqueModules: any[] = [];
+              const seen = new Set();
+              for (const module of modulesArray) {
+                if (!seen.has(module.module_unique_name)) {
+                  seen.add(module.module_unique_name);
+                  uniqueModules.push(module);
+                }
+              }
+              modulesArray = uniqueModules.slice(0, 4);
+              await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+              setLastOpenedModules(modulesArray);
+            }
+          }
+          
+          console.log('✅ User data refreshed successfully');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing user data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [token]);
+
+  // NEW: Auto-refresh when returning from Profile screen
+  useEffect(() => {
+    if (!showProfile && userData) {
+      // Refresh data when coming back from Profile screen
+      refreshUserData();
+    }
+  }, [showProfile, refreshUserData]);
 
   // Debug logging function
   const debugLog = async (message: string, data?: any) => {
@@ -1192,18 +1291,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowBDT(true);
     } else if (key.includes('mediclaim') || key.includes('medical')) {
       setShowMedical(true);
-      // Alert.alert('Medical Claim', 'Medical Claim feature will be available soon!');
     } else if (key.includes('scout')) {
-      // setShowScoutBoy(true);
       Alert.alert('Scout Boy', 'Scout Boy feature will be available soon!');
     } else if (key.includes('reminder')) {
       setShowReminder(true);
-      // Alert.alert('Reminder', 'Reminder feature will be available soon!');
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
     } else if (key.includes('employee_management') && key != "hr_employee_management") {
       setShowEmployeeManagement(true);
-      // Alert.alert('Employee Management', 'Employee Management feature will be available soon!');
     }
     else if(key.includes('hr_employee_management')){
       setShowHREmployeeManagement(true)
@@ -1560,9 +1655,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
+  // UPDATED: Profile component with callback for real-time updates
   if (showProfile) {
     return (
-      <Profile onBack={handleBackFromPage} userData={userData} />
+      <Profile 
+        onBack={handleBackFromPage} 
+        userData={userData} 
+        onProfileUpdate={(updatedData) => {
+          // Update Dashboard's userData immediately
+          setUserData(updatedData);
+          // Also refresh from backend to get all latest data
+          refreshUserData();
+        }}
+      />
     );
   }
 
@@ -1639,50 +1744,50 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }
 
   // Module Grid - Responsive version
- const ModuleGrid = () => {
-  if (isWeb) {
-    // Web layout - 4 modules in a row
-    return (
-      <View style={[styles.moduleGrid, isWeb && styles.moduleGridWeb]}>
-        {(['attendance', 'cab', 'hr', 'medical'] as const).map((moduleType, index) => {
-          const moduleInfo = {
-            attendance: { name: 'Attendance', icon: 'book-open', gradient: ['#00d285', '#00b872'] },
-            cab: { name: 'Car', icon: 'car', gradient: ['#ff5e7a', '#ff4168'] },
-            hr: { name: 'HR', icon: 'users', gradient: ['#ffb157', '#ff9d3f'] },
-            medical: { name: 'Medical', icon: 'heartbeat', gradient: ['#1da1f2', '#1a8cd8'] }
-          }[moduleType];
-          
-          if (!moduleInfo) return null;
-            return (
-              <TouchableOpacity
-                key={moduleType}
-                style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
-                onPress={() => handleModulePress(moduleInfo.name, moduleType)}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={moduleInfo.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
+  const ModuleGrid = () => {
+    if (isWeb) {
+      // Web layout - 4 modules in a row
+      return (
+        <View style={[styles.moduleGrid, isWeb && styles.moduleGridWeb]}>
+          {(['attendance', 'cab', 'hr', 'medical'] as const).map((moduleType, index) => {
+            const moduleInfo = {
+              attendance: { name: 'Attendance', icon: 'book-open', gradient: ['#00d285', '#00b872'] },
+              cab: { name: 'Car', icon: 'car', gradient: ['#ff5e7a', '#ff4168'] },
+              hr: { name: 'HR', icon: 'users', gradient: ['#ffb157', '#ff9d3f'] },
+              medical: { name: 'Medical', icon: 'heartbeat', gradient: ['#1da1f2', '#1a8cd8'] }
+            }[moduleType];
+            
+            if (!moduleInfo) return null;
+              return (
+                <TouchableOpacity
+                  key={moduleType}
+                  style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
+                  onPress={() => handleModulePress(moduleInfo.name, moduleType)}
+                  activeOpacity={0.9}
                 >
-                  <Ionicons
-                    name="arrow-up"
-                    size={isWeb ? 18 : 16}
-                    color="white"
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                  />
-                  <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
-                    <FontAwesome5 name={moduleInfo.icon as any} size={isWeb ? 20 : 18} color="white" />
-                  </View>
-                  <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>{moduleInfo.name}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      );
-    }
+                  <LinearGradient
+                    colors={moduleInfo.gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
+                  >
+                    <Ionicons
+                      name="arrow-up"
+                      size={isWeb ? 18 : 16}
+                      color="white"
+                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+                    />
+                    <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
+                      <FontAwesome5 name={moduleInfo.icon as any} size={isWeb ? 20 : 18} color="white" />
+                    </View>
+                    <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>{moduleInfo.name}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        );
+      }
 
     // Mobile layout - Original design
     return (
@@ -1785,6 +1890,21 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     </TouchableOpacity>
   );
 
+  // NEW: Refresh button component for Dashboard header
+  const RefreshButton = () => (
+    <TouchableOpacity 
+      onPress={refreshUserData}
+      style={styles.refreshButton}
+      disabled={refreshing}
+    >
+      {refreshing ? (
+        <ActivityIndicator size="small" color="white" />
+      ) : (
+        <Ionicons name="refresh" size={24} color="white" />
+      )}
+    </TouchableOpacity>
+  );
+
   // Main dashboard render
   return (
     <View style={[styles.safeContainer, isWeb && styles.safeContainerWeb]}>
@@ -1866,6 +1986,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 </TouchableOpacity>
                 <Text style={[styles.logoText, isWeb && styles.logoTextWeb]}>CITADEL</Text>
                 <View style={styles.headerSpacer} />
+                {/* NEW: Add refresh button */}
+                <RefreshButton />
               </View>
               <View style={{ marginTop: isWeb ? 20 : 75 }}>
                 <Text style={[styles.welcomeText, isWeb && styles.welcomeTextWeb]}>Welcome!</Text>
@@ -2334,6 +2456,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     paddingLeft: 20,
+  },
+  // NEW: Refresh button styles
+  refreshButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // WhatsApp-style Hamburger Menu Styles - Web responsive
   menuBackdrop: {

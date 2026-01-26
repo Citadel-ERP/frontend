@@ -339,6 +339,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       if (leadData.status !== undefined) updatePayload.status = leadData.status;
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
+
+      // ADD THIS: Include meta field if it exists
+      if (leadData.meta !== undefined && leadData.meta !== null) {
+        updatePayload.meta = leadData.meta;
+      }
+
       const response = await fetch(`${BACKEND_URL}/employee/updateLead`, {
         method: 'POST',
         headers: {

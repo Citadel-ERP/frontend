@@ -104,9 +104,9 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   // Filter BDTs based on search query
   const filteredBDTs = useMemo(() => {
     if (!searchQuery.trim()) return bdts;
-    
+
     const query = searchQuery.toLowerCase();
-    return bdts.filter(bdt => 
+    return bdts.filter(bdt =>
       bdt.full_name.toLowerCase().includes(query) ||
       bdt.employee_id.toLowerCase().includes(query) ||
       bdt.email.toLowerCase().includes(query)
@@ -189,7 +189,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const fetchBDTs = async (city: string): Promise<void> => {
     try {
       if (!token) return;
-      
+
       setLoadingBDTs(true);
       const response = await fetch(`${BACKEND_URL}/manager/getBDT`, {
         method: 'POST',
@@ -559,6 +559,11 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         updatePayload.assigned_to = leadData.assigned_to?.employee_id || leadData.assigned_to?.email;
       }
 
+      // ADD THIS: Include meta field if it exists
+      if (leadData.meta !== undefined && leadData.meta !== null) {
+        updatePayload.meta = leadData.meta;
+      }
+
       const response = await fetch(`${BACKEND_URL}/manager/updateLead`, {
         method: 'POST',
         headers: {
@@ -628,12 +633,12 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const getAvatarColor = (name: string): string => {
     const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
     if (!name) return avatarColors[0];
-    
+
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-    
+
     const index = Math.abs(hash) % avatarColors.length;
     return avatarColors[index];
   };
@@ -698,20 +703,20 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                     </Text>
                   )}
                 </View>
-                
+
                 <View style={styles.bdtContent}>
                   <View style={styles.bdtHeader}>
                     <Text style={[styles.bdtName, { color: theme.text }]} numberOfLines={1}>
                       {item.full_name}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.bdtInfo}>
                     <Text style={[styles.bdtId, { color: theme.textSecondary }]} numberOfLines={1}>
                       ID: {item.employee_id}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.bdtContact}>
                     <Ionicons name="mail" size={12} color={theme.textTertiary} />
                     <Text style={[styles.bdtEmail, { color: theme.textSecondary }]} numberOfLines={1}>
@@ -719,7 +724,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                     </Text>
                   </View>
                 </View>
-                
+
                 <View style={styles.bdtArrow}>
                   <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
                 </View>
