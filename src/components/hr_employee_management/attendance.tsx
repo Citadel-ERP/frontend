@@ -1,5 +1,5 @@
 // hr_employee_management/attendance.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,11 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  Platform
+  Platform,
+  TouchableWithoutFeedback,
+  type TouchableOpacity as TouchableOpacityType 
 } from 'react-native';
+
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -46,8 +49,8 @@ interface DayData {
     id: number;
     reason: string;
   } | null;
-  user_login_reason?: string | null;  
-  user_logout_reason?: string | null;  
+  user_login_reason?: string | null;
+  user_logout_reason?: string | null;
 }
 
 const STATUS_COLORS = {
@@ -110,6 +113,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const [showLogoutTimePicker, setShowLogoutTimePicker] = useState(false);
   const [loginTime, setLoginTime] = useState<Date>(new Date());
   const [logoutTime, setLogoutTime] = useState<Date>(new Date());
+  const [pickerPosition, setPickerPosition] = useState<{top: number; left: number} | null>(null);
+  const [activePicker, setActivePicker] = useState<'login' | 'logout' | null>(null);
   
   // Form data
   const [editData, setEditData] = useState({
@@ -118,6 +123,9 @@ export const Attendance: React.FC<AttendanceProps> = ({
     login_reason: '',
     logout_reason: '',
   });
+
+  const loginTimeRef = useRef<View>(null);
+  const logoutTimeRef = useRef<View>(null); 
 
   useEffect(() => {
     Animated.spring(legendHeight, {
@@ -131,6 +139,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
   useEffect(() => {
     if (!showDayDetailsModal) {
       setIsEditMode(false);
+      setActivePicker(null);
+      setPickerPosition(null);
     }
   }, [showDayDetailsModal]);
 
@@ -282,6 +292,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
         
         setShowDayDetailsModal(true);
         setIsEditMode(false);
+        setActivePicker(null);
+        setPickerPosition(null);
       } else {
         Alert.alert('Error', 'Failed to fetch day data');
       }
@@ -297,7 +309,36 @@ export const Attendance: React.FC<AttendanceProps> = ({
     fetchDayData(day);
   };
 
+  const handleLoginTimePress = () => {
+    loginTimeRef.current?.measure((_fx: number, _fy: number, width: number, height: number, pageX: number, pageY: number) => {
+      setPickerPosition({
+        top: pageY + height + 5,
+        left: pageX
+      });
+      setActivePicker('login');
+      setShowLoginTimePicker(true);
+    });
+  };
+
+  const handleLogoutTimePress = () => {
+    logoutTimeRef.current?.measure((_fx: number, _fy: number, width: number, height: number, pageX: number, pageY: number) => {
+      setPickerPosition({
+        top: pageY + height + 5,
+        left: pageX
+      });
+      setActivePicker('logout');
+      setShowLogoutTimePicker(true);
+    });
+  };
+
   const handleLoginTimeChange = (event: any, selectedDate?: Date) => {
+    if (event.type === 'dismissed') {
+      setShowLoginTimePicker(false);
+      setActivePicker(null);
+      setPickerPosition(null);
+      return;
+    }
+    
     setShowLoginTimePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setLoginTime(selectedDate);
@@ -305,10 +346,24 @@ export const Attendance: React.FC<AttendanceProps> = ({
         ...editData,
         login_time: formatTimeForAPI(selectedDate)
       });
+      
+      // On iOS, keep the picker open. On Android, close it after selection
+      if (Platform.OS === 'android') {
+        setShowLoginTimePicker(false);
+        setActivePicker(null);
+        setPickerPosition(null);
+      }
     }
   };
 
   const handleLogoutTimeChange = (event: any, selectedDate?: Date) => {
+    if (event.type === 'dismissed') {
+      setShowLogoutTimePicker(false);
+      setActivePicker(null);
+      setPickerPosition(null);
+      return;
+    }
+    
     setShowLogoutTimePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setLogoutTime(selectedDate);
@@ -316,6 +371,13 @@ export const Attendance: React.FC<AttendanceProps> = ({
         ...editData,
         logout_time: formatTimeForAPI(selectedDate)
       });
+      
+      // On iOS, keep the picker open. On Android, close it after selection
+      if (Platform.OS === 'android') {
+        setShowLogoutTimePicker(false);
+        setActivePicker(null);
+        setPickerPosition(null);
+      }
     }
   };
 
@@ -338,9 +400,13 @@ export const Attendance: React.FC<AttendanceProps> = ({
   };
 
   const validateAndUpdateDayData = async () => {
+    // Fix TypeScript error by handling undefined values
+    const loginReason = editData.login_reason || '';
+    const logoutReason = editData.logout_reason || '';
+    
     // Validation: If login_time is provided, login_reason should be provided
     if (editData.login_time && editData.login_time.trim() !== '') {
-      if (!editData.login_reason || !editData.login_reason.trim()) {
+      if (!loginReason.trim()) {
         Alert.alert('Validation Error', 'Login reason is required when login time is provided');
         return;
       }
@@ -348,7 +414,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
     // Validation: If logout_time is provided, logout_reason should be provided
     if (editData.logout_time && editData.logout_time.trim() !== '') {
-      if (!editData.logout_reason || !editData.logout_reason.trim()) {
+      if (!logoutReason.trim()) {
         Alert.alert('Validation Error', 'Logout reason is required when logout time is provided');
         return;
       }
@@ -359,14 +425,14 @@ export const Attendance: React.FC<AttendanceProps> = ({
       const payload: any = {
         token,
         employee_id: employee.employee_id,
-        date: dayData?.date,
+        date: dayData?.date || null,
       };
 
       // Add login time and location if provided
       if (editData.login_time && editData.login_time.trim() !== '') {
         payload.login_time = editData.login_time;
         payload.login_location = {
-          reason: editData.login_reason.trim(),
+          reason: loginReason.trim(),
         };
       } else {
         // If empty, set to null to delete
@@ -378,7 +444,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       if (editData.logout_time && editData.logout_time.trim() !== '') {
         payload.logout_time = editData.logout_time;
         payload.logout_location = {
-          reason: editData.logout_reason.trim(),
+          reason: logoutReason.trim(),
         };
       } else {
         // If empty, set to null to delete
@@ -417,6 +483,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
   const handleCancelEdit = () => {
     setIsEditMode(false);
+    setActivePicker(null);
+    setPickerPosition(null);
     // Reset to original data
     if (dayData) {
       setEditData({
@@ -428,6 +496,23 @@ export const Attendance: React.FC<AttendanceProps> = ({
       setLoginTime(dayData.login_time ? parseTimeString(dayData.login_time) : new Date());
       setLogoutTime(dayData.logout_time ? parseTimeString(dayData.logout_time) : new Date());
     }
+  };
+
+  const handleDoneButtonPress = () => {
+    if (activePicker === 'login') {
+      setShowLoginTimePicker(false);
+    } else if (activePicker === 'logout') {
+      setShowLogoutTimePicker(false);
+    }
+    setActivePicker(null);
+    setPickerPosition(null);
+  };
+
+  const handleBackdropPress = () => {
+    setShowLoginTimePicker(false);
+    setShowLogoutTimePicker(false);
+    setActivePicker(null);
+    setPickerPosition(null);
   };
 
   const renderCalendar = () => {
@@ -588,300 +673,348 @@ export const Attendance: React.FC<AttendanceProps> = ({
         onRequestClose={() => {
           setShowDayDetailsModal(false);
           setIsEditMode(false);
+          setActivePicker(null);
+          setPickerPosition(null);
         }}
       >
-        <View style={styles.assetsModalOverlay}>
-          <View style={styles.assetsModalContainer}>
-            {/* Modal Header */}
-            <View style={styles.assetsModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <MaterialIcons name="event" size={24} color={WHATSAPP_COLORS.primary} />
-                <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
-                  {dayData?.date ? formatDate(dayData.date) : 'Attendance Details'}
-                </Text>
-              </View>
-              {!isEditMode && (
+        <TouchableWithoutFeedback onPress={handleBackdropPress}>
+          <View style={styles.assetsModalOverlay}>
+            <View style={styles.assetsModalContainer}>
+              {/* Modal Header */}
+              <View style={styles.assetsModalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <MaterialIcons name="event" size={24} color={WHATSAPP_COLORS.primary} />
+                  <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
+                    {dayData?.date ? formatDate(dayData.date) : 'Attendance Details'}
+                  </Text>
+                </View>
+                {!isEditMode && (
+                  <TouchableOpacity
+                    style={{ marginRight: 12 }}
+                    onPress={() => setIsEditMode(true)}
+                  >
+                    <MaterialIcons name="edit" size={24} color={WHATSAPP_COLORS.primary} />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={{ marginRight: 12 }}
-                  onPress={() => setIsEditMode(true)}
+                  onPress={() => {
+                    setShowDayDetailsModal(false);
+                    setIsEditMode(false);
+                    setActivePicker(null);
+                    setPickerPosition(null);
+                  }}
                 >
-                  <MaterialIcons name="edit" size={24} color={WHATSAPP_COLORS.primary} />
+                  <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
                 </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {isEditMode ? (
+                  // Edit Mode
+                  <>
+                    {/* Login Section */}
+                    <View style={styles.sectionAlt}>
+                      <View style={[styles.sectionHeader,{marginTop:20}]}>
+                        <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
+                        <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
+                      </View>
+
+                      <View style={styles.detailCard}>
+                        <Text style={styles.editLabel}>Login Time</Text>
+                        <TouchableOpacity
+                          ref={loginTimeRef}
+                          style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                          onPress={handleLoginTimePress}
+                        >
+                          <Text style={{ color: editData.login_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
+                            {editData.login_time ? formatTimeForDisplay(editData.login_time) : 'Select time'}
+                          </Text>
+                          <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
+                        </TouchableOpacity>
+
+                        {editData.login_time && (
+                          <TouchableOpacity
+                            onPress={handleClearLoginTime}
+                            style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                          >
+                            <Text style={{ color: '#D32F2F', fontSize: 14, fontWeight: '500' }}>Clear Login Time</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {(editData.login_time || dayData?.login_time) && (
+                          <>
+                            <Text style={[styles.editLabel, { marginTop: 16, color: '#000000' }]}>Login Location *</Text>
+                            <TextInput
+                              style={[styles.editInput, { height: 80 }]}
+                              value={editData.login_reason}
+                              onChangeText={(text) => setEditData({ ...editData, login_reason: text })}
+                              placeholder="Enter reason for check-in location"
+                              placeholderTextColor="#888"
+                              multiline
+                              textAlignVertical="top"
+                            />
+                          </>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Logout Section */}
+                    <View style={styles.sectionAlt}>
+                      <View style={styles.sectionHeader}>
+                        <MaterialIcons name="logout" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
+                        <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-out Details</Text>
+                      </View>
+
+                      <View style={styles.detailCard}>
+                        <Text style={styles.editLabel}>Logout Time</Text>
+                        <TouchableOpacity
+                          ref={logoutTimeRef}
+                          style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                          onPress={handleLogoutTimePress}
+                        >
+                          <Text style={{ color: editData.logout_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
+                            {editData.logout_time ? formatTimeForDisplay(editData.logout_time) : 'Select time'}
+                          </Text>
+                          <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
+                        </TouchableOpacity>
+
+                        {editData.logout_time && (
+                          <TouchableOpacity
+                            onPress={handleClearLogoutTime}
+                            style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                          >
+                            <Text style={{ color: '#D32F2F', fontSize: 14, fontWeight: '500' }}>Clear Logout Time</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {(editData.logout_time || dayData?.logout_time) && (
+                          <>
+                            <Text style={[styles.editLabel, { marginTop: 16, color: '#000000' }]}>Logout Location *</Text>
+                            <TextInput
+                              style={[styles.editInput, { height: 80 }]}
+                              value={editData.logout_reason}
+                              onChangeText={(text) => setEditData({ ...editData, logout_reason: text })}
+                              placeholder="Enter reason for check-out location"
+                              placeholderTextColor="#888"
+                              multiline
+                              textAlignVertical="top"
+                            />
+                          </>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={styles.actionContainer}>
+                      <TouchableOpacity
+                        onPress={handleCancelEdit}
+                        style={[styles.actionButtonLarge, styles.cancelButton]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={validateAndUpdateDayData}
+                        style={[
+                          styles.actionButtonLarge,
+                          styles.saveButton,
+                          actionLoading && styles.disabledButton
+                        ]}
+                        disabled={actionLoading}
+                        activeOpacity={0.7}
+                      >
+                        {actionLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="save" size={20} color="#fff" />
+                            <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>Save Changes</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.bottomSpacer} />
+                  </>
+                ) : (
+                  // View Mode
+                  <>
+                    {/* Login Section */}
+                    <View style={styles.sectionAlt}>
+                      <View style={[styles.sectionHeader,{marginTop:20}]}>
+                        <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
+                        <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
+                      </View>
+
+                      <View style={styles.detailCard}>
+                        <View style={styles.detailRow}>
+                          <MaterialIcons name="access-time" size={20} color="#666" />
+                          <Text style={styles.detailLabel}>Login Time</Text>
+                          <Text style={[styles.detailValue, { color: '#25D366', fontWeight: '700' }]}>
+                            {formatTimeForDisplay(dayData?.login_time || null)}
+                          </Text>
+                        </View>
+
+                        {/* Show location reason if it exists */}
+                        {dayData?.login_location?.reason && (
+                          <>
+                            <View style={styles.detailDivider} />
+                            <View style={styles.detailRow}>
+                              <MaterialIcons name="location-on" size={20} color="#666" />
+                              <Text style={styles.detailLabel}>Location Reason</Text>
+                              <Text style={[styles.detailValue, { color: WHATSAPP_COLORS.textPrimary }]}>
+                                {dayData.login_location.reason}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+
+                        {/* Show user comment if it exists */}
+                        {dayData?.user_login_reason && (
+                          <>
+                            <View style={styles.detailDivider} />
+                            <View style={styles.detailRow}>
+                              <MaterialIcons name="comment" size={20} color="#666" />
+                              <Text style={styles.detailLabel}>Employee Comment</Text>
+                              <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
+                                {dayData.user_login_reason}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+
+                        {!dayData?.login_time && (
+                          <View style={styles.warningCard}>
+                            <MaterialIcons name="info-outline" size={20} color="#FF9500" />
+                            <Text style={[styles.warningText, { color: '#FF9500' }]}>
+                              No check-in recorded for this date
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Logout Section */}
+                    <View style={styles.sectionAlt}>
+                      <View style={styles.sectionHeader}>
+                        <MaterialIcons name="logout" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
+                        <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-out Details</Text>
+                      </View>
+
+                      <View style={styles.detailCard}>
+                        <View style={styles.detailRow}>
+                          <MaterialIcons name="access-time" size={20} color="#666" />
+                          <Text style={styles.detailLabel}>Logout Time</Text>
+                          <Text style={[styles.detailValue, { color: '#FF6B6B', fontWeight: '700' }]}>
+                            {formatTimeForDisplay(dayData?.logout_time || null)}
+                          </Text>
+                        </View>
+
+                        {/* Show location reason if it exists */}
+                        {dayData?.logout_location?.reason && (
+                          <>
+                            <View style={styles.detailDivider} />
+                            <View style={styles.detailRow}>
+                              <MaterialIcons name="location-on" size={20} color="#666" />
+                              <Text style={styles.detailLabel}>Location Reason</Text>
+                              <Text style={[styles.detailValue, { color: WHATSAPP_COLORS.textPrimary }]}>
+                                {dayData.logout_location.reason}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+
+                        {/* Show user comment if it exists */}
+                        {dayData?.user_logout_reason && (
+                          <>
+                            <View style={styles.detailDivider} />
+                            <View style={styles.detailRow}>
+                              <MaterialIcons name="comment" size={20} color="#666" />
+                              <Text style={styles.detailLabel}>Employee Comment</Text>
+                              <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
+                                {dayData.user_logout_reason}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+
+                        {!dayData?.logout_time && (
+                          <View style={styles.warningCard}>
+                            <MaterialIcons name="info-outline" size={20} color="#FF9500" />
+                            <Text style={[styles.warningText, { color: '#FF9500' }]}>
+                              No check-out recorded for this date
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.bottomSpacer} />
+                  </>
+                )}
+              </ScrollView>
+
+              {/* Custom Time Picker Overlay */}
+              {(showLoginTimePicker || showLogoutTimePicker) && pickerPosition && (
+                <View 
+                  style={{
+                    top: pickerPosition.top,
+                    left: pickerPosition.left,
+                    position: 'absolute',
+                    backgroundColor: 'white',
+                    borderRadius: 8,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 4,
+                    elevation: 5,
+                    zIndex: 1000,
+                    minWidth: 200,
+                  }}
+                >
+                  <DateTimePicker
+                    value={activePicker === 'login' ? loginTime : logoutTime}
+                    mode="time"
+                    display="spinner"
+                    onChange={activePicker === 'login' ? handleLoginTimeChange : handleLogoutTimeChange}
+                    style={{ backgroundColor: 'white' }}
+                  />
+                  <TouchableOpacity
+                    onPress={handleDoneButtonPress}
+                    style={{
+                      padding: 10,
+                      backgroundColor: WHATSAPP_COLORS.primary,
+                      borderBottomLeftRadius: 8,
+                      borderBottomRightRadius: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
               )}
-              <TouchableOpacity
-                onPress={() => {
-                  setShowDayDetailsModal(false);
-                  setIsEditMode(false);
-                }}
-              >
-                <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
-              </TouchableOpacity>
+
+              {/* Android Time Pickers (fallback) */}
+              {Platform.OS === 'android' && showLoginTimePicker && (
+                <DateTimePicker
+                  value={loginTime}
+                  mode="time"
+                  display="default"
+                  onChange={handleLoginTimeChange}
+                />
+              )}
+
+              {Platform.OS === 'android' && showLogoutTimePicker && (
+                <DateTimePicker
+                  value={logoutTime}
+                  mode="time"
+                  display="default"
+                  onChange={handleLogoutTimeChange}
+                />
+              )}
             </View>
-
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-              {isEditMode ? (
-                // Edit Mode
-                <>
-                  {/* Login Section */}
-                  <View style={styles.sectionAlt}>
-                    <View style={[styles.sectionHeader,{marginTop:20}]}>
-                      <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
-                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
-                    </View>
-
-                    <View style={styles.detailCard}>
-                      <Text style={styles.editLabel}>Login Time</Text>
-                      <TouchableOpacity
-                        style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-                        onPress={() => setShowLoginTimePicker(true)}
-                      >
-                        <Text style={{ color: editData.login_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
-                          {editData.login_time ? formatTimeForDisplay(editData.login_time) : 'Select time'}
-                        </Text>
-                        <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
-                      </TouchableOpacity>
-
-                      {editData.login_time && (
-                        <TouchableOpacity
-                          onPress={handleClearLoginTime}
-                          style={{ marginTop: 8, alignSelf: 'flex-start' }}
-                        >
-                          <Text style={{ color: '#D32F2F', fontSize: 14, fontWeight: '500' }}>Clear Login Time</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {(editData.login_time || dayData?.login_time) && (
-                        <>
-                          <Text style={[styles.editLabel, { marginTop: 16, color: '#000000' }]}>Login Location *</Text>
-                          <TextInput
-                            style={[styles.editInput, { height: 80 }]}
-                            value={editData.login_reason}
-                            onChangeText={(text) => setEditData({ ...editData, login_reason: text })}
-                            placeholder="Enter reason for check-in location"
-                            placeholderTextColor="#888"
-                            multiline
-                            textAlignVertical="top"
-                          />
-                        </>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Logout Section */}
-                  <View style={styles.sectionAlt}>
-                    <View style={styles.sectionHeader}>
-                      <MaterialIcons name="logout" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
-                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-out Details</Text>
-                    </View>
-
-                    <View style={styles.detailCard}>
-                      <Text style={styles.editLabel}>Logout Time</Text>
-                      <TouchableOpacity
-                        style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-                        onPress={() => setShowLogoutTimePicker(true)}
-                      >
-                        <Text style={{ color: editData.logout_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
-                          {editData.logout_time ? formatTimeForDisplay(editData.logout_time) : 'Select time'}
-                        </Text>
-                        <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
-                      </TouchableOpacity>
-
-                      {editData.logout_time && (
-                        <TouchableOpacity
-                          onPress={handleClearLogoutTime}
-                          style={{ marginTop: 8, alignSelf: 'flex-start' }}
-                        >
-                          <Text style={{ color: '#D32F2F', fontSize: 14, fontWeight: '500' }}>Clear Logout Time</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {(editData.logout_time || dayData?.logout_time) && (
-                        <>
-                          <Text style={[styles.editLabel, { marginTop: 16, color: '#000000' }]}>Logout Location *</Text>
-                          <TextInput
-                            style={[styles.editInput, { height: 80 }]}
-                            value={editData.logout_reason}
-                            onChangeText={(text) => setEditData({ ...editData, logout_reason: text })}
-                            placeholder="Enter reason for check-out location"
-                            placeholderTextColor="#888"
-                            multiline
-                            textAlignVertical="top"
-                          />
-                        </>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Action Buttons */}
-                  <View style={styles.actionContainer}>
-                    <TouchableOpacity
-                      onPress={handleCancelEdit}
-                      style={[styles.actionButtonLarge, styles.cancelButton]}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={validateAndUpdateDayData}
-                      style={[
-                        styles.actionButtonLarge,
-                        styles.saveButton,
-                        actionLoading && styles.disabledButton
-                      ]}
-                      disabled={actionLoading}
-                      activeOpacity={0.7}
-                    >
-                      {actionLoading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <MaterialIcons name="save" size={20} color="#fff" />
-                          <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>Save Changes</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.bottomSpacer} />
-                </>
-              ) : (
-                // View Mode
-                <>
-                  {/* Login Section */}
-                  <View style={styles.sectionAlt}>
-                    <View style={[styles.sectionHeader,{marginTop:20}]}>
-                      <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
-                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
-                    </View>
-
-                    <View style={styles.detailCard}>
-                      <View style={styles.detailRow}>
-                        <MaterialIcons name="access-time" size={20} color="#666" />
-                        <Text style={styles.detailLabel}>Login Time</Text>
-                        <Text style={[styles.detailValue, { color: '#25D366', fontWeight: '700' }]}>
-                          {formatTimeForDisplay(dayData?.login_time)}
-                        </Text>
-                      </View>
-
-                      {/* Show location reason if it exists */}
-                      {dayData?.login_location?.reason && (
-                        <>
-                          <View style={styles.detailDivider} />
-                          <View style={styles.detailRow}>
-                            <MaterialIcons name="location-on" size={20} color="#666" />
-                            <Text style={styles.detailLabel}>Location Reason</Text>
-                            <Text style={[styles.detailValue, { color: WHATSAPP_COLORS.textPrimary }]}>
-                              {dayData.login_location.reason}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-
-                      {/* Show user comment if it exists */}
-                      {dayData?.user_login_reason && (
-                        <>
-                          <View style={styles.detailDivider} />
-                          <View style={styles.detailRow}>
-                            <MaterialIcons name="comment" size={20} color="#666" />
-                            <Text style={styles.detailLabel}>Employee Comment</Text>
-                            <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
-                              {dayData.user_login_reason}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-
-                      {!dayData?.login_time && (
-                        <View style={styles.warningCard}>
-                          <MaterialIcons name="info-outline" size={20} color="#FF9500" />
-                          <Text style={[styles.warningText, { color: '#FF9500' }]}>
-                            No check-in recorded for this date
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Logout Section */}
-                  <View style={styles.sectionAlt}>
-                    <View style={styles.sectionHeader}>
-                      <MaterialIcons name="logout" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
-                      <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-out Details</Text>
-                    </View>
-
-                    <View style={styles.detailCard}>
-                      <View style={styles.detailRow}>
-                        <MaterialIcons name="access-time" size={20} color="#666" />
-                        <Text style={styles.detailLabel}>Logout Time</Text>
-                        <Text style={[styles.detailValue, { color: '#FF6B6B', fontWeight: '700' }]}>
-                          {formatTimeForDisplay(dayData?.logout_time)}
-                        </Text>
-                      </View>
-
-                      {/* Show location reason if it exists */}
-                      {dayData?.logout_location?.reason && (
-                        <>
-                          <View style={styles.detailDivider} />
-                          <View style={styles.detailRow}>
-                            <MaterialIcons name="location-on" size={20} color="#666" />
-                            <Text style={styles.detailLabel}>Location Reason</Text>
-                            <Text style={[styles.detailValue, { color: WHATSAPP_COLORS.textPrimary }]}>
-                              {dayData.logout_location.reason}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-
-                      {/* Show user comment if it exists */}
-                      {dayData?.user_logout_reason && (
-                        <>
-                          <View style={styles.detailDivider} />
-                          <View style={styles.detailRow}>
-                            <MaterialIcons name="comment" size={20} color="#666" />
-                            <Text style={styles.detailLabel}>Employee Comment</Text>
-                            <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
-                              {dayData.user_logout_reason}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-
-                      {!dayData?.logout_time && (
-                        <View style={styles.warningCard}>
-                          <MaterialIcons name="info-outline" size={20} color="#FF9500" />
-                          <Text style={[styles.warningText, { color: '#FF9500' }]}>
-                            No check-out recorded for this date
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  <View style={styles.bottomSpacer} />
-                </>
-              )}
-            </ScrollView>
-
-            {/* Time Pickers (rendered outside ScrollView) */}
-            {showLoginTimePicker && (
-              <DateTimePicker
-                value={loginTime}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleLoginTimeChange}
-              />
-            )}
-
-            {showLogoutTimePicker && (
-              <DateTimePicker
-                value={logoutTime}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleLogoutTimeChange}
-              />
-            )}
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     );
   };
