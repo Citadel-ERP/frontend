@@ -7,6 +7,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 import { Header } from './header';
 import { EmployeeList } from './list';
 import EmployeeDetails from './employeeDetails';
@@ -15,9 +18,9 @@ import { WHATSAPP_COLORS, TOKEN_KEY } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 import SearchAndDownload from './searchAndDownload';
-import AddEmployeeModal from './addEmployeeModal';
+import AddEmployeeScreen from './AddEmployeeScreen';
 import HolidayManagement from './holiday';
-// import AssetsManagement from './assets';
+import AttendanceDownloadModal from './AttendanceDownloadModal';
 
 const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
@@ -30,9 +33,9 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [showHolidayManagement, setShowHolidayManagement] = useState(false);
-  // const [showAssetsManagement, setShowAssetsManagement] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showAddEmployeeScreen, setShowAddEmployeeScreen] = useState(false);
 
   // Get token on mount - with enhanced debugging
   useEffect(() => {
@@ -41,13 +44,11 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         console.log('=== Getting token from AsyncStorage ===');
         console.log('Trying TOKEN_KEY:', TOKEN_KEY);
         
-        // Try multiple possible token keys
         const possibleKeys = ['user_token', 'token', 'authToken', 'auth_token', 'userToken'];
         
         let foundToken = null;
         let foundKey = null;
         
-        // Try the defined TOKEN_KEY first
         foundToken = await AsyncStorage.getItem(TOKEN_KEY);
         if (foundToken) {
           foundKey = TOKEN_KEY;
@@ -55,7 +56,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         } else {
           console.log(`❌ No token with key: ${TOKEN_KEY}`);
           
-          // Try other possible keys
           for (const key of possibleKeys) {
             const testToken = await AsyncStorage.getItem(key);
             if (testToken) {
@@ -67,7 +67,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
           }
         }
         
-        // Log all keys in AsyncStorage for debugging
         const allKeys = await AsyncStorage.getAllKeys();
         console.log('All keys in AsyncStorage:', allKeys);
         
@@ -199,80 +198,149 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     setSelectedEmployee(null);
   };
 
-  const downloadAllEmployees = async () => {
+  const downloadAttendanceReport = async (month: number, year: number, employeeId?: string) => {
     if (!token) {
       Alert.alert('Error', 'Authentication required');
-      return;
+      throw new Error('Authentication required');
     }
 
     try {
-      const response = await fetch(`${BACKEND_URL}/manager/downloadEmployeeDetails`, {
+      console.log('Downloading attendance report:', { month, year, employeeId });
+
+      const response = await fetch(`${BACKEND_URL}/manager/downloadAllAttendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ 
+          token, 
+          month, 
+          year
+        }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        Alert.alert('Success', 'Employee data downloaded successfully');
-      } else {
-        const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to download');
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+        
+        const errorMessage = errorData.message || 'Failed to download attendance report';
+        Alert.alert('Error', errorMessage);
+        throw new Error(errorMessage);
       }
-    } catch (error) {
-      console.error('Download error:', error);
-      Alert.alert('Error', 'Network error occurred');
-    }
-  };
 
-  const downloadAttendanceReport = async () => {
-    if (!token) {
-      Alert.alert('Error', 'Authentication required');
-      return;
-    }
+      const data = await response.json();
+      console.log('Success response:', data);
 
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/downloadAttendanceReport`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        Alert.alert('Success', 'Attendance report downloaded successfully');
-      } else {
-        const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to download attendance report');
+      if (!data.file_url) {
+        Alert.alert('Error', 'Invalid response from server');
+        throw new Error('Invalid response from server');
       }
-    } catch (error) {
+
+      const fileUrl = data.file_url;
+      const filename = data.filename || `attendance_report_all_employees_${month}_${year}.pdf`;
+      const monthName = data.month || '';
+
+      // Show download options alert (similar to attendance.tsx)
+      Alert.alert(
+        'Download Report',
+        `Attendance report for ${monthName} ${year} is ready. Choose how you want to access it:`,
+        [
+          {
+            text: 'Open in Browser',
+            onPress: async () => {
+              try {
+                await WebBrowser.openBrowserAsync(fileUrl);
+              } catch (err) {
+                console.error('Failed to open browser:', err);
+                Alert.alert('Error', 'Could not open the file in browser');
+              }
+            },
+          },
+          {
+            text: 'Download & Share',
+            onPress: async () => {
+              try {
+                setLoading(true);
+                
+                // Fetch the PDF from the URL
+                const pdfResponse = await fetch(fileUrl);
+                if (!pdfResponse.ok) {
+                  throw new Error('Failed to fetch PDF from server');
+                }
+                
+                // Convert to blob and then to base64
+                const blob = await pdfResponse.blob();
+                const reader = new FileReader();
+                
+                reader.onloadend = async () => {
+                  try {
+                    const base64data = reader.result as string;
+                    const base64Content = base64data.split(',')[1];
+                    
+                    // Save to device storage
+                    const fileUri = FileSystem.documentDirectory + filename;
+                    await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+
+                    // Share the file
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(fileUri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Share Attendance Report',
+                        UTI: 'com.adobe.pdf',
+                      });
+                      Alert.alert('Success', 'Report downloaded successfully!');
+                    } else {
+                      Alert.alert('Info', 'File saved to app directory but sharing is not available on this device');
+                    }
+                  } catch (shareError) {
+                    console.error('Share error:', shareError);
+                    Alert.alert('Error', 'Failed to share PDF. The file may have been saved to app directory.');
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                
+                reader.onerror = () => {
+                  console.error('FileReader error');
+                  Alert.alert('Error', 'Failed to process PDF');
+                  setLoading(false);
+                };
+                
+                reader.readAsDataURL(blob);
+              } catch (err) {
+                console.error('Download error:', err);
+                Alert.alert('Error', 'Failed to download PDF. Please try again.');
+                setLoading(false);
+              }
+            },
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+
+    } catch (error: any) {
       console.error('Download attendance error:', error);
-      Alert.alert('Error', 'Network error occurred');
+      // Error already handled above, just rethrow for modal to catch
+      throw error;
     }
   };
 
-  const handleAddEmployee = async (employeeData: any) => {
-    if (!token) return;
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/addEmployee`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, ...employeeData }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Employee added successfully');
-        setShowAddEmployee(false);
-        fetchEmployees();
-      } else {
-        const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to add employee');
-      }
-    } catch (error) {
-      console.error('Add employee error:', error);
-      Alert.alert('Error', 'Network error occurred');
-    }
+  // Handle employee addition success
+  const handleEmployeeAdded = () => {
+    fetchEmployees(); // Refresh the employee list
   };
 
   if (selectedEmployee) {
@@ -294,14 +362,15 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     );
   }
 
-  // if (showAssetsManagement) {
-  //   return (
-  //     <AssetsManagement
-  //       token={token || ''}
-  //       onBack={() => setShowAssetsManagement(false)}
-  //     />
-  //   );
-  // }
+  if (showAddEmployeeScreen) {
+    return (
+      <AddEmployeeScreen
+        token={token || ''}
+        onBack={() => setShowAddEmployeeScreen(false)}
+        onEmployeeAdded={handleEmployeeAdded}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -315,16 +384,14 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         title="HR Management"
         subtitle={`${filteredEmployees.length} employee${filteredEmployees.length !== 1 ? 's' : ''}`}
         onBack={onBack}
-        showAddEmployee={() => setShowAddEmployee(true)}
+        showAddEmployee={() => setShowAddEmployeeScreen(true)}
       />
 
       <SearchAndDownload
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onDownloadEmployees={downloadAllEmployees}
-        onDownloadAttendance={downloadAttendanceReport}
+        onDownloadAttendance={() => setShowAttendanceModal(true)}
         onOpenHolidays={() => setShowHolidayManagement(true)}
-        // onOpenAssets={() => setShowAssetsManagement(true)}
         placeholder="Search employees..."
       />
 
@@ -339,11 +406,10 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onClearSearch={() => setSearchQuery('')}
       />
 
-      <AddEmployeeModal
-        visible={showAddEmployee}
-        onClose={() => setShowAddEmployee(false)}
-        onSubmit={handleAddEmployee}
-        token={token || ''}
+      <AttendanceDownloadModal
+        visible={showAttendanceModal}
+        onClose={() => setShowAttendanceModal(false)}
+        onDownload={downloadAttendanceReport}
       />
     </View>
   );

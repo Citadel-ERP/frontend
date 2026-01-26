@@ -16,7 +16,6 @@ import { styles } from './styles';
 interface SearchAndDownloadProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onDownloadEmployees: () => void;
   onDownloadAttendance: () => void;
   onOpenHolidays: () => void;
   placeholder: string;
@@ -25,7 +24,6 @@ interface SearchAndDownloadProps {
 const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
   searchQuery,
   onSearchChange,
-  onDownloadEmployees,
   onDownloadAttendance,
   onOpenHolidays,
   placeholder,
@@ -62,7 +60,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity
-            style={[styles.clearButton,{marginLeft: -40}]}
+            style={[styles.clearButton, { marginLeft: -40 }]}
             onPress={() => onSearchChange('')}
             activeOpacity={0.7}
           >
@@ -72,7 +70,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
       </View>
       
       <TouchableOpacity
-        style={[localStyles.optionsButton,{marginTop:5}]}
+        style={[localStyles.optionsButton, { marginTop: 5 }]}
         onPress={() => setOptionsVisible(true)}
         activeOpacity={0.8}
       >
@@ -97,8 +95,14 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
               onPress={() => handleOptionPress(onOpenHolidays)}
               activeOpacity={0.7}
             >
-              <Ionicons name="calendar-outline" size={20} color="#2D3748" />
-              <Text style={localStyles.optionText}>Holidays</Text>
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="calendar-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Manage Holidays</Text>
+                <Text style={localStyles.optionSubtext}>View and edit company holidays</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
             </TouchableOpacity>
 
             <View style={localStyles.optionDivider} />
@@ -108,19 +112,14 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
               onPress={() => handleOptionPress(onDownloadAttendance)}
               activeOpacity={0.7}
             >
-              <Ionicons name="document-text-outline" size={20} color="#2D3748" />
-              <Text style={localStyles.optionText}>Download Attendance Report</Text>
-            </TouchableOpacity>
-
-            <View style={localStyles.optionDivider} />
-
-            <TouchableOpacity
-              style={localStyles.optionItem}
-              onPress={() => handleOptionPress(onDownloadEmployees)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="download-outline" size={20} color="#2D3748" />
-              <Text style={localStyles.optionText}>Download Employee Data</Text>
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="download-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Download Attendance</Text>
+                <Text style={localStyles.optionSubtext}>Generate monthly attendance report</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -152,27 +151,43 @@ const localStyles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 8,
-    minWidth: 330,
-    maxWidth: 350,
-    elevation: 5,
+    minWidth: 340,
+    maxWidth: 360,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowRadius: 8,
   },
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
   },
+  optionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
   optionText: {
-    marginLeft: 12,
-    fontSize: 15,
+    fontSize: 16,
     color: '#2D3748',
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  optionSubtext: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   optionDivider: {
     height: 1,

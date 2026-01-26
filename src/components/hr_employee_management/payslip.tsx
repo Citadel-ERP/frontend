@@ -51,7 +51,7 @@ const PayslipModal: React.FC<PayslipProps> = ({
   const [payslips, setPayslips] = useState<PayslipData[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'list' | 'upload'>('list');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedFile, setSelectedFile] = useState<any>(null);
@@ -60,8 +60,17 @@ const PayslipModal: React.FC<PayslipProps> = ({
   useEffect(() => {
     if (visible) {
       fetchPayslips();
+      // Reset to list mode when modal opens
+      setModalMode('list');
     }
   }, [visible]);
+
+  useEffect(() => {
+    // Reset file selection when switching back to list mode
+    if (modalMode === 'list') {
+      setSelectedFile(null);
+    }
+  }, [modalMode]);
 
   useEffect(() => {
     // Group payslips by year
@@ -134,32 +143,6 @@ const PayslipModal: React.FC<PayslipProps> = ({
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      Alert.alert('Error', 'Please select a payslip file');
-      return;
-    }
-
-    // Check if payslip already exists for this month/year
-    const exists = payslips.some(
-      p => p.month === selectedMonth && p.year === selectedYear
-    );
-
-    if (exists) {
-      Alert.alert(
-        'Payslip Exists',
-        'A payslip for this month already exists. Do you want to replace it?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Replace', onPress: () => uploadPayslip() }
-        ]
-      );
-      return;
-    }
-
-    uploadPayslip();
-  };
-
   const uploadPayslip = async () => {
     setUploading(true);
     try {
@@ -181,7 +164,7 @@ const PayslipModal: React.FC<PayslipProps> = ({
 
       if (response.ok) {
         Alert.alert('Success', 'Payslip uploaded successfully');
-        setShowUploadModal(false);
+        setModalMode('list');
         setSelectedFile(null);
         fetchPayslips();
       } else {
@@ -194,6 +177,37 @@ const PayslipModal: React.FC<PayslipProps> = ({
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      Alert.alert('Error', 'Please select a payslip file');
+      return;
+    }
+
+    // Check if payslip already exists for this month/year
+    const exists = payslips.some(
+      p => p.month === selectedMonth && p.year === selectedYear
+    );
+
+    if (exists) {
+      Alert.alert(
+        'Payslip Exists',
+        'A payslip for this month already exists. Do you want to replace it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Replace', 
+            onPress: async () => {
+              await uploadPayslip();
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    await uploadPayslip();
   };
 
   const handleDownload = async (payslipUrl: string, month: number, year: number) => {
@@ -255,156 +269,156 @@ const PayslipModal: React.FC<PayslipProps> = ({
     );
   };
 
-  return (
-    <>
-      <Modal
-        visible={visible}
-        transparent
-        animationType="slide"
-        onRequestClose={onClose}
-      >
-        <View style={styles.assetsModalOverlay}>
-          <View style={styles.assetsModalContainer}>
-            <View style={styles.assetsModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Ionicons name="document-text-outline" size={24} color={WHATSAPP_COLORS.primary} />
-                <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
-                  Payslips
+  const renderUploadForm = () => (
+    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={{ padding: 16 }}>
+        <View style={{ marginBottom: 20 }}>
+          <Text style={styles.editLabel}>Month</Text>
+          <View style={styles.pickerContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.monthPicker}
+            >
+              {MONTHS.map((month, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.monthButton,
+                    selectedMonth === index + 1 && styles.monthButtonActive
+                  ]}
+                  onPress={() => setSelectedMonth(index + 1)}
+                >
+                  <Text style={[
+                    styles.monthButtonText,
+                    selectedMonth === index + 1 && styles.monthButtonTextActive
+                  ]}>
+                    {month.substring(0, 3)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <Text style={styles.editLabel}>Year</Text>
+          <View style={styles.yearPickerContainer}>
+            {[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => (
+              <TouchableOpacity
+                key={year}
+                style={[
+                  styles.yearButton,
+                  selectedYear === year && styles.yearButtonActive
+                ]}
+                onPress={() => setSelectedYear(year)}
+              >
+                <Text style={[
+                  styles.yearButtonText,
+                  selectedYear === year && styles.yearButtonTextActive
+                ]}>
+                  {year}
                 </Text>
-              </View>
-              
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.editLabel}>Payslip File (PDF)</Text>
+          <TouchableOpacity
+            style={styles.filePickerButton}
+            onPress={pickDocument}
+          >
+            <Ionicons name="document-attach-outline" size={24} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.filePickerText}>
+              {selectedFile ? (selectedFile.name || 'Selected file') : 'Select PDF file'}
+            </Text>
+          </TouchableOpacity>
+
+          {selectedFile && (
+            <View style={styles.selectedFileContainer}>
+              <Ionicons name="document-text" size={20} color={WHATSAPP_COLORS.primary} />
+              <Text style={styles.selectedFileName} numberOfLines={1}>
+                {selectedFile.name || selectedFile.fileName || 'payslip.pdf'}
+              </Text>
+              <TouchableOpacity onPress={() => setSelectedFile(null)}>
+                <Ionicons name="close-circle" size={20} color="#D32F2F" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </ScrollView>
+  );
+
+  const renderListContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+          <Text style={styles.loadingText}>Loading payslips...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {Object.keys(groupedPayslips).length > 0 ? (
+          <View style={{ padding: 16 }}>
+            {Object.keys(groupedPayslips)
+              .sort((a, b) => parseInt(b) - parseInt(a))
+              .map(renderYearSection)}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="document-text-outline" size={64} color={WHATSAPP_COLORS.textTertiary} />
+            <Text style={styles.emptyStateTitle}>No Payslips Found</Text>
+            <Text style={styles.emptyStateMessage}>
+              Upload payslips to get started
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.assetsModalOverlay}>
+        <View style={styles.assetsModalContainer}>
+          <View style={styles.assetsModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <Ionicons name="document-text-outline" size={24} color={WHATSAPP_COLORS.primary} />
+              <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
+                {modalMode === 'upload' ? 'Upload Payslip' : 'Payslips'}
+              </Text>
+            </View>
+            
+            {modalMode === 'list' ? (
               <TouchableOpacity
                 style={styles.uploadPayslipButton}
-                onPress={() => setShowUploadModal(true)}
+                onPress={() => setModalMode('upload')}
               >
                 <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
                 <Text style={styles.uploadPayslipButtonText}>Upload</Text>
               </TouchableOpacity>
+            ) : null}
 
-              <TouchableOpacity onPress={onClose} style={{ marginLeft: 12 }}>
-                <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
-                <Text style={styles.loadingText}>Loading payslips...</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {Object.keys(groupedPayslips).length > 0 ? (
-                  <View style={{ padding: 16 }}>
-                    {Object.keys(groupedPayslips)
-                      .sort((a, b) => parseInt(b) - parseInt(a))
-                      .map(renderYearSection)}
-                  </View>
-                ) : (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="document-text-outline" size={64} color={WHATSAPP_COLORS.textTertiary} />
-                    <Text style={styles.emptyStateTitle}>No Payslips Found</Text>
-                    <Text style={styles.emptyStateMessage}>
-                      Upload payslips to get started
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
-            )}
+            <TouchableOpacity onPress={onClose} style={{ marginLeft: 12 }}>
+              <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
+            </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
 
-      {/* Upload Modal */}
-      <Modal
-        visible={showUploadModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowUploadModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { maxWidth: 400 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Upload Payslip</Text>
-            </View>
+          {modalMode === 'list' ? renderListContent() : renderUploadForm()}
 
-            <View style={{ marginBottom: 20 }}>
-              <Text style={styles.editLabel}>Month</Text>
-              <View style={styles.pickerContainer}>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.monthPicker}
-                >
-                  {MONTHS.map((month, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.monthButton,
-                        selectedMonth === index + 1 && styles.monthButtonActive
-                      ]}
-                      onPress={() => setSelectedMonth(index + 1)}
-                    >
-                      <Text style={[
-                        styles.monthButtonText,
-                        selectedMonth === index + 1 && styles.monthButtonTextActive
-                      ]}>
-                        {month.substring(0, 3)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              <Text style={styles.editLabel}>Year</Text>
-              <View style={styles.yearPickerContainer}>
-                {[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => (
-                  <TouchableOpacity
-                    key={year}
-                    style={[
-                      styles.yearButton,
-                      selectedYear === year && styles.yearButtonActive
-                    ]}
-                    onPress={() => setSelectedYear(year)}
-                  >
-                    <Text style={[
-                      styles.yearButtonText,
-                      selectedYear === year && styles.yearButtonTextActive
-                    ]}>
-                      {year}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.editLabel}>Payslip File (PDF)</Text>
-              <TouchableOpacity
-                style={styles.filePickerButton}
-                onPress={pickDocument}
-              >
-                <Ionicons name="document-attach-outline" size={24} color={WHATSAPP_COLORS.primary} />
-                <Text style={styles.filePickerText}>
-                  {selectedFile ? (selectedFile.name || 'Selected file') : 'Select PDF file'}
-                </Text>
-              </TouchableOpacity>
-
-              {selectedFile && (
-                <View style={styles.selectedFileContainer}>
-                  <Ionicons name="document-text" size={20} color={WHATSAPP_COLORS.primary} />
-                  <Text style={styles.selectedFileName} numberOfLines={1}>
-                    {selectedFile.name || selectedFile.fileName || 'payslip.pdf'}
-                  </Text>
-                  <TouchableOpacity onPress={() => setSelectedFile(null)}>
-                    <Ionicons name="close-circle" size={20} color="#D32F2F" />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.modalButtons}>
+          {modalMode === 'upload' && (
+            <View style={[styles.modalButtons, { marginBottom: 20, marginRight:20, marginLeft:20 }]}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
-                  setShowUploadModal(false);
+                  setModalMode('list');
                   setSelectedFile(null);
                 }}
                 activeOpacity={0.7}
@@ -429,10 +443,10 @@ const PayslipModal: React.FC<PayslipProps> = ({
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+          )}
         </View>
-      </Modal>
-    </>
+      </View>
+    </Modal>
   );
 };
 

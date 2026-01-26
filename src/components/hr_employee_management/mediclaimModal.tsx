@@ -59,7 +59,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [mediclaimData, setMediclaimData] = useState<MediclaimData | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'view' | 'create' | 'edit'>('view');
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -79,8 +79,9 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
   }, [visible]);
 
   useEffect(() => {
-    // Reset editing state when modal closes
+    // Reset state when modal closes
     if (!visible) {
+      setModalMode('view');
       setIsEditing(false);
     }
   }, [visible]);
@@ -151,7 +152,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           'Mediclaim created successfully! Employee will be notified to complete their details.',
           [{
             text: 'OK', onPress: () => {
-              setShowCreateModal(false);
+              setModalMode('view');
               setFormData({
                 policy_number: '',
                 insurance_provider_name: '',
@@ -204,6 +205,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       if (response.ok) {
         Alert.alert('Success', 'Mediclaim updated successfully');
         setIsEditing(false);
+        setModalMode('view');
         fetchMediclaimData();
         onRefresh?.();
       } else {
@@ -224,19 +226,17 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
     }
 
     try {
-      // Open document picker for signature
       const result = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
-        return; // User cancelled
+        return;
       }
 
       const signatureFile = result.assets[0];
 
-      // Confirm before signing
       Alert.alert(
         'Confirm Signature',
         'Once signed, this mediclaim cannot be edited. Continue?',
@@ -312,7 +312,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    // Reset form data to original values
     if (mediclaimData) {
       setFormData({
         policy_number: mediclaimData.policy_number || '',
@@ -357,7 +356,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       </Text>
       <TouchableOpacity
         style={[styles.uploadPayslipButton, { marginTop: 20 }]}
-        onPress={() => setShowCreateModal(true)}
+        onPress={() => setModalMode('create')}
       >
         <Ionicons name="add-circle-outline" size={18} color="#fff" />
         <Text style={styles.uploadPayslipButtonText}>Create Mediclaim</Text>
@@ -686,71 +685,180 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
         )}
 
         {/* Action Buttons */}
-        <View style={styles.actionContainer}>
-          <TouchableOpacity
-            onPress={handleCancelEdit}
-            style={[styles.actionButtonLarge, styles.cancelButton]}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+        {isEditing ? (
+          <View style={styles.actionContainer}>
+            <TouchableOpacity
+              onPress={handleCancelEdit}
+              style={[styles.actionButtonLarge, styles.cancelButton]}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={isEditing ? handleUpdateMediclaim : handleSignMediclaim}
-            style={[
-              styles.actionButtonLarge,
-              styles.saveButton,
-              (actionLoading || (isEditing ? false : !canSign)) && styles.disabledButton
-            ]}
-            disabled={actionLoading || (isEditing ? false : !canSign)}
-            activeOpacity={0.7}
-          >
-            {actionLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <MaterialIcons
-                  name={isEditing ? "save" : "verified-user"}
-                  size={20}
-                  color="#fff"
-                />
-                <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>
-                  {isEditing ? 'Save Changes' : 'Sign & Stamp'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              onPress={handleUpdateMediclaim}
+              style={[
+                styles.actionButtonLarge,
+                styles.saveButton,
+                actionLoading && styles.disabledButton
+              ]}
+              disabled={actionLoading}
+              activeOpacity={0.7}
+            >
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <MaterialIcons name="save" size={20} color="#fff" />
+                  <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>
+                    Save Changes
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : canSign && (
+          <View style={styles.actionContainer}>
+            <TouchableOpacity
+              onPress={handleSignMediclaim}
+              style={[
+                styles.actionButtonLarge,
+                styles.saveButton,
+                actionLoading && styles.disabledButton
+              ]}
+              disabled={actionLoading}
+              activeOpacity={0.7}
+            >
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <MaterialIcons name="verified-user" size={20} color="#fff" />
+                  <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>
+                    Sign & Stamp
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
     );
   };
 
-  return (
-    <>
-      {/* Main Modal */}
-      <Modal
-        visible={visible}
-        transparent
-        animationType="slide"
-        onRequestClose={onClose}
-      >
-        <View style={styles.assetsModalOverlay}>
-          <View style={styles.assetsModalContainer}>
-            <View style={styles.assetsModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <MaterialIcons name="health-and-safety" size={24} color={WHATSAPP_COLORS.primary} />
-                <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
-                  Mediclaim Details
-                </Text>
-              </View>
-              <TouchableOpacity onPress={onClose} style={{ marginLeft: 12 }}>
-                <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
+  const renderCreateForm = () => (
+    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Info Banner */}
+      <View style={[styles.statusBanner, { backgroundColor: '#4ECDC4', margin: 16 }]}>
+        <View style={styles.statusIcon}>
+          <Ionicons name="information-circle" size={24} color="white" />
+        </View>
+        <View style={styles.statusContent}>
+          <Text style={styles.statusTitle}>New Policy</Text>
+          <Text style={styles.statusSubtitle}>
+            Employee will be notified to complete details
+          </Text>
+        </View>
+      </View>
 
-            {loading && !mediclaimData ? (
+      {/* Form Section */}
+      <View style={[styles.sectionAlt, { marginTop: 0 }]}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="policy" size={20} color={WHATSAPP_COLORS.primary} style={{ marginRight: 8, marginTop: 2 }} />
+          <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Policy Information</Text>
+        </View>
+
+        <View style={styles.detailCard}>
+          <Text style={styles.editLabel}>Policy Number *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={formData.policy_number}
+            onChangeText={(text) => setFormData({ ...formData, policy_number: text })}
+            placeholder="POL-123456"
+            placeholderTextColor="#888"
+          />
+
+          <Text style={styles.editLabel}>Insurance Provider *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={formData.insurance_provider_name}
+            onChangeText={(text) => setFormData({ ...formData, insurance_provider_name: text })}
+            placeholder="Insurance Company Name"
+            placeholderTextColor="#888"
+          />
+
+          <Text style={styles.editLabel}>Sum Insured (₹) *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={formData.sum_insured_opted}
+            onChangeText={(text) => setFormData({ ...formData, sum_insured_opted: text })}
+            placeholder="500000"
+            keyboardType="numeric"
+            placeholderTextColor="#888"
+          />
+
+          <Text style={styles.editLabel}>Base Cover (₹) *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={formData.base_cover}
+            onChangeText={(text) => setFormData({ ...formData, base_cover: text })}
+            placeholder="300000"
+            keyboardType="numeric"
+            placeholderTextColor="#888"
+          />
+
+          <Text style={styles.editLabel}>Optional Top-up Cover (₹) *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={formData.optional_top_up_cover}
+            onChangeText={(text) => setFormData({ ...formData, optional_top_up_cover: text })}
+            placeholder="200000"
+            keyboardType="numeric"
+            placeholderTextColor="#888"
+          />
+        </View>
+      </View>
+
+      <View style={styles.bottomSpacer} />
+    </ScrollView>
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.assetsModalOverlay}>
+        <View style={styles.assetsModalContainer}>
+          <View style={styles.assetsModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <MaterialIcons name="health-and-safety" size={24} color={WHATSAPP_COLORS.primary} />
+              <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
+                {modalMode === 'create' ? 'Create Mediclaim Policy' : 'Mediclaim Details'}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => {
+                if (modalMode === 'create') {
+                  setModalMode('view');
+                } else if (isEditing) {
+                  setIsEditing(false);
+                } else {
+                  onClose();
+                }
+              }} 
+              style={{ marginLeft: 12 }}
+            >
+              <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {modalMode === 'view' ? (
+            loading && !mediclaimData ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
                 <Text style={styles.loadingText}>Loading mediclaim details...</Text>
@@ -759,125 +867,17 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
               renderMediclaimDetails()
             ) : (
               renderEmptyState()
-            )}
-          </View>
-        </View>
-      </Modal>
+            )
+          ) : (
+            renderCreateForm()
+          )}
 
-      {/* Create Mediclaim Modal */}
-      <Modal
-        visible={showCreateModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCreateModal(false)}
-      >
-        <View style={styles.assetsModalOverlay}>
-          <View style={styles.assetsModalContainer}>
-            {/* Modal Header */}
-            <View style={styles.assetsModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <MaterialIcons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
-                <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
-                  Create Mediclaim Policy
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowCreateModal(false);
-                  setFormData({
-                    policy_number: '',
-                    insurance_provider_name: '',
-                    sum_insured_opted: '',
-                    base_cover: '',
-                    optional_top_up_cover: '',
-                  });
-                }}
-                style={{ marginLeft: 12 }}
-              >
-                <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Modal Content */}
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-              {/* Info Banner */}
-              <View style={[styles.statusBanner, { backgroundColor: '#4ECDC4', margin: 16 }]}>
-                <View style={styles.statusIcon}>
-                  <Ionicons name="information-circle" size={24} color="white" />
-                </View>
-                <View style={styles.statusContent}>
-                  <Text style={styles.statusTitle}>New Policy</Text>
-                  <Text style={styles.statusSubtitle}>
-                    Employee will be notified to complete details
-                  </Text>
-                </View>
-              </View>{/* Form Section */}
-              <View style={[styles.sectionAlt, { marginTop: 0 }]}>
-                <View style={styles.sectionHeader}>
-                  <MaterialIcons name="policy" size={20} color={WHATSAPP_COLORS.primary} style={{ marginRight: 8, marginTop: 2 }} />
-                  <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Policy Information</Text>
-                </View>
-
-                <View style={styles.detailCard}>
-                  <Text style={styles.editLabel}>Policy Number *</Text>
-                  <TextInput
-                    style={styles.editInput}
-                    value={formData.policy_number}
-                    onChangeText={(text) => setFormData({ ...formData, policy_number: text })}
-                    placeholder="POL-123456"
-                    placeholderTextColor="#888"
-                  />
-
-                  <Text style={styles.editLabel}>Insurance Provider *</Text>
-                  <TextInput
-                    style={styles.editInput}
-                    value={formData.insurance_provider_name}
-                    onChangeText={(text) => setFormData({ ...formData, insurance_provider_name: text })}
-                    placeholder="Insurance Company Name"
-                    placeholderTextColor="#888"
-                  />
-
-                  <Text style={styles.editLabel}>Sum Insured (₹) *</Text>
-                  <TextInput
-                    style={styles.editInput}
-                    value={formData.sum_insured_opted}
-                    onChangeText={(text) => setFormData({ ...formData, sum_insured_opted: text })}
-                    placeholder="500000"
-                    keyboardType="numeric"
-                    placeholderTextColor="#888"
-                  />
-
-                  <Text style={styles.editLabel}>Base Cover (₹) *</Text>
-                  <TextInput
-                    style={styles.editInput}
-                    value={formData.base_cover}
-                    onChangeText={(text) => setFormData({ ...formData, base_cover: text })}
-                    placeholder="300000"
-                    keyboardType="numeric"
-                    placeholderTextColor="#888"
-                  />
-
-                  <Text style={styles.editLabel}>Optional Top-up Cover (₹) *</Text>
-                  <TextInput
-                    style={styles.editInput}
-                    value={formData.optional_top_up_cover}
-                    onChangeText={(text) => setFormData({ ...formData, optional_top_up_cover: text })}
-                    placeholder="200000"
-                    keyboardType="numeric"
-                    placeholderTextColor="#888"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.bottomSpacer} />
-            </ScrollView>
-
-            {/* Action Buttons */}
+          {modalMode === 'create' && (
             <View style={[styles.actionContainer, { marginBottom: 16 }]}>
               <TouchableOpacity
                 style={[styles.actionButtonLarge, styles.cancelButton]}
                 onPress={() => {
-                  setShowCreateModal(false);
+                  setModalMode('view');
                   setFormData({
                     policy_number: '',
                     insurance_provider_name: '',
@@ -911,9 +911,11 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+          )}
         </View>
-      </Modal>
-    </>);
+      </View>
+    </Modal>
+  );
 };
+
 export default MediclaimModal;
