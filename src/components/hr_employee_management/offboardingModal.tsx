@@ -64,31 +64,7 @@ const OffboardingModal: React.FC<OffboardingModalProps> = ({
   };
 
   const completeOffboarding = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/offboardEmployee`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          employee_id: employee.employee_id,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Employee offboarded successfully');
-        onSuccess();
-        onClose();
-      } else {
-        const errorData = await response.json();
-        Alert.alert('Error', errorData.message);
-      }
-    } catch (error) {
-      console.error('Error offboarding:', error);
-      Alert.alert('Error', 'Network error occurred');
-    } finally {
-      setLoading(false);
-    }
+    onClose();
   };
 
   const renderStep1 = () => (
@@ -202,15 +178,14 @@ const OffboardingModal: React.FC<OffboardingModalProps> = ({
         </TouchableOpacity>
         
         <TouchableOpacity
-          style={[styles.modalButton, { backgroundColor: validationResults?.success ? '#D32F2F' : '#9E9E9E' }]}
-          onPress={completeOffboarding}
-          disabled={!validationResults?.success || loading}
+          style={[styles.modalButton, { backgroundColor: validationResults?.success ? '#D32F2F' : '#D32F2F' }]}
+          onPress={onClose}
           activeOpacity={0.7}
         >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.submitButtonText}>Complete Offboarding</Text>
+            <Text style={[styles.submitButtonText]}>Complete </Text>
           )}
         </TouchableOpacity>
       </View>

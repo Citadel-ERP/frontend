@@ -1,5 +1,5 @@
 // hr_employee_management/editEmployee.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -100,11 +100,12 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
   const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(null);
   const [loadingOffices, setLoadingOffices] = useState(false);
 
-  // Dates
+  // Dates - iOS specific handling
   const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [joiningDate, setJoiningDate] = useState<Date | null>(null);
   const [showBirthDatePicker, setShowBirthDatePicker] = useState(false);
   const [showJoiningDatePicker, setShowJoiningDatePicker] = useState(false);
+  const [activePickerType, setActivePickerType] = useState<'birth' | 'joining' | 'loginTime' | 'logoutTime' | null>(null);
 
   // Account Reset
   const [resetPassword, setResetPassword] = useState('');
@@ -113,12 +114,28 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
 
   const [loading, setLoading] = useState(false);
 
+  // Refs for picker timeouts on iOS
+  const birthDatePickerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const joiningDatePickerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loginTimePickerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const logoutTimePickerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (visible) {
       initializeData();
       fetchOffices();
     }
   }, [visible, employee, employeeDetails]);
+
+  // Cleanup timeout refs on unmount
+  useEffect(() => {
+    return () => {
+      if (birthDatePickerTimeoutRef.current) clearTimeout(birthDatePickerTimeoutRef.current);
+      if (joiningDatePickerTimeoutRef.current) clearTimeout(joiningDatePickerTimeoutRef.current);
+      if (loginTimePickerTimeoutRef.current) clearTimeout(loginTimePickerTimeoutRef.current);
+      if (logoutTimePickerTimeoutRef.current) clearTimeout(logoutTimePickerTimeoutRef.current);
+    };
+  }, []);
 
   const parseTimeString = (timeString: string): Date => {
     const date = new Date();
@@ -189,6 +206,9 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     setResetPassword('');
     setConfirmPassword('');
     setShowResetSection(false);
+
+    // Reset active picker
+    setActivePickerType(null);
   };
 
   const fetchOffices = async () => {
@@ -257,12 +277,99 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     return `${year}-${month}-${day}`;
   };
 
+  const handleDateChange = (
+    event: any,
+    selectedDate: Date | undefined,
+    pickerType: 'birth' | 'joining' | 'loginTime' | 'logoutTime'
+  ) => {
+    if (Platform.OS === 'android') {
+      // Android dismisses immediately
+      if (pickerType === 'birth') {
+        setShowBirthDatePicker(false);
+      } else if (pickerType === 'joining') {
+        setShowJoiningDatePicker(false);
+      } else if (pickerType === 'loginTime') {
+        setShowLoginTimePicker(false);
+      } else if (pickerType === 'logoutTime') {
+        setShowLogoutTimePicker(false);
+      }
+    }
+
+    if (selectedDate) {
+      if (pickerType === 'birth') {
+        setBirthDate(selectedDate);
+      } else if (pickerType === 'joining') {
+        setJoiningDate(selectedDate);
+      } else if (pickerType === 'loginTime') {
+        setLoginTime(selectedDate);
+      } else if (pickerType === 'logoutTime') {
+        setLogoutTime(selectedDate);
+      }
+    }
+  };
+
+  const closeBirthDatePicker = () => {
+    if (birthDatePickerTimeoutRef.current) {
+      clearTimeout(birthDatePickerTimeoutRef.current);
+    }
+    
+    birthDatePickerTimeoutRef.current = setTimeout(() => {
+      setShowBirthDatePicker(false);
+      setActivePickerType(null);
+      birthDatePickerTimeoutRef.current = null;
+    }, 300);
+  };
+
+  const closeJoiningDatePicker = () => {
+    if (joiningDatePickerTimeoutRef.current) {
+      clearTimeout(joiningDatePickerTimeoutRef.current);
+    }
+    
+    joiningDatePickerTimeoutRef.current = setTimeout(() => {
+      setShowJoiningDatePicker(false);
+      setActivePickerType(null);
+      joiningDatePickerTimeoutRef.current = null;
+    }, 300);
+  };
+
+  const closeLoginTimePicker = () => {
+    if (loginTimePickerTimeoutRef.current) {
+      clearTimeout(loginTimePickerTimeoutRef.current);
+    }
+    
+    loginTimePickerTimeoutRef.current = setTimeout(() => {
+      setShowLoginTimePicker(false);
+      setActivePickerType(null);
+      loginTimePickerTimeoutRef.current = null;
+    }, 300);
+  };
+
+  const closeLogoutTimePicker = () => {
+    if (logoutTimePickerTimeoutRef.current) {
+      clearTimeout(logoutTimePickerTimeoutRef.current);
+    }
+    
+    logoutTimePickerTimeoutRef.current = setTimeout(() => {
+      setShowLogoutTimePicker(false);
+      setActivePickerType(null);
+      logoutTimePickerTimeoutRef.current = null;
+    }, 300);
+  };
+
   const handleSave = async () => {
     if (!validateInputs()) {
       return;
     }
 
     setLoading(true);
+    
+    // Close all pickers before saving
+    setShowBirthDatePicker(false);
+    setShowJoiningDatePicker(false);
+    setShowLoginTimePicker(false);
+    setShowLogoutTimePicker(false);
+    setActivePickerType(null);
+
     try {
       const payload: any = {
         token,
@@ -397,11 +504,11 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                 {/* Office Assignment Section */}
                 {renderSection('Office Assignment', 'business-outline', (
                   <View>
-                    <Text style={styles.editLabel}>Assigned Office</Text>
+                    <Text style={[styles.editLabel]}>Assigned Office</Text>
                     {loadingOffices ? (
                       <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
                     ) : (
-                      <View style={styles.pickerContainer}>
+                      <View style={[styles.pickerContainer]}>
                         <Picker
                           selectedValue={selectedOfficeId}
                           onValueChange={(itemValue) => setSelectedOfficeId(itemValue)}
@@ -467,43 +574,67 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                     <Text style={styles.editLabel}>Login Time</Text>
                     <TouchableOpacity
                       style={styles.datePickerButton}
-                      onPress={() => setShowLoginTimePicker(true)}
+                      onPress={() => {
+                        setShowLoginTimePicker(true);
+                        setActivePickerType('loginTime');
+                      }}
                     >
                       <Text style={styles.datePickerText}>
                         {formatTimeForDisplay(loginTime)}
                       </Text>
                     </TouchableOpacity>
-                    {showLoginTimePicker && (
-                      <DateTimePicker
-                        value={loginTime}
-                        mode="time"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(event, time) => {
-                          setShowLoginTimePicker(Platform.OS === 'ios');
-                          if (time) setLoginTime(time);
-                        }}
-                      />
+                    {showLoginTimePicker && activePickerType === 'loginTime' && (
+                      <View>
+                        <DateTimePicker
+                          value={loginTime}
+                          mode="time"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={(event, time) => {
+                            handleDateChange(event, time, 'loginTime');
+                          }}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity
+                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                            onPress={closeLoginTimePicker}
+                          >
+                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
 
                     <Text style={styles.editLabel}>Logout Time</Text>
                     <TouchableOpacity
                       style={styles.datePickerButton}
-                      onPress={() => setShowLogoutTimePicker(true)}
+                      onPress={() => {
+                        setShowLogoutTimePicker(true);
+                        setActivePickerType('logoutTime');
+                      }}
                     >
                       <Text style={styles.datePickerText}>
                         {formatTimeForDisplay(logoutTime)}
                       </Text>
                     </TouchableOpacity>
-                    {showLogoutTimePicker && (
-                      <DateTimePicker
-                        value={logoutTime}
-                        mode="time"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(event, time) => {
-                          setShowLogoutTimePicker(Platform.OS === 'ios');
-                          if (time) setLogoutTime(time);
-                        }}
-                      />
+                    {showLogoutTimePicker && activePickerType === 'logoutTime' && (
+                      <View>
+                        <DateTimePicker
+                          value={logoutTime}
+                          mode="time"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={(event, time) => {
+                            handleDateChange(event, time, 'logoutTime');
+                          }}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity
+                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                            onPress={closeLogoutTimePicker}
+                          >
+                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
                 ))}
@@ -514,45 +645,69 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                     <Text style={styles.editLabel}>Birth Date</Text>
                     <TouchableOpacity
                       style={styles.datePickerButton}
-                      onPress={() => setShowBirthDatePicker(true)}
+                      onPress={() => {
+                        setShowBirthDatePicker(true);
+                        setActivePickerType('birth');
+                      }}
                     >
                       <Text style={styles.datePickerText}>
                         {formatDateForDisplay(birthDate)}
                       </Text>
                     </TouchableOpacity>
-                    {showBirthDatePicker && (
-                      <DateTimePicker
-                        value={birthDate || new Date()}
-                        mode="date"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(event, date) => {
-                          setShowBirthDatePicker(Platform.OS === 'ios');
-                          if (date) setBirthDate(date);
-                        }}
-                        maximumDate={new Date()}
-                      />
+                    {showBirthDatePicker && activePickerType === 'birth' && (
+                      <View>
+                        <DateTimePicker
+                          value={birthDate || new Date()}
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={(event, date) => {
+                            handleDateChange(event, date, 'birth');
+                          }}
+                          maximumDate={new Date()}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity
+                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                            onPress={closeBirthDatePicker}
+                          >
+                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
 
                     <Text style={styles.editLabel}>Joining Date</Text>
                     <TouchableOpacity
                       style={styles.datePickerButton}
-                      onPress={() => setShowJoiningDatePicker(true)}
+                      onPress={() => {
+                        setShowJoiningDatePicker(true);
+                        setActivePickerType('joining');
+                      }}
                     >
                       <Text style={styles.datePickerText}>
                         {formatDateForDisplay(joiningDate)}
                       </Text>
                     </TouchableOpacity>
-                    {showJoiningDatePicker && (
-                      <DateTimePicker
-                        value={joiningDate || new Date()}
-                        mode="date"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(event, date) => {
-                          setShowJoiningDatePicker(Platform.OS === 'ios');
-                          if (date) setJoiningDate(date);
-                        }}
-                        maximumDate={new Date()}
-                      />
+                    {showJoiningDatePicker && activePickerType === 'joining' && (
+                      <View>
+                        <DateTimePicker
+                          value={joiningDate || new Date()}
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={(event, date) => {
+                            handleDateChange(event, date, 'joining');
+                          }}
+                          maximumDate={new Date()}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity
+                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                            onPress={closeJoiningDatePicker}
+                          >
+                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
                 ))}
