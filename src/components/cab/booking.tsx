@@ -370,7 +370,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
                                     styles.headerImage,
                                     isLargeScreen && styles.headerImageDesktop
                                 ]}
-                                resizeMode="cover"
+                                resizeMode="contain"
                             />
                             <View style={styles.headerOverlay} />
 

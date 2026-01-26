@@ -302,6 +302,7 @@ const AvailableCabsScreen: React.FC<AvailableCabsScreenProps> = ({
                                                         styles.cabImageDesktop
                                                     )
                                                 ]}
+                                                resizeMode="contain"
                                             />
                                             <View style={styles.cabInfo}>
                                                 <Text style={[
