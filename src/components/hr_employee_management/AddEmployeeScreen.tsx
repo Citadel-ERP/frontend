@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,8 +26,6 @@ interface Office {
   address: string;
   city: string;
   state: string;
-  country?: string;
-  zip_code?: string;
 }
 
 interface Tag {
@@ -80,25 +77,6 @@ interface StepValidationResult {
   errorMessage?: string;
 }
 
-// ==================== HELPER COMPONENTS ====================
-const ReviewSection: React.FC<{
-  label: string;
-  value?: string | number;
-  customContent?: React.ReactNode;
-}> = ({ label, value, customContent }) => (
-  <View style={styles.reviewSection}>
-    <Text style={styles.reviewLabel}>{label}</Text>
-    {customContent ? customContent : (
-      <Text style={styles.reviewValue}>
-        {value !== undefined && value !== null 
-          ? (typeof value === 'object' ? JSON.stringify(value) : String(value))
-          : 'Not specified'
-        }
-      </Text>
-    )}
-  </View>
-);
-
 // ==================== COMPONENT ====================
 const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   token,
@@ -114,6 +92,8 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedReportingTags, setSelectedReportingTags] = useState<string[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+
+  const [showOfficePicker, setShowOfficePicker] = useState<boolean>(false);
   const [showLoginTimePicker, setShowLoginTimePicker] = useState<boolean>(false);
   const [showLogoutTimePicker, setShowLogoutTimePicker] = useState<boolean>(false);
 
@@ -155,6 +135,11 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   });
 
   // ==================== MEMOIZED VALUES ====================
+  const reportingTags = useMemo(() =>
+    tags.filter(tag => selectedTags.includes(tag.tag_id)),
+    [tags, selectedTags]
+  );
+
   const selectedOffice = useMemo(() =>
     offices.find(office => office.id === addressInfo.office_id),
     [offices, addressInfo.office_id]
@@ -178,6 +163,10 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  useEffect(() => {
+    setShowOfficePicker(false);
+  }, [currentStep]);
 
   // ==================== DATA FETCHING ====================
   const fetchInitialData = async () => {
@@ -285,10 +274,11 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     );
   }, []);
 
-  const handleReportingTagSelection = useCallback((tagId: string) => {
-    // Single selection only - replace the array with just this tag
-    setSelectedReportingTags(prev => 
-      prev.includes(tagId) ? [] : [tagId]
+  const toggleReportingTagSelection = useCallback((tagId: string) => {
+    setSelectedReportingTags(prev =>
+      prev.includes(tagId)
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
     );
   }, []);
 
@@ -320,13 +310,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
   // ==================== VALIDATION ====================
   const validateStep1 = (): StepValidationResult => {
-    const requiredFields: (keyof BasicInfoData)[] = [
-      'employee_id', 
-      'first_name', 
-      'designation', 
-      'login_time', 
-      'logout_time'
-    ];
+    const requiredFields: (keyof BasicInfoData)[] = ['employee_id', 'first_name'];
     const missingFields = requiredFields.filter(field => !basicInfo[field]);
 
     if (missingFields.length > 0) {
@@ -399,13 +383,15 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     if (selectedReportingTags.length === 0) {
       return {
         isValid: false,
-        errorMessage: 'Please select a reporting tag',
+        errorMessage: 'Please select at least one reporting tag',
       };
     }
     return { isValid: true };
   };
 
   const handleNext = () => {
+    setShowOfficePicker(false);
+
     let validationResult: StepValidationResult = { isValid: true };
 
     switch (currentStep) {
@@ -432,6 +418,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   };
 
   const handlePrevious = () => {
+    setShowOfficePicker(false);
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
     } else {
@@ -594,240 +581,271 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
   // ==================== RENDER COMPONENTS ====================
   const renderStepIndicator = () => (
-    <View style={styles.stepProgress}>
-      {/* Circles Row */}
-      <View style={styles.stepIndicatorContainer}>
-        {[1, 2, 3, 4, 5].map((step, index) => (
-          <React.Fragment key={step}>
-            <View style={[
-              styles.stepIndicator,
-              currentStep >= step ? styles.stepIndicatorActive : styles.stepIndicatorInactive,
+  <View style={styles.stepProgress}>
+    {/* Circles Row */}
+    <View style={styles.stepIndicatorContainer}>
+      {[1, 2, 3, 4, 5].map((step, index) => (
+        <React.Fragment key={step}>
+          <View style={[
+            styles.stepIndicator,
+            currentStep >= step ? styles.stepIndicatorActive : styles.stepIndicatorInactive,
+          ]}>
+            <Text style={[
+              styles.stepIndicatorText,
+              currentStep >= step ? styles.stepIndicatorTextActive : styles.stepIndicatorTextInactive,
             ]}>
-              <Text style={[
-                styles.stepIndicatorText,
-                currentStep >= step ? styles.stepIndicatorTextActive : styles.stepIndicatorTextInactive,
-              ]}>
-                {step}
-              </Text>
-            </View>
-            {step < 5 && (
-              <View style={[
-                styles.stepConnector,
-                currentStep > step ? styles.stepConnectorActive : styles.stepConnectorInactive,
-              ]} />
-            )}
-          </React.Fragment>
-        ))}
-      </View>
-      
-      {/* Labels Row */}
-      <View style={styles.stepLabelsContainer}>
-        <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}>
-          Basic Info
-        </Text>
-        <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
-          Address
-        </Text>
-        <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
-          Tags
-        </Text>
-        <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
-          Reporting
-        </Text>
-        <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive]}>
-          Documents
-        </Text>
-      </View>
+              {step}
+            </Text>
+          </View>
+          {step < 5 && (
+            <View style={[
+              styles.stepConnector,
+              currentStep > step ? styles.stepConnectorActive : styles.stepConnectorInactive,
+            ]} />
+          )}
+        </React.Fragment>
+      ))}
+    </View>
+    
+    {/* Labels Row */}
+    <View style={styles.stepLabelsContainer}>
+      <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}>
+        Basic Info
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
+        Address
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
+        Tags
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
+        Reporting
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive]}>
+        Documents
+      </Text>
+    </View>
+  </View>
+);
+
+  const renderStepLabels = () => (
+    <View style={styles.stepLabelsContainer}>
+      <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive, { marginLeft: -15 }]}>
+        Basic Info
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
+        Address
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
+        Tags
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
+        Reporting
+      </Text>
+      <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive, { marginRight: 25 }]}>
+        Documents
+      </Text>
     </View>
   );
 
   // ==================== STEP RENDERERS ====================
   const renderStep1 = () => (
-    <View style={{ flex: 1 }}>
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Basic Information</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={100}
+    >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 0 : 0 }}
+        style={{ flex: 1 }}
+      >
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Basic Information</Text>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Employee ID *</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.employee_id}
-            onChangeText={value => handleBasicInfoChange('employee_id', value)}
-            placeholder="Enter employee ID"
-            autoCapitalize="characters"
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>First Name *</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Employee ID *</Text>
             <TextInput
               style={styles.input}
-              value={basicInfo.first_name}
-              onChangeText={value => handleBasicInfoChange('first_name', value)}
-              placeholder="First name"
+              value={basicInfo.employee_id}
+              onChangeText={value => handleBasicInfoChange('employee_id', value)}
+              placeholder="Enter employee ID"
+              autoCapitalize="characters"
             />
           </View>
 
-          <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Last Name</Text>
-            <TextInput
-              style={styles.input}
-              value={basicInfo.last_name}
-              onChangeText={value => handleBasicInfoChange('last_name', value)}
-              placeholder="Last name"
-            />
-          </View>
-        </View>
-
-        {/* Designation Field - NOW MANDATORY */}
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Designation *</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.designation}
-            onChangeText={value => handleBasicInfoChange('designation', value)}
-            placeholder="e.g., Software Engineer, HR Manager"
-          />
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.email}
-            onChangeText={value => handleBasicInfoChange('email', value)}
-            placeholder="employee@company.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <Text style={styles.helperText}>Either email or phone is required</Text>
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.phone_number}
-            onChangeText={value => handleBasicInfoChange('phone_number', value)}
-            placeholder="+91 9876543210"
-            keyboardType="phone-pad"
-          />
-          <Text style={styles.helperText}>Either email or phone is required</Text>
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Default Password</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.employee_password}
-            onChangeText={value => handleBasicInfoChange('employee_password', value)}
-            placeholder="Enter password"
-            secureTextEntry
-          />
-          <Text style={styles.helperText}>Default: Citadel2025@</Text>
-        </View>
-
-        {/* Login/Logout Time Fields - NOW MANDATORY */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Work Timing *</Text>
           <View style={styles.row}>
             <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Login Time *</Text>
-              <TouchableOpacity
-                style={[styles.input, { justifyContent: 'center' }]}
-                onPress={() => setShowLoginTimePicker(true)}
-              >
-                <Text style={basicInfo.login_time ? {} : { color: '#999' }}>
-                  {basicInfo.login_time || 'Select Time'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Logout Time *</Text>
-              <TouchableOpacity
-                style={[styles.input, { justifyContent: 'center' }]}
-                onPress={() => setShowLogoutTimePicker(true)}
-              >
-                <Text style={basicInfo.logout_time ? {} : { color: '#999' }}>
-                  {basicInfo.logout_time || 'Select Time'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Time Pickers */}
-        {showLoginTimePicker && (
-          <DateTimePicker
-            value={basicInfo.login_time ? new Date(`2000-01-01T${basicInfo.login_time}`) : new Date()}
-            mode="time"
-            display="spinner"
-            onChange={(event, selectedDate) => {
-              if (selectedDate) {
-                handleTimeSelect('login_time', selectedDate);
-              }
-            }}
-          />
-        )}
-
-        {showLogoutTimePicker && (
-          <DateTimePicker
-            value={basicInfo.logout_time ? new Date(`2000-01-01T${basicInfo.logout_time}`) : new Date()}
-            mode="time"
-            display="spinner"
-            onChange={(event, selectedDate) => {
-              if (selectedDate) {
-                handleTimeSelect('logout_time', selectedDate);
-              }
-            }}
-          />
-        )}
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: -30 }]}>Leave Allocation</Text>
-          <View style={styles.row}>
-            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Earned Leaves</Text>
+              <Text style={styles.label}>First Name *</Text>
               <TextInput
                 style={styles.input}
-                value={basicInfo.earned_leaves}
-                onChangeText={value => handleBasicInfoChange('earned_leaves', value)}
-                keyboardType="numeric"
-                placeholder="0"
-              />
-            </View>
-
-            <View style={[styles.formGroup, { flex: 1, marginHorizontal: 8 }]}>
-              <Text style={styles.label}>Sick Leaves</Text>
-              <TextInput
-                style={[styles.input, { marginTop: 16 }]}
-                value={basicInfo.sick_leaves}
-                onChangeText={value => handleBasicInfoChange('sick_leaves', value)}
-                keyboardType="numeric"
-                placeholder="0"
+                value={basicInfo.first_name}
+                onChangeText={value => handleBasicInfoChange('first_name', value)}
+                placeholder="First name"
               />
             </View>
 
             <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Casual Leaves</Text>
+              <Text style={styles.label}>Last Name</Text>
               <TextInput
                 style={styles.input}
-                value={basicInfo.casual_leaves}
-                onChangeText={value => handleBasicInfoChange('casual_leaves', value)}
-                keyboardType="numeric"
-                placeholder="0"
+                value={basicInfo.last_name}
+                onChangeText={value => handleBasicInfoChange('last_name', value)}
+                placeholder="Last name"
               />
             </View>
           </View>
+
+          {/* ADDED: Designation Field */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Designation</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.designation}
+              onChangeText={value => handleBasicInfoChange('designation', value)}
+              placeholder="e.g., Software Engineer, HR Manager"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.email}
+              onChangeText={value => handleBasicInfoChange('email', value)}
+              placeholder="employee@company.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Text style={styles.helperText}>Either email or phone is required</Text>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.phone_number}
+              onChangeText={value => handleBasicInfoChange('phone_number', value)}
+              placeholder="+91 9876543210"
+              keyboardType="phone-pad"
+            />
+            <Text style={styles.helperText}>Either email or phone is required</Text>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Default Password</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.employee_password}
+              onChangeText={value => handleBasicInfoChange('employee_password', value)}
+              placeholder="Enter password"
+              secureTextEntry
+            />
+            <Text style={styles.helperText}>Default: Citadel2025@</Text>
+          </View>
+
+          {/* ADDED: Login/Logout Time Fields */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Work Timing (Optional)</Text>
+            <View style={styles.row}>
+              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.label}>Login Time</Text>
+                <TouchableOpacity
+                  style={[styles.input, { justifyContent: 'center' }]}
+                  onPress={() => setShowLoginTimePicker(true)}
+                >
+                  <Text style={basicInfo.login_time ? {} : { color: '#999' }}>
+                    {basicInfo.login_time || 'Select Time'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.label}>Logout Time</Text>
+                <TouchableOpacity
+                  style={[styles.input, { justifyContent: 'center' }]}
+                  onPress={() => setShowLogoutTimePicker(true)}
+                >
+                  <Text style={basicInfo.logout_time ? {} : { color: '#999' }}>
+                    {basicInfo.logout_time || 'Select Time'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Time Pickers */}
+          {showLoginTimePicker && (
+            <DateTimePicker
+              value={basicInfo.login_time ? new Date(`2000-01-01T${basicInfo.login_time}`) : new Date()}
+              mode="time"
+              display="spinner"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  handleTimeSelect('login_time', selectedDate);
+                }
+              }}
+            />
+          )}
+
+          {showLogoutTimePicker && (
+            <DateTimePicker
+              value={basicInfo.logout_time ? new Date(`2000-01-01T${basicInfo.logout_time}`) : new Date()}
+              mode="time"
+              display="spinner"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  handleTimeSelect('logout_time', selectedDate);
+                }
+              }}
+            />
+          )}
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: -30 }]}>Leave Allocation</Text>
+            <View style={styles.row}>
+              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.label}>Earned Leaves</Text>
+                <TextInput
+                  style={styles.input}
+                  value={basicInfo.earned_leaves}
+                  onChangeText={value => handleBasicInfoChange('earned_leaves', value)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1, marginHorizontal: 8 }]}>
+                <Text style={styles.label}>Sick Leaves</Text>
+                <TextInput
+                  style={[styles.input, { marginTop: 16 }]}
+                  value={basicInfo.sick_leaves}
+                  onChangeText={value => handleBasicInfoChange('sick_leaves', value)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.label}>Casual Leaves</Text>
+                <TextInput
+                  style={styles.input}
+                  value={basicInfo.casual_leaves}
+                  onChangeText={value => handleBasicInfoChange('casual_leaves', value)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </View>
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   const renderStep2 = () => (
-    <View style={{ flex: 1 }}>
+    <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Home Address *
@@ -983,67 +1001,89 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Office Assignment *
         </Text>
-        <Text style={styles.sectionSubtitle}>
-          Select the primary office for this employee
-        </Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} style={{ marginTop: 20 }} />
-        ) : offices.length === 0 ? (
-          <Text style={styles.noDataText}>No offices available</Text>
+          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
         ) : (
-          <View style={{ marginTop: 16, marginBottom: 200 }}>
-            {offices.map(office => (
-              <TouchableOpacity
-                key={office.id}
-                style={[
-                  styles.officeCard,
-                  addressInfo.office_id === office.id && styles.officeCardSelected,
-                ]}
-                onPress={() => setAddressInfo(prev => ({ ...prev, office_id: office.id }))}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.officeCardIcon,
-                  addressInfo.office_id === office.id && styles.officeCardIconSelected,
-                ]}>
-                  <Ionicons
-                    name="business"
-                    size={24}
-                    color={addressInfo.office_id === office.id ? '#fff' : WHATSAPP_COLORS.primary}
-                  />
-                </View>
-                
-                <View style={styles.officeCardContent}>
-                  <Text style={[
-                    styles.officeCardName,
-                    addressInfo.office_id === office.id && styles.officeCardNameSelected,
-                  ]}>
-                    {office.name}
-                  </Text>
-                  <Text style={styles.officeCardAddress}>
-                    {office.address}
-                  </Text>
-                  <Text style={styles.officeCardLocation}>
-                    {office.city}, {office.state}
-                  </Text>
-                </View>
-                
-                {addressInfo.office_id === office.id && (
-                  <View style={styles.officeCardCheck}>
-                    <Ionicons name="checkmark-circle" size={28} color={WHATSAPP_COLORS.primary} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+          <View style={[styles.formGroup,{marginBottom:20}]}>
+            <TouchableOpacity
+              style={[
+                styles.input,
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 12
+                }
+              ]}
+              onPress={() => setShowOfficePicker(true)}
+            >
+              <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
+                {addressInfo.office_id
+                  ? selectedOffice?.name || 'Select Office'
+                  : 'Select Office'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
+
+            {showOfficePicker && (
+              <View style={styles.officePickerContainer}>
+                <ScrollView>
+                  {offices.map(office => (
+                    <TouchableOpacity
+                      key={office.id}
+                      style={[
+                        styles.officeOption,
+                        addressInfo.office_id === office.id && styles.officeOptionSelected
+                      ]}
+                      onPress={() => {
+                        setAddressInfo(prev => ({ ...prev, office_id: office.id }));
+                        setShowOfficePicker(false);
+                      }}
+                    >
+                      <View style={[
+                        styles.officeIconContainer,
+                        addressInfo.office_id === office.id && styles.officeIconSelected
+                      ]}>
+                        <Ionicons
+                          name="business"
+                          size={20}
+                          color={addressInfo.office_id === office.id ? '#fff' : '#666'}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[
+                          styles.officeName,
+                          addressInfo.office_id === office.id && styles.officeNameSelected
+                        ]}>
+                          {office.name}
+                        </Text>
+                        <Text style={styles.officeLocation}>
+                          {office.city}, {office.state}
+                        </Text>
+                      </View>
+                      {addressInfo.office_id === office.id && (
+                        <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
+                  style={styles.officePickerCloseButton}
+                  onPress={() => setShowOfficePicker(false)}
+                >
+                  <Text style={styles.officePickerCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 
   const renderStep3 = () => (
-    <View style={{ flex: 1 }}>
+    <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Assign Tags *
@@ -1082,64 +1122,65 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           </View>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 
   const renderStep4 = () => (
-    <View style={{ flex: 1 }}>
+    <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
-          Assign Reporting Manager *
+          Assign Reporting Tags *
         </Text>
         <Text style={styles.sectionSubtitle}>
-          Select ONE tag that this employee will report to
+          Select which tags this employee should report to
         </Text>
 
-        {/* Show currently selected reporting tag if any */}
-        {selectedReportingTags.length > 0 && (
-          <View style={styles.selectedReportingBanner}>
-            <Ionicons name="person-circle" size={24} color={WHATSAPP_COLORS.primary} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.selectedReportingLabel}>Reports To:</Text>
-              <Text style={styles.selectedReportingValue}>
-                {tags.find(t => t.tag_id === selectedReportingTags[0])?.tag_name || 'Unknown'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setSelectedReportingTags([])}
-              style={styles.clearReportingButton}
-            >
-              <Ionicons name="close-circle" size={24} color="#666" />
-            </TouchableOpacity>
+        {selectedTags.length === 0 ? (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={24} color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.infoText}>
+              Please select employee tags in the previous step first
+            </Text>
           </View>
-        )}
-
-        {tags.length === 0 ? (
-          <Text style={styles.noDataText}>No tags available</Text>
+        ) : reportingTags.length === 0 ? (
+          <Text style={styles.noDataText}>No reporting tags available</Text>
         ) : (
-          <View style={styles.tagsContainer}>
-            {tags.map(tag => {
-              const isSelected = selectedReportingTags.includes(tag.tag_id);
-              
-              return (
+          <>
+            <View style={styles.selectedTagsPreview}>
+              <Text style={styles.selectedTagsLabel}>Selected Employee Tags:</Text>
+              <View style={styles.selectedTagsContainer}>
+                {selectedTagNames.map((tagName, index) => (
+                  <View key={index} style={styles.selectedTagBadge}>
+                    <Text style={styles.selectedTagText}>{tagName}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <Text style={[styles.sectionSubtitle, { marginTop: 20, marginBottom: 10 }]}>
+              Choose reporting tags from the selected tags above:
+            </Text>
+
+            <View style={styles.tagsContainer}>
+              {reportingTags.map(tag => (
                 <TouchableOpacity
                   key={tag.tag_id}
                   style={[
                     styles.tagItem,
-                    isSelected && styles.tagItemSelected,
+                    selectedReportingTags.includes(tag.tag_id) && styles.tagItemSelected,
                   ]}
-                  onPress={() => handleReportingTagSelection(tag.tag_id)}
+                  onPress={() => toggleReportingTagSelection(tag.tag_id)}
                 >
                   <View style={styles.tagContent}>
                     <Ionicons
                       name="person-circle-outline"
                       size={18}
-                      color={isSelected ? '#fff' : '#666'}
+                      color={selectedReportingTags.includes(tag.tag_id) ? '#fff' : '#666'}
                       style={{ marginRight: 8 }}
                     />
                     <Text style={[
                       styles.tagText,
-                      isSelected && styles.tagTextSelected,
+                      selectedReportingTags.includes(tag.tag_id) && styles.tagTextSelected,
                     ]}>
                       {tag.tag_name}
                     </Text>
@@ -1147,25 +1188,25 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
                   {tag.tag_type && (
                     <Text style={[
                       styles.tagType,
-                      isSelected && styles.tagTypeSelected,
+                      selectedReportingTags.includes(tag.tag_id) && styles.tagTypeSelected,
                     ]}>
                       {tag.tag_type}
                     </Text>
                   )}
-                  {isSelected && (
-                    <Ionicons name="checkmark-circle" size={20} color="#fff" style={styles.tagCheck} />
+                  {selectedReportingTags.includes(tag.tag_id) && (
+                    <Ionicons name="checkmark" size={16} color="#fff" style={styles.tagCheck} />
                   )}
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+              ))}
+            </View>
+          </>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 
   const renderStep5 = () => (
-    <View style={{ flex: 1 }}>
+    <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Upload Documents (Optional)
@@ -1243,10 +1284,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             }
           />
 
-          <ReviewSection 
-            label="Office:" 
-            value={selectedOffice?.name || 'Not selected'} 
-          />
+          <ReviewSection label="Office:" value={selectedOffice?.name || 'Not selected'} />
 
           <ReviewSection
             label="Employee Tags:"
@@ -1266,7 +1304,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           />
 
           <ReviewSection
-            label="Reporting Tag:"
+            label="Reporting Tags:"
             customContent={
               selectedReportingTags.length > 0 ? (
                 <View style={styles.reviewTags}>
@@ -1278,7 +1316,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
                   ))}
                 </View>
               ) : (
-                <Text style={styles.noDataText}>No reporting tag selected</Text>
+                <Text style={styles.noDataText}>No reporting tags selected</Text>
               )
             }
           />
@@ -1286,72 +1324,75 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           <ReviewSection label="Documents:" value={`${documents.length} file(s)`} />
         </View>
       </View>
+    </ScrollView>
+  );
+
+  // ==================== HELPER COMPONENT ====================
+  const ReviewSection: React.FC<{
+    label: string;
+    value?: string;
+    customContent?: React.ReactNode;
+  }> = ({ label, value, customContent }) => (
+    <View style={styles.reviewSection}>
+      <Text style={styles.reviewLabel}>{label}</Text>
+      {customContent ? customContent : (
+        <Text style={styles.reviewValue}>{value}</Text>
+      )}
     </View>
   );
 
   // ==================== MAIN RENDER ====================
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: WHATSAPP_COLORS.background }}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <ScrollView 
-          style={{ flex: 1 }}
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
+    <View style={styles.container}>
+      <Header
+        title="Add New Employee"
+        subtitle={`Step ${currentStep} of 5`}
+        onBack={handlePrevious}
+      />
+
+      <View style={styles.stepProgress}>
+        {renderStepIndicator()}
+        {/* {renderStepLabels()} */}
+      </View>
+
+      <View style={styles.content}>
+        {currentStep === 1 && renderStep1()}
+        {currentStep === 2 && renderStep2()}
+        {currentStep === 3 && renderStep3()}
+        {currentStep === 4 && renderStep4()}
+        {currentStep === 5 && renderStep5()}
+      </View>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.footerButton, styles.secondaryButton]}
+          onPress={handlePrevious}
+          disabled={submitting}
         >
-          <Header
-            title="Add New Employee"
-            subtitle={`Step ${currentStep} of 5`}
-            onBack={handlePrevious}
-          />
+          <Text style={styles.secondaryButtonText}>
+            {currentStep === 1 ? 'Cancel' : 'Back'}
+          </Text>
+        </TouchableOpacity>
 
-          <View style={styles.stepProgress}>
-            {renderStepIndicator()}
-          </View>
-
-          <View style={[styles.content, { flex: 1 }]}>
-            {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && renderStep4()}
-            {currentStep === 5 && renderStep5()}
-          </View>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.footerButton, styles.secondaryButton]}
-            onPress={handlePrevious}
-            disabled={submitting}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {currentStep === 1 ? 'Cancel' : 'Back'}
+        <TouchableOpacity
+          style={[
+            styles.footerButton,
+            styles.primaryButton,
+            submitting && styles.disabledButton
+          ]}
+          onPress={currentStep === 5 ? handleSubmit : handleNext}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.primaryButtonText}>
+              {currentStep === 5 ? 'Create Employee' : 'Next'}
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.footerButton,
-              styles.primaryButton,
-              submitting && styles.disabledButton
-            ]}
-            onPress={currentStep === 5 ? handleSubmit : handleNext}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {currentStep === 5 ? 'Create Employee' : 'Next'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 
