@@ -199,15 +199,15 @@ export const Overview: React.FC<OverviewProps> = ({
         uploadDocument();
       }
     },
-    {
-      label: 'Mark Gift Basket Sent',
-      icon: 'gift-outline',
-      action: () => {
-        setShowActionMenu(false);
-        markGiftBasketSent();
-      },
-      hidden: employee.gift_basket_sent
-    },
+    // {
+    //   label: 'Mark Gift Basket Sent',
+    //   icon: 'gift-outline',
+    //   action: () => {
+    //     setShowActionMenu(false);
+    //     markGiftBasketSent();
+    //   },
+    //   hidden: employee.gift_basket_sent
+    // },
     {
       label: 'Mediclaim',
       icon: 'medkit-outline',
