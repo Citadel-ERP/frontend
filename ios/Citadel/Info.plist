@@ -81,6 +81,13 @@
       <string>remote-notification</string>
       <string>processing</string>
     </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+      <string>com.citadelnetinc.app.background</string>
+      <string>com.citadelnetinc.app.refresh</string>
+      <string>com.citadelnetinc.app.location</string>
+      <string>com.citadelnetinc.app.processing</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
