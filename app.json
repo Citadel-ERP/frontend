@@ -25,6 +25,11 @@
           "remote-notification",
           "processing"
         ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.citadelnetinc.app.background",
+          "com.citadelnetinc.app.refresh",
+          "com.citadelnetinc.app.location"
+        ],
         "NSLocationWhenInUseUsageDescription":
           "Citadel uses your location to mark attendance when you are at the office.",
         "NSLocationAlwaysAndWhenInUseUsageDescription":
@@ -39,7 +44,6 @@
           "Citadel needs permission to save photos to your photo library.",
         "NSFaceIDUsageDescription":
           "Face ID is used to securely authenticate you.",
-        
         "NSLocationTemporaryUsageDescriptionDictionary": {
           "attendance": "Your location is needed to verify you are at the office for attendance."
         }
