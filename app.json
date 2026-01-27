@@ -28,7 +28,8 @@
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.citadelnetinc.app.background",
           "com.citadelnetinc.app.refresh",
-          "com.citadelnetinc.app.location"
+          "com.citadelnetinc.app.location",
+          "com.citadelnetinc.app.processing"
         ],
         "NSLocationWhenInUseUsageDescription":
           "Citadel uses your location to mark attendance when you are at the office.",
