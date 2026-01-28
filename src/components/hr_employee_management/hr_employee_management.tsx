@@ -109,9 +109,9 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       setFilteredEmployees(employees);
     } else {
       const filtered = employees.filter(emp =>
-        emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.employee_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.employee_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         emp.designation?.toLowerCase().includes(searchQuery.toLowerCase())
       );
       setFilteredEmployees(filtered);

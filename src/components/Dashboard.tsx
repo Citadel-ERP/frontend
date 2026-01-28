@@ -1292,7 +1292,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (key.includes('mediclaim') || key.includes('medical')) {
       setShowMedical(true);
     } else if (key.includes('scout')) {
-      Alert.alert('Scout Boy', 'Scout Boy feature will be available soon!');
+      setShowScoutBoy(true);
+      // Alert.alert('Scout Boy', 'Scout Boy feature will be available soon!');
     } else if (key.includes('reminder')) {
       setShowReminder(true);
     } else if (key.includes('bup') || key.includes('business update')) {
@@ -1987,7 +1988,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 <Text style={[styles.logoText, isWeb && styles.logoTextWeb]}>CITADEL</Text>
                 <View style={styles.headerSpacer} />
                 {/* NEW: Add refresh button */}
-                <RefreshButton />
+                {/* <RefreshButton /> */}
               </View>
               <View style={{ marginTop: isWeb ? 20 : 75 }}>
                 <Text style={[styles.welcomeText, isWeb && styles.welcomeTextWeb]}>Welcome!</Text>
