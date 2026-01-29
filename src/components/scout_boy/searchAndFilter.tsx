@@ -43,7 +43,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('');
-  const [filterValue, setFilterValue] = useState('');
+  const [filterValue, setFilterValue] = useState('all');
   const [activeDropdown, setActiveDropdown] = useState<'filter' | 'status' | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
 
@@ -113,7 +113,9 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   const handleTabPress = (tabId: string) => {
     if (tabId === 'all') {
-      clearFilters();
+      setFilterBy('');
+      setFilterValue('all');
+      onFilter('', '');
     } else {
       setFilterBy('status');
       setFilterValue(tabId);

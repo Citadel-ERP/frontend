@@ -128,26 +128,26 @@ const VisitComment: React.FC<VisitCommentProps> = ({
   }, []);
 
   const handlePickDocument = useCallback(async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      copyToCacheDirectory: true,
+    });
 
-      if (result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        setCommentDocuments(prev => [...prev, {
-          uri: asset.uri,
-          name: asset.name,
-          mimeType: asset.mimeType,
-          type: 'document',
-          size: asset.size
-        }]);
-      }
-    } catch (error) {
-      console.error('Error picking document:', error);
+    if (result.assets && result.assets[0]) {
+      const asset = result.assets[0];
+      setCommentDocuments(prev => [...prev, {
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType || 'application/octet-stream',  
+        type: 'document' as const,
+        size: asset.size
+      }]);
     }
-  }, []);
+  } catch (error) {
+    console.error('Error picking document:', error);
+  }
+}, []);
 
   const handleRemoveDocument = useCallback((index: number) => {
     setCommentDocuments(prev => prev.filter((_, i) => i !== index));

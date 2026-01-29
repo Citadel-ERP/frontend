@@ -85,27 +85,8 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
-  const [swipeStartX, setSwipeStartX] = useState(0);
 
   const flatListRef = useRef<FlatList>(null);
-
-  const handleSwipeStart = (event: any) => {
-    setSwipeStartX(event.nativeEvent.pageX);
-  };
-
-  const handleSwipeEnd = (event: any) => {
-    const swipeEndX = event.nativeEvent.pageX;
-    const swipeDistance = swipeEndX - swipeStartX;
-    const swipeThreshold = 50;
-
-    if (Math.abs(swipeDistance) > swipeThreshold) {
-      if (swipeDistance > 0 && hasPrevious) {
-        onPrevious();
-      } else if (swipeDistance < 0 && hasNext) {
-        onNext();
-      }
-    }
-  };
 
   const fetchComments = useCallback(async (page: number = 1, append: boolean = false) => {
     if (!token || !visit.id) return;
@@ -540,11 +521,7 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   );
 
   return (
-    <View 
-      style={styles.mainContainer}
-      onTouchStart={handleSwipeStart}
-      onTouchEnd={handleSwipeEnd}
-    >
+    <View style={styles.mainContainer}>
       <Header />
       {ContactInfoModal()}
 
@@ -596,26 +573,8 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
         theme={theme}
       />
 
-      {visit.status === 'pending' && (
-        <TouchableOpacity
-          style={[styles.markCompleteButton, { backgroundColor: WHATSAPP_COLORS.success }]}
-          onPress={onMarkComplete}
-        >
-          <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-          <Text style={styles.markCompleteButtonText}>Mark Visit as Completed</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Swipe Instructions */}
-      {(hasPrevious || hasNext) && (
-        <View style={styles.swipeInstructions}>
-          <Text style={styles.swipeInstructionsText}>
-            {hasPrevious && hasNext ? 'Swipe left or right to navigate' : 
-             hasPrevious ? 'Swipe right for previous' : 
-             hasNext ? 'Swipe left for next' : ''}
-          </Text>
-        </View>
-      )}
+      {/* REMOVED: "Mark as completed" button from bottom */}
+      {/* REMOVED: Swipe instructions from bottom */}
     </View>
   );
 };
@@ -874,38 +833,6 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textSecondary,
     textAlign: 'center',
     maxWidth: 200
-  },
-  markCompleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    marginHorizontal: 16,
-    marginVertical: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
-  },
-  markCompleteButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF'
-  },
-  swipeInstructions: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16
-  },
-  swipeInstructionsText: {
-    color: '#FFF',
-    fontSize: 12,
-    textAlign: 'center',
-    fontWeight: '500'
   }
 });
 

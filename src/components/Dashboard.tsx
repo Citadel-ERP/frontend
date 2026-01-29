@@ -1293,7 +1293,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowMedical(true);
     } else if (key.includes('scout')) {
       setShowScoutBoy(true);
-      // Alert.alert('Scout Boy', 'Scout Boy feature will be available soon!');
     } else if (key.includes('reminder')) {
       setShowReminder(true);
     } else if (key.includes('bup') || key.includes('business update')) {

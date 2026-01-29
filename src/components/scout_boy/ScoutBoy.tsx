@@ -246,8 +246,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   }, [viewMode, fetchVisits, onBack]);
 
   const handleEditPress = useCallback(() => {
-    setViewMode('edit');
-  }, []);
+  setViewMode('edit');
+}, []);
 
   const handleMarkComplete = useCallback(async () => {
     if (!selectedVisit || !token) return;

@@ -94,7 +94,7 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
 
   const [newSite, setNewSite] = useState({
     building_name: '',
-    location: '',
+    site_location: '',
     landmark: '',
     total_floors: '',
     number_of_basements: '',
@@ -295,7 +295,7 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
       }
     }
     if (step === 1) {
-      if (!newSite.building_name || !newSite.location) {
+      if (!newSite.building_name || !newSite.site_location) {
         Alert.alert('Required Fields', 'Please fill in Building Name and Location');
         return false;
       }
@@ -444,19 +444,24 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
         latitude: parseFloat(locationData.latitude),
         longitude: parseFloat(locationData.longitude),
         site_type: siteType,
-        managed_property: siteType === 'managed' ? 'true' : 'false',
-        conventional_property: siteType === 'conventional' ? 'true' : 'false',
+        managed_property: siteType === 'managed' ? 'True' : 'False',
+        conventional_property: siteType === 'conventional' ? 'True' : 'False',
       };
 
-      // Add metro station if selected
+      // FIXED: Handle metro station properly - send as string for custom station
+      let metroStationValue = '';
       if (selectedMetroStation) {
-        siteData.nearest_metro_station = selectedMetroStation.id;
+        metroStationValue = selectedMetroStation.name;
       } else if (customMetroStation) {
-        siteData.nearest_metro_station = customMetroStation;
+        metroStationValue = customMetroStation;
+      }
+      
+      if (metroStationValue) {
+        siteData.nearest_metro_station = metroStationValue;
       }
 
       // Common fields for both types
-      if (newSite.location) siteData.location = newSite.location;
+      if (newSite.site_location) siteData.site_location = newSite.site_location;
       if (newSite.landmark) siteData.landmark = newSite.landmark;
       if (newSite.building_status) siteData.building_status = newSite.building_status;
       if (newSite.floor_condition) siteData.floor_condition = newSite.floor_condition;
@@ -550,11 +555,12 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
 
       const formData = new FormData();
       Object.entries(siteData).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
+        if (value !== null && value !== undefined && value !== '') {
           formData.append(key, String(value));
         }
       });
 
+      // Add photos to form data
       buildingPhotos.forEach((photo, idx) => {
         const fileName = `photo_${idx + 1}_${photo.id}.jpg`;
         formData.append('building_photos', {
@@ -564,21 +570,39 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
         } as any);
       });
 
+      // console.log('Creating site with data:', Object.fromEntries(formData));
       const response = await fetch(`${BACKEND_URL}/employee/createSite`, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create site');
+      const responseText = await response.text();
+      console.log('Response:', responseText);
+      
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response:', e);
+        throw new Error('Invalid server response');
       }
+
+      if (!response.ok) {
+        throw new Error(responseData.message || `HTTP ${response.status}: Failed to create site`);
+      }
+
+      if (responseData.message !== 'Success' && responseData.message !== 'Site location created successfully') {
+  throw new Error(responseData.message || 'Failed to create site');
+}
 
       Alert.alert('Success', 'Site created successfully!');
       onBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Site creation error:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create site');
+      Alert.alert('Error', error.message || 'Failed to create site');
     } finally {
       setCreatingSite(false);
     }
@@ -672,10 +696,11 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
           ]}>
             {selectedMetroStation ? selectedMetroStation.name : 
              customMetroStation ? customMetroStation : 
-             'Search for metro station...'}
+             'Select metro station...'}
           </Text>
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
+        <Text style={styles.optionalText}>(Optional)</Text>
       </View>
 
       {/* Custom Metro Station Input */}
@@ -726,8 +751,8 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
         <Text style={styles.formLabel}>Location *</Text>
         <TextInput
           style={styles.input}
-          value={newSite.location}
-          onChangeText={(val) => setNewSite({ ...newSite, location: val })}
+          value={newSite.site_location}
+          onChangeText={(val) => setNewSite({ ...newSite, site_location: val })}
           placeholder="Enter location"
           placeholderTextColor={WHATSAPP_COLORS.textTertiary}
         />
@@ -1691,7 +1716,7 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
       
       <View style={styles.header}>
@@ -1722,46 +1747,48 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
         </ScrollView>
 
         <View style={styles.navigationButtons}>
-          {currentStep > 0 && (
-            <TouchableOpacity
-              style={styles.navButton}
-              onPress={handlePrevStep}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-            >
-              <Text style={styles.navButtonText}>← Previous</Text>
-            </TouchableOpacity>
-          )}
-          {currentStep < 6 ? (
-            <TouchableOpacity
-              style={[styles.navButton, styles.navButtonPrimary, currentStep === 0 && styles.navButtonFull]}
-              onPress={handleNextStep}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-            >
-              <Text style={styles.navButtonTextPrimary}>Next →</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.navButton, styles.navButtonPrimary, styles.navButtonFull, creatingSite && styles.buttonDisabled]}
-              onPress={handleCreateSite}
-              disabled={creatingSite}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-            >
-              {creatingSite ? (
-                <View style={styles.buttonLoading}>
-                  <ActivityIndicator color="#FFF" size="small" />
-                  <Text style={[styles.navButtonTextPrimary, { marginLeft: 8 }]}>
-                    Creating...
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-                  <Text style={styles.navButtonTextPrimary}>Create Site</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
+  {currentStep > 0 && (
+    <TouchableOpacity
+      style={styles.navButton}
+      onPress={handlePrevStep}
+      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+    >
+      <Ionicons name="arrow-back" size={18} color="#075E54" />
+      <Text style={styles.navButtonText}>Previous</Text>
+    </TouchableOpacity>
+  )}
+  {currentStep < 6 ? (
+    <TouchableOpacity
+      style={[styles.navButton, styles.navButtonPrimary, currentStep === 0 && styles.navButtonFull]}
+      onPress={handleNextStep}
+      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+    >
+      <Text style={styles.navButtonTextPrimary}>Next</Text>
+      <Ionicons name="arrow-forward" size={18} color="#FFF" />
+    </TouchableOpacity>
+  ) : (
+    <TouchableOpacity
+      style={[styles.navButton, styles.navButtonPrimary, styles.navButtonFull, creatingSite && styles.buttonDisabled]}
+      onPress={handleCreateSite}
+      disabled={creatingSite}
+      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+    >
+      {creatingSite ? (
+        <View style={styles.buttonLoading}>
+          <ActivityIndicator color="#FFF" size="small" />
+          <Text style={[styles.navButtonTextPrimary, { marginLeft: 8 }]}>
+            Creating...
+          </Text>
         </View>
+      ) : (
+        <>
+          <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+          <Text style={[styles.navButtonTextPrimary, { marginLeft: 0 }]}>Create Site</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  )}
+</View>
       </View>
 
       <DropdownModal
@@ -1823,6 +1850,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     marginTop: 0,
+    overflow: 'hidden',
   },
   stepIndicator: {
     flexDirection: 'row',
@@ -1894,6 +1922,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     marginBottom: 4,
+  },
+  optionalText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   input: {
     paddingHorizontal: 12,
@@ -2208,6 +2241,7 @@ const styles = StyleSheet.create({
   photoPreviewContainer: {
     marginTop: 8,
   },
+  
   photoCountText: {
     fontSize: 12,
     color: '#075E54',
@@ -2262,22 +2296,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   navigationButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
+  flexDirection: 'row',
+  gap: 12,  
+  padding: 16,  
+},
   navButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#075E54',
-  },
+  flex: 1,
+  flexDirection: 'row',  
+  paddingVertical: 12,
+  paddingHorizontal: 16,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',  
+  borderWidth: 2,
+  borderColor: '#075E54',
+  gap: 4,  
+},
   navButtonPrimary: {
     backgroundColor: '#075E54',
   },
@@ -2285,10 +2319,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#075E54',
-  },
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#075E54',
+  
+},
   navButtonTextPrimary: {
     fontSize: 14,
     fontWeight: '700',
