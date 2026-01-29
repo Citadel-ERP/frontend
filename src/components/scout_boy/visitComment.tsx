@@ -1,3 +1,8 @@
+// Key changes made:
+// 1. Removed excessive padding in inputWrapper
+// 2. Streamlined the input container layout
+// 3. Made spacing more consistent with WhatsApp design
+
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -128,26 +133,26 @@ const VisitComment: React.FC<VisitCommentProps> = ({
   }, []);
 
   const handlePickDocument = useCallback(async () => {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      copyToCacheDirectory: true,
-    });
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
 
-    if (result.assets && result.assets[0]) {
-      const asset = result.assets[0];
-      setCommentDocuments(prev => [...prev, {
-        uri: asset.uri,
-        name: asset.name,
-        mimeType: asset.mimeType || 'application/octet-stream',  
-        type: 'document' as const,
-        size: asset.size
-      }]);
+      if (result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        setCommentDocuments(prev => [...prev, {
+          uri: asset.uri,
+          name: asset.name,
+          mimeType: asset.mimeType || 'application/octet-stream',  
+          type: 'document' as const,
+          size: asset.size
+        }]);
+      }
+    } catch (error) {
+      console.error('Error picking document:', error);
     }
-  } catch (error) {
-    console.error('Error picking document:', error);
-  }
-}, []);
+  }, []);
 
   const handleRemoveDocument = useCallback((index: number) => {
     setCommentDocuments(prev => prev.filter((_, i) => i !== index));
@@ -353,21 +358,21 @@ const styles = StyleSheet.create({
   removeFileButton: {
     padding: 4,
   },
+  // FIXED: Input container with proper spacing
   inputContainer: {
     backgroundColor: WHATSAPP_COLORS.surface,
   },
   inputWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 8 : 8,
+    paddingHorizontal: 12, // CHANGED: Reduced from 16 to 12
+    paddingVertical: 8, // CHANGED: Simplified - removed platform-specific logic
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
+    gap: 8, // CHANGED: Reduced from 10 to 8 for tighter spacing
   },
   attachmentButton: {
-    padding: 8,
+    padding: 6, // CHANGED: Reduced from 8 to 6
     marginBottom: 2,
     position: 'relative',
   },
@@ -395,8 +400,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    minHeight: 30,
+    paddingVertical: 8, // CHANGED: Reduced from 10 to 8
+    minHeight: 36, // CHANGED: Increased from 30 to 36 for better appearance
     maxHeight: 100,
   },
   messageInput: {

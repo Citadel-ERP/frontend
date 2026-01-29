@@ -1,3 +1,8 @@
+// Key changes made:
+// 1. Fixed empty chat centering by using flex: 1 in emptyChat style
+// 2. Adjusted chatListContent padding to remove irregular bottom spacing
+// 3. Updated KeyboardAvoidingView behavior for better spacing
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
@@ -38,6 +43,7 @@ const WHATSAPP_COLORS = {
   background: '#e7e6e5',
   surface: '#FFFFFF',
   textPrimary: '#1F2937',
+  chat: '#4d4d4d',
   textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
   border: '#E5E7EB',
@@ -63,6 +69,7 @@ interface VisitDetailsProps {
   hasNext: boolean;
   token: string | null;
   theme: ThemeColors;
+  currentUserId?: string;
 }
 
 const VisitDetails: React.FC<VisitDetailsProps> = ({
@@ -79,6 +86,7 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   hasNext,
   token,
   theme,
+  currentUserId,
 }) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -192,93 +200,108 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
     }
   }, []);
 
+  const DetailRow = ({ icon, label, value }: { icon?: string; label: string; value: string | number | boolean }) => {
+    const displayValue = typeof value === 'boolean' ? (value ? 'Yes' : 'No') : (value || '-');
+    
+    return (
+      <View style={styles.detailRow}>
+        <View style={styles.detailRowLeft}>
+          {icon && <Ionicons name={icon as any} size={16} color={WHATSAPP_COLORS.primary} style={styles.detailRowIcon} />}
+          <Text style={styles.detailRowLabel}>{label}</Text>
+        </View>
+        <Text style={styles.detailRowValue}>{displayValue}</Text>
+      </View>
+    );
+  };
+
   const DetailSection = ({ title, site }: { title: string; site: any }) => {
     const isManagedProperty = site.managed_property === true;
     
     const getDetailItems = () => {
       switch (title) {
-        case '📋 Basic Information':
+        case 'Basic Information':
           if (isManagedProperty) {
             return [
-              { label: 'Landmark', value: site.landmark },
-              { label: 'Building Status', value: site.building_status },
-              { label: 'Floor Condition', value: site.floor_condition },
-              { label: 'Total Floors', value: site.total_floors },
-              { label: 'Basements', value: site.number_of_basements },
-              { label: 'Total Seats', value: site.total_seats },
-              { label: 'Seats Available', value: site.seats_available },
-              { label: 'Number of Units', value: site.number_of_units },
-              { label: 'Seats Per Unit', value: site.number_of_seats_per_unit },
-              { label: 'Efficiency', value: site.efficiency },
-              { label: 'Business Hours', value: site.business_hours_of_operation },
-              { label: 'Premises Access', value: site.premises_access },
-              { label: 'Developer Fitouts', value: site.will_developer_do_fitouts ? 'Yes' : 'No' },
+              { icon: 'location', label: 'Landmark', value: site.landmark },
+              { icon: 'business', label: 'Building Status', value: site.building_status },
+              { icon: 'layers', label: 'Floor Condition', value: site.floor_condition },
+              { icon: 'trending-up', label: 'Total Floors', value: site.total_floors },
+              { icon: 'arrow-down', label: 'Basements', value: site.number_of_basements },
+              { icon: 'people', label: 'Total Seats', value: site.total_seats },
+              { icon: 'checkmark-circle', label: 'Seats Available', value: site.seats_available },
+              { icon: 'grid', label: 'Number of Units', value: site.number_of_units },
+              { icon: 'calculator', label: 'Seats Per Unit', value: site.number_of_seats_per_unit },
+              { icon: 'speedometer', label: 'Efficiency', value: site.efficiency },
+              { icon: 'time', label: 'Business Hours', value: site.business_hours_of_operation },
+              { icon: 'key', label: 'Premises Access', value: site.premises_access },
+              { icon: 'construct', label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
             ];
           } else {
             return [
-              { label: 'Landmark', value: site.landmark },
-              { label: 'Building Status', value: site.building_status },
-              { label: 'Floor Condition', value: site.floor_condition },
-              { label: 'Total Floors', value: site.total_floors },
-              { label: 'Basements', value: site.number_of_basements },
-              { label: 'Available Floors', value: site.availble_floors },
-              { label: 'Total Area', value: site.total_area ? `${site.total_area} sq ft` : '-' },
-              { label: 'Area per Floor', value: site.area_per_floor ? `${site.area_per_floor} sq ft` : '-' },
-              { label: 'Efficiency', value: site.efficiency },
-              { label: 'Area Offered', value: site.area_offered },
-              { label: 'Developer Fitouts', value: site.will_developer_do_fitouts ? 'Yes' : 'No' },
+              { icon: 'location', label: 'Landmark', value: site.landmark },
+              { icon: 'business', label: 'Building Status', value: site.building_status },
+              { icon: 'layers', label: 'Floor Condition', value: site.floor_condition },
+              { icon: 'trending-up', label: 'Total Floors', value: site.total_floors },
+              { icon: 'arrow-down', label: 'Basements', value: site.number_of_basements },
+              { icon: 'resize', label: 'Available Floors', value: site.availble_floors },
+              { icon: 'expand', label: 'Total Area', value: site.total_area ? `${site.total_area} sq ft` : '-' },
+              { icon: 'apps', label: 'Area per Floor', value: site.area_per_floor ? `${site.area_per_floor} sq ft` : '-' },
+              { icon: 'speedometer', label: 'Efficiency', value: site.efficiency },
+              { icon: 'cube', label: 'Area Offered', value: site.area_offered },
+              { icon: 'construct', label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
             ];
           }
 
-        case '💰 Commercial Details':
+        case 'Commercial Details':
           if (isManagedProperty) {
             return [
-              { label: 'Rent Per Seat', value: site.rent_per_seat ? `₹${site.rent_per_seat}` : '-' },
-              { label: 'Total Monthly Rent', value: site.rent_per_seat && site.total_seats ? `₹${(parseFloat(site.rent_per_seat) * parseFloat(site.total_seats)).toLocaleString('en-IN')}` : '-' },
-              { label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
-              { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
-              { label: 'Security Deposit', value: site.security_deposit ? `${site.security_deposit} months` : '-' },
-              { label: 'Lease Term', value: site.lease_term },
-              { label: 'Lock-in Period', value: site.lock_in_period },
-              { label: 'Notice Period', value: site.notice_period },
-              { label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
+              { icon: 'cash', label: 'Rent Per Seat', value: site.rent_per_seat ? `₹${site.rent_per_seat}` : '-' },
+              { icon: 'wallet', label: 'Total Monthly Rent', value: site.rent_per_seat && site.total_seats ? `₹${(parseFloat(site.rent_per_seat) * parseFloat(site.total_seats)).toLocaleString('en-IN')}` : '-' },
+              { icon: 'settings', label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
+              { icon: 'card', label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
+              { icon: 'shield', label: 'Security Deposit', value: site.security_deposit ? `${site.security_deposit} months` : '-' },
+              { icon: 'calendar', label: 'Lease Term', value: site.lease_term },
+              { icon: 'lock-closed', label: 'Lock-in Period', value: site.lock_in_period },
+              { icon: 'notifications', label: 'Notice Period', value: site.notice_period },
+              { icon: 'trending-up', label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
             ];
           } else {
             return [
-              { label: 'Monthly Rent', value: site.rent ? `₹${site.rent}` : '-' },
-              { label: 'Rent Per SQ/FT', value: site.rent && site.total_area ? `₹${(parseFloat(site.rent) / parseFloat(site.total_area)).toFixed(2)}` : '-' },
-              { label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
-              { label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
-              { label: 'Security Deposit', value: site.security_deposit ? `${site.security_deposit} months` : '-' },
-              { label: 'Lease Term', value: site.lease_term },
-              { label: 'Lock-in Period', value: site.lock_in_period },
-              { label: 'Notice Period', value: site.notice_period },
-              { label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
+              { icon: 'cash', label: 'Monthly Rent', value: site.rent ? `₹${site.rent}` : '-' },
+              { icon: 'calculator', label: 'Rent Per SQ/FT', value: site.rent && site.total_area ? `₹${(parseFloat(site.rent) / parseFloat(site.total_area)).toFixed(2)}` : '-' },
+              { icon: 'settings', label: 'Maintenance Charges', value: site.maintenance_rate ? `₹${site.maintenance_rate}` : '-' },
+              { icon: 'card', label: 'CAM Deposit', value: site.cam_deposit ? `₹${site.cam_deposit}` : '-' },
+              { icon: 'shield', label: 'Security Deposit', value: site.security_deposit ? `${site.security_deposit} months` : '-' },
+              { icon: 'calendar', label: 'Lease Term', value: site.lease_term },
+              { icon: 'lock-closed', label: 'Lock-in Period', value: site.lock_in_period },
+              { icon: 'notifications', label: 'Notice Period', value: site.notice_period },
+              { icon: 'trending-up', label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
             ];
           }
 
-        case '🚗 Vehicle Information':
+        case 'Vehicle Information':
           return [
-            { label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
-            { label: 'Car Parking Slots', value: site.car_parking_slots },
-            { label: 'Car Parking Ratio', value: site.car_parking_ratio },
-            { label: 'Two Wheeler Parking', value: site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-' },
-            { label: 'Two Wheeler Slots', value: site.two_wheeler_slots },
+            { icon: 'car', label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
+            { icon: 'square', label: 'Car Parking Slots', value: site.car_parking_slots },
+            { icon: 'analytics', label: 'Car Parking Ratio', value: site.car_parking_ratio },
+            { icon: 'bicycle', label: 'Two Wheeler Parking', value: site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-' },
+            { icon: 'grid', label: 'Two Wheeler Slots', value: site.two_wheeler_slots },
           ];
 
-        case '👤 Contact Information':
+        case 'Contact Information':
           const contactItems = [
-            { label: 'Building Owner', value: site.building_owner_name },
-            { label: 'Owner Contact', value: site.building_owner_contact },
-            { label: 'Contact Person', value: site.contact_person_name },
-            { label: 'Phone', value: site.contact_person_number },
-            { label: 'Email', value: site.contact_person_email },
-            { label: 'Designation', value: site.contact_person_designation },
+            { icon: 'person', label: 'Building Owner', value: site.building_owner_name },
+            { icon: 'call', label: 'Owner Contact', value: site.building_owner_contact },
+            { icon: 'people', label: 'Contact Person', value: site.contact_person_name },
+            { icon: 'phone-portrait', label: 'Phone', value: site.contact_person_number },
+            { icon: 'mail', label: 'Email', value: site.contact_person_email },
+            { icon: 'briefcase', label: 'Designation', value: site.contact_person_designation },
           ];
           
           if (site.nearest_metro_station) {
             contactItems.unshift({
-              label: '🚇 Nearest Metro',
+              icon: 'train',
+              label: 'Nearest Metro',
               value: site.nearest_metro_station.name
             });
           }
@@ -293,24 +316,15 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
     const items = getDetailItems();
 
     return (
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>
-          {title}
-          {isManagedProperty && title === '📋 Basic Information' && (
-            <Text style={styles.propertyTypeBadge}> • Managed</Text>
-          )}
-          {!isManagedProperty && title === '📋 Basic Information' && (
-            <Text style={styles.propertyTypeBadge}> • Conventional</Text>
-          )}
-        </Text>
-        <View style={styles.detailGrid}>
-          {items.map((item, idx) => (
-            <View key={`${title}-${idx}`} style={styles.detailItem}>
-              <Text style={styles.detailLabel}>{item.label}</Text>
-              <Text style={styles.detailValue}>{item.value || '-'}</Text>
-            </View>
-          ))}
-        </View>
+      <View style={styles.detailSectionContainer}>
+        {items.map((item, idx) => (
+          <DetailRow 
+            key={`${title}-${idx}`} 
+            icon={item.icon}
+            label={item.label} 
+            value={item.value} 
+          />
+        ))}
       </View>
     );
   };
@@ -363,43 +377,49 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
     switch (item) {
       case 'building-info':
         return (
-          <View style={styles.containerBox}>
-            <View style={styles.leadInfoContainer}>
-              <View style={styles.leadAvatarSection}>
-                <View style={styles.leadAvatar}>
-                  <Text style={styles.leadAvatarText}>
-                    {visit.site?.building_name?.charAt(0)?.toUpperCase() || 'V'}
+          <View style={styles.modalCard}>
+            <View style={styles.leadProfileHeader}>
+              <View style={styles.leadAvatarLarge}>
+                <Text style={styles.leadAvatarLargeText}>
+                  {visit.site?.building_name?.charAt(0)?.toUpperCase() || 'V'}
+                </Text>
+              </View>
+              
+              <Text style={styles.leadBuildingName}>{visit.site?.building_name || 'Visit'}</Text>
+              
+              {site?.location && (
+                <View style={styles.locationBadge}>
+                  <Ionicons name="location" size={14} color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.locationText}>{site.location}</Text>
+                </View>
+              )}
+
+              <View style={styles.statusBadgesRow}>
+                <View style={[styles.statusPill, { 
+                  backgroundColor: getStatusColor(visit.status) + '15',
+                  borderColor: getStatusColor(visit.status)
+                }]}>
+                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(visit.status) }]} />
+                  <Text style={[styles.statusPillText, { color: getStatusColor(visit.status) }]}>
+                    {beautifyName(visit.status)}
                   </Text>
                 </View>
-              </View>
-              
-              <View style={styles.leadHeaderSection}>
-                <Text style={styles.leadNameText}>{visit.site?.building_name || 'Visit'}</Text>
-                {site?.location && (
-                  <Text style={styles.leadCompanyText}>{site.location}</Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.statusBadgesContainer}>
-              <View style={[styles.statusBadgeBox, { 
-                backgroundColor: getStatusColor(visit.status) + '15',
-                borderColor: getStatusColor(visit.status) + '30' 
-              }]}>
-                <Text style={[styles.statusBadgeBoxText, { color: getStatusColor(visit.status) }]}>
-                  {beautifyName(visit.status)}
-                </Text>
-              </View>
-              
-              <View style={[styles.statusBadgeBox, { 
-                backgroundColor: site?.managed_property ? '#10B98115' : '#3B82F615',
-                borderColor: site?.managed_property ? '#10B98130' : '#3B82F630' 
-              }]}>
-                <Text style={[styles.statusBadgeBoxText, { 
-                  color: site?.managed_property ? '#10B981' : '#3B82F6' 
+                
+                <View style={[styles.statusPill, { 
+                  backgroundColor: site?.managed_property ? WHATSAPP_COLORS.accent + '15' : WHATSAPP_COLORS.info + '15',
+                  borderColor: site?.managed_property ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.info
                 }]}>
-                  {site?.managed_property ? 'Managed' : 'Conventional'}
-                </Text>
+                  <Ionicons 
+                    name={site?.managed_property ? "business" : "home"} 
+                    size={12} 
+                    color={site?.managed_property ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.info} 
+                  />
+                  <Text style={[styles.statusPillText, { 
+                    color: site?.managed_property ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.info
+                  }]}>
+                    {site?.managed_property ? 'Managed' : 'Conventional'}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -407,22 +427,37 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
 
       case 'photos':
         return visit.photos?.length > 0 ? (
-          <View style={styles.containerBox}>
-            <View style={styles.containerHeader}>
-              <Ionicons name="images" size={20} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.containerTitle}>Photos ({visit.photos.length})</Text>
+          <View style={styles.modalCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="images" size={18} color={WHATSAPP_COLORS.primary} />
+                </View>
+                <Text style={styles.sectionTitle}>Photos</Text>
+              </View>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{visit.photos.length}</Text>
+              </View>
             </View>
             
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.photosScrollView}
+              contentContainerStyle={styles.photosScrollContent}
+            >
               {visit.photos.map((photo, index) => (
                 <TouchableOpacity
                   key={photo.id}
-                  style={styles.photoThumbnail}
+                  style={styles.photoCard}
                   onPress={() => onPhotoPress(photo.file_url, index)}
+                  activeOpacity={0.8}
                 >
-                  <Image source={{ uri: photo.file_url }} style={styles.photoImage} />
-                  <View style={styles.photoNumberBadge}>
-                    <Text style={styles.photoNumber}>{index + 1}</Text>
+                  <Image source={{ uri: photo.file_url }} style={styles.photoCardImage} />
+                  <View style={styles.photoCardOverlay}>
+                    <View style={styles.photoIndexBadge}>
+                      <Text style={styles.photoIndexText}>{index + 1}</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -432,57 +467,76 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
 
       case 'basic-info':
         return (
-          <View style={styles.containerBox}>
-            <View style={styles.containerHeader}>
-              <Ionicons name="information-circle" size={20} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.containerTitle}>Basic Information</Text>
+          <View style={styles.modalCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="information-circle" size={18} color={WHATSAPP_COLORS.primary} />
+                </View>
+                <Text style={styles.sectionTitle}>Basic Information</Text>
+              </View>
+              {site.managed_property !== undefined && (
+                <View style={[styles.propertyTypeBadgeSmall, {
+                  backgroundColor: site.managed_property ? WHATSAPP_COLORS.accent + '15' : WHATSAPP_COLORS.info + '15'
+                }]}>
+                  <Text style={[styles.propertyTypeBadgeSmallText, {
+                    color: site.managed_property ? WHATSAPP_COLORS.accent : WHATSAPP_COLORS.info
+                  }]}>
+                    {site.managed_property ? 'Managed' : 'Conventional'}
+                  </Text>
+                </View>
+              )}
             </View>
             
-            <View style={styles.containerContent}>
-              <DetailSection title="📋 Basic Information" site={site} />
-            </View>
+            <DetailSection title="Basic Information" site={site} />
           </View>
         );
 
       case 'commercial-info':
         return (
-          <View style={styles.containerBox}>
-            <View style={styles.containerHeader}>
-              <Ionicons name="cash" size={20} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.containerTitle}>Commercial Details</Text>
+          <View style={styles.modalCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="cash" size={18} color={WHATSAPP_COLORS.primary} />
+                </View>
+                <Text style={styles.sectionTitle}>Commercial Details</Text>
+              </View>
             </View>
             
-            <View style={styles.containerContent}>
-              <DetailSection title="💰 Commercial Details" site={site} />
-            </View>
+            <DetailSection title="Commercial Details" site={site} />
           </View>
         );
 
       case 'vehicle-info':
         return (
-          <View style={styles.containerBox}>
-            <View style={styles.containerHeader}>
-              <Ionicons name="car" size={20} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.containerTitle}>Vehicle Information</Text>
+          <View style={styles.modalCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="car" size={18} color={WHATSAPP_COLORS.primary} />
+                </View>
+                <Text style={styles.sectionTitle}>Vehicle Information</Text>
+              </View>
             </View>
             
-            <View style={styles.containerContent}>
-              <DetailSection title="🚗 Vehicle Information" site={site} />
-            </View>
+            <DetailSection title="Vehicle Information" site={site} />
           </View>
         );
 
       case 'contact-info':
         return (
-          <View style={styles.containerBox}>
-            <View style={styles.containerHeader}>
-              <Ionicons name="people" size={20} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.containerTitle}>Contact Information</Text>
+          <View style={styles.modalCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="people" size={18} color={WHATSAPP_COLORS.primary} />
+                </View>
+                <Text style={styles.sectionTitle}>Contact Information</Text>
+              </View>
             </View>
             
-            <View style={styles.containerContent}>
-              <DetailSection title="👤 Contact Information" site={site} />
-            </View>
+            <DetailSection title="Contact Information" site={site} />
           </View>
         );
 
@@ -500,23 +554,27 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
       visible={showLeadDetailsModal}
       onRequestClose={() => setShowLeadDetailsModal(false)}
     >
-      <View style={[styles.modalHeader, { paddingTop: Platform.OS === 'ios' ? 50 : 15 }]}>
-        <TouchableOpacity
-          onPress={() => setShowLeadDetailsModal(false)}
-          style={styles.modalBackButton}
-        >
-          <Ionicons name="close" size={24} color="#FFF" />
-        </TouchableOpacity>
-        <Text style={styles.modalTitle}>Visit Details</Text>
+      <View style={styles.modalMainContainer}>
+        <View style={[styles.modalHeaderBar, { paddingTop: Platform.OS === 'ios' ? 50 : 15 }]}>
+          <TouchableOpacity
+            onPress={() => setShowLeadDetailsModal(false)}
+            style={styles.modalCloseButton}
+          >
+            <Ionicons name="close" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.modalHeaderTitle}>Visit Details</Text>
+          <View style={styles.modalHeaderPlaceholder} />
+        </View>
+        
+        <FlatList
+          data={modalSections}
+          renderItem={renderModalSection}
+          keyExtractor={(item) => item}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.modalContent}
+          ListFooterComponent={<View style={styles.modalFooterSpace} />}
+        />
       </View>
-      <FlatList
-        data={modalSections}
-        renderItem={renderModalSection}
-        keyExtractor={(item) => item}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.modalScrollContent}
-        ListFooterComponent={<View style={styles.modalBottomSpacing} />}
-      />
     </Modal>
   );
 
@@ -529,19 +587,35 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
         <FlatList
           ref={flatListRef}
           data={comments}
-          renderItem={({ item }) => (
-            <View style={styles.chatBubbleContainer}>
-              <View style={[styles.chatBubble, styles.otherUserBubble]}>
-                <Text style={styles.senderName}>{item.user?.full_name || 'Unknown'}</Text>
-                {item.content && (
-                  <Text style={styles.chatMessage}>{item.content}</Text>
-                )}
-                <View style={styles.chatTimestamp}>
-                  <Text style={styles.chatTimeText}>{formatCommentDate(item.created_at)}</Text>
+          renderItem={({ item }) => {
+            const isOwnMessage = item.user?.id?.toString() === currentUserId;
+            
+            return (
+              <View 
+                style={[
+                  styles.chatBubbleContainer,
+                  isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
+                ]}
+              >
+                <View 
+                  style={[
+                    styles.chatBubble,
+                    isOwnMessage ? styles.ownUserBubble : styles.otherUserBubble
+                  ]}
+                >
+                  {!isOwnMessage && (
+                    <Text style={styles.senderName}>{item.user?.full_name || 'Unknown'}</Text>
+                  )}
+                  {item.content && (
+                    <Text style={styles.chatMessage}>{item.content}</Text>
+                  )}
+                  <View style={styles.chatTimestamp}>
+                    <Text style={styles.chatTimeText}>{formatCommentDate(item.created_at)}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          )}
+            );
+          }}
           keyExtractor={(item) => item.id.toString()}
           inverted={false}
           contentContainerStyle={styles.chatListContent}
@@ -556,7 +630,7 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
           }
           ListEmptyComponent={
             <View style={styles.emptyChat}>
-              <Ionicons name="chatbubbles" size={64} color={WHATSAPP_COLORS.border} />
+              <Ionicons name="chatbubbles" size={64} color={WHATSAPP_COLORS.chat} />
               <Text style={styles.emptyChatTitle}>No comments yet</Text>
               <Text style={styles.emptyChatText}>
                 Start by sending a message or attaching files
@@ -572,9 +646,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
         onCommentAdded={() => fetchComments(1, false)}
         theme={theme}
       />
-
-      {/* REMOVED: "Mark as completed" button from bottom */}
-      {/* REMOVED: Swipe instructions from bottom */}
     </View>
   );
 };
@@ -628,167 +699,284 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerActionButton: { padding: 8 },
-  modalContainer: { flex: 1, backgroundColor: WHATSAPP_COLORS.background },
-  modalHeader: {
+
+  // Modal styles - redesigned
+  modalMainContainer: { 
+    flex: 1, 
+    backgroundColor: '#F5F5F5',
+  },
+  modalHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: WHATSAPP_COLORS.primary
+    paddingBottom: 16,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  modalBackButton: { padding: 8, marginRight: 12 },
-  modalTitle: {
+  modalCloseButton: { 
+    padding: 8,
+    width: 40,
+  },
+  modalHeaderTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFF',
-    flex: 1
+    flex: 1,
+    textAlign: 'center',
   },
-  modalScrollContent: {
+  modalHeaderPlaceholder: {
+    width: 40,
+  },
+  modalContent: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    flexGrow: 1
+    paddingTop: 16,
   },
-  containerBox: {
+  modalFooterSpace: { height: 24 },
+
+  // Card styles - WhatsApp message bubble inspired
+  modalCard: {
     backgroundColor: WHATSAPP_COLORS.surface,
-    marginBottom: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    overflow: 'hidden'
+    marginBottom: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
-  leadInfoContainer: {
-    flexDirection: 'row',
+
+  // Lead profile header - redesigned
+  leadProfileHeader: {
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 16
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    backgroundColor: WHATSAPP_COLORS.surface,
   },
-  leadAvatarSection: { alignItems: 'center' },
-  leadAvatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: WHATSAPP_COLORS.primaryLight,
+  leadAvatarLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: WHATSAPP_COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: WHATSAPP_COLORS.primary
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: WHATSAPP_COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
-  leadAvatarText: { fontSize: 28, fontWeight: '700', color: '#FFF' },
-  leadHeaderSection: { flex: 1, justifyContent: 'center' },
-  leadNameText: {
+  leadAvatarLargeText: { 
+    fontSize: 32, 
+    fontWeight: '700', 
+    color: '#FFF' 
+  },
+  leadBuildingName: {
     fontSize: 22,
     fontWeight: '700',
     color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 4
+    marginBottom: 6,
+    textAlign: 'center',
   },
-  leadCompanyText: {
-    fontSize: 15,
+  locationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: WHATSAPP_COLORS.primary + '10',
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  locationText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.primary,
     fontWeight: '500',
-    color: WHATSAPP_COLORS.textSecondary
   },
-  statusBadgesContainer: {
+  statusBadgesRow: {
     flexDirection: 'row',
+    gap: 8,
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10
+    justifyContent: 'center',
   },
-  statusBadgeBox: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  statusBadgeBoxText: { fontSize: 13, fontWeight: '600' },
-  containerHeader: {
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusPillText: { 
+    fontSize: 13, 
+    fontWeight: '600',
+  },
+
+  // Section header - redesigned
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: WHATSAPP_COLORS.primary + '08',
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 10
   },
-  containerTitle: {
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: WHATSAPP_COLORS.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.primary,
-    flex: 1
+    color: WHATSAPP_COLORS.textPrimary,
   },
-  containerContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12
-  },
-  photosScroll: { paddingHorizontal: 16, paddingVertical: 12 },
-  photoThumbnail: {
-    marginRight: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-    position: 'relative'
-  },
-  photoImage: { width: 120, height: 120, backgroundColor: WHATSAPP_COLORS.backgroundSecondary },
-  photoNumberBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
+  countBadge: {
     backgroundColor: WHATSAPP_COLORS.primary,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4
+    borderRadius: 12,
+    minWidth: 24,
+    alignItems: 'center',
   },
-  photoNumber: { color: '#FFF', fontSize: 12, fontWeight: '600' },
-  modalBottomSpacing: { height: 40 },
-  detailSection: { marginBottom: 16 },
-  detailSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.primary,
-    marginBottom: 12
-  },
-  propertyTypeBadge: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textSecondary
-  },
-  detailGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12
-  },
-  detailItem: {
-    width: '48%',
-    backgroundColor: WHATSAPP_COLORS.background,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border
-  },
-  detailLabel: {
+  countBadgeText: {
+    color: '#FFF',
     fontSize: 12,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.textSecondary,
-    marginBottom: 4
   },
-  detailValue: {
+  propertyTypeBadgeSmall: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  propertyTypeBadgeSmallText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  // Photos section - redesigned
+  photosScrollView: {
+    paddingVertical: 12,
+  },
+  photosScrollContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  photoCard: {
+    width: 140,
+    height: 140,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginRight: 12,
+    backgroundColor: WHATSAPP_COLORS.border,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  photoCardImage: { 
+    width: '100%', 
+    height: '100%',
+  },
+  photoCardOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 8,
+    background: 'linear-gradient(to top, rgba(0,0,0,0.3), transparent)',
+  },
+  photoIndexBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  photoIndexText: { 
+    color: '#FFF', 
+    fontSize: 12, 
+    fontWeight: '600' 
+  },
+
+  // Detail section - redesigned for WhatsApp feel
+  detailSectionContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border + '40',
+  },
+  detailRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  detailRowIcon: {
+    marginRight: 10,
+  },
+  detailRowLabel: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    fontWeight: '500',
+    flex: 1,
+  },
+  detailRowValue: {
     fontSize: 14,
     color: WHATSAPP_COLORS.textPrimary,
-    fontWeight: '500'
+    fontWeight: '600',
+    textAlign: 'right',
+    maxWidth: '50%',
   },
+
+  // Chat section - FIXED: Better centering and spacing
   chatContainer: { flex: 1, backgroundColor: WHATSAPP_COLORS.chatBg },
   chatListContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 20
+    paddingBottom: 8, // CHANGED: Reduced from 20 to 8 to fix irregular spacing
+    flexGrow: 1, // ADDED: Allows content to grow and enables proper centering
   },
-  chatBubbleContainer: { marginVertical: 8, maxWidth: '80%' },
+  chatBubbleContainer: { 
+    marginVertical: 4,
+  },
+  ownMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  otherMessageContainer: {
+    alignItems: 'flex-start',
+  },
   chatBubble: {
     padding: 12,
     borderRadius: 12,
@@ -797,11 +985,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
-    minWidth: 120
+    minWidth: 120,
+    maxWidth: '75%',
+  },
+  ownUserBubble: {
+    backgroundColor: WHATSAPP_COLORS.outgoing,
+    borderBottomRightRadius: 2,
   },
   otherUserBubble: {
     backgroundColor: WHATSAPP_COLORS.incoming,
-    borderBottomLeftRadius: 2
+    borderBottomLeftRadius: 2,
   },
   senderName: {
     fontSize: 12,
@@ -817,10 +1010,12 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   chatTimeText: { fontSize: 10, color: WHATSAPP_COLORS.textTertiary },
+  // FIXED: Empty chat state with proper vertical centering
   emptyChat: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 100,
+    flex: 1, // ADDED: Enables vertical centering in FlatList
+    paddingVertical: 60, // CHANGED: Reduced from 100 to 60
     gap: 16
   },
   emptyChatTitle: {
