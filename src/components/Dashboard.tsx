@@ -32,7 +32,7 @@ import Cab from './cab/Cab';
 import Driver from './driver/Driver';
 import BDT from './bdt/BDT';
 import Medical from './Medical';
-import ScoutBoy from './ScoutBoy';
+import ScoutBoy from './scout_boy/ScoutBoy';
 import CreateSite from './CreateSite';
 import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
