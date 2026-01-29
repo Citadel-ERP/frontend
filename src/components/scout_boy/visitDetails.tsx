@@ -355,9 +355,9 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {visit.site?.building_name || 'Visit'}
               </Text>
-              <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {/* <Text style={styles.headerSubtitle} numberOfLines={1}>
                 {currentIndex + 1} of {totalVisits}
-              </Text>
+              </Text> */}
             </View>
           </TouchableOpacity>
 
