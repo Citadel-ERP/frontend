@@ -1134,6 +1134,20 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  addButton: {
+  backgroundColor: '#00d285', 
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 8,
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+},
+addButtonText: {
+  color: '#FFFFFF',
+  fontWeight: '600',
+  fontSize: 14,
+},
   reasonInput: {
     borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,
