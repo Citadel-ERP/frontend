@@ -8,8 +8,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { BACKEND_URL } from '../../config/config';
 import { Ionicons } from '@expo/vector-icons';
+import MetroStationSelector from './metroStationSelector';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface CreateSiteProps {
   token: string | null;
@@ -63,17 +64,20 @@ const CreateSite: React.FC<CreateSiteProps> = ({
   const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
   const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
-  const [siteType, setSiteType] = useState<'managed' | 'conventional' | null>(null);
-  const [metroStations, setMetroStations] = useState<MetroStation[]>([]);
-  const [showMetroDropdown, setShowMetroDropdown] = useState(false);
-  const [metroSearchQuery, setMetroSearchQuery] = useState('');
+  const [siteType, setSiteType] = useState<'managed' | 'conventional' | 'for_sale' | null>(null);
   const [selectedMetroStation, setSelectedMetroStation] = useState<MetroStation | null>(null);
-  const [loadingMetroStations, setLoadingMetroStations] = useState(false);
-  const [showCustomMetroInput, setShowCustomMetroInput] = useState(false);
   const [customMetroStation, setCustomMetroStation] = useState('');
   const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
   const [otherAmenities, setOtherAmenities] = useState<OtherAmenity[]>([]);
-  const hasInitiallyLoaded = useRef(false);
+  const [customFloorCondition, setCustomFloorCondition] = useState('');
+  const [customBuildingStatus, setCustomBuildingStatus] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [showMetroSelector, setShowMetroSelector] = useState(false);
+
+  // Rental escalation state
+  const [rentalEscalationPercentage, setRentalEscalationPercentage] = useState('');
+  const [rentalEscalationValue, setRentalEscalationValue] = useState('');
+  const [rentalEscalationPeriod, setRentalEscalationPeriod] = useState<'year' | 'month'>('year');
 
   const [newSite, setNewSite] = useState({
     building_name: '',
@@ -124,10 +128,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     remarks: '',
     building_owner_name: '',
     building_owner_contact: '',
-    area_offered: '',
-    maintenance_rate: '',
     managed_property: false,
     conventional_property: true,
+    for_sale_property: false,
     business_hours_of_operation: '',
     premises_access: '',
     total_seats: '',
@@ -140,64 +143,25 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     scout_id: ''
   });
 
+  // Extended floor condition options with custom
+  const FLOOR_CONDITION_OPTIONS = [
+    { label: 'Bareshell', value: 'bareshell' },
+    { label: 'Warmshell', value: 'warmshell' },
+    { label: 'Extended Warmshell', value: 'extended_warmshell' },
+    { label: 'Fully Furnished', value: 'fully_furnished' },
+    { label: 'Semi Furnished', value: 'semi_furnished' },
+    { label: 'Custom', value: 'custom' },
+  ];
+
+  // Building status options with custom
   const BUILDING_STATUS_OPTIONS = [
     { label: 'Available', value: 'available' },
     { label: 'Leased Out', value: 'leased_out' },
     { label: 'Readily Available', value: 'readily_available' },
     { label: 'Ready to Move In', value: 'ready_to_move_in' },
     { label: 'Ready for Fitouts', value: 'ready_for_fitouts' },
+    { label: 'Custom', value: 'custom' },
   ];
-
-  const FLOOR_CONDITION_OPTIONS = [
-    { label: 'Bareshell', value: 'bareshell' },
-    { label: 'Warmshell', value: 'warmshell' },
-    { label: 'Fully Furnished', value: 'fully_furnished' },
-    { label: 'Semi Furnished', value: 'semi_furnished' },
-  ];
-
-  const fetchMetroStations = async (query: string = '') => {
-    setLoadingMetroStations(true);
-    try {
-      let url = `${BACKEND_URL}/core/getAllMetroStations`;
-      if (query && query.length >= 2) {
-        url = `${BACKEND_URL}/core/getMetroStations?query=${encodeURIComponent(query)}`;
-      }
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.message === "Success" && data.data) {
-        setMetroStations(data.data);
-      } else {
-        setMetroStations([]);
-      }
-    } catch (error) {
-      console.error('Error fetching metro stations:', error);
-      setMetroStations([]);
-    } finally {
-      setLoadingMetroStations(false);
-    }
-  };
-
-  useEffect(() => {
-    if (showMetroDropdown && !hasInitiallyLoaded.current) {
-      hasInitiallyLoaded.current = true;
-      fetchMetroStations('');
-    }
-    
-    if (!showMetroDropdown) {
-      hasInitiallyLoaded.current = false;
-      setMetroSearchQuery('');
-    }
-  }, [showMetroDropdown]);
-
-  useEffect(() => {
-    if (!showMetroDropdown || !metroSearchQuery || metroSearchQuery.length < 2) return;
-    
-    const delayDebounceFn = setTimeout(() => {
-      fetchMetroStations(metroSearchQuery);
-    }, 500);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [metroSearchQuery, showMetroDropdown]);
 
   const beautifyName = (name: string): string => {
     if (!name) return '-';
@@ -253,31 +217,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     }
   };
 
-  const addMetroStationToBackend = async (stationName: string, city: string = 'Delhi') => {
-    if (!token) return false;
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/core/addMetroStations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          stations: {
-            [city]: [stationName]
-          }
-        }),
-      });
-
-      const data = await response.json();
-      return response.ok;
-    } catch (error) {
-      console.error('Error adding metro station:', error);
-      return false;
-    }
-  };
-
   const validateStep = (step: number): boolean => {
     if (step === 0) {
       if (!siteType) {
@@ -296,17 +235,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
   const handleNextStep = async () => {
     if (validateStep(currentStep)) {
-      if (currentStep === 0 && customMetroStation && !selectedMetroStation) {
-        try {
-          const success = await addMetroStationToBackend(customMetroStation, 'Custom');
-          if (!success) {
-            Alert.alert('Warning', 'Failed to save custom metro station, but continuing...');
-          }
-        } catch (error) {
-          console.error('Error saving custom metro station:', error);
-        }
-      }
-
       setCurrentStep(currentStep + 1);
     }
   };
@@ -317,48 +245,16 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     }
   };
 
-  const requestPermissions = async () => {
-    try {
-      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-      const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (cameraPermission.status !== 'granted' || mediaPermission.status !== 'granted') {
-        Alert.alert(
-          'Permissions Required',
-          'Camera and gallery permissions are required to upload photos. Please enable them in Settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings', onPress: () => {
-                if (Platform.OS === 'ios') {
-                  ImagePicker.requestMediaLibraryPermissionsAsync();
-                }
-              }
-            }
-          ]
-        );
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error('Permission request error:', error);
-      Alert.alert('Error', 'Failed to request permissions');
-      return false;
-    }
-  };
-
   const handleAddPhoto = () => {
     setShowImageSourceModal(true);
   };
 
   const pickImageFromCamera = async () => {
     setShowImageSourceModal(false);
-
     await new Promise(resolve => setTimeout(resolve, 300));
 
     try {
       const { status } = await ImagePicker.getCameraPermissionsAsync();
-
       if (status !== 'granted') {
         const { status: newStatus } = await ImagePicker.requestCameraPermissionsAsync();
         if (newStatus !== 'granted') {
@@ -391,12 +287,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
   const pickImageFromGallery = async () => {
     setShowImageSourceModal(false);
-
     await new Promise(resolve => setTimeout(resolve, 300));
 
     try {
       const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
-
       if (status !== 'granted') {
         const { status: newStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (newStatus !== 'granted') {
@@ -449,8 +343,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         longitude: parseFloat(locationData.longitude),
         managed_property: siteType === 'managed',
         conventional_property: siteType === 'conventional',
+        for_sale_property: siteType === 'for_sale',
       };
 
+      // Handle metro station
       if (selectedMetroStation && selectedMetroStation.id) {
         siteData.nearest_metro_station = selectedMetroStation.id;
       } else if (customMetroStation) {
@@ -484,18 +380,40 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         }
       }
 
+      // Handle floor condition with custom
+      if (newSite.floor_condition === 'custom' && customFloorCondition) {
+        siteData.floor_condition = customFloorCondition;
+      } else {
+        siteData.floor_condition = newSite.floor_condition;
+      }
+
+      // Handle building status with custom
+      if (newSite.building_status === 'custom' && customBuildingStatus) {
+        siteData.building_status = customBuildingStatus;
+      } else {
+        siteData.building_status = newSite.building_status;
+      }
+
+      // Handle rental escalation from parts
+      if (rentalEscalationPercentage && rentalEscalationValue) {
+        siteData.rental_escalation = `${rentalEscalationPercentage}% / ${rentalEscalationValue} / ${rentalEscalationPeriod}`;
+      }
+
+      // Basic info
       if (newSite.location) siteData.location = newSite.location;
       if (newSite.location_link) siteData.location_link = newSite.location_link;
       if (newSite.landmark) siteData.landmark = newSite.landmark;
-      if (newSite.building_status) siteData.building_status = newSite.building_status;
-      if (newSite.floor_condition) siteData.floor_condition = newSite.floor_condition;
 
-      if (siteType === 'conventional') {
+      // Property specs
+      if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
+      if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
+      if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
+      if (newSite.total_area) siteData.total_area = parseCurrency(newSite.total_area);
+      if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
+
+      // Financial/Commercial details
+      if (siteType === 'conventional' || siteType === 'for_sale') {
         if (newSite.rent) siteData.rent = parseCurrency(newSite.rent);
-        if (newSite.total_area) siteData.total_area = parseCurrency(newSite.total_area);
-        if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
-        if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
-        if (newSite.area_offered) siteData.area_offered = newSite.area_offered;
       } else {
         if (newSite.rent_per_seat) siteData.rent_per_seat = parseCurrency(newSite.rent_per_seat);
         if (newSite.total_seats) siteData.total_seats = parseCurrency(newSite.total_seats);
@@ -506,14 +424,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         if (newSite.premises_access) siteData.premises_access = newSite.premises_access;
       }
 
+      // Contact info
       if (newSite.contact_person_name) siteData.contact_person_name = newSite.contact_person_name;
       if (newSite.contact_person_number) siteData.contact_person_number = newSite.contact_person_number;
       if (newSite.contact_person_email) siteData.contact_person_email = newSite.contact_person_email;
       if (newSite.contact_person_designation) siteData.contact_person_designation = newSite.contact_person_designation;
+      if (newSite.building_owner_name) siteData.building_owner_name = newSite.building_owner_name;
+      if (newSite.building_owner_contact) siteData.building_owner_contact = newSite.building_owner_contact;
 
-      if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
-      if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
-
+      // Parking
       if (newSite.car_parking_charges) siteData.car_parking_charges = parseCurrency(newSite.car_parking_charges);
       if (newSite.car_parking_slots) siteData.car_parking_slots = newSite.car_parking_slots;
       if (newSite.two_wheeler_slots) siteData.two_wheeler_slots = newSite.two_wheeler_slots;
@@ -523,8 +442,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
       }
 
+      // Commercial terms
       if (newSite.cam) siteData.cam = parseCurrency(newSite.cam);
-      if (newSite.cam_deposit) siteData.cam_deposit = parseCurrency(newSite.cam_deposit);
+      if (newSite.cam_deposit) siteData.cam_deposit = newSite.cam_deposit;
       if (newSite.security_deposit) siteData.security_deposit = newSite.security_deposit;
 
       if (newSite.oc !== undefined && newSite.oc !== null) {
@@ -534,16 +454,16 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         siteData.will_developer_do_fitouts = newSite.will_developer_do_fitouts ? 'True' : 'False';
       }
 
-      if (newSite.rental_escalation) siteData.rental_escalation = newSite.rental_escalation;
       if (newSite.efficiency) siteData.efficiency = newSite.efficiency;
       if (newSite.notice_period) siteData.notice_period = newSite.notice_period;
-      if (newSite.maintenance_rate) siteData.maintenance_rate = newSite.maintenance_rate;
       if (newSite.lease_term) siteData.lease_term = newSite.lease_term;
       if (newSite.lock_in_period) siteData.lock_in_period = newSite.lock_in_period;
 
+      // Utilities
       if (newSite.power) siteData.power = newSite.power;
       if (newSite.power_backup) siteData.power_backup = newSite.power_backup;
 
+      // Workspace amenities
       if (newSite.number_of_cabins) siteData.number_of_cabins = newSite.number_of_cabins;
       if (newSite.number_of_workstations) siteData.number_of_workstations = newSite.number_of_workstations;
       if (newSite.size_of_workstation) siteData.size_of_workstation = newSite.size_of_workstation;
@@ -556,6 +476,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
       if (newSite.discussion_room) siteData.discussion_room = newSite.discussion_room;
       if (newSite.meeting_room) siteData.meeting_room = newSite.meeting_room;
 
+      // Other amenities
       otherAmenities.forEach((amenity, index) => {
         if (amenity.key && amenity.value) {
           siteData[`other_amenity_${index + 1}_key`] = amenity.key;
@@ -564,8 +485,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
       });
 
       if (newSite.remarks) siteData.remarks = newSite.remarks;
-      if (newSite.building_owner_name) siteData.building_owner_name = newSite.building_owner_name;
-      if (newSite.building_owner_contact) siteData.building_owner_contact = newSite.building_owner_contact;
 
       const formData = new FormData();
       Object.entries(siteData).forEach(([key, value]) => {
@@ -689,60 +608,48 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             </View>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.siteTypeCard,
+            siteType === 'for_sale' && styles.siteTypeCardSelected
+          ]}
+          onPress={() => setSiteType('for_sale')}
+        >
+          <Ionicons name="cash" size={32} color={siteType === 'for_sale' ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.primary} />
+          <Text style={styles.siteTypeTitle}>For Sale Office</Text>
+          <Text style={styles.siteTypeDescription}>
+            Office property available for purchase
+          </Text>
+          {siteType === 'for_sale' && (
+            <View style={styles.siteTypeCheckmark}>
+              <Ionicons name="checkmark" size={16} color="#FFF" />
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <View style={[styles.formGroup, { marginTop: 24 }]}>
-        <Text style={styles.formLabel}>Nearest Metro Station</Text>
+        <Text style={styles.formLabel}>Nearest Metro Station <Text style={styles.optionalText}>(Optional)</Text></Text>
         <TouchableOpacity
-          style={styles.dropdownButton}
-          onPress={() => {
-            setShowMetroDropdown(true);
-            setMetroSearchQuery('');
-          }}
+          style={styles.metroSelectButton}
+          onPress={() => setShowMetroSelector(true)}
         >
-          <Text style={[
-            styles.dropdownButtonText,
-            !selectedMetroStation && !customMetroStation && { color: WHATSAPP_COLORS.textTertiary }
-          ]}>
-            {selectedMetroStation ? selectedMetroStation.name :
-              customMetroStation ? customMetroStation :
-                'Select metro station...'}
-          </Text>
-          <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
+          <View style={styles.metroSelectContent}>
+            <Ionicons name="train" size={20} color={WHATSAPP_COLORS.primary} />
+            <Text style={[
+              styles.metroSelectText,
+              !(selectedMetroStation || customMetroStation) && styles.metroSelectPlaceholder
+            ]}>
+              {selectedMetroStation ? selectedMetroStation.name :
+                customMetroStation ? customMetroStation :
+                  'Select metro station...'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.optionalText}>(Optional)</Text>
+        
       </View>
-
-      {showCustomMetroInput && (
-        <View style={styles.formGroup}>
-          <Text style={styles.formLabel}>Enter Metro Station Name</Text>
-          <TextInput
-            style={styles.input}
-            value={customMetroStation}
-            onChangeText={setCustomMetroStation}
-            placeholder="Enter metro station name"
-            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-          />
-          <TouchableOpacity
-            style={[styles.navButton, { marginTop: 8 }]}
-            onPress={async () => {
-              if (customMetroStation.trim()) {
-                try {
-                  await addMetroStationToBackend(customMetroStation, 'Custom');
-                } catch (error) {
-                  console.error('Error saving custom station:', error);
-                }
-
-                setSelectedMetroStation(null);
-                setShowCustomMetroInput(false);
-                setShowMetroDropdown(false);
-              }
-            }}
-          >
-            <Text style={styles.navButtonTextPrimary}>Save Custom Station</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 
@@ -800,10 +707,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({
   const renderStep2 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>
-        {siteType === 'conventional' ? '📐 Property Specifications' : '💺 Seat & Unit Details'}
+        {siteType === 'conventional' || siteType === 'for_sale' ? '📐 Property Specifications' : '💺 Seat & Unit Details'}
       </Text>
       <Text style={styles.stepDescription}>
-        {siteType === 'conventional' ? 'Area and floor details' : 'Seat and unit configuration'}
+        {siteType === 'conventional' || siteType === 'for_sale' ? 'Area and floor details' : 'Seat and unit configuration'}
       </Text>
 
       <View style={styles.row}>
@@ -838,13 +745,28 @@ const CreateSite: React.FC<CreateSiteProps> = ({
           onPress={() => setShowFloorConditionDropdown(true)}
         >
           <Text style={styles.dropdownButtonText}>
-            {beautifyName(newSite.floor_condition)}
+            {newSite.floor_condition === 'custom'
+              ? customFloorCondition || 'Custom'
+              : beautifyName(newSite.floor_condition)}
           </Text>
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      {siteType === 'conventional' ? (
+      {newSite.floor_condition === 'custom' && (
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Custom Floor Condition</Text>
+          <TextInput
+            style={styles.input}
+            value={customFloorCondition}
+            onChangeText={setCustomFloorCondition}
+            placeholder="Enter custom floor condition"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+        </View>
+      )}
+
+      {(siteType === 'conventional' || siteType === 'for_sale') ? (
         <>
           <View style={styles.row}>
             <View style={styles.halfWidth}>
@@ -878,17 +800,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
               value={newSite.availble_floors}
               onChangeText={(val) => setNewSite({ ...newSite, availble_floors: val })}
               placeholder="G+1 to G+5"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Area Offered</Text>
-            <TextInput
-              style={styles.input}
-              value={newSite.area_offered}
-              onChangeText={(val) => setNewSite({ ...newSite, area_offered: val })}
-              placeholder="11000"
               placeholderTextColor={WHATSAPP_COLORS.textTertiary}
             />
           </View>
@@ -963,9 +874,11 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
   const renderStep3 = () => (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>💰 Financial Details</Text>
+      <Text style={styles.stepTitle}>📊 Commercial Details</Text>
       <Text style={styles.stepDescription}>
-        {siteType === 'conventional' ? 'Rent and payment terms' : 'Seat pricing and payment terms'}
+        {siteType === 'conventional' || siteType === 'for_sale'
+          ? 'Commercial terms and pricing'
+          : 'Seat pricing and commercial terms'}
       </Text>
 
       <View style={styles.formGroup}>
@@ -975,13 +888,28 @@ const CreateSite: React.FC<CreateSiteProps> = ({
           onPress={() => setShowBuildingStatusDropdown(true)}
         >
           <Text style={styles.dropdownButtonText}>
-            {beautifyName(newSite.building_status)}
+            {newSite.building_status === 'custom'
+              ? customBuildingStatus || 'Custom'
+              : beautifyName(newSite.building_status)}
           </Text>
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      {siteType === 'conventional' ? (
+      {newSite.building_status === 'custom' && (
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Custom Building Status</Text>
+          <TextInput
+            style={styles.input}
+            value={customBuildingStatus}
+            onChangeText={setCustomBuildingStatus}
+            placeholder="Enter custom building status"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+        </View>
+      )}
+
+      {siteType === 'conventional' || siteType === 'for_sale' ? (
         <>
           <View style={styles.row}>
             <View style={styles.halfWidth}>
@@ -1062,12 +990,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
       <View style={styles.row}>
         <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>CAM Deposit (₹)</Text>
+          <Text style={styles.formLabel}>CAM Deposit (Months)</Text>
           <TextInput
             style={styles.input}
             value={newSite.cam_deposit}
-            onChangeText={(val) => setNewSite({ ...newSite, cam_deposit: formatCurrency(val) })}
-            placeholder="1,00,000"
+            onChangeText={(val) => setNewSite({ ...newSite, cam_deposit: val })}
+            placeholder="3"
             keyboardType="numeric"
             placeholderTextColor={WHATSAPP_COLORS.textTertiary}
           />
@@ -1108,6 +1036,57 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         </View>
       </View>
 
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Rental Escalation</Text>
+        <View style={styles.rentalEscalationContainer}>
+          <TextInput
+            style={[styles.input, styles.rentalEscalationInput]}
+            value={rentalEscalationPercentage}
+            onChangeText={setRentalEscalationPercentage}
+            placeholder="5%"
+            keyboardType="numeric"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+          <Text style={styles.rentalEscalationSeparator}>/</Text>
+          <TextInput
+            style={[styles.input, styles.rentalEscalationInput]}
+            value={rentalEscalationValue}
+            onChangeText={setRentalEscalationValue}
+            placeholder="2"
+            keyboardType="numeric"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+          <Text style={styles.rentalEscalationSeparator}>/</Text>
+          <View style={styles.rentalEscalationPeriodContainer}>
+            <TouchableOpacity
+              style={[
+                styles.periodButton,
+                rentalEscalationPeriod === 'year' && styles.periodButtonActive
+              ]}
+              onPress={() => setRentalEscalationPeriod('year')}
+            >
+              <Text style={[
+                styles.periodButtonText,
+                rentalEscalationPeriod === 'year' && styles.periodButtonTextActive
+              ]}>Year</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.periodButton,
+                rentalEscalationPeriod === 'month' && styles.periodButtonActive
+              ]}
+              onPress={() => setRentalEscalationPeriod('month')}
+            >
+              <Text style={[
+                styles.periodButtonText,
+                rentalEscalationPeriod === 'month' && styles.periodButtonTextActive
+              ]}>Month</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <Text style={styles.helperText}>Format: Percentage / Frequency / Period</Text>
+      </View>
+
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Notice Period</Text>
@@ -1119,28 +1098,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
             placeholderTextColor={WHATSAPP_COLORS.textTertiary}
           />
         </View>
-        <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>Rental Escalation (%)</Text>
-          <TextInput
-            style={styles.input}
-            value={newSite.rental_escalation}
-            onChangeText={(val) => setNewSite({ ...newSite, rental_escalation: val })}
-            placeholder="5"
-            keyboardType="numeric"
-            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Maintenance rate</Text>
-        <TextInput
-          style={styles.input}
-          value={newSite.maintenance_rate}
-          onChangeText={(val) => setNewSite({ ...newSite, maintenance_rate: val })}
-          placeholder="12"
-          placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-        />
       </View>
 
       <View style={styles.checkboxContainer}>
@@ -1548,6 +1505,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
           placeholder="Any additional observations..."
           placeholderTextColor={WHATSAPP_COLORS.textTertiary}
           multiline
+          textAlignVertical="top"
         />
       </View>
 
@@ -1617,101 +1575,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     </Modal>
   );
 
-  const MetroDropdownModal = () => (
-    <Modal
-      visible={showMetroDropdown}
-      transparent
-      animationType="slide"
-      onRequestClose={() => {
-        setShowMetroDropdown(false);
-        setMetroSearchQuery('');
-      }}
-    >
-      <TouchableOpacity
-        style={styles.modalContainer}
-        activeOpacity={1}
-        onPress={() => {
-          setShowMetroDropdown(false);
-          setMetroSearchQuery('');
-        }}
-      >
-        <View
-          style={styles.dropdownContainer}
-          onStartShouldSetResponder={() => true}
-        >
-          <Text style={styles.dropdownTitle}>Select Metro Station</Text>
-
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              value={metroSearchQuery}
-              onChangeText={setMetroSearchQuery}
-              placeholder="Search metro stations..."
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-              autoFocus={false}
-              returnKeyType="search"
-              onSubmitEditing={() => {
-                // Prevent keyboard from closing
-              }}
-            />
-          </View>
-
-          <ScrollView style={styles.dropdownScroll}>
-            {loadingMetroStations ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-                <Text style={styles.loadingText}>Searching...</Text>
-              </View>
-            ) : metroStations.length === 0 ? (
-              <Text style={styles.noResultsText}>
-                No stations found. Try a different search or add a custom station.
-              </Text>
-            ) : (
-              metroStations.map((station) => (
-                <TouchableOpacity
-                  key={station.id}
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setSelectedMetroStation(station);
-                    setCustomMetroStation('');
-                    setShowCustomMetroInput(false);
-                    setShowMetroDropdown(false);
-                  }}
-                >
-                  <Text style={styles.dropdownOptionText}>{station.name}</Text>
-                  <Text style={styles.dropdownOptionSubtext}>{station.city}</Text>
-                </TouchableOpacity>
-              ))
-            )}
-
-            <TouchableOpacity
-              style={[styles.dropdownOption, { borderTopWidth: 1, borderTopColor: WHATSAPP_COLORS.border }]}
-              onPress={() => {
-                setShowCustomMetroInput(true);
-                setShowMetroDropdown(false);
-                setSelectedMetroStation(null);
-              }}
-            >
-              <Text style={[styles.dropdownOptionText, { color: WHATSAPP_COLORS.primary }]}>
-                + Add Custom Metro Station
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => {
-              setShowMetroDropdown(false);
-              setMetroSearchQuery('');
-            }}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-
   const ImageSourceModal = () => (
     <Modal visible={showImageSourceModal} transparent animationType="fade" onRequestClose={() => setShowImageSourceModal(false)}>
       <TouchableOpacity
@@ -1749,6 +1612,22 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     </Modal>
   );
 
+  // Show Metro Selector Screen
+  if (showMetroSelector) {
+    return (
+      <MetroStationSelector
+        token={token}
+        selectedStation={selectedMetroStation}
+        customStation={customMetroStation}
+        onSelect={(station, custom) => {
+          setSelectedMetroStation(station);
+          setCustomMetroStation(custom);
+        }}
+        onBack={() => setShowMetroSelector(false)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
@@ -1769,14 +1648,18 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         {renderStepIndicator()}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
           <ScrollView
+            ref={scrollViewRef}
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 20 }}
+            contentContainerStyle={{
+              paddingBottom: 100,
+              minHeight: screenHeight - 200
+            }}
           >
             <View style={styles.formContainer}>
               {currentStep === 0 && renderStep0()}
@@ -1850,8 +1733,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         onClose={() => setShowFloorConditionDropdown(false)}
         title="Select Floor Condition"
       />
-
-      <MetroDropdownModal />
 
       <ImageSourceModal />
     </SafeAreaView>
@@ -1956,16 +1837,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   formContainer: {
-    padding: 16, flexGrow: 1,
+    padding: 16,
+    flexGrow: 1,
   },
   formGroup: {
-    marginBottom: 12,
+    marginBottom: 16,
+    width: '100%',
   },
   formLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   optionalText: {
     fontSize: 11,
@@ -1989,7 +1872,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   halfWidth: {
     flex: 1,
@@ -2015,23 +1898,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalOverlay: {
-    flex: 1,
+    width: '100%',
   },
   dropdownContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     padding: 16,
     maxHeight: '80%',
     shadowColor: '#000',
@@ -2039,6 +1913,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    width: '90%'
   },
   dropdownTitle: {
     fontSize: 16,
@@ -2058,41 +1933,6 @@ const styles = StyleSheet.create({
   dropdownOptionText: {
     fontSize: 14,
     color: '#1F2937',
-  },
-  dropdownOptionSubtext: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  searchContainer: {
-    marginBottom: 12,
-  },
-  searchInput: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    fontSize: 14,
-    color: '#1F2937',
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  loadingText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  noResultsText: {
-    textAlign: 'center',
-    padding: 16,
-    fontSize: 14,
-    color: '#6B7280',
   },
   imageSourceContainer: {
     width: '100%',
@@ -2137,7 +1977,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   checkboxContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   checkbox: {
     flexDirection: 'row',
@@ -2176,6 +2016,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
   },
+  rentalEscalationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  rentalEscalationInput: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  rentalEscalationSeparator: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  rentalEscalationPeriodContainer: {
+    flexDirection: 'row',
+    gap: 4,
+    flex: 2,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 6,
+  },
+  periodButtonActive: {
+    backgroundColor: '#075E54',
+    borderColor: '#075E54',
+  },
+  periodButtonText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  periodButtonTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 4,
+  },
   siteTypeContainer: {
     gap: 12,
   },
@@ -2189,12 +2074,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    // elevation: 2,
     alignItems: 'center',
   },
   siteTypeCardSelected: {
     borderColor: '#075E54',
-    backgroundColor: 'rgba(7, 94, 84, 0.05)',
+    backgroundColor: 'rgba(7, 94, 84, 0.3)',
   },
   siteTypeTitle: {
     fontSize: 16,
@@ -2220,8 +2105,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  metroSelectButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  metroSelectContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  metroSelectText: {
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  metroSelectPlaceholder: {
+    color: '#9CA3AF',
+  },
   otherAmenityContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   otherAmenityRow: {
     flexDirection: 'row',
@@ -2341,6 +2250,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 16,
+    backgroundColor: '#F5F5F5',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   navButton: {
     flex: 1,

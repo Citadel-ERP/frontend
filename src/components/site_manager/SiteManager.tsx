@@ -89,7 +89,7 @@ interface Assignment {
     is_visible_to_scout: boolean;
     scout_completed_at: string | null;
     admin_completed_at: string | null;
-    assign_date: string;  
+    assign_date: string;
     created_at: string;
     updated_at: string;
     comments: any[];
@@ -179,7 +179,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
             }
 
             const data = await response.json();
-
+            console.log('Fetched sites data:', data);
             if (data.message !== "Sites fetched successfully") {
                 throw new Error(data.message || 'Failed to fetch sites');
             }
@@ -239,6 +239,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         }
     }, [token, sitesFilter]);
 
+
     const deleteSite = useCallback(async (siteId: number) => {
         if (!token) return;
 
@@ -255,7 +256,10 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                             const response = await fetch(`${BACKEND_URL}/manager/deleteSite`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ token, site_id: siteId })
+                                body: JSON.stringify({
+                                    token,
+                                    site_ids: [siteId]  // Send as array
+                                })
                             });
 
                             if (!response.ok) {
@@ -277,6 +281,38 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         } catch (error) {
             console.error('Error deleting site:', error);
             Alert.alert('Error', 'Failed to delete site. Please try again.');
+        }
+    }, [token, fetchSites]);
+
+    // NEW: Add bulk delete function
+    const bulkDeleteSites = useCallback(async (siteIds: number[]) => {
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/manager/deleteSite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token,
+                    site_ids: siteIds  // Send all IDs at once
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.message !== "Site deleted successfully") {
+                throw new Error(data.message || 'Failed to delete sites');
+            }
+
+            // Refresh the sites list after successful deletion
+            fetchSites(1);
+        } catch (error) {
+            console.error('Error deleting sites:', error);
+            throw error; // Re-throw to let the component handle it
         }
     }, [token, fetchSites]);
 
@@ -654,6 +690,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                                     onSitePress={handleSitePress}
                                     onEditSite={handleEditSite}
                                     onDeleteSite={deleteSite}
+                                    onBulkDeleteSites={bulkDeleteSites}  // ADD THIS LINE
                                     onSearch={searchSites}
                                     onFilter={setSitesFilter}
                                     onLoadMore={handleLoadMoreSites}
@@ -715,6 +752,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         handleAssignmentPress,
         handleEditAssignment,
         deleteSite,
+        bulkDeleteSites,
         deleteAssignment,
         searchSites,
         searchAssignments,
