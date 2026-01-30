@@ -54,8 +54,10 @@ interface EditSiteVisitProps {
 const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, token, theme }) => {
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
   const [editedVisit, setEditedVisit] = useState<Visit>(visit);
   const [editableFields, setEditableFields] = useState<EditableFieldType>({});
+  const [originalFields, setOriginalFields] = useState<EditableFieldType>({});
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -117,6 +119,7 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
       });
     }
     setEditableFields(initialFields);
+    setOriginalFields(initialFields);
   }, [visit]);
 
   const beautifyName = (name: string): string => {
@@ -139,13 +142,13 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
     }));
   };
 
-  const handleUpdateVisit = async () => {
+  const handleSaveDetails = async () => {
     if (!token) {
       Alert.alert('Error', 'Token not found. Please login again.');
       return;
     }
 
-    setUpdating(true);
+    setSavingDetails(true);
     try {
       // Build update payload for updateVisitDetails endpoint
       const updatePayload: any = {
@@ -153,55 +156,150 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
         visit_id: visit.id,
       };
 
-      // Add all editable fields to payload
+      // Add all editable fields to payload (only non-empty ones)
+      let hasChanges = false;
       EDITABLE_FIELDS.forEach(field => {
-        if (editableFields[field] !== undefined && editableFields[field] !== '') {
-          const value = editableFields[field];
-          // Convert numeric fields appropriately
-          updatePayload[field] = isNaN(Number(value)) ? value : Number(value);
+        const currentValue = editableFields[field];
+        const originalValue = originalFields[field];
+        
+        // Check if field has changed
+        if (currentValue !== originalValue) {
+          hasChanges = true;
+          if (currentValue !== undefined && currentValue !== '') {
+            // Convert numeric fields appropriately
+            const numValue = Number(currentValue);
+            updatePayload[field] = isNaN(numValue) ? currentValue : numValue;
+          } else {
+            // Send empty string for cleared fields
+            updatePayload[field] = '';
+          }
         }
       });
 
-      // Add status if it has changed
-      if (editedVisit.status !== visit.status) {
-        updatePayload.status = editedVisit.status;
+      if (!hasChanges) {
+        Alert.alert('Info', 'No changes to save');
+        setSavingDetails(false);
+        return;
       }
 
-      console.log('Update payload:', updatePayload);
+      console.log('Saving details with payload:', updatePayload);
 
-      // Update visit details (handles both details and status)
+      // Update visit details
       const response = await fetch(`${BACKEND_URL}/employee/updateVisitDetails`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
       console.log('Update response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
       
       if (!data.message || !data.message.includes('successfully')) {
         throw new Error(data.message || 'Failed to update visit details');
       }
 
-      Alert.alert('Success', 'Visit updated successfully!');
-      setIsEditing(false);
+      // CRITICAL FIX: Update the original fields AND the visit object with the new saved data
+      // This ensures the data persists when user navigates away and comes back
+      const updatedFields = { ...editableFields };
+      setOriginalFields(updatedFields);
       
-      // Call the onUpdate callback to refresh parent component
-      if (onUpdate) {
-        onUpdate();
+      // Update the local editedVisit state with new field values
+      if (editedVisit.site) {
+        const updatedSite = { ...editedVisit.site };
+        EDITABLE_FIELDS.forEach(field => {
+          if (editableFields[field] !== undefined) {
+            const value = editableFields[field];
+            if (value !== '') {
+              const numValue = Number(value);
+              (updatedSite as any)[field] = isNaN(numValue) ? value : numValue;
+            } else {
+              (updatedSite as any)[field] = '';
+            }
+          }
+        });
+        setEditedVisit({ ...editedVisit, site: updatedSite });
       }
       
-      // Delay before going back to ensure data is refreshed
-      setTimeout(() => {
-        onBack();
-      }, 500);
+      Alert.alert('Success', 'Visit details saved successfully!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            setIsEditing(false);
+            // Call the onUpdate callback to refresh parent component
+            // This will fetch fresh data from the server
+            if (onUpdate) {
+              onUpdate();
+            }
+          }
+        }
+      ]);
+
     } catch (error) {
-      console.error('Error updating visit:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update visit');
+      console.error('Error saving details:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save visit details');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!token) {
+      Alert.alert('Error', 'Token not found. Please login again.');
+      return;
+    }
+
+    // Check if status has actually changed
+    if (editedVisit.status === visit.status) {
+      Alert.alert('Info', 'Status has not changed');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const updatePayload = {
+        token,
+        visit_id: visit.id,
+        status: editedVisit.status,
+      };
+
+      console.log('Updating status with payload:', updatePayload);
+
+      const response = await fetch(`${BACKEND_URL}/employee/updateVisitDetails`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload),
+      });
+
+      const data = await response.json();
+      console.log('Status update response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+      
+      if (!data.message || !data.message.includes('successfully')) {
+        throw new Error(data.message || 'Failed to update status');
+      }
+
+      Alert.alert('Success', 'Status updated successfully!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Call the onUpdate callback to refresh parent component
+            if (onUpdate) {
+              onUpdate();
+            }
+          }
+        }
+      ]);
+
+    } catch (error) {
+      console.error('Error updating status:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update status');
     } finally {
       setUpdating(false);
     }
@@ -221,28 +319,33 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
         body: JSON.stringify({ token, visit_id: visit.id }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
       console.log('Mark complete response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
       
       if (!data.message || !data.message.includes('successfully')) {
         throw new Error(data.message || 'Failed to mark visit as complete');
       }
 
-      Alert.alert('Success', 'Visit marked as completed!');
-      
-      // Call the onUpdate callback to refresh parent component
-      if (onUpdate) {
-        onUpdate();
-      }
-      
-      // Delay before going back to ensure data is refreshed
-      setTimeout(() => {
-        onBack();
-      }, 500);
+      Alert.alert('Success', 'Visit marked as completed!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Call the onUpdate callback to refresh parent component
+            if (onUpdate) {
+              onUpdate();
+            }
+            // Go back after a short delay
+            setTimeout(() => {
+              onBack();
+            }, 300);
+          }
+        }
+      ]);
+
     } catch (error) {
       console.error('Error marking visit complete:', error);
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to mark visit as complete');
@@ -253,16 +356,13 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
 
   const handleCancel = () => {
     // Reset editable fields to original values
-    const initialFields: EditableFieldType = {};
-    if (visit.site) {
-      EDITABLE_FIELDS.forEach(field => {
-        const value = (visit.site as any)?.[field];
-        initialFields[field] = value ? String(value) : '';
-      });
-    }
-    setEditableFields(initialFields);
+    setEditableFields({ ...originalFields });
     setEditedVisit(visit);
     setIsEditing(false);
+  };
+
+  const hasUnsavedChanges = () => {
+    return JSON.stringify(editableFields) !== JSON.stringify(originalFields);
   };
 
   const renderEditableField = (label: string, fieldName: string, placeholder: string = '') => (
@@ -393,7 +493,27 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={isEditing ? handleCancel : onBack}
+          onPress={() => {
+            if (isEditing && hasUnsavedChanges()) {
+              Alert.alert(
+                'Unsaved Changes',
+                'You have unsaved changes. Do you want to discard them?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Discard', 
+                    style: 'destructive',
+                    onPress: () => {
+                      handleCancel();
+                      onBack();
+                    }
+                  }
+                ]
+              );
+            } else {
+              onBack();
+            }
+          }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -401,7 +521,24 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
         <Text style={styles.headerTitle}>Edit Visit</Text>
         <TouchableOpacity
           style={styles.editButton}
-          onPress={() => setIsEditing(!isEditing)}
+          onPress={() => {
+            if (isEditing && hasUnsavedChanges()) {
+              Alert.alert(
+                'Unsaved Changes',
+                'You have unsaved changes. Do you want to discard them?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Discard', 
+                    style: 'destructive',
+                    onPress: handleCancel
+                  }
+                ]
+              );
+            } else {
+              setIsEditing(!isEditing);
+            }
+          }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
@@ -441,14 +578,19 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
             </View>
 
             <TouchableOpacity
-              style={[styles.updateButton, updating && styles.buttonDisabled]}
-              onPress={handleUpdateVisit}
-              disabled={updating}
+              style={[
+                styles.updateButton, 
+                (updating || editedVisit.status === visit.status) && styles.buttonDisabled
+              ]}
+              onPress={handleUpdateStatus}
+              disabled={updating || editedVisit.status === visit.status}
             >
               {updating ? (
                 <ActivityIndicator color="#FFF" size="small" />
               ) : (
-                <Text style={styles.updateButtonText}>Update Status</Text>
+                <Text style={styles.updateButtonText}>
+                  {editedVisit.status === visit.status ? 'No Change' : 'Update Status'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -479,14 +621,22 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
               <Text style={styles.sectionTitle}>Visit Details</Text>
               {isEditing && (
                 <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={handleUpdateVisit}
-                  disabled={updating}
+                  style={[
+                    styles.saveButton,
+                    (savingDetails || !hasUnsavedChanges()) && styles.buttonDisabled
+                  ]}
+                  onPress={handleSaveDetails}
+                  disabled={savingDetails || !hasUnsavedChanges()}
                 >
-                  {updating ? (
+                  {savingDetails ? (
                     <ActivityIndicator color="#FFF" size="small" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                    <>
+                      <Ionicons name="save" size={16} color="#FFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.saveButtonText}>
+                        {hasUnsavedChanges() ? 'Save Changes' : 'No Changes'}
+                      </Text>
+                    </>
                   )}
                 </TouchableOpacity>
               )}
@@ -518,13 +668,24 @@ const EditSiteVisit: React.FC<EditSiteVisitProps> = ({ visit, onBack, onUpdate, 
               {STATUS_OPTIONS.map((option) => (
                 <TouchableOpacity
                   key={option.value}
-                  style={styles.dropdownOption}
+                  style={[
+                    styles.dropdownOption,
+                    editedVisit.status === option.value && styles.dropdownOptionSelected
+                  ]}
                   onPress={() => {
                     setEditedVisit({ ...editedVisit, status: option.value });
                     setShowStatusDropdown(false);
                   }}
                 >
-                  <Text style={styles.dropdownOptionText}>{option.label}</Text>
+                  <Text style={[
+                    styles.dropdownOptionText,
+                    editedVisit.status === option.value && styles.dropdownOptionTextSelected
+                  ]}>
+                    {option.label}
+                  </Text>
+                  {editedVisit.status === option.value && (
+                    <Ionicons name="checkmark" size={20} color={WHATSAPP_COLORS.success} />
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -551,7 +712,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     backgroundColor: WHATSAPP_COLORS.primary,
   },
   backButton: {
@@ -670,6 +831,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    flexDirection: 'row',
   },
   saveButtonText: {
     color: WHATSAPP_COLORS.white,
@@ -784,10 +946,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownOptionSelected: {
+    backgroundColor: WHATSAPP_COLORS.success + '10',
   },
   dropdownOptionText: {
     fontSize: 16,
     color: WHATSAPP_COLORS.textPrimary,
+  },
+  dropdownOptionTextSelected: {
+    color: WHATSAPP_COLORS.success,
+    fontWeight: '600',
   },
   cancelButton: {
     paddingVertical: 12,
