@@ -76,6 +76,12 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showDisabledMessage, setShowDisabledMessage] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Track if we need to save read status (to prevent constant saves)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedNotificationsRef = useRef<Notification[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
@@ -179,16 +185,37 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     }
   };
 
+  // ✅ OPTIMIZED: Only update badge count and save when necessary
   useEffect(() => {
-    if (notificationsEnabled) {
-      const unreadCount = notifications.filter(n => !n.Read).length;
-      onBadgeUpdate?.(unreadCount);
-      updateIOSBadgeCount(unreadCount);
-      console.log(`📱 Total: ${notifications.length}, Unread: ${unreadCount}`);
-      if (notifications.length > 0) {
-        saveReadStatusLocally();
-      }
+    if (!notificationsEnabled || notifications.length === 0) return;
+
+    const unreadCount = notifications.filter(n => !n.Read).length;
+    onBadgeUpdate?.(unreadCount);
+    updateIOSBadgeCount(unreadCount);
+    console.log(`📱 Total: ${notifications.length}, Unread: ${unreadCount}`);
+
+    // Debounce save operation to prevent constant writes
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      // Only save if read status actually changed
+      const currentReadStatus = notifications.map(n => ({ id: n.id, read: n.Read }));
+      const lastReadStatus = lastSavedNotificationsRef.current.map(n => ({ id: n.id, read: n.Read }));
+      
+      const hasChanged = JSON.stringify(currentReadStatus) !== JSON.stringify(lastReadStatus);
+      if (hasChanged) {
+        saveReadStatusLocally();
+        lastSavedNotificationsRef.current = [...notifications];
+      }
+    }, 300); // Wait 300ms after change before saving
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [notifications, notificationsEnabled]);
 
   const saveReadStatusLocally = async () => {
@@ -284,6 +311,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         });
         
         setNotifications(formattedNotifications);
+        lastSavedNotificationsRef.current = [...formattedNotifications];
         setDeletedIds(localDeletedIds);
         
         console.log(`📊 Final - Total: ${formattedNotifications.length}, Unread: ${formattedNotifications.filter((n: Notification) => !n.Read).length}`);
@@ -369,6 +397,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       const token = await AsyncStorage.getItem('token_2');
       if (!token) return;
 
+      // Update UI optimistically
       setNotifications(prev => prev.map(notif => notif.id === id ? { ...notif, Read: true } : notif));
 
       const response = await fetch(`${BACKEND_URL}/core/markNotificationAsRead`, {
@@ -379,6 +408,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
 
       if (!response.ok) {
         console.error('❌ Failed to mark notification as read on backend');
+        // Only revert if backend fails
         setNotifications(prev => prev.map(notif => notif.id === id ? { ...notif, Read: false } : notif));
       } else {
         console.log(`✅ Notification ${id} marked as read`);
@@ -440,6 +470,14 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         return;
       }
 
+      // Optimistically update UI first
+      const newDeletedIds = new Set(deletedIds).add(id);
+      setDeletedIds(newDeletedIds);
+      await saveDeletedIds(newDeletedIds);
+      
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setNotifications(prev => prev.filter(notif => notif.id !== id));
+
       const response = await fetch(`${BACKEND_URL}/core/deleteNotification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -447,16 +485,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       });
 
       if (response.ok) {
-        const newDeletedIds = new Set(deletedIds).add(id);
-        setDeletedIds(newDeletedIds);
-        await saveDeletedIds(newDeletedIds);
-        
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setNotifications(prev => prev.filter(notif => notif.id !== id));
         console.log(`✅ Notification ${id} deleted successfully`);
       } else {
         console.error('❌ Failed to delete notification on backend');
-        Alert.alert('Error', 'Failed to delete notification. Please try again.');
+        Alert.alert('Error', 'Failed to delete notification on server. It may reappear on refresh.');
       }
     } catch (error) {
       console.error('❌ Error deleting notification:', error);
@@ -468,6 +500,85 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         return newSet;
       });
     }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+
+    Alert.alert(
+      'Delete Notifications',
+      `Are you sure you want to delete ${selectedIds.size} notification${selectedIds.size > 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const idsToDelete = Array.from(selectedIds);
+            
+            try {
+              const token = await AsyncStorage.getItem('token_2');
+              if (!token) return;
+
+              // Optimistically update UI first
+              const newDeletedIds = new Set(deletedIds);
+              idsToDelete.forEach(id => newDeletedIds.add(id));
+              setDeletedIds(newDeletedIds);
+              await saveDeletedIds(newDeletedIds);
+              
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setNotifications(prev => prev.filter(notif => !selectedIds.has(notif.id)));
+              setSelectedIds(new Set());
+              setSelectionMode(false);
+
+              // Delete on backend in background
+              for (const id of idsToDelete) {
+                const response = await fetch(`${BACKEND_URL}/core/deleteNotification`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token, notification_id: id }),
+                });
+
+                if (response.ok) {
+                  console.log(`✅ Notification ${id} deleted successfully`);
+                } else {
+                  console.error(`❌ Failed to delete notification ${id} on backend`);
+                }
+              }
+              
+            } catch (error) {
+              console.error('❌ Error deleting selected notifications:', error);
+              Alert.alert('Error', 'Some notifications may not have been deleted on the server.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === notifications.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(notifications.map(n => n.id)));
+    }
+  };
+
+  const toggleSelectItem = (id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
   const onRefresh = async () => {
@@ -483,6 +594,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
 
   const handleNotificationPress = (notification: Notification) => {
     if (!notificationsEnabled) return;
+    
+    if (selectionMode) {
+      toggleSelectItem(notification.id);
+      return;
+    }
     
     if (!notification.Read) {
       handleMarkAsRead(notification.id);
@@ -514,6 +630,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     const itemScale = useRef(new Animated.Value(0.95)).current;
     const notificationColor = getNotificationColor(notification.type);
     const [isDeleting, setIsDeleting] = useState(false);
+    const isSelected = selectedIds.has(notification.id);
     
     useEffect(() => {
       Animated.parallel([
@@ -564,8 +681,34 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
             delayPressIn={50}
             disabled={isDeleting || !notificationsEnabled}
           >
-            <View style={[s.iconBox, { backgroundColor: `${notificationColor}20` }]}>
-              <Ionicons name={notification.icon as any} size={22} color={notificationColor} />
+            {selectionMode && (
+              <TouchableOpacity 
+                style={s.checkboxContainer}
+                onPress={() => toggleSelectItem(notification.id)}
+                activeOpacity={0.6}
+              >
+                <View style={[
+                  s.checkbox,
+                  { 
+                    borderColor: isSelected ? currentColors.primary : currentColors.border,
+                    backgroundColor: isSelected ? currentColors.primary : 'transparent',
+                  }
+                ]}>
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+
+            <View style={[s.iconBox, { 
+              backgroundColor: selectionMode ? currentColors.primary : `${notificationColor}20` 
+            }]}>
+              <Ionicons 
+                name={notification.icon as any} 
+                size={22} 
+                color={selectionMode ? "#FFFFFF" : notificationColor} 
+              />
             </View>
 
             <View style={s.notifText}>
@@ -590,11 +733,13 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
               )}
             </View>
 
-            <TouchableOpacity style={s.delBtn} onPress={onDeletePress} disabled={isDeleting} activeOpacity={0.6}>
-              <Ionicons name="trash-outline" size={20} color={currentColors.textTertiary} />
-            </TouchableOpacity>
+            {!selectionMode && (
+              <TouchableOpacity style={s.delBtn} onPress={onDeletePress} disabled={isDeleting} activeOpacity={0.6}>
+                <Ionicons name="trash-outline" size={20} color={currentColors.textTertiary} />
+              </TouchableOpacity>
+            )}
 
-            {!notification.Read && notificationsEnabled && (
+            {!notification.Read && notificationsEnabled && !selectionMode && (
               <View style={s.unreadBox}>
                 <View style={[s.dot, { backgroundColor: currentColors.primary }]} />
               </View>
@@ -639,20 +784,63 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
             </View>
           </TouchableOpacity>
           
-          <View style={s.hdrTitleBox}>
-            <Text style={[s.hdrTitle, { color: "#FFFFFF" }]}>Notifications</Text>
+          <View style={[s.hdrTitleBox, selectionMode && { left: 90, right: 140 }]}>
+            <Text style={[s.hdrTitle, { color: "#FFFFFF" }]} numberOfLines={1}>
+              {selectionMode ? `${selectedIds.size} Selected` : 'Notifications'}
+            </Text>
           </View>
           
-          <TouchableOpacity 
-            style={[s.markAllBtn, { 
-              opacity: unreadCount === 0 || !notificationsEnabled ? 0.4 : 1 
-            }]}
-            onPress={markAllNotificationsAsRead}
-            disabled={unreadCount === 0 || !notificationsEnabled}
-            activeOpacity={0.6}
-          >
-            <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          {selectionMode ? (
+            <View style={s.selectionActions}>
+              <TouchableOpacity 
+                style={s.selectAllBtn}
+                onPress={toggleSelectAll}
+                activeOpacity={0.6}
+              >
+                <Text style={[s.selectAllText, { color: "#FFFFFF" }]}>
+                  {selectedIds.size === notifications.length ? 'Deselect' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[s.deleteSelectedBtn, { opacity: selectedIds.size === 0 ? 0.4 : 1 }]}
+                onPress={handleDeleteSelected}
+                disabled={selectedIds.size === 0}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="trash" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={s.cancelBtn}
+                onPress={toggleSelectionMode}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="close" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={s.normalActions}>
+              <TouchableOpacity 
+                style={[s.selectionModeBtn, { 
+                  opacity: notifications.length === 0 || !notificationsEnabled ? 0.4 : 1 
+                }]}
+                onPress={toggleSelectionMode}
+                disabled={notifications.length === 0 || !notificationsEnabled}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="checkmark-circle-outline" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[s.markAllBtn, { 
+                  opacity: unreadCount === 0 || !notificationsEnabled ? 0.4 : 1 
+                }]}
+                onPress={markAllNotificationsAsRead}
+                disabled={unreadCount === 0 || !notificationsEnabled}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         {notifications.length > 0 && (
           <View style={s.hdrStats}>
@@ -886,13 +1074,25 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
   hdrContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: 12, paddingBottom: 4 },
-  backBtn: { width: 80, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
+  backBtn: { width: 85, height: 40, alignItems: 'flex-start', justifyContent: 'center', zIndex: 1 },
   backBtnContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
   backBtnText: { fontSize: 16, fontWeight: '500', marginLeft: 4 },
   hdrTitleBox: { position: 'absolute', left: 0, right: 0, alignItems: 'center',
-    justifyContent: 'center', zIndex: -1 },
-  hdrTitle: { fontSize: 20, fontWeight: '600' },
+    justifyContent: 'center', zIndex: 0 },
+  hdrTitle: { fontSize: 18, fontWeight: '600' },
+  normalActions: { flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1 },
+  selectionModeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   markAllBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  selectionActions: { flexDirection: 'row', alignItems: 'center', gap: 2, zIndex: 1 },
+  selectAllBtn: { 
+    paddingHorizontal: 8, 
+    paddingVertical: 5, 
+    borderRadius: 5, 
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  selectAllText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  deleteSelectedBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   hdrStats: { marginTop: 4, marginBottom: 4, alignItems: 'center' },
   hdrStatsText: { fontSize: 13, fontWeight: '400' },
   scroll: { flex: 1 },
@@ -902,7 +1102,16 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
   notifContainer: { position: 'relative', marginBottom: 1, height: 90 },
   notifCard: { position: 'relative', zIndex: 1 },
-  notifContent: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 14 },
+  notifContent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
+  checkboxContainer: { marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+  checkbox: { 
+    width: 22, 
+    height: 22, 
+    borderRadius: 11, 
+    borderWidth: 2, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
   delBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginTop: 2 },
   iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
     marginRight: 14, marginTop: 2 },
