@@ -123,10 +123,11 @@ const Header: React.FC<HeaderProps> = ({
               
               {showAddButton && onAddPress && (
                 <TouchableOpacity 
-                  style={styles.actionButton} 
+                  style={[styles.actionButton, styles.addButton]} 
                   onPress={onAddPress}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
                   <Text style={styles.actionButtonText}>{addButtonText}</Text>
                 </TouchableOpacity>
               )}
@@ -253,6 +254,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00d285',
+    paddingHorizontal: 14,
+    gap: 6,
   },
   backText: {
     color: '#fff',

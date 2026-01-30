@@ -1572,28 +1572,37 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         <View style={styles.headerOverlay} />
 
                         <View style={styles.headerContent}>
-                            <View style={styles.headerTopRow}>
-                                <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                                    <View style={styles.backIcon}>
-                                        <View style={styles.backArrow} />
-                                        <Text style={styles.backText}>Back</Text>
-                                    </View>
-                                </TouchableOpacity>
-                                <View style={styles.headerCenter}>
-                                    <Text style={styles.logoText}>CITADEL</Text>
-                                    <Text style={styles.headerSubtitle}>Managing: {city}</Text>
-                                </View>
-                                <TouchableOpacity
-                                    style={{ padding: 8 }}
-                                    onPress={() => {
-                                        setCurrentView('create-vehicle');
-                                    }}
-                                >
-                                    <MaterialIcons name="add" size={24} color="#fff" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
+    <View style={styles.headerTopRow}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <View style={styles.backIcon}>
+                <View style={styles.backArrow} />
+                <Text style={styles.backText}>Back</Text>
+            </View>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+            <Text style={styles.logoText}>CITADEL</Text>
+            <Text style={styles.headerSubtitle}>Managing: {city}</Text>
+        </View>
+        {/* CHANGED: + icon to Add button */}
+        <TouchableOpacity
+            style={{
+                backgroundColor: '#00d285',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6
+            }}
+            onPress={() => {
+                setCurrentView('create-vehicle');
+            }}
+        >
+            <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
+        </TouchableOpacity>
+    </View>
+</View>
                         <View style={styles.titleSection}>
                             <Text style={styles.headerTitle}>Vehicles</Text>
                             <Text style={[styles.headerSubtitle,{textAlign: 'left'}]}>
