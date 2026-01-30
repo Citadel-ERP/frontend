@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
 import { ReminderItem } from './types';
@@ -274,20 +274,22 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   calendarDay: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-  },
+  width: `${100 / 7}%`,
+  aspectRatio: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 2,
+  maxHeight: Platform.OS === 'web' ? 50 : undefined,
+},
   dayCircle: {
-    width: '85%',
-    aspectRatio: 1,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f3f4f6',
-  },
+  width: Platform.OS === 'web' ? 40 : '85%',
+  height: Platform.OS === 'web' ? 40 : undefined,
+  aspectRatio: Platform.OS === 'web' ? undefined : 1,
+  borderRadius: 100,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#f3f4f6',
+},
   todayCircle: {
     borderWidth: 2,
     borderColor: '#1e1b4b',

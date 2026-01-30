@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 
@@ -21,6 +21,13 @@ interface HeaderProps {
   variant?: 'main' | 'details';
 }
 
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+    <Text style={styles.backText}>Back</Text>
+  </View>
+);
+
 export const Header: React.FC<HeaderProps> = ({
   title,
   subtitle,
@@ -30,12 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   variant = 'main',
 }) => {
   const headerStyle = variant === 'details' ? styles.detailsHeaderBanner : styles.headerBanner;
-const BackIcon = () => (
-  <View style={styles.backIcon}>
-    <View style={styles.backArrow} />
-    <Text style={styles.backText}>Back</Text>
-  </View>
-);
+
   return (
     <View style={headerStyle}>
       <LinearGradient
@@ -75,11 +77,12 @@ const BackIcon = () => (
             <View style={styles.rightSection}>
               {variant === 'main' && showAddEmployee && (
                 <TouchableOpacity 
-                  style={styles.actionButton} 
+                  style={styles.addButton} 
                   onPress={showAddEmployee}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="person-add" size={20} color="#fff" />
+                  <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
+                  <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               )}
             </View>

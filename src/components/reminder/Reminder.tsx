@@ -386,11 +386,20 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.addDayButton}
+              style={{
+                backgroundColor: '#00d285',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6
+              }}
               onPress={() => openCreateModalForDate(selectedDate)}
               activeOpacity={0.8}
             >
-              <Ionicons name="add" size={24} color="#fff" />
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
             </TouchableOpacity>
           </View>
           
@@ -558,15 +567,23 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 </View>
                 
                 <View style={styles.rightSection}>
-                  <TouchableOpacity 
-                    style={styles.actionButton} 
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#00d285',
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
                     onPress={() => {
                       setSelectedDate(new Date());
                       setShowCreateModal(true);
                     }}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="add" size={20} color="#fff" />
+                    <Ionicons name="add" size={20} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -720,13 +737,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    minHeight: 32,
-    justifyContent: 'center',
-  },
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 8,
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  minHeight: 32,
+  justifyContent: 'center',
+},
   titleSection: {
     paddingHorizontal: 20,
     paddingBottom: 10,
@@ -809,14 +826,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginTop: 4,
   },
-  addDayButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // addDayButton: {
+  //   width: 44,
+  //   height: 44,
+  //   borderRadius: 22,
+  //   backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  // },
   timelineScroll: {
     flex: 1,
     backgroundColor: '#fff',

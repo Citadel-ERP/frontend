@@ -538,33 +538,37 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
       <StatusBar barStyle="light-content" backgroundColor="#075E54" />
       
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="chevron-back" size={28} color="white" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <View style={[styles.avatar, { backgroundColor: policyColor }]}>
-            <MaterialIcons name="health-and-safety" size={24} color="white" />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>Mediclaim</Text>
-            <Text style={styles.headerSubtitle}>
-              {mediclaimData.insurance_provider_name} • Active
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity 
-          style={styles.downloadButton} 
-          onPress={downloadPDF}
-          disabled={downloadingPDF}
-        >
-          {downloadingPDF ? (
-            <ActivityIndicator size="small" color="white" />
-          ) : (
-            <Ionicons name="download-outline" size={24} color="white" />
-          )}
-        </TouchableOpacity>
-      </View>
+<View style={styles.header}>
+  <TouchableOpacity style={styles.backButton} onPress={onBack}>
+    <Ionicons name="chevron-back" size={28} color="white" />
+  </TouchableOpacity>
+  <View style={styles.headerContent}>
+    <View style={[styles.avatar, { backgroundColor: policyColor }]}>
+      <MaterialIcons name="health-and-safety" size={24} color="white" />
+    </View>
+    <View style={styles.headerText}>
+      <Text style={styles.headerTitle}>Mediclaim</Text>
+      <Text style={styles.headerSubtitle}>
+        {mediclaimData.insurance_provider_name} • Active
+      </Text>
+    </View>
+  </View>
+  <TouchableOpacity 
+    style={styles.downloadButtonGreen} 
+    onPress={downloadPDF}
+    disabled={downloadingPDF}
+    activeOpacity={0.8}
+  >
+    {downloadingPDF ? (
+      <ActivityIndicator size="small" color="white" />
+    ) : (
+      <>
+        <MaterialIcons name="download" size={20} color="#FFFFFF" />
+        <Text style={styles.downloadButtonText}>Download</Text>
+      </>
+    )}
+  </TouchableOpacity>
+</View>
 
       {/* Main Content */}
       <ScrollView style={styles.mainContent} showsVerticalScrollIndicator={false}>
@@ -1198,6 +1202,20 @@ const styles = StyleSheet.create({
   addMemberButton: {
     marginLeft: 'auto',
   },
+  downloadButtonGreen: {
+  backgroundColor: '#00d285',
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 8,
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+},
+downloadButtonText: {
+  color: '#FFFFFF',
+  fontWeight: '600',
+  fontSize: 14,
+},
   detailCard: {
     backgroundColor: 'white',
     borderRadius: 12,

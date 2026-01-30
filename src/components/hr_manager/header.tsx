@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { styles } from './styles';
 import { WHATSAPP_COLORS } from './constants';
 
@@ -48,13 +48,18 @@ export const Header: React.FC<HeaderProps> = ({
             <TouchableOpacity
               onPress={rightButton.onPress}
               disabled={rightButton.disabled}
-              style={styles.headerRightButton}
+              style={[
+                styles.headerAddButton,
+                rightButton.disabled && styles.headerAddButtonDisabled
+              ]}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name={rightButton.icon as any}
-                size={24}
-                color={rightButton.disabled ? 'rgba(255,255,255,0.5)' : WHATSAPP_COLORS.white}
+              <MaterialCommunityIcons
+                name="plus"
+                size={20}
+                color="#FFFFFF"
               />
+              <Text style={styles.headerAddButtonText}>Add</Text>
             </TouchableOpacity>
           )}
         </View>

@@ -883,7 +883,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         onBack: handleBackToBDTSelection,
         showAddButton: true,
         onAddPress: handleCreateLead,
-        addButtonText: '+ Lead',
+        addButtonText: 'Add Lead',
         showThemeToggle: true,
       };
     }

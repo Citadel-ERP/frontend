@@ -9,6 +9,24 @@ export const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: WHATSAPP_COLORS.white
     },
+    headerAddButton: {
+        backgroundColor: '#00d285',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        },
+        headerAddButtonDisabled: {
+        backgroundColor: 'rgba(0, 210, 133, 0.5)',
+        opacity: 0.6,
+        },
+        headerAddButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 14,
+        },
     header: {
         backgroundColor: WHATSAPP_COLORS.primaryDark,
         paddingHorizontal: 16,
