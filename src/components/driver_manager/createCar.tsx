@@ -245,13 +245,19 @@ const CreateCar: React.FC<CreateCarProps> = ({
             return;
         }
 
-        if (!formData.pollution_certificate || !formData.insurance_certificate || !formData.registration_certificate) {
-            Alert.alert('Error', 'All certificates are required');
+        // Validate that if a certificate is uploaded, its expiry date must be provided
+        if (formData.pollution_certificate && !formData.pollution_expiry_date) {
+            Alert.alert('Error', 'Please provide expiry date for Pollution Certificate');
             return;
         }
 
-        if (!formData.pollution_expiry_date || !formData.insurance_expiry_date || !formData.registration_expiry_date) {
-            Alert.alert('Error', 'All certificate expiry dates are required');
+        if (formData.insurance_certificate && !formData.insurance_expiry_date) {
+            Alert.alert('Error', 'Please provide expiry date for Insurance Certificate');
+            return;
+        }
+
+        if (formData.registration_certificate && !formData.registration_expiry_date) {
+            Alert.alert('Error', 'Please provide expiry date for Registration Certificate');
             return;
         }
 
@@ -275,7 +281,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
             formDataToSend.append('vehicle_type', formData.vehicle_type);
             formDataToSend.append('office', formData.office_id);
 
-            // Append certificates
+            // Append certificates only if they exist
             if (formData.pollution_certificate) {
                 formDataToSend.append('pollution_certificate', formData.pollution_certificate as any);
                 formDataToSend.append('pollution_expiry_date', formData.pollution_expiry_date);
@@ -604,7 +610,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 15, fontWeight: '400' }]}>Documents</Text>
 
                         <View style={styles.documentGroup}>
-                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Pollution Certificate *</Text>
+                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Pollution Certificate</Text>
 
 
 
@@ -649,24 +655,26 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             )}
 
                             {/* Expiry Date Field */}
-                            <View style={styles.expiryDateContainer}>
-                                <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
-                                <TouchableOpacity
-                                    style={styles.datePickerButton}
-                                    onPress={() => setPollutionDatePickerOpen(true)}
-                                >
-                                    <MaterialIcons name="calendar-today" size={20} color="#075E54" />
-                                    <Text style={styles.datePickerText}>
-                                        {formData.pollution_expiry_date
-                                            ? new Date(formData.pollution_expiry_date).toLocaleDateString('en-GB')
-                                            : 'Select Expiry Date'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
+                            {formData.pollution_certificate && (
+                                <View style={styles.expiryDateContainer}>
+                                    <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
+                                    <TouchableOpacity
+                                        style={styles.datePickerButton}
+                                        onPress={() => setPollutionDatePickerOpen(true)}
+                                    >
+                                        <MaterialIcons name="calendar-today" size={20} color="#075E54" />
+                                        <Text style={styles.datePickerText}>
+                                            {formData.pollution_expiry_date
+                                                ? new Date(formData.pollution_expiry_date).toLocaleDateString('en-GB')
+                                                : 'Select Expiry Date'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </View>
 
                         <View style={styles.documentGroup}>
-                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Insurance Certificate *</Text>
+                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Insurance Certificate</Text>
                             {/* Document Upload */}
                             {formData.insurance_certificate ? (
                                 <View style={styles.documentSelected}>
@@ -708,24 +716,26 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             )}
 
                             {/* Expiry Date Field */}
-                            <View style={styles.expiryDateContainer}>
-                                <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
-                                <TouchableOpacity
-                                    style={styles.datePickerButton}
-                                    onPress={() => setInsuranceDatePickerOpen(true)}
-                                >
-                                    <MaterialIcons name="calendar-today" size={20} color="#075E54" />
-                                    <Text style={styles.datePickerText}>
-                                        {formData.insurance_expiry_date
-                                            ? new Date(formData.insurance_expiry_date).toLocaleDateString('en-GB')
-                                            : 'Select Expiry Date'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
+                            {formData.insurance_certificate && (
+                                <View style={styles.expiryDateContainer}>
+                                    <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
+                                    <TouchableOpacity
+                                        style={styles.datePickerButton}
+                                        onPress={() => setInsuranceDatePickerOpen(true)}
+                                    >
+                                        <MaterialIcons name="calendar-today" size={20} color="#075E54" />
+                                        <Text style={styles.datePickerText}>
+                                            {formData.insurance_expiry_date
+                                                ? new Date(formData.insurance_expiry_date).toLocaleDateString('en-GB')
+                                                : 'Select Expiry Date'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </View>
 
                         <View style={styles.documentGroup}>
-                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Registration Certificate *</Text>
+                            <Text style={[styles.formLabel, { marginBottom: 10 }]}>Registration Certificate</Text>
                             {/* Document Upload */}
                             {formData.registration_certificate ? (
                                 <View style={styles.documentSelected}>
@@ -767,20 +777,22 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             )}
 
                             {/* Expiry Date Field */}
-                            <View style={styles.expiryDateContainer}>
-                                <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
-                                <TouchableOpacity
-                                    style={styles.datePickerButton}
-                                    onPress={() => setRegistrationDatePickerOpen(true)}
-                                >
-                                    <MaterialIcons name="calendar-today" size={20} color="#075E54" />
-                                    <Text style={styles.datePickerText}>
-                                        {formData.registration_expiry_date
-                                            ? new Date(formData.registration_expiry_date).toLocaleDateString('en-GB')
-                                            : 'Select Expiry Date'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
+                            {formData.registration_certificate && (
+                                <View style={styles.expiryDateContainer}>
+                                    <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
+                                    <TouchableOpacity
+                                        style={styles.datePickerButton}
+                                        onPress={() => setRegistrationDatePickerOpen(true)}
+                                    >
+                                        <MaterialIcons name="calendar-today" size={20} color="#075E54" />
+                                        <Text style={styles.datePickerText}>
+                                            {formData.registration_expiry_date
+                                                ? new Date(formData.registration_expiry_date).toLocaleDateString('en-GB')
+                                                : 'Select Expiry Date'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </View>
 
                         {/* Date Picker Modals */}
