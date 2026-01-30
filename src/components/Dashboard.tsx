@@ -33,7 +33,7 @@ import Driver from './driver/Driver';
 import BDT from './bdt/BDT';
 import Medical from './Medical';
 import ScoutBoy from './scout_boy/ScoutBoy';
-import CreateSite from './CreateSite';
+import SiteManager from './site_manager/SiteManager';
 import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
 import ChatScreen from './chat/ChatScreen';
@@ -406,9 +406,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showBDT, setShowBDT] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
   const [showScoutBoy, setShowScoutBoy] = useState(false);
-  const [showCreateSite, setShowCreateSite] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [showBUP, setShowBUP] = useState(false);
+  const[showSiteManager,setShowSiteManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
   const [showHREmployeeManager, setShowHREmployeeManagement] = useState(false);
@@ -876,6 +876,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       case 'bup':
         setShowBUP(true);
         break;
+      case 'site_manager':
+        setShowSiteManager(true);
+        break;
       case 'employee_management':
         setShowEmployeeManagement(true);
         break;
@@ -1297,6 +1300,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowReminder(true);
     } else if (key.includes('bup') || key.includes('business update')) {
       setShowBUP(true);
+    } else if(key.includes('site_manager') || key.includes('site manager')) {
+      setShowSiteManager(true);
     } else if (key.includes('employee_management') && key != "hr_employee_management") {
       setShowEmployeeManagement(true);
     }
@@ -1446,9 +1451,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setShowBDT(false);
     setShowMedical(false);
     setShowScoutBoy(false);
-    setShowCreateSite(false);
     setShowReminder(false);
     setShowBUP(false);
+    setShowSiteManager(false);
     setShowNotifications(false);
     setShowSettings(false);
     setShowEmployeeManagement(false);
@@ -1719,6 +1724,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
+  if (showSiteManager) {
+    return (
+      <SiteManager onBack={handleBackFromPage} />
+    );
+  }
+
   if (showSettings) {
     return (
       <Settings onBack={handleBackFromPage} />
@@ -1736,13 +1747,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       <HREmployeeManager onBack={handleBackFromPage} />
     );
   }
-
-  if (showCreateSite) {
-    return (
-      <CreateSite onBack={handleBackFromPage} colors={undefined} spacing={undefined} fontSize={undefined} borderRadius={undefined} shadows={undefined} />
-    );
-  }
-
   // Module Grid - Responsive version
   const ModuleGrid = () => {
     if (isWeb) {
