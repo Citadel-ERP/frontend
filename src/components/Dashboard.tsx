@@ -211,7 +211,7 @@ const darkColors = {
   headerBgLight: '#d8d8d8ff',
 };
 
-// WhatsApp-style Hamburger Menu Component
+// WhatsApp-style Hamburger Menu Component - Only for mobile
 interface HamburgerMenuProps {
   isVisible: boolean;
   onClose: () => void;
@@ -258,49 +258,47 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     item.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (!isVisible) return null;
+  if (!isVisible || isWeb) return null; // Hide on web
 
   return (
     <>
       {/* Backdrop */}
       <TouchableOpacity
-        style={[styles.menuBackdrop, isWeb && styles.menuBackdropWeb]}
+        style={[styles.menuBackdrop]}
         activeOpacity={1}
         onPress={onClose}
       >
         <Animated.View
           style={[
             styles.menuContainer,
-            isWeb && styles.menuContainerWeb,
             {
               transform: [{ translateX: slideAnim }],
               backgroundColor: isDark ? '#111B21' : '#e7e6e5',
-              width: isWeb ? Math.min(screenWidth * 0.3, 400) : width * 0.85,
-              maxWidth: isWeb ? 400 : undefined,
+              width: width * 0.85,
             },
           ]}
         >
           {/* Header Section - WhatsApp Style */}
-          <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }, isWeb && styles.menuHeaderWeb]}>
-            <View style={[styles.userInfoContainer, isWeb && styles.userInfoContainerWeb]}>
+          <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }]}>
+            <View style={styles.userInfoContainer}>
               {userData?.profile_picture ? (
                 <Image
                   source={{ uri: userData.profile_picture }}
-                  style={[styles.userAvatar, isWeb && styles.userAvatarWeb]}
+                  style={styles.userAvatar}
                 />
               ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#0c4036ff' }, isWeb && styles.avatarPlaceholderWeb]}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: '#0c4036ff' }]}>
                   <Text style={styles.avatarText}>
                     {getInitials(userData?.full_name || 'User')}
                   </Text>
                 </View>
               )}
 
-              <View style={[styles.userDetails, isWeb && styles.userDetailsWeb]}>
-                <Text style={[styles.userName, isWeb && styles.userNameWeb]} numberOfLines={1}>
+              <View style={styles.userDetails}>
+                <Text style={styles.userName} numberOfLines={1}>
                   {userData?.full_name || 'User'}
                 </Text>
-                <Text style={[styles.userStatus, isWeb && styles.userStatusWeb]} numberOfLines={1}>
+                <Text style={styles.userStatus} numberOfLines={1}>
                   {userData?.designation || 'Employee'}
                 </Text>
               </View>
@@ -308,13 +306,12 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           </View>
 
           {/* Menu Items */}
-          <ScrollView style={[styles.menuItemsContainer, isWeb && styles.menuItemsContainerWeb]}>
+          <ScrollView style={styles.menuItemsContainer}>
             {filteredMenuItems.map((item, index) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.menuItem,
-                  isWeb && styles.menuItemWeb,
                   activeMenuItem === item.title && styles.activeMenuItem,
                   index === filteredMenuItems.length - 1 && styles.lastMenuItem,
                 ]}
@@ -327,21 +324,21 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 }}
                 activeOpacity={0.7}
               >
-                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? '#2A3942' : '#F0F2F5' }, isWeb && styles.menuIconContainerWeb]}>
+                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
                   <Ionicons
                     name={item.icon as any}
-                    size={isWeb ? 24 : 22}
+                    size={22}
                     color={item.color}
                   />
                 </View>
-                <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }, isWeb && styles.menuItemTextWeb]}>
+                <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
                   {item.title}
                 </Text>
 
                 {item.id !== 'logout' && (
                   <Ionicons
                     name="chevron-forward"
-                    size={isWeb ? 20 : 18}
+                    size={18}
                     color={isDark ? '#8696A0' : '#667781'}
                     style={styles.chevronIcon}
                   />
@@ -351,8 +348,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           </ScrollView>
 
           {/* Footer - App Version */}
-          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#2A3942' : '#F0F2F5' }, isWeb && styles.menuFooterWeb]}>
-            <Text style={[styles.versionText, { color: isDark ? '#8696A0' : '#667781' }, isWeb && styles.versionTextWeb]}>
+          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
+            <Text style={[styles.versionText, { color: isDark ? '#8696A0' : '#667781' }]}>
               Citadel v1.0.0
             </Text>
           </View>
@@ -1485,12 +1482,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     ]);
   };
 
-  // Open menu
+  // Open menu - Only for mobile
   const openMenu = () => {
+    if (isWeb) return; // Don't open menu on web
     setIsMenuVisible(true);
-    if (!isWeb) {
-      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-    }
+    Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
   };
 
   // Close menu
@@ -1747,167 +1743,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       <HREmployeeManager onBack={handleBackFromPage} />
     );
   }
-  // Module Grid - Responsive version
-  const ModuleGrid = () => {
-    if (isWeb) {
-      // Web layout - 4 modules in a row
-      return (
-        <View style={[styles.moduleGrid, isWeb && styles.moduleGridWeb]}>
-          {(['attendance', 'cab', 'hr', 'medical'] as const).map((moduleType, index) => {
-            const moduleInfo = {
-              attendance: { name: 'Attendance', icon: 'book-open', gradient: ['#00d285', '#00b872'] },
-              cab: { name: 'Car', icon: 'car', gradient: ['#ff5e7a', '#ff4168'] },
-              hr: { name: 'HR', icon: 'users', gradient: ['#ffb157', '#ff9d3f'] },
-              medical: { name: 'Medical', icon: 'heartbeat', gradient: ['#1da1f2', '#1a8cd8'] }
-            }[moduleType];
-            
-            if (!moduleInfo) return null;
-              return (
-                <TouchableOpacity
-                  key={moduleType}
-                  style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
-                  onPress={() => handleModulePress(moduleInfo.name, moduleType)}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={moduleInfo.gradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
-                  >
-                    <Ionicons
-                      name="arrow-up"
-                      size={isWeb ? 18 : 16}
-                      color="white"
-                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                    />
-                    <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
-                      <FontAwesome5 name={moduleInfo.icon as any} size={isWeb ? 20 : 18} color="white" />
-                    </View>
-                    <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>{moduleInfo.name}</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        );
-      }
-
-    // Mobile layout - Original design
-    return (
-      <View style={[styles.moduleGrid, isWeb && styles.moduleGridWeb]}>
-        <TouchableOpacity
-          style={[styles.moduleAttendance, isWeb && styles.moduleAttendanceWeb]}
-          onPress={() => handleModulePress('Attendance', 'attendance')}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={['#00d285', '#00b872']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
-          >
-            <Ionicons
-              name="arrow-up"
-              size={isWeb ? 22 : 18}
-              color="white"
-              style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-            />
-            <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
-              <FontAwesome5 name="book-open" size={isWeb ? 26 : 22} color="white" />
-            </View>
-            <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>Attendance</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        <View style={[styles.moduleColumn, isWeb && styles.moduleColumnWeb]}>
-          <TouchableOpacity
-            style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
-            onPress={() => handleModulePress('Car', 'cab')}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={['#ff5e7a', '#ff4168']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
-            >
-              <Ionicons
-                name="arrow-up"
-                size={isWeb ? 18 : 16}
-                color="white"
-                style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-              />
-              <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
-                <FontAwesome5 name="car" size={isWeb ? 20 : 18} color="white" />
-              </View>
-              <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>Car</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.moduleSmall, isWeb && styles.moduleWeb]}
-            onPress={() => handleModulePress('HR', 'hr')}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={['#ffb157', '#ff9d3f']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.moduleGradient, isWeb && styles.moduleGradientWeb]}
-            >
-              <Ionicons
-                name="arrow-up"
-                size={isWeb ? 18 : 16}
-                color="white"
-                style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-              />
-              <View style={[styles.moduleIconCircle, isWeb && styles.moduleIconCircleWeb]}>
-                <FontAwesome5 name="users" size={isWeb ? 20 : 18} color="white" />
-              </View>
-              <Text style={[styles.moduleTitle, isWeb && styles.moduleTitleWeb]}>HR</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  // View All Modules Button - Responsive
-  const ViewAllModulesButton = () => (
-    <TouchableOpacity
-      style={[styles.viewAllContainer, { marginHorizontal: isWeb ? 'auto' : 20 }, isWeb && styles.viewAllContainerWeb]}
-      onPress={() => setAllModulesVisible(true)}
-      activeOpacity={0.7}
-    >
-      <LinearGradient
-        colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={[styles.viewAllButton, isWeb && styles.viewAllButtonWeb]}
-      >
-        <Text style={[styles.viewAllText, isWeb && styles.viewAllTextWeb]}>View all modules</Text>
-        <View style={styles.chevronGroup}>
-          <Ionicons name="chevron-forward" size={isWeb ? 18 : 16} color="white" />
-          <Ionicons name="chevron-forward" size={isWeb ? 18 : 16} color="white" style={{ marginLeft: -8 }} />
-          <Ionicons name="chevron-forward" size={isWeb ? 18 : 16} color="white" style={{ marginLeft: -8 }} />
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-
-  // NEW: Refresh button component for Dashboard header
-  const RefreshButton = () => (
-    <TouchableOpacity 
-      onPress={refreshUserData}
-      style={styles.refreshButton}
-      disabled={refreshing}
-    >
-      {refreshing ? (
-        <ActivityIndicator size="small" color="white" />
-      ) : (
-        <Ionicons name="refresh" size={24} color="white" />
-      )}
-    </TouchableOpacity>
-  );
 
   // Main dashboard render
   return (
@@ -1918,7 +1753,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         translucent={false}
       />
 
-      {/* WhatsApp-style Hamburger Menu */}
+      {/* WhatsApp-style Hamburger Menu - Only for mobile */}
       <HamburgerMenu
         isVisible={isMenuVisible}
         onClose={closeMenu}
@@ -1961,92 +1796,443 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           />
         )}
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContent, isWeb && styles.scrollContentWeb]}
-          style={isWeb && styles.scrollViewWeb}
-        >
-          {/* Header Banner with dark overlay */}
-          <LinearGradient
-            colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.headerBanner, isWeb && styles.headerBannerWeb]}
-          >
-            <Image
-              source={require('../assets/bg.jpeg')}
-              style={[styles.headerImage, isWeb && styles.headerImageWeb] as any}
-              resizeMode="cover"
-            />
-            <View style={[styles.headerOverlay, {
-              backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-            }, isWeb && styles.headerOverlayWeb]} />
-            <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 40 : 20 }, isWeb && styles.headerContentWeb]}>
-              <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }, isWeb && styles.topNavWeb]}>
-                <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
-                  {[1, 2, 3].map(i => (
-                    <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
-                  ))}
+        {isWeb ? (
+          // Web Layout
+          <View style={[styles.webContainer, isWeb && styles.webContainerWeb]}>
+            {/* Left Side - User Profile & Navigation */}
+            <View style={[styles.webLeftSide, { backgroundColor: theme.cardBg }]}>
+              <View style={[styles.webUserProfile, { backgroundColor: theme.cardBg }]}>
+                {userData?.profile_picture ? (
+                  <Image
+                    source={{ uri: userData.profile_picture }}
+                    style={styles.webUserAvatar}
+                  />
+                ) : (
+                  <View style={[styles.webAvatarPlaceholder, { backgroundColor: currentColors.primaryBlue }]}>
+                    <Text style={styles.webAvatarText}>
+                      {getInitials(userData?.full_name || 'User')}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.webUserInfo}>
+                  <Text style={[styles.webUserName, { color: theme.textMain }]}>
+                    {userData?.full_name || 'User'}
+                  </Text>
+                  <Text style={[styles.webUserDesignation, { color: theme.textSub }]}>
+                    {userData?.designation || 'Employee'}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.webSettingsButton, { backgroundColor: theme.cardBg }]}
+                  onPress={() => setShowSettings(true)}
+                >
+                  <Ionicons name="settings-outline" size={24} color={theme.textMain} />
                 </TouchableOpacity>
-                <Text style={[styles.logoText, isWeb && styles.logoTextWeb]}>CITADEL</Text>
-                <View style={styles.headerSpacer} />
-                {/* NEW: Add refresh button */}
-                {/* <RefreshButton /> */}
               </View>
-              <View style={{ marginTop: isWeb ? 20 : 75 }}>
-                <Text style={[styles.welcomeText, isWeb && styles.welcomeTextWeb]}>Welcome!</Text>
-                <Text style={[styles.employeeText, isWeb && styles.employeeTextWeb]}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
+
+              <View style={styles.webNavigation}>
+                {/* Home */}
+                <TouchableOpacity 
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.cardBg },
+                    activeNavItem === 'home' && styles.webNavItemActive
+                  ]}
+                  onPress={() => {
+                    setActiveNavItem('home');
+                  }}
+                >
+                  <Ionicons 
+                    name="home" 
+                    size={24} 
+                    color={activeNavItem === 'home' ? currentColors.primaryBlue : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activeNavItem === 'home' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activeNavItem === 'home' ? '600' : '400'
+                    }
+                  ]}>
+                    Home
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Profile */}
+                <TouchableOpacity 
+                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  onPress={() => {
+                    setActiveNavItem('profile');
+                    setShowProfile(true);
+                  }}
+                >
+                  <Ionicons name="person-circle-outline" size={24} color={currentColors.primaryBlue} />
+                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                    Profile
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Settings */}
+                <TouchableOpacity 
+                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  onPress={() => {
+                    setActiveNavItem('settings');
+                    setShowSettings(true);
+                  }}
+                >
+                  <Ionicons name="settings-outline" size={24} color={currentColors.primaryBlue} />
+                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                    Settings
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Notifications */}
+                <TouchableOpacity 
+                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  onPress={() => {
+                    setActiveNavItem('notifications');
+                    setShowNotifications(true);
+                  }}
+                >
+                  <Ionicons name="notifications-outline" size={24} color={currentColors.warning} />
+                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                    Notifications
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Privacy Policy */}
+                <TouchableOpacity 
+                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  onPress={() => Alert.alert('Privacy Policy', 'Privacy Policy feature will be available soon!')}
+                >
+                  <Ionicons name="shield-checkmark-outline" size={24} color="#1E40AF" />
+                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                    Privacy Policy
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Messages */}
+                <TouchableOpacity 
+                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  onPress={() => Alert.alert('Coming Soon', 'Messages feature will be available soon!')}
+                >
+                  <Ionicons name="chatbubbles-outline" size={24} color={currentColors.success} />
+                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                    Messages
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Logout */}
+                <TouchableOpacity 
+                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  onPress={handleLogout}
+                >
+                  <Ionicons name="log-out-outline" size={24} color={currentColors.error} />
+                  <Text style={[styles.webNavText, { color: currentColors.error }]}>
+                    Logout
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-          </LinearGradient>
 
-          {/* Quick Actions */}
-          <QuickActions
-            lastOpenedModules={lastOpenedModules}
-            modules={modules}
-            theme={theme}
-            handleModulePress={handleModulePress}
-          />
+            {/* Center Content */}
+            <ScrollView 
+              style={[styles.webCenterContent, { backgroundColor: theme.bgColor }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Header */}
+              <LinearGradient
+                colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.webHeader, isWeb && styles.webHeaderWeb]}
+              >
+                <Image
+                  source={require('../assets/bg.jpeg')}
+                  style={[styles.webHeaderImage, isWeb && styles.webHeaderImageWeb]}
+                  resizeMode="cover"
+                />
+                <View style={[styles.webHeaderOverlay, {
+                  backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
+                }]} />
+                <View style={styles.webHeaderContent}>
+                  <View style={styles.webTopNav}>
+                    <View style={styles.webLogoContainer}>
+                      <Text style={[styles.webLogoText, isWeb && styles.webLogoTextWeb]}>CITADEL</Text>
+                    </View>
+                  </View>
+                  <View style={{ marginTop: 40 }}>
+                    <Text style={[styles.webWelcomeText, isWeb && styles.webWelcomeTextWeb]}>Welcome back!</Text>
+                    <Text style={[styles.webEmployeeText, isWeb && styles.webEmployeeTextWeb]}>
+                      {userData?.first_name + ' ' + userData?.last_name || 'User'}
+                    </Text>
+                  </View>
+                </View>
+              </LinearGradient>
 
-          {/* Upcoming Reminder */}
-          <UpcomingReminder
-            reminders={reminders}
-            theme={theme}
-            currentColors={currentColors}
-            onPress={() => handleModulePress('Reminder')}
-          />
+              {/* Quick Actions */}
+              <QuickActions
+                lastOpenedModules={lastOpenedModules}
+                modules={modules}
+                theme={theme}
+                handleModulePress={handleModulePress}
+              />
 
-          {/* Module Grid */}
-          <ModuleGrid />
+              {/* Upcoming Reminder */}
+              <UpcomingReminder
+                reminders={reminders}
+                theme={theme}
+                currentColors={currentColors}
+                onPress={() => handleModulePress('Reminder')}
+              />
 
-          {/* View All Modules Button */}
-          <ViewAllModulesButton />
+              {/* Work Statistics */}
+              <WorkStatistics
+                hoursWorked={hoursWorked}
+                overtimeHours={overtimeHours}
+                userData={userData}
+                theme={theme}
+                currentColors={currentColors}
+              />
 
-          {/* Work Statistics */}
-          <WorkStatistics
-            hoursWorked={hoursWorked}
-            overtimeHours={overtimeHours}
-            userData={userData}
-            theme={theme}
-            currentColors={currentColors}
-          />
+          
+              {/* Upcoming Events */}
+              <View style={styles.upcomingEventsWrapper}>
+                <UpcomingEvents
+                  upcomingEvents={upcomingEvents}
+                  theme={theme}
+                  currentColors={currentColors}
+                  getInitials={getInitials}
+                  formatEventDate={formatEventDate}
+                  formatAnniversaryYears={formatAnniversaryYears}
+                />
+              </View>
 
-          {/* Upcoming Events */}
-          <UpcomingEvents
-            upcomingEvents={upcomingEvents}
-            theme={theme}
-            currentColors={currentColors}
-            getInitials={getInitials}
-            formatEventDate={formatEventDate}
-            formatAnniversaryYears={formatAnniversaryYears}
-          />
+              {/* Footer */}
+              {/* Footer - Hidden on web */}
+              {!isWeb && (
+                <View style={[styles.webFooter, isWeb && styles.webFooterWeb]}>
+                  <Text style={[styles.webFooterLogo, isWeb && styles.webFooterLogoWeb]}>CITADEL</Text>
+                  <Text style={[styles.webFooterText, isWeb && styles.webFooterTextWeb]}>Made with ❤️</Text>
+                </View>
+              )}
+            </ScrollView>
 
-          {/* Footer */}
-          <View style={[styles.footer, isWeb && styles.footerWeb]}>
-            <Text style={[styles.footerLogo, isWeb && styles.footerLogoWeb]}>CITADEL</Text>
-            <Text style={[styles.footerText, isWeb && styles.footerTextWeb]}>Made with ❤️</Text>
+            {/* Right Side - All Modules Grid */}
+            <View style={[styles.webRightSide, { backgroundColor: theme.cardBg }]}>
+              <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
+                All Modules
+              </Text>
+              <ScrollView 
+                style={styles.modulesGridScroll}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.modulesGridContainer}>
+                  {filteredModules.map((module, index) => (
+                    <TouchableOpacity
+                      key={`${module.module_unique_name}-${index}`}
+                      style={[styles.moduleGridItem, { backgroundColor: theme.cardBg }]}
+                      onPress={() => handleModulePress(module.title, module.module_unique_name)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        styles.moduleGridIconContainer, 
+                        { backgroundColor: theme.cardBg === '#111a2d' ? 'rgba(255, 255, 255, 0.05)' : '#f8f9fa' }
+                      ]}>
+                        <Image
+                          source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
+                          style={styles.moduleGridIcon}
+                          resizeMode="contain"
+                        />
+                      </View>
+                      <Text 
+                        style={[styles.moduleGridTitle, { color: theme.textMain }]}
+                        numberOfLines={2}
+                      >
+                        {module.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
           </View>
-        </ScrollView>
+        ) : (
+          // Mobile Layout (Original)
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Header Banner with dark overlay */}
+            <LinearGradient
+              colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.headerBanner}
+            >
+              <Image
+                source={require('../assets/bg.jpeg')}
+                style={styles.headerImage as any}
+                resizeMode="cover"
+              />
+              <View style={[styles.headerOverlay, {
+                backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
+              }]} />
+              <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 40 : 20 }]}>
+                <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
+                  <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
+                    {[1, 2, 3].map(i => (
+                      <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
+                    ))}
+                  </TouchableOpacity>
+                  <Text style={styles.logoText}>CITADEL</Text>
+                  <View style={styles.headerSpacer} />
+                </View>
+                <View style={{ marginTop: 75 }}>
+                  <Text style={styles.welcomeText}>Welcome!</Text>
+                  <Text style={styles.employeeText}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
+                </View>
+              </View>
+            </LinearGradient>
+
+            {/* Quick Actions */}
+            <QuickActions
+              lastOpenedModules={lastOpenedModules}
+              modules={modules}
+              theme={theme}
+              handleModulePress={handleModulePress}
+            />
+
+            {/* Upcoming Reminder */}
+            <UpcomingReminder
+              reminders={reminders}
+              theme={theme}
+              currentColors={currentColors}
+              onPress={() => handleModulePress('Reminder')}
+            />
+
+            {/* Module Grid - Mobile version */}
+            <View style={styles.moduleGrid}>
+              <TouchableOpacity
+                style={styles.moduleAttendance}
+                onPress={() => handleModulePress('Attendance', 'attendance')}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={['#00d285', '#00b872']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.moduleGradient}
+                >
+                  <Ionicons
+                    name="arrow-up"
+                    size={18}
+                    color="white"
+                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+                  />
+                  <View style={styles.moduleIconCircle}>
+                    <FontAwesome5 name="book-open" size={22} color="white" />
+                  </View>
+                  <Text style={styles.moduleTitle}>Attendance</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <View style={styles.moduleColumn}>
+                <TouchableOpacity
+                  style={styles.moduleSmall}
+                  onPress={() => handleModulePress('Car', 'cab')}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={['#ff5e7a', '#ff4168']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.moduleGradient}
+                  >
+                    <Ionicons
+                      name="arrow-up"
+                      size={16}
+                      color="white"
+                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+                    />
+                    <View style={styles.moduleIconCircle}>
+                      <FontAwesome5 name="car" size={18} color="white" />
+                    </View>
+                    <Text style={styles.moduleTitle}>Car</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.moduleSmall}
+                  onPress={() => handleModulePress('HR', 'hr')}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={['#ffb157', '#ff9d3f']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.moduleGradient}
+                  >
+                    <Ionicons
+                      name="arrow-up"
+                      size={16}
+                      color="white"
+                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+                    />
+                    <View style={styles.moduleIconCircle}>
+                      <FontAwesome5 name="users" size={18} color="white" />
+                    </View>
+                    <Text style={styles.moduleTitle}>HR</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* View All Modules Button */}
+            <TouchableOpacity
+              style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
+              onPress={() => setAllModulesVisible(true)}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={[currentColors.gradientStart, currentColors.gradientEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.viewAllButton}
+              >
+                <Text style={styles.viewAllText}>View all modules</Text>
+                <View style={styles.chevronGroup}>
+                  <Ionicons name="chevron-forward" size={16} color="white" />
+                  <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+                  <Ionicons name="chevron-forward" size={16} color="white" style={{ marginLeft: -8 }} />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Work Statistics */}
+            <WorkStatistics
+              hoursWorked={hoursWorked}
+              overtimeHours={overtimeHours}
+              userData={userData}
+              theme={theme}
+              currentColors={currentColors}
+            />
+
+            {/* Upcoming Events */}
+            <UpcomingEvents
+              upcomingEvents={upcomingEvents}
+              theme={theme}
+              currentColors={currentColors}
+              getInitials={getInitials}
+              formatEventDate={formatEventDate}
+              formatAnniversaryYears={formatAnniversaryYears}
+            />
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerLogo}>CITADEL</Text>
+              <Text style={styles.footerText}>Made with ❤️</Text>
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Bottom Bar - Only show on mobile */}
@@ -2095,7 +2281,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000D24',
   },
   safeContainerWeb: {
-    maxWidth: 1200,
+    maxWidth: 1400,
     marginHorizontal: 'auto',
     width: '100%',
   },
@@ -2146,7 +2332,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mainContentWeb: {
-    maxWidth: 1200,
+    maxWidth: 1400,
     marginHorizontal: 'auto',
     width: '100%',
   },
@@ -2164,14 +2350,277 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
-  scrollContentWeb: {
-    paddingBottom: 50,
-    paddingHorizontal: 20,
-  },
-  scrollViewWeb: {
-    maxWidth: 1200,
+  
+  // Web-specific styles
+  webContainer: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'stretch', // Changed from 'flex-start' to 'stretch'
+  paddingVertical: 0,
+  minHeight: 0, // Allow flex children to shrink
+},
+  webContainerWeb: {
+    maxWidth: 1400,
     marginHorizontal: 'auto',
   },
+  webLeftSide: {
+  width: 280,
+  padding: 20,
+  borderRightWidth: 1,
+  borderRightColor: '#e5e7eb',
+  borderRadius: 20,
+  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  shadowColor: '#000',
+  shadowOffset: { width: 2, height: 0 },
+  shadowOpacity: 0.1,
+  shadowRadius: 10,
+  elevation: 5,
+  marginTop: 20,
+  marginBottom: 20,
+  marginLeft: 20,
+  maxHeight: 'calc(100vh - 40px)', // 100vh minus top and bottom margins
+  minHeight: 1000, // Minimum height
+},
+  webUserProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30,
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  webUserAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  webAvatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webAvatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  webUserInfo: {
+    flex: 1,
+  },
+  webUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  webUserDesignation: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  webSettingsButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  webNavigation: {
+    marginTop: 20,
+  },
+  webNavItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 12,
+  paddingHorizontal: 15,
+  borderRadius: 10,
+  marginBottom: 8,
+  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  borderWidth: 1,
+  borderColor: 'rgba(255, 255, 255, 0.1)',
+},
+webNavItemActive: {
+  backgroundColor: 'rgba(0, 128, 105, 0.15)',
+  borderColor: 'rgba(0, 128, 105, 0.3)',
+  borderWidth: 1,
+},
+  webNavText: {
+    marginLeft: 12,
+    fontSize: 14,
+    flex: 1,
+  },
+  notificationBadge: {
+    backgroundColor: '#EF4444',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  
+  webCenterContent: {
+  flex: 1,
+  minWidth: 0,
+  paddingHorizontal: 10,
+  maxWidth: '100%',
+  overflow: 'hidden',
+  alignSelf: 'stretch', // Match parent height
+},
+
+  webHeader: {
+    height: 250,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    margin: 20,
+    marginBottom: 15,
+  },
+  webHeaderWeb: {
+    marginTop: 20,
+  },
+  webHeaderImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  webHeaderOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  webHeaderContent: {
+    padding: 30,
+    position: 'relative',
+    zIndex: 1,
+  },
+  webTopNav: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webLogoContainer: {
+    alignItems: 'center',
+  },
+  webLogoText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  webWelcomeText: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: '700',
+  },
+  webEmployeeText: {
+    color: 'white',
+    fontSize: 20,
+    opacity: 0.8,
+    marginTop: 4,
+  },
+  
+  webRightSide: {
+  width: 300,
+  padding: 20,
+  borderLeftWidth: 1,
+  borderLeftColor: '#e5e7eb',
+  borderRadius: 20,
+  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  shadowColor: '#000',
+  shadowOffset: { width: -2, height: 0 },
+  shadowOpacity: 0.1,
+  shadowRadius: 10,
+  elevation: 5,
+  marginTop: 20,
+  marginBottom: 20,
+  marginRight: 20,
+  maxHeight: 'calc(100vh - 40px)', // Same as left panel
+  minHeight: 1000, // Same as left panel
+},
+webUpcomingEventsContainer: {
+  marginHorizontal: 20,
+  marginTop: 20,
+  marginBottom: 20,
+},
+upcomingEventsWrapper: {
+  maxWidth: '100%',
+  overflow: 'hidden',
+},
+
+  modulesGridTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 20,
+  },
+  modulesGridScroll: {
+    flex: 1,
+  },
+  modulesGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  moduleGridItem: {
+    width: '48%',
+    marginBottom: 15,
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  moduleGridIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  moduleGridIcon: {
+    width: 30,
+    height: 30,
+  },
+  moduleGridTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  
+  webFooter: {
+    alignItems: 'center',
+    padding: 30,
+    marginTop: 20,
+  },
+  webFooterLogo: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 5,
+    color: '#a9a9a9b6',
+    marginBottom: 5,
+  },
+  webFooterText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  
+  // Mobile styles (unchanged)
   headerBanner: {
     height: 250,
     borderBottomLeftRadius: 30,
@@ -2179,20 +2628,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  headerBannerWeb: {
-    height: 300,
-    borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 20,
-  },
   headerImage: {
     position: 'absolute',
     width: '100%',
     height: '100%',
     opacity: 1,
-  },
-  headerImageWeb: {
-    borderRadius: 20,
   },
   headerOverlay: {
     position: 'absolute',
@@ -2200,24 +2640,15 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
-  headerOverlayWeb: {
-    borderRadius: 20,
-  },
   headerContent: {
     padding: 20,
     position: 'relative',
     zIndex: 1,
   },
-  headerContentWeb: {
-    padding: 40,
-  },
   topNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  topNavWeb: {
-    marginTop: 10,
   },
   menuButton: {
     padding: 8,
@@ -2238,9 +2669,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
-  logoTextWeb: {
-    fontSize: 24,
-  },
   headerSpacer: {
     width: 40,
   },
@@ -2249,17 +2677,11 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '700',
   },
-  welcomeTextWeb: {
-    fontSize: 36,
-  },
   employeeText: {
     color: 'white',
     fontSize: 18,
     opacity: 0.8,
     marginTop: 2,
-  },
-  employeeTextWeb: {
-    fontSize: 22,
   },
   moduleGrid: {
     marginHorizontal: 20,
@@ -2267,12 +2689,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 220,
     gap: 12,
-  },
-  moduleGridWeb: {
-    height: 'auto',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 20,
   },
   moduleAttendance: {
     flex: 1,
@@ -2284,21 +2700,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  moduleAttendanceWeb: {
-    flex: 0,
-    width: '48%',
-    height: 180,
-  },
   moduleColumn: {
     flex: 1,
     gap: 12,
   },
-  moduleColumnWeb: {
-    flex: 0,
-    width: '48%',
-    gap: 20,
-  },
-
   moduleSmall: {
     flex: 1,
     borderRadius: 16,
@@ -2309,18 +2714,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  moduleWeb: {
-    flex: 0,
-    width: '100%',
-    height: 180,
-  },
   moduleGradient: {
     flex: 1,
     padding: 16,
     justifyContent: 'space-between',
-  },
-  moduleGradientWeb: {
-    padding: 24,
   },
   moduleArrow: {
     position: 'absolute',
@@ -2335,11 +2732,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moduleIconCircleWeb: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
   moduleTitle: {
     color: 'white',
     fontSize: 16,
@@ -2348,15 +2740,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  moduleTitleWeb: {
-    fontSize: 20,
-  },
   viewAllContainer: {
     marginBottom: 15,
-  },
-  viewAllContainerWeb: {
-    width: '90%',
-    maxWidth: 400,
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -2370,17 +2755,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  viewAllButtonWeb: {
-    padding: 18,
-  },
   viewAllText: {
     fontSize: 14,
     fontWeight: '600',
     color: 'white',
     marginRight: 8,
-  },
-  viewAllTextWeb: {
-    fontSize: 16,
   },
   chevronGroup: {
     flexDirection: 'row',
@@ -2391,9 +2770,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     paddingTop: 15,
   },
-  footerWeb: {
-    paddingBottom: 50,
-  },
   footerLogo: {
     fontSize: 28,
     fontWeight: '700',
@@ -2401,74 +2777,12 @@ const styles = StyleSheet.create({
     color: '#a9a9a9b6',
     marginBottom: 5,
   },
-  footerLogoWeb: {
-    fontSize: 32,
-  },
   footerText: {
     fontSize: 10,
     color: '#666',
   },
-  footerTextWeb: {
-    fontSize: 12,
-  },
-  themeSwitcher: {
-    alignItems: 'center',
-    marginVertical: 25,
-    paddingHorizontal: 20,
-  },
-  lightSwitch: {
-    height: 56,
-    borderRadius: 28,
-    padding: 6,
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-    justifyContent: 'center',
-  },
-  switchTrack: {
-    position: 'absolute',
-    left: 6,
-    top: 6,
-    right: 6,
-    bottom: 6,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  switchToggleButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  switchNotch: {
-    width: 0,
-    borderRadius: 3,
-  },
-  switchIcons: {
-    position: 'absolute',
-    height: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 0,
-  },
-  switchIconContainer: {
-    width: 44,
-    height: 44,
-    paddingLeft: 20,
-  },
-  // NEW: Refresh button styles
-  refreshButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // WhatsApp-style Hamburger Menu Styles - Web responsive
+  
+  // WhatsApp-style Hamburger Menu Styles
   menuBackdrop: {
     position: 'absolute',
     top: 0,
@@ -2477,15 +2791,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     zIndex: 1000,
-  },
-  menuBackdropWeb: {
-    position: 'fixed',
-  },
-  menuContainerWeb: {
-    position: 'fixed',
-    width: '30%',
-    minWidth: 300,
-    maxWidth: 400,
   },
   menuContainer: {
     position: 'absolute',
@@ -2496,31 +2801,14 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     zIndex: 1001,
   },
-
   menuHeader: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
-  menuHeaderWeb: {
-    paddingTop: 60,
-    paddingBottom: 30,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 30,
-    left: 20,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   userInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  userInfoContainerWeb: {
-    alignItems: 'flex-start',
   },
   userAvatar: {
     width: 56,
@@ -2529,22 +2817,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  userAvatarWeb: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-  },
   avatarPlaceholder: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarPlaceholderWeb: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
   },
   avatarText: {
     color: 'white',
@@ -2555,40 +2833,24 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 16,
   },
-  userDetailsWeb: {
-    marginTop: 10,
-  },
   userName: {
     color: 'white',
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 4,
   },
-  userNameWeb: {
-    fontSize: 22,
-  },
   userStatus: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 14,
   },
-  userStatusWeb: {
-    fontSize: 16,
-  },
   menuItemsContainer: {
     flex: 1,
-  },
-  menuItemsContainerWeb: {
-    paddingTop: 20,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-  },
-  menuItemWeb: {
-    paddingVertical: 20,
-    paddingHorizontal: 24,
   },
   activeMenuItem: {
     backgroundColor: 'rgba(0, 128, 105, 0.1)',
@@ -2604,18 +2866,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
-  menuIconContainerWeb: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
   menuItemText: {
     flex: 1,
     fontSize: 16,
     fontWeight: '400',
-  },
-  menuItemTextWeb: {
-    fontSize: 18,
   },
   chevronIcon: {
     marginLeft: 8,
@@ -2624,14 +2878,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderTopWidth: 1,
   },
-  menuFooterWeb: {
-    padding: 24,
-  },
   versionText: {
     fontSize: 12,
     textAlign: 'center',
-  },
-  versionTextWeb: {
-    fontSize: 14,
   },
 });
