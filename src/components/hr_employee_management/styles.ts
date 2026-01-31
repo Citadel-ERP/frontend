@@ -789,7 +789,7 @@ export const styles = StyleSheet.create({
     padding: 2,
   },
   dayCircle: {
-    width: '85%',
+    width: Platform.OS === 'web' ? '35%' : '85%',
     aspectRatio: 1,
     borderRadius: 100,
     alignItems: 'center',
