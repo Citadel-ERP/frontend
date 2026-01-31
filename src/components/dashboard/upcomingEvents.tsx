@@ -38,14 +38,14 @@ const UpcomingEvents: React.FC<UpcomingEventsProps> = ({
   return (
     <View style={[styles.sectionCard, { backgroundColor: theme.cardBg }]}>
       <Text style={[styles.labelSmall, { color: theme.textSub }]}>UPCOMING EVENTS</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.eventsScroll}
-        contentContainerStyle={styles.eventsScrollContent}
-      >
-        {upcomingEvents.length > 0 ? (
-          upcomingEvents.map((event, index) => {
+      {upcomingEvents.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.eventsScroll}
+          contentContainerStyle={styles.eventsScrollContent}
+        >
+          {upcomingEvents.map((event, index) => {
             const formattedDate = formatEventDate(event.date);
             return (
               <View key={index} style={styles.eventItem}>
@@ -107,24 +107,24 @@ const UpcomingEvents: React.FC<UpcomingEventsProps> = ({
                 </View>
               </View>
             );
-          })
-        ) : (
-          <View style={styles.noEventsContainer}>
-            <Ionicons
-              name="calendar-outline"
-              size={50}
-              color={currentColors.primaryBlue}
-              style={styles.noEventsIcon}
-            />
-            <Text style={[styles.noEventsText, { color: theme.textMain }]}>
-              No upcoming events
-            </Text>
-            <Text style={[styles.noEventsSubtext, { color: theme.textSub }]}>
-              in the next 3 months
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+          })}
+        </ScrollView>
+      ) : (
+        <View style={styles.noEventsContainer}>
+          <Ionicons
+            name="calendar-outline"
+            size={50}
+            color={currentColors.primaryBlue}
+            style={styles.noEventsIcon}
+          />
+          <Text style={[styles.noEventsText, { color: theme.textMain }]}>
+            No upcoming events
+          </Text>
+          <Text style={[styles.noEventsSubtext, { color: theme.textSub }]}>
+            in the next 3 months
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -150,6 +150,7 @@ const styles = StyleSheet.create({
   },
   eventsScroll: {
     marginHorizontal: -5,
+    minHeight: 160,
   },
   eventsScrollContent: {
     paddingHorizontal: 5,
@@ -233,12 +234,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   noEventsContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
     paddingVertical: 30,
-    minWidth: width - 40, // Full width minus padding
+    minHeight: 150,
   },
   noEventsIcon: {
     marginBottom: 15,

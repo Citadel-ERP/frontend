@@ -201,10 +201,14 @@ const NewReminder: React.FC<NewReminderProps> = ({
   const handleSubmit = async () => {
     const finalTitle = title.trim();
     
-    if (!finalTitle) {
-      Alert.alert('Required Field', 'Please enter a title for your reminder');
-      return;
-    }
+if (!finalTitle) {
+  if (Platform.OS === 'web') {
+    (window as any).alert('Please enter a title for your reminder');
+  } else {
+    Alert.alert('Required Field', 'Please enter a title for your reminder');
+  }
+  return;
+}
 
     const dateString = formatDateToYYYYMMDD(date);
     const hours = time.getHours().toString().padStart(2, '0');
@@ -284,6 +288,7 @@ const NewReminder: React.FC<NewReminderProps> = ({
           keyboardShouldPersistTaps="handled" 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          scrollEnabled={Platform.OS !== 'web'}  // ← ADD THIS LINE
         >
           {/* Title */}
           <View style={styles.inputSection}>
@@ -470,39 +475,100 @@ const NewReminder: React.FC<NewReminderProps> = ({
           <View style={styles.formSection}>
             <Text style={styles.sectionLabel}>DATE & TIME</Text>
             
-            <TouchableOpacity 
-              style={styles.dateTimeButton}
-              onPress={() => {
-                setShowDatePicker(true);
-                setShowTimePicker(false);
-                setShowTypeDropdown(false);
-                setShowEmployeeSearch(false);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.dateTimeButtonLeft}>
-                <Ionicons name="calendar-outline" size={22} color="#075E54" />
-                <Text style={styles.dateTimeLabel}>Date</Text>
+            {Platform.OS === 'web' ? (
+              // Web version - use HTML input
+              <View style={styles.dateTimeButton}>
+                <View style={styles.dateTimeButtonLeft}>
+                  <Ionicons name="calendar-outline" size={22} color="#075E54" />
+                  <Text style={styles.dateTimeLabel}>Date</Text>
+                </View>
+                <input
+                  type="date"
+                  value={date.toISOString().split('T')[0]}
+                  onChange={(e) => {
+                    const newDate = new Date(e.target.value);
+                    if (!isNaN(newDate.getTime())) {
+                      setDate(newDate);
+                    }
+                  }}
+                  min={new Date().toISOString().split('T')[0]}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#075E54',
+                    fontSize: 16,
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                />
               </View>
-              <Text style={styles.dateTimeValue}>{formatDisplayDate(date)}</Text>
-            </TouchableOpacity>
+            ) : (
+              // Mobile version - use TouchableOpacity
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => {
+                  setShowDatePicker(true);
+                  setShowTimePicker(false);
+                  setShowTypeDropdown(false);
+                  setShowEmployeeSearch(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dateTimeButtonLeft}>
+                  <Ionicons name="calendar-outline" size={22} color="#075E54" />
+                  <Text style={styles.dateTimeLabel}>Date</Text>
+                </View>
+                <Text style={styles.dateTimeValue}>{formatDisplayDate(date)}</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-              style={[styles.dateTimeButton, styles.dateTimeButtonLast]}
-              onPress={() => {
-                setShowTimePicker(true);
-                setShowDatePicker(false);
-                setShowTypeDropdown(false);
-                setShowEmployeeSearch(false);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.dateTimeButtonLeft}>
-                <Ionicons name="time-outline" size={22} color="#075E54" />
-                <Text style={styles.dateTimeLabel}>Time</Text>
+            {Platform.OS === 'web' ? (
+              // Web version - use HTML input
+              <View style={[styles.dateTimeButton, styles.dateTimeButtonLast]}>
+                <View style={styles.dateTimeButtonLeft}>
+                  <Ionicons name="time-outline" size={22} color="#075E54" />
+                  <Text style={styles.dateTimeLabel}>Time</Text>
+                </View>
+                <input
+                  type="time"
+                  value={time.toTimeString().slice(0, 5)}
+                  onChange={(e) => {
+                    const [hours, minutes] = e.target.value.split(':');
+                    const newTime = new Date(time);
+                    newTime.setHours(parseInt(hours), parseInt(minutes));
+                    setTime(newTime);
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#075E54',
+                    fontSize: 16,
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                />
               </View>
-              <Text style={styles.dateTimeValue}>{formatDisplayTime(time)}</Text>
-            </TouchableOpacity>
+            ) : (
+              // Mobile version - use TouchableOpacity
+              <TouchableOpacity 
+                style={[styles.dateTimeButton, styles.dateTimeButtonLast]}
+                onPress={() => {
+                  setShowTimePicker(true);
+                  setShowDatePicker(false);
+                  setShowTypeDropdown(false);
+                  setShowEmployeeSearch(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dateTimeButtonLeft}>
+                  <Ionicons name="time-outline" size={22} color="#075E54" />
+                  <Text style={styles.dateTimeLabel}>Time</Text>
+                </View>
+                <Text style={styles.dateTimeValue}>{formatDisplayTime(time)}</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Description */}
