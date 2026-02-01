@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Animated,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
@@ -117,9 +118,11 @@ const ListSite: React.FC<ListSiteProps> = ({
   const [selectionMode, setSelectionMode] = useState(false);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [deletingMultiple, setDeletingMultiple] = useState(false);
-  const [showStatusFilter, setShowStatusFilter] = useState(false);
-  const [showFloorConditionFilter, setShowFloorConditionFilter] = useState(false);
-  const [showPropertyTypeFilter, setShowPropertyTypeFilter] = useState(false);
+  
+  // NEW: Combined state for nested filter modals and queue system
+  const [activeNestedFilter, setActiveNestedFilter] = useState<string | null>(null);
+  const [queuedModal, setQueuedModal] = useState<string | null>(null);
+  const [shouldReopenFilterModal, setShouldReopenFilterModal] = useState(false);
   
   // Local filter state
   const [localFilters, setLocalFilters] = useState({
@@ -150,6 +153,43 @@ const ListSite: React.FC<ListSiteProps> = ({
     { value: 'conventional', label: 'Conventional Office' },
     { value: 'for_sale', label: 'For Sale' },
   ];
+
+  // NEW: Effect to handle queued modals after filter modal closes
+  useEffect(() => {
+    if (!showFilterModal && queuedModal) {
+      const timeout = setTimeout(() => {
+        setActiveNestedFilter(queuedModal);
+        setQueuedModal(null);
+      }, Platform.OS === 'ios' ? 300 : 100);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [showFilterModal, queuedModal]);
+
+  // NEW: Effect to reopen filter modal after nested modal closes
+  useEffect(() => {
+    if (!activeNestedFilter && shouldReopenFilterModal) {
+      const timeout = setTimeout(() => {
+        setShowFilterModal(true);
+        setShouldReopenFilterModal(false);
+      }, Platform.OS === 'ios' ? 300 : 100);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [activeNestedFilter, shouldReopenFilterModal]);
+
+  // NEW: Modified handler for opening nested filter modals
+  const handleOpenNestedFilter = useCallback((filterType: 'property_type' | 'building_status' | 'floor_condition') => {
+    setQueuedModal(filterType);
+    setShowFilterModal(false);
+  }, []);
+
+  // NEW: Handler for closing nested filter modal
+  const handleCloseNestedFilter = useCallback(() => {
+    setActiveNestedFilter(null);
+    // Set flag to reopen main filter modal after nested modal closes
+    setShouldReopenFilterModal(true);
+  }, []);
 
   // API Call: Search and Filter Sites
   const searchAndFilterSites = useCallback(async (
@@ -658,15 +698,23 @@ const ListSite: React.FC<ListSiteProps> = ({
 
   // Render Filter Dropdown
   const renderFilterDropdown = useCallback((
-    visible: boolean,
+    filterType: string,
     title: string,
     options: FilterOption[],
     currentValues: string[],
-    onToggle: (value: string) => void,
-    onClose: () => void
+    onToggle: (value: string) => void
   ) => (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={onClose}>
+    <Modal 
+      visible={activeNestedFilter === filterType} 
+      transparent 
+      animationType="fade" 
+      onRequestClose={handleCloseNestedFilter}
+    >
+      <TouchableOpacity 
+        style={styles.dropdownOverlay} 
+        activeOpacity={1} 
+        onPress={handleCloseNestedFilter}
+      >
         <View style={styles.dropdownContainer}>
           <Text style={styles.dropdownTitle}>{title}</Text>
           <ScrollView style={styles.dropdownScroll}>
@@ -676,7 +724,10 @@ const ListSite: React.FC<ListSiteProps> = ({
                 <TouchableOpacity
                   key={option.value}
                   style={styles.dropdownOption}
-                  onPress={() => onToggle(option.value)}
+                  onPress={() => {
+                    onToggle(option.value);
+                    // Don't close immediately - allow multiple selections
+                  }}
                 >
                   <Text style={styles.dropdownOptionText}>{option.label}</Text>
                   {isSelected && (
@@ -686,10 +737,18 @@ const ListSite: React.FC<ListSiteProps> = ({
               );
             })}
           </ScrollView>
+          <View style={styles.nestedFilterFooter}>
+            <TouchableOpacity
+              style={styles.nestedFilterDoneButton}
+              onPress={handleCloseNestedFilter}
+            >
+              <Text style={styles.nestedFilterDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     </Modal>
-  ), []);
+  ), [activeNestedFilter, handleCloseNestedFilter]);
 
   // Render Filter Modal
   const renderFilterModal = useCallback(() => (
@@ -713,10 +772,10 @@ const ListSite: React.FC<ListSiteProps> = ({
           </View>
 
           <ScrollView style={styles.filterList}>
-            {/* Property Type Filter */}
+            {/* Property Type Filter - MODIFIED for iOS */}
             <TouchableOpacity
               style={styles.filterOption}
-              onPress={() => setShowPropertyTypeFilter(true)}
+              onPress={() => handleOpenNestedFilter('property_type')}
             >
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="business" size={20} color={WHATSAPP_COLORS.primary} />
@@ -732,10 +791,10 @@ const ListSite: React.FC<ListSiteProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* Building Status Filter */}
+            {/* Building Status Filter - MODIFIED for iOS */}
             <TouchableOpacity
               style={styles.filterOption}
-              onPress={() => setShowStatusFilter(true)}
+              onPress={() => handleOpenNestedFilter('building_status')}
             >
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="flag" size={20} color={WHATSAPP_COLORS.primary} />
@@ -751,10 +810,10 @@ const ListSite: React.FC<ListSiteProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* Floor Condition Filter */}
+            {/* Floor Condition Filter - MODIFIED for iOS */}
             <TouchableOpacity
               style={styles.filterOption}
-              onPress={() => setShowFloorConditionFilter(true)}
+              onPress={() => handleOpenNestedFilter('floor_condition')}
             >
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="layers" size={20} color={WHATSAPP_COLORS.primary} />
@@ -782,7 +841,7 @@ const ListSite: React.FC<ListSiteProps> = ({
         </View>
       </TouchableOpacity>
     </Modal>
-  ), [showFilterModal, localFilters, clearFilters, applyFilters]);
+  ), [showFilterModal, localFilters, clearFilters, applyFilters, handleOpenNestedFilter]);
 
   // Render Actions Modal
   const renderActionsModal = useCallback(() => (
@@ -1004,7 +1063,7 @@ const ListSite: React.FC<ListSiteProps> = ({
 
       {/* Filter Dropdowns */}
       {renderFilterDropdown(
-        showPropertyTypeFilter,
+        'property_type',
         'Select Property Type',
         PROPERTY_TYPE_OPTIONS,
         localFilters.property_type,
@@ -1013,11 +1072,10 @@ const ListSite: React.FC<ListSiteProps> = ({
             ? localFilters.property_type.filter(v => v !== value)
             : [...localFilters.property_type, value];
           handleFilterChange('property_type', newValues);
-        },
-        () => setShowPropertyTypeFilter(false)
+        }
       )}
       {renderFilterDropdown(
-        showStatusFilter,
+        'building_status',
         'Select Building Status',
         BUILDING_STATUS_OPTIONS,
         localFilters.building_status,
@@ -1026,11 +1084,10 @@ const ListSite: React.FC<ListSiteProps> = ({
             ? localFilters.building_status.filter(v => v !== value)
             : [...localFilters.building_status, value];
           handleFilterChange('building_status', newValues);
-        },
-        () => setShowStatusFilter(false)
+        }
       )}
       {renderFilterDropdown(
-        showFloorConditionFilter,
+        'floor_condition',
         'Select Floor Condition',
         FLOOR_CONDITION_OPTIONS,
         localFilters.floor_condition,
@@ -1039,8 +1096,7 @@ const ListSite: React.FC<ListSiteProps> = ({
             ? localFilters.floor_condition.filter(v => v !== value)
             : [...localFilters.floor_condition, value];
           handleFilterChange('floor_condition', newValues);
-        },
-        () => setShowFloorConditionFilter(false)
+        }
       )}
 
       {/* Loading Overlay for Bulk Delete */}
@@ -1596,6 +1652,23 @@ const styles = StyleSheet.create({
   dropdownOptionText: {
     fontSize: 16,
     color: WHATSAPP_COLORS.textPrimary,
+  },
+  nestedFilterFooter: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: WHATSAPP_COLORS.border,
+  },
+  nestedFilterDoneButton: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  nestedFilterDoneText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.white,
+    fontWeight: '600',
   },
   loadingOverlay: {
     position: 'absolute',

@@ -151,15 +151,29 @@ const PayslipModal: React.FC<PayslipProps> = ({
       formData.append('employee_id', employee.employee_id);
       formData.append('month', selectedMonth.toString());
       formData.append('year', selectedYear.toString());
-      formData.append('payslip', {
-        uri: selectedFile.uri,
-        type: 'application/pdf',
-        name: selectedFile.name || 'payslip.pdf',
-      } as any);
+      
+      // Handle file upload differently for web
+      if (Platform.OS === 'web') {
+        // For web, we need to fetch the file and append it as a Blob
+        const response = await fetch(selectedFile.uri);
+        const blob = await response.blob();
+        formData.append('payslip', blob, selectedFile.name || 'payslip.pdf');
+      } else {
+        // For mobile (iOS/Android)
+        formData.append('payslip', {
+          uri: selectedFile.uri,
+          type: 'application/pdf',
+          name: selectedFile.name || 'payslip.pdf',
+        } as any);
+      }
 
       const response = await fetch(`${BACKEND_URL}/manager/uploadPayslip`, {
         method: 'POST',
         body: formData,
+        // Don't set Content-Type header for FormData on web - let browser set it with boundary
+        headers: Platform.OS === 'web' ? {} : {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
       if (response.ok) {

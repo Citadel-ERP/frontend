@@ -2476,6 +2476,7 @@ webNavItemActive: {
   overflow: 'hidden',
   alignSelf: 'stretch',
   backgroundColor: 'transparent',
+  width: 700,
 },
 
   webHeader: {

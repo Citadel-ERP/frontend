@@ -12,6 +12,7 @@ import {
   FlatList,
   Image,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
@@ -120,6 +121,9 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showMultipleStatusEditModal, setShowMultipleStatusEditModal] = useState(false);
   const [updatingMultipleStatus, setUpdatingMultipleStatus] = useState(false);
+
+  // NEW: Queued modal state for iOS compatibility
+  const [queuedModal, setQueuedModal] = useState<'status' | 'visibility' | null>(null);
 
   // Local filter state
   const [localFilters, setLocalFilters] = useState<any>({});
@@ -350,6 +354,23 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     }
   }, [token]);
 
+  // NEW: Effect to handle queued modals after filter modal closes
+  useEffect(() => {
+    if (!showFilterModal && queuedModal) {
+      // Delay to ensure filter modal is fully closed on iOS
+      const timeout = setTimeout(() => {
+        if (queuedModal === 'status') {
+          setShowStatusFilter(true);
+        } else if (queuedModal === 'visibility') {
+          setShowVisibilityFilter(true);
+        }
+        setQueuedModal(null);
+      }, Platform.OS === 'ios' ? 300 : 100);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [showFilterModal, queuedModal]);
+
   // Helper Functions
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
@@ -491,6 +512,12 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
       fetchAssignments(1, false);
     }
   }, [localFilters, localSearchQuery, searchAssignments, fetchAssignments]);
+
+  // NEW: Modified handler for opening nested modals (iOS fix)
+  const handleOpenNestedModal = useCallback((modalType: 'status' | 'visibility') => {
+    setQueuedModal(modalType);
+    setShowFilterModal(false);
+  }, []);
 
   // Selection Handlers
   const handleLongPress = useCallback((assignmentId: number) => {
@@ -818,10 +845,10 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
           </View>
 
           <ScrollView style={styles.filterList}>
-            {/* Status Filter */}
+            {/* Status Filter - MODIFIED for iOS */}
             <TouchableOpacity
               style={styles.filterOption}
-              onPress={() => setShowStatusFilter(true)}
+              onPress={() => handleOpenNestedModal('status')}
             >
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="flag" size={20} color={WHATSAPP_COLORS.primary} />
@@ -850,7 +877,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         </View>
       </TouchableOpacity>
     </Modal>
-  ), [showFilterModal, localFilters, clearFilters, applyFilters, beautifyName]);
+  ), [showFilterModal, localFilters, clearFilters, applyFilters, beautifyName, handleOpenNestedModal]);
 
   const renderHistoryModal = useCallback(() => (
     <Modal
@@ -925,7 +952,10 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
             style={[styles.actionOption, styles.actionOptionPrimary]}
             onPress={() => {
               setShowActionsModal(false);
-              setShowMultipleStatusEditModal(true);
+              // Delay for iOS modal transition
+              setTimeout(() => {
+                setShowMultipleStatusEditModal(true);
+              }, Platform.OS === 'ios' ? 300 : 100);
             }}
           >
             <View style={styles.actionOptionLeft}>
