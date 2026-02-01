@@ -91,19 +91,15 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  // Pagination and scroll management
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreComments, setHasMoreComments] = useState(true);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const shouldScrollToBottomRef = useRef(true);
   const isLoadingMoreRef = useRef(false);
-  const lastScrollY = useRef(0);
-  const scrollDirection = useRef<'up' | 'down'>('down');
   const paginationTriggeredAt = useRef(0);
-  const PAGINATION_COOLDOWN = 1000;
-  const SCROLL_THRESHOLD = 100;
+  const PAGINATION_COOLDOWN = 800;
+  const SCROLL_THRESHOLD = 50;
 
-  // Fetch current user employee ID
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -148,14 +144,15 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
       }));
 
       if (append) {
+        // When loading more (older messages), prepend them to the beginning
         setComments(prev => [...formattedComments, ...prev]);
       } else {
+        // Initial load - just set the comments
         setComments(formattedComments);
         setInitialLoadDone(true);
         shouldScrollToBottomRef.current = true;
       }
 
-      // Update pagination state
       if (data.pagination) {
         setHasMoreComments(data.pagination.has_next);
         setCurrentPage(data.pagination.current_page);
@@ -170,13 +167,16 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   }, [token, visit.id]);
 
   useEffect(() => {
+    setInitialLoadDone(false);
+    setComments([]);
+    setCurrentPage(1);
+    setHasMoreComments(true);
     fetchComments(1, false);
-  }, [fetchComments]);
+  }, [visit.id]);
 
   const fetchMoreComments = async () => {
     const now = Date.now();
     if (now - paginationTriggeredAt.current < PAGINATION_COOLDOWN) {
-      console.log('Pagination on cooldown, skipping...');
       return;
     }
 
@@ -191,46 +191,27 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
     await fetchComments(nextPage, true);
     
     isLoadingMoreRef.current = false;
-    shouldScrollToBottomRef.current = false; // Don't auto-scroll when loading older messages
+    shouldScrollToBottomRef.current = false;
   };
 
-  const handleScroll = (event: any) => {
+  const handleScroll = useCallback((event: any) => {
     const { contentOffset } = event.nativeEvent;
     const currentY = contentOffset.y;
 
-    // Determine scroll direction
-    if (currentY > lastScrollY.current) {
-      scrollDirection.current = 'down';
-    } else if (currentY < lastScrollY.current) {
-      scrollDirection.current = 'up';
-    }
-
-    lastScrollY.current = currentY;
-
-    // Check if user is near the top (for pagination)
-    const isNearTop = currentY < SCROLL_THRESHOLD;
-
-    // Trigger pagination when scrolling up near the top
-    const shouldLoadMore =
-      scrollDirection.current === 'up' &&
-      isNearTop &&
-      hasMoreComments &&
-      !loadingMoreComments &&
-      !isLoadingMoreRef.current;
-
-    if (shouldLoadMore) {
-      console.log('Triggering pagination - scroll position:', currentY);
+    // Load more when scrolling UP (to see older messages)
+    if (currentY < SCROLL_THRESHOLD && hasMoreComments && !loadingMoreComments && !isLoadingMoreRef.current) {
       fetchMoreComments();
     }
-  };
+  }, [hasMoreComments, loadingMoreComments]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    setCurrentPage(1);
+    setHasMoreComments(true);
     await fetchComments(1, false);
     setRefreshing(false);
   }, [fetchComments]);
 
-  // Optimistic update handler
   const handleCommentAdded = useCallback((newComment: {
     content: string;
     documents: any[];
@@ -248,6 +229,7 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
       employeeId: currentUserEmployeeId || '',
     };
 
+    // Add new comment to the END (bottom) of the array
     setComments(prev => [...prev, optimisticComment]);
     shouldScrollToBottomRef.current = true;
 
@@ -255,7 +237,10 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
+    // Refresh to get the real comment from backend
     setTimeout(() => {
+      setCurrentPage(1);
+      setHasMoreComments(true);
       fetchComments(1, false);
     }, 1000);
   }, [currentUserEmployeeId, fetchComments]);
@@ -312,7 +297,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
     }
   }, []);
 
-  // Auto-scroll effect
   useEffect(() => {
     if (initialLoadDone && shouldScrollToBottomRef.current && comments.length > 0) {
       setTimeout(() => {
@@ -707,7 +691,7 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
         {loadingMoreComments && (
           <View style={styles.loadingMoreContainer}>
             <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.loadingMoreText}>Loading more comments...</Text>
+            <Text style={styles.loadingMoreText}>Loading older messages...</Text>
           </View>
         )}
         
@@ -748,7 +732,7 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
           contentContainerStyle={styles.chatListContent}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          scrollEventThrottle={400}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -764,14 +748,24 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
               }, 100);
             }
           }}
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+            autoscrollToTopThreshold: 10
+          }}
           ListEmptyComponent={
-            <View style={styles.emptyChat}>
-              <Ionicons name="chatbubbles" size={64} color={WHATSAPP_COLORS.chat} />
-              <Text style={styles.emptyChatTitle}>No comments yet</Text>
-              <Text style={styles.emptyChatText}>
-                Start by sending a message or attaching files
-              </Text>
-            </View>
+            loadingComments ? (
+              <View style={styles.emptyChat}>
+                <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+              </View>
+            ) : (
+              <View style={styles.emptyChat}>
+                <Ionicons name="chatbubbles" size={64} color={WHATSAPP_COLORS.chat} />
+                <Text style={styles.emptyChatTitle}>No comments yet</Text>
+                <Text style={styles.emptyChatText}>
+                  Start by sending a message or attaching files
+                </Text>
+              </View>
+            )
           }
         />
       </View>
@@ -1096,12 +1090,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
     backgroundColor: WHATSAPP_COLORS.chatBg,
-    gap: 8,
+    gap: 6,
   },
   loadingMoreText: {
-    fontSize: 13,
+    fontSize: 12,
     color: WHATSAPP_COLORS.textSecondary,
   },
   chatListContent: {

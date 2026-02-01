@@ -6,6 +6,7 @@ import {
   Alert,
   BackHandler,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -621,10 +622,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     </View>
   );
 };
-
+// Platform.OS === 'ios' ? -30 : 0,
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height:'100%',
+    marginBottom:Platform.OS === 'ios' ? -30 : 0,
   },
   scrollContainer: {
     flex: 1,

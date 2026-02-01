@@ -1,10 +1,3 @@
-// Fixed VisitComment component with proper keyboard handling using Animated
-// Key fixes:
-// 1. Added Animated API for smooth keyboard avoidance
-// 2. Fixed auto-scroll to properly reach bottom
-// 3. Improved keyboard handling for both iOS and Android
-// 4. Added proper KeyboardAvoidingView implementation
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
@@ -232,18 +225,20 @@ const VisitComment: React.FC<VisitCommentProps> = ({
 
     if (!token || !visitId) return;
 
+    // Store current values before clearing
+    const textToSend = commentText.trim();
+    const docsToSend = [...commentDocuments];
+
     try {
       setAddingComment(true);
 
       // Immediately notify parent with optimistic data
       onCommentAdded({
-        content: commentText.trim(),
-        documents: commentDocuments
+        content: textToSend,
+        documents: docsToSend
       });
 
       // Clear input immediately for better UX
-      const textToSend = commentText.trim();
-      const docsToSend = [...commentDocuments];
       setCommentText('');
       setCommentDocuments([]);
 
@@ -273,16 +268,15 @@ const VisitComment: React.FC<VisitCommentProps> = ({
       if (!response.ok) throw new Error('Failed to add comment');
 
       const data = await response.json();
-      if (!data.comment) throw new Error();
+      if (!data.comment) throw new Error('Invalid response from server');
 
-      // Success - no need to show alert as the message is already visible
+      // Success - comment is already shown optimistically
     } catch (error) {
       console.error('Error adding comment:', error);
       Alert.alert('Error', 'Failed to send comment. Please try again.');
-
-      // On error, restore the comment text and documents
-      setCommentText(commentText);
-      setCommentDocuments(commentDocuments);
+      // On error, restore the stored values (not the current state which is empty)
+      setCommentText(textToSend);
+      setCommentDocuments(docsToSend);
     } finally {
       setAddingComment(false);
     }
@@ -388,9 +382,9 @@ const VisitComment: React.FC<VisitCommentProps> = ({
   // Render for iOS with KeyboardAvoidingView
   return (
     <KeyboardAvoidingView
-      behavior="padding"
-      keyboardVerticalOffset={0}
       style={styles.mainContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {commentDocuments.length > 0 && (
         <View style={styles.attachedFilesContainer}>
@@ -488,6 +482,7 @@ const styles = StyleSheet.create({
     backgroundColor: WHATSAPP_COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: WHATSAPP_COLORS.border,
+    marginBottom: Platform.OS === 'ios' ? -25 : 0,
   },
   attachedFilesContainer: {
     paddingHorizontal: 16,
@@ -531,6 +526,8 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     backgroundColor: WHATSAPP_COLORS.surface,
+    // marginBottom: Platform.OS === 'ios' ? -25 : 0,
+    // This was causing the blank space below the message box on iOS
   },
   inputWrapper: {
     paddingHorizontal: 12,
@@ -573,6 +570,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     minHeight: 36,
     maxHeight: 100,
+
   },
   messageInput: {
     fontSize: 15,

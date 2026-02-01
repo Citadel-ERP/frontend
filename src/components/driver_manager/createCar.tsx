@@ -83,6 +83,7 @@ const fetchAllOffices = async (token: string | null): Promise<Office[]> => {
                 return data.offices;
             }
         }
+
         throw new Error('No offices found');
     } catch (error) {
         console.error('Error fetching offices:', error);
@@ -104,6 +105,11 @@ const CreateCar: React.FC<CreateCarProps> = ({
     const [pollutionDatePickerOpen, setPollutionDatePickerOpen] = useState(false);
     const [insuranceDatePickerOpen, setInsuranceDatePickerOpen] = useState(false);
     const [registrationDatePickerOpen, setRegistrationDatePickerOpen] = useState(false);
+    
+    // New state for upload method modal
+    const [uploadMethodModalVisible, setUploadMethodModalVisible] = useState(false);
+    const [currentUploadType, setCurrentUploadType] = useState<'pollution' | 'insurance' | 'registration' | 'photo' | null>(null);
+
     const [formData, setFormData] = useState<CarFormData>({
         make: '',
         model: '',
@@ -143,6 +149,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         office.address.city.toLowerCase().includes(city.toLowerCase()) ||
                         city.toLowerCase().includes(office.address.city.toLowerCase())
                     );
+
                     if (officeInCity) {
                         setFormData(prev => ({
                             ...prev,
@@ -161,75 +168,140 @@ const CreateCar: React.FC<CreateCarProps> = ({
         loadOffices();
     }, [token, city]);
 
-    const handleDocumentPick = async (type: 'pollution' | 'insurance' | 'registration' | 'photo') => {
+    // Show upload method modal
+    const showUploadMethodModal = (type: 'pollution' | 'insurance' | 'registration' | 'photo') => {
+        // Check photo limit
+        if (type === 'photo' && formData.photos.length >= 6) {
+            Alert.alert('Limit Reached', 'You can only upload up to 6 photos');
+            return;
+        }
+        
+        setCurrentUploadType(type);
+        setUploadMethodModalVisible(true);
+    };
+
+    // Handle upload from gallery
+    const handleGalleryPick = async () => {
+        setUploadMethodModalVisible(false);
+        
+        if (!currentUploadType) return;
+
         try {
-            // Check photo limit
-            if (type === 'photo' && formData.photos.length >= 6) {
-                Alert.alert('Limit Reached', 'You can only upload up to 6 photos');
+            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            
+            if (!permissionResult.granted) {
+                Alert.alert('Permission Required', 'Please allow access to your photo library');
                 return;
             }
 
-            // Use ImagePicker for photos, DocumentPicker for certificates
-            if (type === 'photo') {
-                // Request permission
-                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsMultipleSelection: false,
+                quality: 0.8,
+                allowsEditing: false,
+            });
 
-                if (!permissionResult.granted) {
-                    Alert.alert('Permission Required', 'Please allow access to your photo library');
-                    return;
-                }
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const image = result.assets[0];
+                const fileName = image.uri.split('/').pop() || `image_${Date.now()}.jpg`;
+                
+                const docObject = {
+                    uri: image.uri,
+                    name: fileName,
+                    type: 'image/jpeg',
+                };
 
-                const result = await ImagePicker.launchImageLibraryAsync({
-                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                    allowsMultipleSelection: false,
-                    quality: 0.8,
-                    allowsEditing: false,
-                });
+                updateFormDataWithDocument(currentUploadType, docObject);
+            }
+        } catch (error) {
+            console.error('Error picking from gallery:', error);
+            Alert.alert('Error', 'Failed to pick image from gallery');
+        }
+    };
 
-                if (!result.canceled && result.assets && result.assets.length > 0) {
-                    const image = result.assets[0];
-                    const fileName = image.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-                    const docObject = {
-                        uri: image.uri,
-                        name: fileName,
-                        type: 'image/jpeg',
-                    };
+    // Handle upload from camera
+    const handleCameraPick = async () => {
+        setUploadMethodModalVisible(false);
+        
+        if (!currentUploadType) return;
 
-                    if (formData.photos.length < 6) {
-                        setFormData({ ...formData, photos: [...formData.photos, docObject] });
-                    }
-                }
-            } else {
-                // Use DocumentPicker for certificates (PDF or images)
-                const result = await DocumentPicker.getDocumentAsync({
-                    type: ['image/*', 'application/pdf'],
-                    copyToCacheDirectory: true,
-                });
+        try {
+            const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+            
+            if (!permissionResult.granted) {
+                Alert.alert('Permission Required', 'Please allow access to your camera');
+                return;
+            }
 
-                if (!result.canceled && result.assets && result.assets.length > 0) {
-                    const document = result.assets[0];
-                    const docObject = {
-                        uri: document.uri,
-                        name: document.name,
-                        type: document.mimeType || 'application/octet-stream',
-                    };
+            const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: false,
+                quality: 0.8,
+            });
 
-                    switch (type) {
-                        case 'pollution':
-                            setFormData({ ...formData, pollution_certificate: docObject });
-                            break;
-                        case 'insurance':
-                            setFormData({ ...formData, insurance_certificate: docObject });
-                            break;
-                        case 'registration':
-                            setFormData({ ...formData, registration_certificate: docObject });
-                            break;
-                    }
-                }
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const image = result.assets[0];
+                const fileName = `camera_${Date.now()}.jpg`;
+                
+                const docObject = {
+                    uri: image.uri,
+                    name: fileName,
+                    type: 'image/jpeg',
+                };
+
+                updateFormDataWithDocument(currentUploadType, docObject);
+            }
+        } catch (error) {
+            console.error('Error taking photo:', error);
+            Alert.alert('Error', 'Failed to take photo');
+        }
+    };
+
+    // Handle upload from file picker
+    const handleFilePick = async () => {
+        setUploadMethodModalVisible(false);
+        
+        if (!currentUploadType) return;
+
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['image/*', 'application/pdf'],
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const document = result.assets[0];
+                
+                const docObject = {
+                    uri: document.uri,
+                    name: document.name,
+                    type: document.mimeType || 'application/octet-stream',
+                };
+
+                updateFormDataWithDocument(currentUploadType, docObject);
             }
         } catch (error) {
             console.error('Error picking document:', error);
             Alert.alert('Error', 'Failed to pick document');
+        }
+    };
+
+    // Update form data with the selected document
+    const updateFormDataWithDocument = (type: 'pollution' | 'insurance' | 'registration' | 'photo', docObject: Document) => {
+        switch (type) {
+            case 'pollution':
+                setFormData({ ...formData, pollution_certificate: docObject });
+                break;
+            case 'insurance':
+                setFormData({ ...formData, insurance_certificate: docObject });
+                break;
+            case 'registration':
+                setFormData({ ...formData, registration_certificate: docObject });
+                break;
+            case 'photo':
+                if (formData.photos.length < 6) {
+                    setFormData({ ...formData, photos: [...formData.photos, docObject] });
+                }
+                break;
         }
     };
 
@@ -267,6 +339,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
         }
 
         setLoading(true);
+
         try {
             const formDataToSend = new FormData();
             formDataToSend.append('token', token || '');
@@ -286,10 +359,12 @@ const CreateCar: React.FC<CreateCarProps> = ({
                 formDataToSend.append('pollution_certificate', formData.pollution_certificate as any);
                 formDataToSend.append('pollution_expiry_date', formData.pollution_expiry_date);
             }
+
             if (formData.insurance_certificate) {
                 formDataToSend.append('insurance_certificate', formData.insurance_certificate as any);
                 formDataToSend.append('insurance_expiry_date', formData.insurance_expiry_date);
             }
+
             if (formData.registration_certificate) {
                 formDataToSend.append('registration_certificate', formData.registration_certificate as any);
                 formDataToSend.append('registration_expiry_date', formData.registration_expiry_date);
@@ -346,6 +421,70 @@ const CreateCar: React.FC<CreateCarProps> = ({
                 <Text style={styles.detailHeaderTitle}>Add New Vehicle</Text>
                 <View style={styles.detailHeaderSpacer} />
             </View>
+
+            {/* Upload Method Selection Modal */}
+            <Modal
+                transparent={true}
+                animationType="fade"
+                visible={uploadMethodModalVisible}
+                onRequestClose={() => setUploadMethodModalVisible(false)}
+            >
+                <View style={styles.uploadModalOverlay}>
+                    <View style={styles.uploadModalContent}>
+                        <Text style={styles.uploadModalTitle}>
+                            {currentUploadType === 'photo' ? 'Add Photo' : 'Upload Document'}
+                        </Text>
+                        <Text style={styles.uploadModalSubtitle}>
+                            Choose how you want to upload
+                        </Text>
+
+                        <TouchableOpacity
+                            style={styles.uploadMethodButton}
+                            onPress={handleCameraPick}
+                        >
+                            <MaterialIcons name="camera-alt" size={28} color="#075E54" />
+                            <View style={styles.uploadMethodTextContainer}>
+                                <Text style={styles.uploadMethodButtonText}>Take Photo</Text>
+                                <Text style={styles.uploadMethodButtonSubtext}>Use camera to capture</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color="#999" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.uploadMethodButton}
+                            onPress={handleGalleryPick}
+                        >
+                            <MaterialIcons name="photo-library" size={28} color="#075E54" />
+                            <View style={styles.uploadMethodTextContainer}>
+                                <Text style={styles.uploadMethodButtonText}>Choose from Gallery</Text>
+                                <Text style={styles.uploadMethodButtonSubtext}>Select from photo library</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color="#999" />
+                        </TouchableOpacity>
+
+                        {currentUploadType !== 'photo' && (
+                            <TouchableOpacity
+                                style={styles.uploadMethodButton}
+                                onPress={handleFilePick}
+                            >
+                                <MaterialIcons name="insert-drive-file" size={28} color="#075E54" />
+                                <View style={styles.uploadMethodTextContainer}>
+                                    <Text style={styles.uploadMethodButtonText}>Browse Files</Text>
+                                    <Text style={styles.uploadMethodButtonSubtext}>Choose PDF or image file</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={24} color="#999" />
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            style={styles.uploadModalCancelButton}
+                            onPress={() => setUploadMethodModalVisible(false)}
+                        >
+                            <Text style={styles.uploadModalCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -435,7 +574,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                     style={styles.dropdown}
                                     onPress={() => {
                                         setDropdownOpen(!dropdownOpen);
-                                        setVehicleTypeDropdownOpen(false); // Close others
+                                        setVehicleTypeDropdownOpen(false);
                                         setStatusDropdownOpen(false);
                                     }}
                                 >
@@ -462,6 +601,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                 )}
                             </View>
                         </View>
+
                         <View style={[styles.formGroup, { zIndex: vehicleTypeDropdownOpen ? 2000 : 1 }]}>
                             <Text style={[styles.formLabel, { marginBottom: 6 }]}>Vehicle Type</Text>
                             <View style={styles.dropdownContainer}>
@@ -469,7 +609,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                     style={styles.dropdown}
                                     onPress={() => {
                                         setVehicleTypeDropdownOpen(!vehicleTypeDropdownOpen);
-                                        setDropdownOpen(false); // Close others
+                                        setDropdownOpen(false);
                                         setStatusDropdownOpen(false);
                                     }}
                                 >
@@ -509,7 +649,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                     </Text>
                                     <Text style={styles.dropdownArrow}>{statusDropdownOpen ? '▲' : '▼'}</Text>
                                 </TouchableOpacity>
-
                                 {statusDropdownOpen && (
                                     <View style={styles.dropdownList}>
                                         {statuses.map((status) => (
@@ -532,7 +671,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                         </View>
                     </View>
 
-                    {/* Office Selection Section */}
                     {/* Office Selection Section */}
                     <View style={[
                         styles.formSection,
@@ -611,10 +749,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
                         <View style={styles.documentGroup}>
                             <Text style={[styles.formLabel, { marginBottom: 10 }]}>Pollution Certificate</Text>
-
-
-
-                            {/* Document Upload */}
                             {formData.pollution_certificate ? (
                                 <View style={styles.documentSelected}>
                                     <View style={[styles.documentIconContainer]}>
@@ -642,7 +776,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             ) : (
                                 <TouchableOpacity
                                     style={styles.documentButton}
-                                    onPress={() => handleDocumentPick('pollution')}
+                                    onPress={() => showUploadMethodModal('pollution')}
                                 >
                                     <View style={styles.uploadIconContainer}>
                                         <MaterialIcons name="cloud-upload" size={28} color="#075E54" />
@@ -653,8 +787,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                     </View>
                                 </TouchableOpacity>
                             )}
-
-                            {/* Expiry Date Field */}
                             {formData.pollution_certificate && (
                                 <View style={styles.expiryDateContainer}>
                                     <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
@@ -675,7 +807,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
                         <View style={styles.documentGroup}>
                             <Text style={[styles.formLabel, { marginBottom: 10 }]}>Insurance Certificate</Text>
-                            {/* Document Upload */}
                             {formData.insurance_certificate ? (
                                 <View style={styles.documentSelected}>
                                     <View style={styles.documentIconContainer}>
@@ -703,7 +834,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             ) : (
                                 <TouchableOpacity
                                     style={styles.documentButton}
-                                    onPress={() => handleDocumentPick('insurance')}
+                                    onPress={() => showUploadMethodModal('insurance')}
                                 >
                                     <View style={styles.uploadIconContainer}>
                                         <MaterialIcons name="cloud-upload" size={28} color="#075E54" />
@@ -714,8 +845,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                     </View>
                                 </TouchableOpacity>
                             )}
-
-                            {/* Expiry Date Field */}
                             {formData.insurance_certificate && (
                                 <View style={styles.expiryDateContainer}>
                                     <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
@@ -736,7 +865,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
 
                         <View style={styles.documentGroup}>
                             <Text style={[styles.formLabel, { marginBottom: 10 }]}>Registration Certificate</Text>
-                            {/* Document Upload */}
                             {formData.registration_certificate ? (
                                 <View style={styles.documentSelected}>
                                     <View style={styles.documentIconContainer}>
@@ -764,7 +892,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                             ) : (
                                 <TouchableOpacity
                                     style={styles.documentButton}
-                                    onPress={() => handleDocumentPick('registration')}
+                                    onPress={() => showUploadMethodModal('registration')}
                                 >
                                     <View style={styles.uploadIconContainer}>
                                         <MaterialIcons name="cloud-upload" size={28} color="#075E54" />
@@ -775,8 +903,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                     </View>
                                 </TouchableOpacity>
                             )}
-
-                            {/* Expiry Date Field */}
                             {formData.registration_certificate && (
                                 <View style={styles.expiryDateContainer}>
                                     <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date *</Text>
@@ -951,9 +1077,6 @@ const CreateCar: React.FC<CreateCarProps> = ({
                     <View style={styles.formSection}>
                         <View style={styles.sectionHeaderRow}>
                             <View style={styles.sectionHeaderLeft}>
-                                {/* <View style={styles.photoSectionIconContainer}>
-                                    <MaterialIcons name="photo-library" size={22} color="#075E54" />
-                                </View> */}
                                 <View>
                                     <Text style={[styles.sectionTitle, { color: '#000', fontSize: 20, marginBottom: 4, fontWeight: '400' }]}>
                                         Vehicle Photos
@@ -986,7 +1109,7 @@ const CreateCar: React.FC<CreateCarProps> = ({
                                         ]}
                                         onPress={() => {
                                             if (!hasPhoto && formData.photos.length < 6) {
-                                                handleDocumentPick('photo');
+                                                showUploadMethodModal('photo');
                                             }
                                         }}
                                         activeOpacity={0.7}

@@ -52,7 +52,7 @@ const Header: React.FC<HeaderProps> = ({
           <View style={styles.headerOverlay} />
           
           <View style={[styles.headerContent, { 
-            paddingTop: Platform.OS === 'ios' ? 50 : 40 
+            paddingTop: Platform.OS === 'ios' ? 60 : 40 
           }]}>
             <View style={styles.headerTopRow}>
               <TouchableOpacity 

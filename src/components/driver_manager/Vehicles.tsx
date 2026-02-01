@@ -1581,7 +1581,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
         </TouchableOpacity>
         <View style={styles.headerCenter}>
             <Text style={styles.logoText}>CITADEL</Text>
-            <Text style={styles.headerSubtitle}>Managing: {city}</Text>
+            {/* <Text style={styles.headerSubtitle}>Managing: {city}</Text> */}
         </View>
         {/* CHANGED: + icon to Add button */}
         <TouchableOpacity
