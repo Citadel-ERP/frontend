@@ -35,9 +35,8 @@ interface EmployeeListProps {
   onRefresh: () => void;
   onEmployeePress: (employee: Employee) => void;
   onClearSearch: () => void;
-  onLoadMore?: () => void;
-  hasMore?: boolean;
   totalEmployees?: number;
+  displayedEmployees?: number;
 }
 
 export const EmployeeList: React.FC<EmployeeListProps> = ({
@@ -49,9 +48,8 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   onRefresh,
   onEmployeePress,
   onClearSearch,
-  onLoadMore,
-  hasMore = false,
   totalEmployees = 0,
+  displayedEmployees = 0,
 }) => {
   const [collapsedCities, setCollapsedCities] = useState<Set<string>>(new Set());
 
@@ -69,7 +67,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   };
 
   const getTotalEmployeesInView = () => {
-    return employeesByCity.reduce((sum, group) => sum + group.employees.length, 0);
+    return employeesByCity.reduce((sum, group) => sum + (group.employees?.length || 0), 0);
   };
 
   if (loading && employeesByCity.length === 0) {
@@ -97,7 +95,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     );
   }
 
-  if (employeesByCity.length === 0) {
+  if (employeesByCity.length === 0 || getTotalEmployeesInView() === 0) {
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyStateIcon}>
@@ -108,7 +106,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
         </Text>
         <Text style={styles.emptyStateMessage}>
           {searchQuery
-            ? 'Try adjusting your search terms'
+            ? `No employees found for "${searchQuery}". Try adjusting your search terms.`
             : 'No employees are currently in the system'}
         </Text>
         {searchQuery && (
@@ -138,25 +136,8 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
           progressBackgroundColor={WHATSAPP_COLORS.background}
         />
       }
-      onScroll={({ nativeEvent }) => {
-        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-        const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 100;
-        if (isCloseToBottom && hasMore && !loading && onLoadMore) {
-          onLoadMore();
-        }
-      }}
-      scrollEventThrottle={400}
     >
       <View style={styles.employeesList}>
-        {/* Summary Header */}
-        {/* <View style={styles.summaryHeader}>
-          <Text style={styles.summaryText}>
-            {searchQuery ? `Results for "${searchQuery}"` : `${totalEmployees} Total Employees`}
-          </Text>
-          <Text style={styles.summarySubtext}>
-            Showing {getTotalEmployeesInView()} employees across {employeesByCity.length} {employeesByCity.length === 1 ? 'city' : 'cities'}
-          </Text>
-        </View> */}
 
         {employeesByCity.map((cityGroup) => (
           <View key={cityGroup.city} style={styles.citySection}>
@@ -174,9 +155,9 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                   style={styles.cityIcon}
                 />
                 <View>
-                  <Text style={styles.cityName}>{cityGroup.city}</Text>
+                  <Text style={styles.cityName}>{cityGroup.city || 'Unknown City'}</Text>
                   <Text style={styles.cityEmployeeCount}>
-                    {cityGroup.employees.length} employee{cityGroup.employees.length !== 1 ? 's' : ''}
+                    {cityGroup.employees?.length || 0} employee{(cityGroup.employees?.length || 0) !== 1 ? 's' : ''}
                   </Text>
                 </View>
               </View>
@@ -190,7 +171,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
             {/* Employee Cards */}
             {!collapsedCities.has(cityGroup.city) && (
               <View style={styles.cityEmployeesContainer}>
-                {cityGroup.employees.map((employee) => (
+                {cityGroup.employees?.map((employee) => (
                   <TouchableOpacity
                     key={employee.employee_id}
                     style={styles.employeeCard}
@@ -231,27 +212,27 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                         </View>
                         
                         <Text style={styles.employeeDesignation} numberOfLines={1}>
-                          {employee.designation || employee.designation}
+                          {employee.designation || employee.role || 'No designation'}
                         </Text>
                         
                         <Text style={styles.employeeLastMessage} numberOfLines={1}>
-                          ID: {employee.employee_id} • {employee.email}
+                          ID: {employee.employee_id} • {employee.email || 'No email'}
                         </Text>
                         
                         <View style={styles.leaveBadges}>
                           <View style={[styles.leaveBadge, { backgroundColor: '#E8F5E9' }]}>
                             <Text style={[styles.leaveBadgeText, { color: '#2E7D32' }]}>
-                              E: {employee.earned_leaves}
+                              E: {employee.earned_leaves || 0}
                             </Text>
                           </View>
                           <View style={[styles.leaveBadge, { backgroundColor: '#FFF3E0' }]}>
                             <Text style={[styles.leaveBadgeText, { color: '#EF6C00' }]}>
-                              S: {employee.sick_leaves}
+                              S: {employee.sick_leaves || 0}
                             </Text>
                           </View>
                           <View style={[styles.leaveBadge, { backgroundColor: '#E3F2FD' }]}>
                             <Text style={[styles.leaveBadgeText, { color: '#1565C0' }]}>
-                              C: {employee.casual_leaves}
+                              C: {employee.casual_leaves || 0}
                             </Text>
                           </View>
                         </View>
@@ -271,18 +252,13 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
           </View>
         ))}
 
-        {/* Load More Indicator */}
-        {loading && employeesByCity.length > 0 && (
-          <View style={styles.loadMoreContainer}>
-            <Text style={styles.loadMoreText}>Loading more employees...</Text>
-          </View>
-        )}
-
         {/* End of List Footer */}
-        {!hasMore && (
+        {getTotalEmployeesInView() > 0 && (
           <View style={styles.listFooter}>
             <Text style={styles.listFooterText}>
-              End of list • {totalEmployees} total employee{totalEmployees !== 1 ? 's' : ''}
+              {searchQuery 
+                ? `End of search results • ${getTotalEmployeesInView()} employee${getTotalEmployeesInView() !== 1 ? 's' : ''} found`
+                : `End of list • ${totalEmployees} total employee${totalEmployees !== 1 ? 's' : ''}`}
             </Text>
           </View>
         )}

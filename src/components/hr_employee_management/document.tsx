@@ -145,16 +145,28 @@ const DocumentModal: React.FC<DocumentProps> = ({
       const formData = new FormData();
       formData.append('token', token);
       formData.append('employee_id', employee.employee_id);
-      
+
       const fileUri = selectedFile.uri;
       const fileName = selectedFile.name;
       const mimeType = selectedFile.mimeType || 'application/octet-stream';
-      
-      formData.append('document', {
-        uri: fileUri,
-        type: mimeType,
-        name: fileName,
-      } as any);
+
+      // Handle file upload differently for web
+      // For web, we need to fetch the file and append it as a Blob
+      if (Platform.OS === 'web') {
+        // For web, we need to fetch the file and append it as a Blob
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        // Create a File object from the Blob with the filename
+        const file = new File([blob], fileName, { type: mimeType });
+        formData.append('document', file);
+      } else {
+        // For mobile (iOS/Android)
+        formData.append('document', {
+          uri: fileUri,
+          type: mimeType,
+          name: fileName,
+        } as any);
+      }
 
       // Add file_name based on selection
       if (selectedDocType === 'custom') {
@@ -169,6 +181,9 @@ const DocumentModal: React.FC<DocumentProps> = ({
       const response = await fetch(`${BACKEND_URL}/manager/addDocument`, {
         method: 'POST',
         body: formData,
+        headers: Platform.OS === 'web' ? {} : {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
       if (response.ok) {
@@ -240,7 +255,7 @@ const DocumentModal: React.FC<DocumentProps> = ({
 
   const getFileIcon = (fileName: string) => {
     const lowerName = fileName.toLowerCase();
-    
+
     if (lowerName.includes('aadhaar') || lowerName.includes('aadhar')) return 'card-outline';
     if (lowerName.includes('pan')) return 'card-outline';
     if (lowerName.includes('education') || lowerName.includes('degree') || lowerName.includes('certificate')) return 'school-outline';
@@ -250,13 +265,13 @@ const DocumentModal: React.FC<DocumentProps> = ({
     if (lowerName.includes('form') || lowerName.includes('16')) return 'receipt-outline';
     if (lowerName.includes('passport')) return 'airplane-outline';
     if (lowerName.includes('epfo') || lowerName.includes('uan')) return 'shield-checkmark-outline';
-    
+
     return 'document-attach-outline';
   };
 
   const getFileColor = (fileName: string) => {
     const lowerName = fileName.toLowerCase();
-    
+
     if (lowerName.includes('aadhaar') || lowerName.includes('aadhar')) return '#2196F3';
     if (lowerName.includes('pan')) return '#4CAF50';
     if (lowerName.includes('education') || lowerName.includes('degree')) return '#9C27B0';
@@ -266,13 +281,13 @@ const DocumentModal: React.FC<DocumentProps> = ({
     if (lowerName.includes('form')) return '#D32F2F';
     if (lowerName.includes('passport')) return '#3F51B5';
     if (lowerName.includes('epfo') || lowerName.includes('uan')) return '#795548';
-    
+
     return WHATSAPP_COLORS.primary;
   };
 
   const renderSelectDocumentType = () => (
-    <ScrollView 
-      style={styles.content} 
+    <ScrollView
+      style={styles.content}
       contentContainerStyle={{ padding: 16 }}
       showsVerticalScrollIndicator={false}
     >
@@ -315,13 +330,13 @@ const DocumentModal: React.FC<DocumentProps> = ({
               justifyContent: 'center',
               marginRight: 16,
             }}>
-              <Ionicons 
-                name={docType.icon as any} 
-                size={24} 
-                color={WHATSAPP_COLORS.primary} 
+              <Ionicons
+                name={docType.icon as any}
+                size={24}
+                color={WHATSAPP_COLORS.primary}
               />
             </View>
-            
+
             <Text style={{
               flex: 1,
               fontSize: 15,
@@ -330,11 +345,11 @@ const DocumentModal: React.FC<DocumentProps> = ({
             }}>
               {docType.name}
             </Text>
-            
-            <Ionicons 
-              name="chevron-forward" 
-              size={20} 
-              color={WHATSAPP_COLORS.textTertiary} 
+
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={WHATSAPP_COLORS.textTertiary}
             />
           </TouchableOpacity>
         ))}
@@ -343,8 +358,8 @@ const DocumentModal: React.FC<DocumentProps> = ({
   );
 
   const renderUploadForm = () => (
-    <ScrollView 
-      style={styles.content} 
+    <ScrollView
+      style={styles.content}
       contentContainerStyle={{ padding: 24 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -367,10 +382,10 @@ const DocumentModal: React.FC<DocumentProps> = ({
           borderWidth: 1,
           borderColor: `${WHATSAPP_COLORS.primary}30`,
         }}>
-          <Ionicons 
-            name={PREDEFINED_DOCUMENT_TYPES.find(d => d.id === selectedDocType)?.icon as any || 'document-outline'} 
-            size={24} 
-            color={WHATSAPP_COLORS.primary} 
+          <Ionicons
+            name={PREDEFINED_DOCUMENT_TYPES.find(d => d.id === selectedDocType)?.icon as any || 'document-outline'}
+            size={24}
+            color={WHATSAPP_COLORS.primary}
           />
           <Text style={{
             marginLeft: 12,
@@ -427,10 +442,10 @@ const DocumentModal: React.FC<DocumentProps> = ({
           onPress={pickDocument}
           activeOpacity={0.7}
         >
-          <Ionicons 
-            name={selectedFile ? "checkmark-circle" : "cloud-upload-outline"} 
-            size={28} 
-            color={selectedFile ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textTertiary} 
+          <Ionicons
+            name={selectedFile ? "checkmark-circle" : "cloud-upload-outline"}
+            size={28}
+            color={selectedFile ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textTertiary}
           />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={{
@@ -511,8 +526,8 @@ const DocumentModal: React.FC<DocumentProps> = ({
     }
 
     return (
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1 }}
       >
@@ -524,8 +539,8 @@ const DocumentModal: React.FC<DocumentProps> = ({
               const fileIcon = getFileIcon(displayName);
 
               return (
-                <View 
-                  key={doc.id} 
+                <View
+                  key={doc.id}
                   style={{
                     marginBottom: 12,
                     backgroundColor: '#fff',
@@ -551,13 +566,13 @@ const DocumentModal: React.FC<DocumentProps> = ({
                         justifyContent: 'center',
                         marginRight: 14,
                       }}>
-                        <Ionicons 
-                          name={fileIcon as any} 
-                          size={26} 
-                          color={fileColor} 
+                        <Ionicons
+                          name={fileIcon as any}
+                          size={26}
+                          color={fileColor}
                         />
                       </View>
-                      
+
                       <View style={{ flex: 1 }}>
                         <Text style={{
                           fontSize: 16,
@@ -567,7 +582,7 @@ const DocumentModal: React.FC<DocumentProps> = ({
                         }} numberOfLines={2}>
                           {displayName}
                         </Text>
-                        
+
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Ionicons name="calendar-outline" size={14} color={WHATSAPP_COLORS.textTertiary} />
@@ -576,10 +591,10 @@ const DocumentModal: React.FC<DocumentProps> = ({
                               color: WHATSAPP_COLORS.textTertiary,
                               marginLeft: 4,
                             }}>
-                              {new Date(doc.created_at).toLocaleDateString('en-IN', { 
-                                day: 'numeric', 
-                                month: 'short', 
-                                year: 'numeric' 
+                              {new Date(doc.created_at).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
                               })}
                             </Text>
                           </View>
@@ -734,7 +749,7 @@ const DocumentModal: React.FC<DocumentProps> = ({
                 {getHeaderTitle()}
               </Text>
             </View>
-            
+
             {modalMode === 'list' && (
               <TouchableOpacity
                 style={styles.uploadPayslipButton}
