@@ -13,6 +13,7 @@ import {
   FlatList,
   Platform,
   Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +48,9 @@ const WHATSAPP_COLORS = {
   lightPurple: '#EDE9FE',
 };
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const IS_IOS = Platform.OS === 'ios';
+const IS_WEB = Platform.OS === 'web';
 
 interface Site {
   id: number;
@@ -447,6 +450,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         transparent
         animationType="slide"
         onRequestClose={() => setShowDatePicker(false)}
+        statusBarTranslucent
       >
         <View style={styles.datePickerOverlay}>
           <View style={styles.datePickerContainer}>
@@ -489,6 +493,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         transparent
         animationType="slide"
         onRequestClose={() => setShowTimePicker(false)}
+        statusBarTranslucent
       >
         <View style={styles.timePickerOverlay}>
           <View style={styles.timePickerContainer}>
@@ -561,8 +566,18 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     onToggle: (value: string) => void,
     onClose: () => void
   ) => (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={onClose}>
+    <Modal 
+      visible={visible} 
+      transparent 
+      animationType="fade" 
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <TouchableOpacity 
+        style={styles.dropdownOverlay} 
+        activeOpacity={1} 
+        onPress={onClose}
+      >
         <View style={styles.dropdownContainer}>
           <Text style={styles.dropdownTitle}>{title}</Text>
           <ScrollView style={styles.dropdownScroll}>
@@ -596,253 +611,269 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     return (
       <Modal
         visible={showSiteSearch}
-        transparent
         animationType="slide"
         onRequestClose={() => setShowSiteSearch(false)}
+        statusBarTranslucent
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.searchModalHeader}>
-            <TouchableOpacity onPress={() => setShowSiteSearch(false)}>
-              <Ionicons name="arrow-back" size={24} color={WHATSAPP_COLORS.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.searchModalTitle}>Select Sites</Text>
-            <View style={{ width: 24 }} />
-          </View>
-
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputWrapper}>
-              <Ionicons 
-                name="search" 
-                size={20} 
-                color={WHATSAPP_COLORS.textTertiary} 
-                style={styles.searchIcon}
-              />
-              <TextInput
-                style={styles.searchModalInput}
-                placeholder="Search sites..."
-                value={siteSearchQuery}
-                onChangeText={setSiteSearchQuery}
-                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-                autoFocus
-              />
-              {siteSearchQuery.length > 0 && (
-                <TouchableOpacity 
-                  onPress={() => setSiteSearchQuery('')}
-                  style={styles.clearSearchButton}
-                >
-                  <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                onPress={() => setShowFilterModal(true)}
-                style={styles.filterButton}
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={IS_IOS ? 'padding' : undefined}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.searchModalHeader}>
+              <TouchableOpacity 
+                onPress={() => setShowSiteSearch(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons 
-                  name="filter" 
-                  size={20} 
-                  color={activeFilterCount > 0 ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textSecondary} 
-                />
-                {activeFilterCount > 0 && (
-                  <View style={styles.filterBadge}>
-                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                  </View>
-                )}
+                <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
               </TouchableOpacity>
+              <Text style={styles.searchModalTitle}>Select Sites</Text>
+              <View style={{ width: 24 }} />
             </View>
-          </View>
 
-          {/* Active Filters */}
-          {activeFilterCount > 0 && (
-            <View style={styles.activeFiltersContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {activeFilters.property_type.map((value) => {
-                  const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
-                  return (
-                    <View key={`prop-${value}`} style={styles.activeFilter}>
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputWrapper}>
+                <Ionicons 
+                  name="search" 
+                  size={20} 
+                  color={WHATSAPP_COLORS.textTertiary} 
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchModalInput}
+                  placeholder="Search sites..."
+                  value={siteSearchQuery}
+                  onChangeText={setSiteSearchQuery}
+                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                  autoFocus={!IS_IOS}
+                />
+                {siteSearchQuery.length > 0 && (
+                  <TouchableOpacity 
+                    onPress={() => setSiteSearchQuery('')}
+                    style={styles.clearSearchButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => setShowFilterModal(true)}
+                  style={styles.filterButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons 
+                    name="filter" 
+                    size={20} 
+                    color={activeFilterCount > 0 ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textSecondary} 
+                  />
+                  {activeFilterCount > 0 && (
+                    <View style={styles.filterBadge}>
+                      <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Active Filters */}
+            {activeFilterCount > 0 && (
+              <View style={styles.activeFiltersContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {activeFilters.property_type.map((value) => {
+                    const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
+                    return (
+                      <View key={`prop-${value}`} style={styles.activeFilter}>
+                        <Text style={styles.activeFilterText}>
+                          {option?.label || value}
+                        </Text>
+                        <TouchableOpacity 
+                          onPress={() => handleFilterChange('property_type', value)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                  {activeFilters.building_status.map((value) => (
+                    <View key={`status-${value}`} style={styles.activeFilter}>
                       <Text style={styles.activeFilterText}>
-                        {option?.label || value}
+                        {beautifyName(value)}
                       </Text>
                       <TouchableOpacity 
-                        onPress={() => handleFilterChange('property_type', value)}
+                        onPress={() => handleFilterChange('building_status', value)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
                         <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                       </TouchableOpacity>
                     </View>
-                  );
-                })}
-                {activeFilters.building_status.map((value) => (
-                  <View key={`status-${value}`} style={styles.activeFilter}>
-                    <Text style={styles.activeFilterText}>
-                      {beautifyName(value)}
-                    </Text>
-                    <TouchableOpacity 
-                      onPress={() => handleFilterChange('building_status', value)}
-                    >
-                      <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                {activeFilters.floor_condition.map((value) => (
-                  <View key={`floor-${value}`} style={styles.activeFilter}>
-                    <Text style={styles.activeFilterText}>
-                      {beautifyName(value)}
-                    </Text>
-                    <TouchableOpacity 
-                      onPress={() => handleFilterChange('floor_condition', value)}
-                    >
-                      <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Selection Info */}
-          <View style={styles.selectionInfoBar}>
-            <Text style={styles.selectionInfoText}>
-              {selectedSites.length} site(s) selected
-            </Text>
-            <TouchableOpacity onPress={handleSelectAllSites}>
-              <Text style={styles.selectAllText}>
-                {selectedSites.length === filteredSites.length ? 'Deselect All' : 'Select All'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={filteredSites}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => {
-              const isSelected = selectedSites.some(s => s.id === item.id);
-              const statusColor = getStatusColor(item.building_status);
-              const propertyType = getPropertyTypeText(item);
-              const propertyTypeColor = getPropertyTypeBadgeColor(item);
-              
-              const pricingText = item.managed_property && item.rent_per_seat
-                ? `${formatCurrency(item.rent_per_seat)}/seat`
-                : item.rent && item.total_area
-                  ? `${formatCurrency(parseFloat(item.rent) / parseFloat(item.total_area))}/sq-ft`
-                  : item.rent ? formatCurrency(item.rent) : '';
-
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.siteCard,
-                    isSelected && styles.siteCardSelected
-                  ]}
-                  onPress={() => handleSelectSite(item)}
-                >
-                  {/* Selection Checkbox */}
-                  <View style={styles.selectionCheckbox}>
-                    <View style={[
-                      styles.checkbox,
-                      isSelected && styles.checkboxSelected
-                    ]}>
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />
-                      )}
+                  ))}
+                  {activeFilters.floor_condition.map((value) => (
+                    <View key={`floor-${value}`} style={styles.activeFilter}>
+                      <Text style={styles.activeFilterText}>
+                        {beautifyName(value)}
+                      </Text>
+                      <TouchableOpacity 
+                        onPress={() => handleFilterChange('floor_condition', value)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
                     </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.headerLeft}>
-                        <Text style={styles.siteName} numberOfLines={1}>
-                          {item.building_name}
-                        </Text>
-                        <View style={[styles.propertyTypeBadge, { backgroundColor: propertyTypeColor }]}>
-                          <Text style={styles.propertyTypeText}>{propertyType}</Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {item.location && (
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
-                        <Text style={styles.locationText} numberOfLines={1}>
-                          {item.location}
-                        </Text>
-                      </View>
-                    )}
-
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.detailsScrollContainer}
-                      contentContainerStyle={styles.detailsGrid}
-                    >
-                      {/* Status Badge */}
-                      <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
-                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                        <Text style={[styles.statusText, { color: statusColor }]}>
-                          {beautifyName(item.building_status || 'unknown')}
-                        </Text>
-                      </View>
-
-                      {/* Floor Condition */}
-                      {item.floor_condition && (
-                        <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
-                          <Ionicons name="layers-outline" size={12} color={WHATSAPP_COLORS.info} />
-                          <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
-                            {beautifyName(item.floor_condition)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Total Area */}
-                      {item.total_area && (
-                        <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
-                          <Ionicons name="expand-outline" size={12} color="#7C3AED" />
-                          <Text style={[styles.detailChipText, { color: "#7C3AED" }]}>
-                            {parseFloat(item.total_area).toLocaleString('en-IN')} sq ft
-                          </Text>
-                        </View>
-                      )}
-                    </ScrollView>
-
-                    {/* Pricing */}
-                    {pricingText && (
-                      <View style={styles.pricingRow}>
-                        <View style={styles.pricingBadge}>
-                          <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
-                          <Text style={styles.pricingText}>{pricingText}</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-            ListEmptyComponent={() => (
-              <View style={styles.emptySearch}>
-                <Ionicons name="business" size={48} color={WHATSAPP_COLORS.border} />
-                <Text style={styles.emptySearchText}>No sites found</Text>
+                  ))}
+                </ScrollView>
               </View>
             )}
-          />
 
-          {/* Selection Footer */}
-          <View style={styles.selectionFooter}>
-            <TouchableOpacity
-              style={[
-                styles.selectButton,
-                selectedSites.length === 0 && styles.selectButtonDisabled
-              ]}
-              onPress={() => {
-                if (selectedSites.length > 0) {
-                  setShowSiteSearch(false);
-                  setSiteSearchQuery('');
-                }
-              }}
-              disabled={selectedSites.length === 0}
-            >
-              <Text style={styles.selectButtonText}>
-                Select {selectedSites.length} Site(s)
+            {/* Selection Info */}
+            <View style={styles.selectionInfoBar}>
+              <Text style={styles.selectionInfoText}>
+                {selectedSites.length} site(s) selected
               </Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
+              <TouchableOpacity 
+                onPress={handleSelectAllSites}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.selectAllText}>
+                  {selectedSites.length === filteredSites.length ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={filteredSites}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => {
+                const isSelected = selectedSites.some(s => s.id === item.id);
+                const statusColor = getStatusColor(item.building_status);
+                const propertyType = getPropertyTypeText(item);
+                const propertyTypeColor = getPropertyTypeBadgeColor(item);
+                
+                const pricingText = item.managed_property && item.rent_per_seat
+                  ? `${formatCurrency(item.rent_per_seat)}/seat`
+                  : item.rent && item.total_area
+                    ? `${formatCurrency(parseFloat(item.rent) / parseFloat(item.total_area))}/sq-ft`
+                    : item.rent ? formatCurrency(item.rent) : '';
+
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.siteCard,
+                      isSelected && styles.siteCardSelected
+                    ]}
+                    onPress={() => handleSelectSite(item)}
+                  >
+                    {/* Selection Checkbox */}
+                    <View style={styles.selectionCheckbox}>
+                      <View style={[
+                        styles.checkbox,
+                        isSelected && styles.checkboxSelected
+                      ]}>
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <Text style={styles.siteName} numberOfLines={1}>
+                            {item.building_name}
+                          </Text>
+                          <View style={[styles.propertyTypeBadge, { backgroundColor: propertyTypeColor }]}>
+                            <Text style={styles.propertyTypeText}>{propertyType}</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {item.location && (
+                        <View style={styles.locationRow}>
+                          <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
+                          <Text style={styles.locationText} numberOfLines={1}>
+                            {item.location}
+                          </Text>
+                        </View>
+                      )}
+
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.detailsScrollContainer}
+                        contentContainerStyle={styles.detailsGrid}
+                      >
+                        {/* Status Badge */}
+                        <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                          <Text style={[styles.statusText, { color: statusColor }]}>
+                            {beautifyName(item.building_status || 'unknown')}
+                          </Text>
+                        </View>
+
+                        {/* Floor Condition */}
+                        {item.floor_condition && (
+                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
+                            <Ionicons name="layers-outline" size={12} color={WHATSAPP_COLORS.info} />
+                            <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
+                              {beautifyName(item.floor_condition)}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Total Area */}
+                        {item.total_area && (
+                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
+                            <Ionicons name="expand-outline" size={12} color="#7C3AED" />
+                            <Text style={[styles.detailChipText, { color: "#7C3AED" }]}>
+                              {parseFloat(item.total_area).toLocaleString('en-IN')} sq ft
+                            </Text>
+                          </View>
+                        )}
+                      </ScrollView>
+
+                      {/* Pricing */}
+                      {pricingText && (
+                        <View style={styles.pricingRow}>
+                          <View style={styles.pricingBadge}>
+                            <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
+                            <Text style={styles.pricingText}>{pricingText}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={() => (
+                <View style={styles.emptySearch}>
+                  <Ionicons name="business" size={48} color={WHATSAPP_COLORS.border} />
+                  <Text style={styles.emptySearchText}>No sites found</Text>
+                </View>
+              )}
+            />
+
+            {/* Selection Footer */}
+            <View style={styles.selectionFooter}>
+              <TouchableOpacity
+                style={[
+                  styles.selectButton,
+                  selectedSites.length === 0 && styles.selectButtonDisabled
+                ]}
+                onPress={() => {
+                  if (selectedSites.length > 0) {
+                    setShowSiteSearch(false);
+                    setSiteSearchQuery('');
+                  }
+                }}
+                disabled={selectedSites.length === 0}
+              >
+                <Text style={styles.selectButtonText}>
+                  Select {selectedSites.length} Site(s)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
@@ -853,6 +884,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
       transparent
       animationType="slide"
       onRequestClose={() => setShowFilterModal(false)}
+      statusBarTranslucent
     >
       <TouchableOpacity
         style={styles.modalOverlay}
@@ -862,7 +894,10 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         <View style={styles.filterModalContent}>
           <View style={styles.filterModalHeader}>
             <Text style={styles.filterModalTitle}>Filter Sites</Text>
-            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+            <TouchableOpacity 
+              onPress={() => setShowFilterModal(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
@@ -927,10 +962,18 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           </ScrollView>
 
           <View style={styles.filterModalFooter}>
-            <TouchableOpacity style={styles.clearFiltersButton} onPress={clearAllFilters}>
+            <TouchableOpacity 
+              style={styles.clearFiltersButton} 
+              onPress={clearAllFilters}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Text style={styles.clearFiltersText}>Clear All Filters</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.applyFiltersButton} onPress={() => setShowFilterModal(false)}>
+            <TouchableOpacity 
+              style={styles.applyFiltersButton} 
+              onPress={() => setShowFilterModal(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Text style={styles.applyFiltersText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -942,77 +985,85 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   const renderScoutSearchModal = () => (
     <Modal
       visible={showScoutSearch}
-      transparent
       animationType="slide"
       onRequestClose={() => setShowScoutSearch(false)}
+      statusBarTranslucent
     >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.searchModalHeader}>
-          <TouchableOpacity onPress={() => setShowScoutSearch(false)}>
-            <Ionicons name="arrow-back" size={24} color={WHATSAPP_COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.searchModalTitle}>Select Scout</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} />
-          <TextInput
-            style={styles.searchModalInput}
-            placeholder="Search scouts..."
-            value={scoutSearchQuery}
-            onChangeText={setScoutSearchQuery}
-            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            autoFocus
-          />
-        </View>
-        {loadingScouts ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.loadingText}>Loading scouts...</Text>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={IS_IOS ? 'padding' : undefined}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.searchModalHeader}>
+            <TouchableOpacity 
+              onPress={() => setShowScoutSearch(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
+            </TouchableOpacity>
+            <Text style={styles.searchModalTitle}>Select Scout</Text>
+            <View style={{ width: 24 }} />
           </View>
-        ) : (
-          <FlatList
-            data={filteredScouts}
-            keyExtractor={(item) => item.employee_id}
-            renderItem={({ item }) => {
-              const isSelected = selectedScout?.employee_id === item.employee_id;
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.scoutOption,
-                    isSelected && styles.scoutOptionSelected
-                  ]}
-                  onPress={() => handleSelectScout(item)}
-                >
-                  <View style={[
-                    styles.scoutAvatar,
-                    { backgroundColor: getAvatarColor(`${item.first_name} ${item.last_name}`) }
-                  ]}>
-                    <Text style={styles.scoutAvatarText}>
-                      {getInitials(`${item.first_name} ${item.last_name}`)}
-                    </Text>
-                  </View>
-                  <View style={styles.scoutInfo}>
-                    <Text style={styles.scoutName}>
-                      {item.first_name} {item.last_name}
-                    </Text>
-                    <Text style={styles.scoutId}>ID: {item.employee_id}</Text>
-                  </View>
-                  {isSelected && (
-                    <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.success} />
-                  )}
-                </TouchableOpacity>
-              );
-            }}
-            ListEmptyComponent={() => (
-              <View style={styles.emptySearch}>
-                <Ionicons name="people" size={48} color={WHATSAPP_COLORS.border} />
-                <Text style={styles.emptySearchText}>No scouts found</Text>
-              </View>
-            )}
-          />
-        )}
-      </SafeAreaView>
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            <TextInput
+              style={styles.searchModalInput}
+              placeholder="Search scouts..."
+              value={scoutSearchQuery}
+              onChangeText={setScoutSearchQuery}
+              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              autoFocus={!IS_IOS}
+            />
+          </View>
+          {loadingScouts ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+              <Text style={styles.loadingText}>Loading scouts...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredScouts}
+              keyExtractor={(item) => item.employee_id}
+              renderItem={({ item }) => {
+                const isSelected = selectedScout?.employee_id === item.employee_id;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.scoutOption,
+                      isSelected && styles.scoutOptionSelected
+                    ]}
+                    onPress={() => handleSelectScout(item)}
+                  >
+                    <View style={[
+                      styles.scoutAvatar,
+                      { backgroundColor: getAvatarColor(`${item.first_name} ${item.last_name}`) }
+                    ]}>
+                      <Text style={styles.scoutAvatarText}>
+                        {getInitials(`${item.first_name} ${item.last_name}`)}
+                      </Text>
+                    </View>
+                    <View style={styles.scoutInfo}>
+                      <Text style={styles.scoutName}>
+                        {item.first_name} {item.last_name}
+                      </Text>
+                      <Text style={styles.scoutId}>ID: {item.employee_id}</Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.success} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={() => (
+                <View style={styles.emptySearch}>
+                  <Ionicons name="people" size={48} color={WHATSAPP_COLORS.border} />
+                  <Text style={styles.emptySearchText}>No scouts found</Text>
+                </View>
+              )}
+            />
+          )}
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -1452,7 +1503,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: WHATSAPP_COLORS.background,
+    backgroundColor: WHATSAPP_COLORS.surface,
   },
   searchModalHeader: {
     flexDirection: 'row',
@@ -1460,14 +1511,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: WHATSAPP_COLORS.surface,
+    backgroundColor: WHATSAPP_COLORS.primary,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
   },
   searchModalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
+    color: WHATSAPP_COLORS.surface,
   },
   searchContainer: {
     paddingHorizontal: 16,
