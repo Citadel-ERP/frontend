@@ -1,15 +1,14 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
+  Alert,
   ActivityIndicator,
-  RefreshControl,
-  FlatList,
-  Image,
+  Modal,
 } from 'react-native';
-import { ThemeColors, Visit } from './types';
 import { Ionicons } from '@expo/vector-icons';
 
 const WHATSAPP_COLORS = {
@@ -20,396 +19,515 @@ const WHATSAPP_COLORS = {
   accent: '#10B981',
   danger: '#EF4444',
   warning: '#F59E0B',
-  background: '#e7e6e5',
+  background: '#F9FAFB',
   surface: '#FFFFFF',
-  textPrimary: '#1F2937',
+  textPrimary: '#111827',
   textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
   border: '#E5E7EB',
   success: '#25D366',
   info: '#3B82F6',
   white: '#FFFFFF',
-  chatBg: '#ECE5DD',
-  incoming: '#FFFFFF',
-  outgoing: '#DCF8C6',
+  backgroundSecondary: '#F3F4F6',
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  chipBackground: '#F3F4F6',
+  selected: '#EBF5FF',
+  selectedBorder: '#3B82F6',
+  lightBlue: '#E0F2FE',
+  lightGreen: '#D1FAE5',
+  lightYellow: '#FEF3C7',
+  lightRed: '#FEE2E2',
+  lightPurple: '#EDE9FE',
 };
 
-interface VisitsListProps {
+interface Visit {
+  id: number;
+  site: {
+    building_name: string;
+    location: string;
+    managed_property: boolean;
+    conventional_property: boolean;
+    rent?: string;
+    rent_per_seat?: string;
+    total_area?: string;
+    building_status?: string;
+    floor_condition?: string;
+  };
+  status: string;
+  created_at: string;
+  updated_at: string;
+  building_photos: any[];
+}
+
+interface Pagination {
+  current_page: number;
+  total_pages: number;
+  total_items: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+interface ListVisitsProps {
   visits: Visit[];
-  onVisitPress: (visit: Visit, index: number) => void;
   loading: boolean;
   loadingMore: boolean;
   refreshing: boolean;
+  pagination: Pagination | null;
+  onVisitPress: (visit: Visit, index: number) => void;
   onLoadMore: () => void;
   onRefresh: () => void;
   token: string | null;
-  theme: ThemeColors;
+  theme: any;
   isDarkMode: boolean;
 }
 
-const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
-
-const beautifyName = (name: string): string => {
-  if (!name) return '';
-  return name
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-};
-
-const getInitials = (name: string): string => {
-  if (!name || name.trim().length === 0) return '?';
-  const nameParts = name.trim().split(/\s+/);
-  if (nameParts.length === 1) {
-    return nameParts[0].charAt(0).toUpperCase();
-  } else {
-    return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
-  }
-};
-
-const getAvatarColor = (name: string): string => {
-  if (!name) return avatarColors[0];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % avatarColors.length;
-  return avatarColors[index];
-};
-
-const formatDateTime = (dateString?: string): string => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return '-';
-  
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-  
-  if (diffMins < 60) {
-    return `${diffMins}m ago`;
-  } else if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  } else if (diffDays < 7) {
-    return `${diffDays}d ago`;
-  } else {
-    return d.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short'
-    });
-  }
-};
-
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'scout_completed':
-    case 'admin_completed':
-      return { icon: 'checkmark-circle', color: WHATSAPP_COLORS.success };
-    case 'pending':
-      return { icon: 'time', color: WHATSAPP_COLORS.warning };
-    case 'cancelled':
-      return { icon: 'close-circle', color: WHATSAPP_COLORS.danger };
-    default:
-      return { icon: 'help-circle', color: WHATSAPP_COLORS.textTertiary };
-  }
-};
-
-const VisitsList: React.FC<VisitsListProps> = React.memo(({
+const VisitsList: React.FC<ListVisitsProps> = ({
   visits,
-  onVisitPress,
   loading,
   loadingMore,
   refreshing,
+  pagination,
+  onVisitPress,
   onLoadMore,
   onRefresh,
+  token,
   theme,
   isDarkMode,
 }) => {
-  const renderVisitItem = useCallback(({ item: visit, index }: { item: Visit; index: number }) => {
-    const buildingName = visit.site?.building_name || 'Unnamed Building';
-    const avatarColor = getAvatarColor(buildingName);
-    const initials = getInitials(buildingName);
-    const lastUpdated = formatDateTime(visit.updated_at);
-    const statusIcon = getStatusIcon(visit.status);
-    const isManaged = visit.site?.managed_property === true;
-    
-    const pricingText = isManaged && visit.site?.rent_per_seat 
-      ? `₹${visit.site.rent_per_seat}/seat`
-      : visit.site?.rent && visit.site?.total_area 
-        ? `₹${(parseFloat(visit.site.rent) / parseFloat(visit.site.total_area)).toFixed(2)}/sq-ft`
-        : '';
+  // Helper Functions
+  const beautifyName = useCallback((name: string): string => {
+    if (!name) return '';
+    return name
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }, []);
+
+  const formatDate = useCallback((dateString: string): string => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 1) {
+      return 'Today';
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      return d.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short'
+      });
+    }
+  }, []);
+
+  const getStatusColor = useCallback((status: string): string => {
+    switch (status?.toLowerCase()) {
+      case 'scout_completed':
+      case 'admin_completed':
+        return WHATSAPP_COLORS.success;
+      case 'pending':
+        return WHATSAPP_COLORS.warning;
+      case 'cancelled':
+        return WHATSAPP_COLORS.danger;
+      default:
+        return WHATSAPP_COLORS.textSecondary;
+    }
+  }, []);
+
+  const getPropertyType = useCallback((visit: Visit): string => {
+    if (visit.site.managed_property) return '💼 Managed';
+    if (visit.site.conventional_property) return '🏛️ Conventional';
+    return '🏢 Office';
+  }, []);
+
+  const formatCurrency = useCallback((value: string | number): string => {
+    if (!value) return '';
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '';
+
+    if (num >= 10000000) {
+      return `₹${(num / 10000000).toFixed(2)}Cr`;
+    } else if (num >= 100000) {
+      return `₹${(num / 100000).toFixed(2)}L`;
+    } else if (num >= 1000) {
+      return `₹${(num / 1000).toFixed(2)}K`;
+    }
+    return `₹${num.toLocaleString('en-IN')}`;
+  }, []);
+
+  // Render Visit Item
+  const renderVisitItem = useCallback((visit: Visit, index: number) => {
+    const lastUpdated = formatDate(visit.updated_at);
+    const statusColor = getStatusColor(visit.status);
+    const propertyType = getPropertyType(visit);
+
+    const pricingText = visit.site.managed_property && visit.site.rent_per_seat
+      ? `${formatCurrency(visit.site.rent_per_seat)}/seat`
+      : visit.site.rent && visit.site.total_area
+        ? `${formatCurrency(parseFloat(visit.site.rent) / parseFloat(visit.site.total_area))}/sq-ft`
+        : visit.site.rent ? formatCurrency(visit.site.rent) : '';
+
+    const handleCardPress = () => {
+      onVisitPress(visit, index);
+    };
 
     return (
-      <TouchableOpacity 
-        style={styles.visitItem} 
-        onPress={() => onVisitPress(visit, index)}
+      <TouchableOpacity
+        key={visit.id}
+        style={styles.visitCard}
+        onPress={handleCardPress}
         activeOpacity={0.7}
       >
-        <View style={[styles.visitAvatar, { backgroundColor: avatarColor }]}>
-          {visit.photos?.length > 0 ? (
-            <Image
-              source={{ uri: visit.photos[0].file_url }}
-              style={styles.visitImage}
-            />
-          ) : (
-            <Text style={styles.visitAvatarText}>{initials}</Text>
-          )}
-          {visit.photos?.length > 0 && (
-            <View style={styles.photoCountBadge}>
-              <Text style={styles.photoCountText}>{visit.photos.length}</Text>
+        {/* Card Content */}
+        <View style={styles.cardContent}>
+          {/* Header Row */}
+          <View style={styles.cardHeader}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.visitName} numberOfLines={1}>
+                {visit.site.building_name || 'Unnamed Site'}
+              </Text>
+              <Text style={styles.visitDate}>{lastUpdated}</Text>
             </View>
-          )}
-        </View>
-        
-        <View style={styles.visitContent}>
-          <View style={styles.visitHeader}>
-            <Text style={styles.visitName} numberOfLines={1}>
-              {buildingName}
-            </Text>
-            <Text style={styles.visitTime}>{lastUpdated}</Text>
           </View>
-          
-          <View style={styles.visitMessage}>
-            <Text style={styles.visitMessageText} numberOfLines={1}>
-              {visit.site?.location || 'No location specified'}
-            </Text>
-            <Ionicons 
-              name={statusIcon.icon as any} 
-              size={16} 
-              color={statusIcon.color} 
-            />
-          </View>
-          
-          <View style={styles.visitStatus}>
-            <Text style={styles.visitStatusText}>
-              {isManaged ? '💼 Managed' : '🏛️ Conventional'} • {beautifyName(visit.status)}
-            </Text>
-          </View>
-          
-          {pricingText && (
-            <View style={styles.visitContact}>
-              <Ionicons name="cash" size={12} color={WHATSAPP_COLORS.textTertiary} />
-              <Text style={styles.visitContactText} numberOfLines={1}>
-                {pricingText}
+
+          {/* Location Row */}
+          {visit.site.location && (
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {visit.site.location}
               </Text>
             </View>
           )}
-        </View>
-        
-        <View style={styles.visitArrow}>
-          <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
+
+          {/* Details ScrollView */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.detailsScrollContainer}
+            contentContainerStyle={styles.detailsGrid}
+          >
+            {/* Status Badge */}
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {beautifyName(visit.status || 'unknown')}
+              </Text>
+            </View>
+
+            {/* Property Type Badge */}
+            <View style={[styles.propertyTypeBadge, { backgroundColor: getPropertyTypeBadgeColor(visit) }]}>
+              <Text style={styles.propertyTypeText}>{propertyType}</Text>
+            </View>
+
+            {/* Building Status */}
+            {visit.site.building_status && (
+              <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
+                <Ionicons name="business-outline" size={12} color={WHATSAPP_COLORS.info} />
+                <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
+                  {beautifyName(visit.site.building_status)}
+                </Text>
+              </View>
+            )}
+
+            {/* Floor Condition */}
+            {visit.site.floor_condition && (
+              <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
+                <Ionicons name="layers-outline" size={12} color="#7C3AED" />
+                <Text style={[styles.detailChipText, { color: "#7C3AED" }]}>
+                  {beautifyName(visit.site.floor_condition)}
+                </Text>
+              </View>
+            )}
+
+            {/* Photos Count */}
+            {visit.building_photos?.length > 0 && (
+              <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightGreen }]}>
+                <Ionicons name="camera-outline" size={12} color={WHATSAPP_COLORS.success} />
+                <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.success }]}>
+                  {visit.building_photos.length} photos
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Pricing Row */}
+          {pricingText && (
+            <View style={styles.pricingRow}>
+              <View style={styles.pricingBadge}>
+                <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
+                <Text style={styles.pricingText}>{pricingText}</Text>
+              </View>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
-  }, [onVisitPress]);
+  }, [
+    onVisitPress,
+    formatDate,
+    getStatusColor,
+    getPropertyType,
+    beautifyName,
+    formatCurrency
+  ]);
 
-  const keyExtractor = useCallback((item: Visit) => item.id.toString(), []);
+  // Helper function for property type badge color
+  const getPropertyTypeBadgeColor = (visit: Visit): string => {
+    if (visit.site.managed_property) return WHATSAPP_COLORS.lightBlue;
+    if (visit.site.conventional_property) return WHATSAPP_COLORS.lightGreen;
+    return WHATSAPP_COLORS.chipBackground;
+  };
 
-  const refreshControl = useMemo(() => (
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      colors={[WHATSAPP_COLORS.primary]}
-      tintColor={WHATSAPP_COLORS.primary}
-    />
-  ), [refreshing, onRefresh]);
+  // Render Empty State
+  const renderEmptyState = useCallback(() => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+          <Text style={styles.loadingText}>Loading visits...</Text>
+        </View>
+      );
+    }
 
-  const listFooter = useMemo(() => {
-    if (!loadingMore) return null;
-    return (
-      <View style={styles.loadMoreContainer}>
-        <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-      </View>
-    );
-  }, [loadingMore]);
-
-  if (loading && visits.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
-        <Text style={styles.loadingText}>Loading visits...</Text>
-      </View>
-    );
-  }
-
-  if (visits.length === 0) {
     return (
       <View style={styles.emptyState}>
-        <Ionicons name="business" size={64} color={WHATSAPP_COLORS.border} />
-        <Text style={styles.emptyStateText}>No visits found</Text>
-        <Text style={styles.emptyStateSubtext}>
-          Your assigned visits will appear here
+        <View style={styles.emptyIconContainer}>
+          <Ionicons name="business-outline" size={64} color={WHATSAPP_COLORS.textTertiary} />
+        </View>
+        <Text style={styles.emptyStateTitle}>No visits found</Text>
+        <Text style={styles.emptyStateText}>
+          Try adjusting your search or filter criteria
         </Text>
       </View>
     );
-  }
+  }, [loading]);
 
   return (
-    <FlatList
-      data={visits}
-      renderItem={renderVisitItem}
-      keyExtractor={keyExtractor}
-      showsVerticalScrollIndicator={false}
-      onEndReached={onLoadMore}
-      onEndReachedThreshold={0.1}
-      refreshControl={refreshControl}
-      contentContainerStyle={styles.listContainer}
-      ListFooterComponent={listFooter}
-      removeClippedSubviews={true}
-      maxToRenderPerBatch={10}
-      updateCellsBatchingPeriod={50}
-      initialNumToRender={10}
-      windowSize={10}
-    />
-  );
-});
+    <View style={styles.container}>
+      {/* Visits List */}
+      <ScrollView
+        style={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+      >
+        {visits.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <>
+            {visits.map((item, index) => renderVisitItem(item, index))}
 
-VisitsList.displayName = 'VisitsList';
+            {/* Load More */}
+            {pagination && pagination.has_next && (
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={onLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="chevron-down-circle-outline" size={20} color={WHATSAPP_COLORS.primary} />
+                    <Text style={styles.loadMoreText}>Load More</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-  listContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  container: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
   },
-  visitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  listContainer: {
+    flex: 1,
+  },
+  listContent: {
+    padding: 16,
+  },
+  visitCard: {
     backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  visitAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  visitImage: {
-    width: '100%',
-    height: '100%',
-  },
-  visitAvatarText: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  photoCountBadge: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  photoCountText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  visitContent: {
+  cardContent: {
     flex: 1,
   },
-  visitHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: 12,
   },
   visitName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: WHATSAPP_COLORS.textPrimary,
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 8,
+    letterSpacing: -0.3,
   },
-  visitTime: {
+  visitDate: {
     fontSize: 12,
     color: WHATSAPP_COLORS.textTertiary,
-  },
-  visitMessage: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  visitMessageText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-    flex: 1,
-    marginRight: 8,
-  },
-  visitStatus: {
-    marginBottom: 4,
-  },
-  visitStatusText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.primary,
     fontWeight: '500',
   },
-  visitContact: {
+  propertyTypeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  propertyTypeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginBottom: 12,
+    gap: 6,
   },
-  visitContactText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.textTertiary,
+  locationText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
     flex: 1,
+    fontWeight: '500',
   },
-  visitArrow: {
-    padding: 4,
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  detailsScrollContainer: {
+    marginBottom: 12,
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
+  },
+  detailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+  },
+  detailChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pricingRow: {
+    marginTop: 4,
+  },
+  pricingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.lightGreen,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 8,
+    alignSelf: 'flex-start',
+  },
+  pricingText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.success,
+    fontWeight: '700',
   },
   loadingContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 50,
+    paddingVertical: 60,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 14,
     color: WHATSAPP_COLORS.textSecondary,
+    fontWeight: '500',
   },
   emptyState: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    paddingVertical: 60,
+    paddingHorizontal: 32,
   },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: WHATSAPP_COLORS.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     color: WHATSAPP_COLORS.textPrimary,
-    marginTop: 16,
     marginBottom: 8,
   },
-  emptyStateSubtext: {
-    fontSize: 14,
+  emptyStateText: {
+    fontSize: 15,
     color: WHATSAPP_COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+    marginBottom: 24,
   },
-  loadMoreContainer: {
+  loadMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
+    gap: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  },
+  loadMoreText: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '600',
   },
 });
 

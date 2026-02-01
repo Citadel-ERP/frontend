@@ -90,7 +90,7 @@ interface ListSiteProps {
   onSitePress: (site: Site) => void;
   onEditSite: (site: Site) => void;
   onDeleteSite: (siteId: number) => void;
-  onBulkDeleteSites: (siteIds: number[]) => Promise<void>; // NEW: Bulk delete handler
+  onBulkDeleteSites: (siteIds: number[]) => Promise<void>;
   onSearch: (query: string) => void;
   onFilter: (filter: any) => void;
   onLoadMore: () => void;
@@ -115,7 +115,7 @@ const ListSite: React.FC<ListSiteProps> = ({
   onSitePress,
   onEditSite,
   onDeleteSite,
-  onBulkDeleteSites, // NEW
+  onBulkDeleteSites,
   onSearch,
   onFilter,
   onLoadMore,
@@ -130,6 +130,9 @@ const ListSite: React.FC<ListSiteProps> = ({
   const [selectionMode, setSelectionMode] = useState(false);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [deletingMultiple, setDeletingMultiple] = useState(false);
+  const [showStatusFilter, setShowStatusFilter] = useState(false);
+  const [showFloorConditionFilter, setShowFloorConditionFilter] = useState(false);
+  const [showPropertyTypeFilter, setShowPropertyTypeFilter] = useState(false);
 
   // Local filter state
   const [localFilters, setLocalFilters] = useState({
@@ -230,19 +233,20 @@ const ListSite: React.FC<ListSiteProps> = ({
     onSearch(text);
   }, [onSearch]);
 
-  const toggleFilterOption = useCallback((filterType: 'building_status' | 'floor_condition' | 'property_type', value: string) => {
-    setLocalFilters(prev => {
-      const current = prev[filterType];
-      const newValues = current.includes(value)
-        ? current.filter(v => v !== value)
-        : [...current, value];
-
-      return {
-        ...prev,
-        [filterType]: newValues
-      };
-    });
-  }, []);
+  const handleFilterChange = useCallback((key: string, values: string[]) => {
+    const newFilter: any = { ...filter };
+    
+    if (values.length === 0) {
+      delete newFilter[key];
+    } else {
+      newFilter[key] = values.join(',');
+    }
+    
+    setLocalFilters(prev => ({
+      ...prev,
+      [key]: values
+    }));
+  }, [filter]);
 
   const applyFilters = useCallback(() => {
     const newFilter: any = {};
@@ -309,7 +313,7 @@ const ListSite: React.FC<ListSiteProps> = ({
     setSelectionMode(false);
   }, []);
 
-  // UPDATED: Bulk Delete Handler
+  // Bulk Delete Handler
   const handleBulkDelete = useCallback(async () => {
     setShowActionsModal(false);
 
@@ -324,7 +328,6 @@ const ListSite: React.FC<ListSiteProps> = ({
           onPress: async () => {
             setDeletingMultiple(true);
             try {
-              // Call the bulk delete function once with all site IDs
               await onBulkDeleteSites(selectedSites);
               Alert.alert('Success', `${selectedSites.length} site(s) deleted successfully`);
               cancelSelection();
@@ -560,6 +563,41 @@ const ListSite: React.FC<ListSiteProps> = ({
     );
   }, [loading, searchQuery, filter, onCreateSite]);
 
+  // Render Filter Dropdown
+  const renderFilterDropdown = useCallback((
+    visible: boolean,
+    title: string,
+    options: FilterOption[],
+    currentValues: string[],
+    onToggle: (value: string) => void,
+    onClose: () => void
+  ) => (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={onClose}>
+        <View style={styles.dropdownContainer}>
+          <Text style={styles.dropdownTitle}>{title}</Text>
+          <ScrollView style={styles.dropdownScroll}>
+            {options.map((option) => {
+              const isSelected = currentValues.includes(option.value);
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.dropdownOption}
+                  onPress={() => onToggle(option.value)}
+                >
+                  <Text style={styles.dropdownOptionText}>{option.label}</Text>
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={20} color={WHATSAPP_COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  ), []);
+
   // Render Filter Modal
   const renderFilterModal = useCallback(() => (
     <Modal
@@ -568,119 +606,90 @@ const ListSite: React.FC<ListSiteProps> = ({
       animationType="slide"
       onRequestClose={() => setShowFilterModal(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.filterModal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter Sites</Text>
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowFilterModal(false)}
+      >
+        <View style={styles.filterModalContent}>
+          <View style={styles.filterModalHeader}>
+            <Text style={styles.filterModalTitle}>Filter Sites</Text>
             <TouchableOpacity onPress={() => setShowFilterModal(false)}>
               <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.filterContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.filterList}>
             {/* Property Type Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Property Type</Text>
-              <View style={styles.filterOptionsGrid}>
-                {PROPERTY_TYPE_OPTIONS.map((option) => {
-                  const isSelected = localFilters.property_type.includes(option.value);
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.filterChipButton,
-                        isSelected && styles.filterChipButtonActive
-                      ]}
-                      onPress={() => toggleFilterOption('property_type', option.value)}
-                    >
-                      <Text style={[
-                        styles.filterChipButtonText,
-                        isSelected && styles.filterChipButtonTextActive
-                      ]}>
-                        {option.label}
-                      </Text>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={16} color={WHATSAPP_COLORS.white} style={{ marginLeft: 6 }} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => setShowPropertyTypeFilter(true)}
+            >
+              <View style={styles.filterOptionLeft}>
+                <Ionicons name="business" size={20} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.filterOptionLabel}>Property Type</Text>
               </View>
-            </View>
+              <View style={styles.filterOptionRight}>
+                <Text style={styles.filterOptionValue}>
+                  {localFilters.property_type.length > 0 
+                    ? `${localFilters.property_type.length} selected` 
+                    : 'All'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+              </View>
+            </TouchableOpacity>
 
             {/* Building Status Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Building Status</Text>
-              <View style={styles.filterOptionsGrid}>
-                {BUILDING_STATUS_OPTIONS.map((option) => {
-                  const isSelected = localFilters.building_status.includes(option.value);
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.filterChipButton,
-                        isSelected && styles.filterChipButtonActive
-                      ]}
-                      onPress={() => toggleFilterOption('building_status', option.value)}
-                    >
-                      <Text style={[
-                        styles.filterChipButtonText,
-                        isSelected && styles.filterChipButtonTextActive
-                      ]}>
-                        {option.label}
-                      </Text>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={16} color={WHATSAPP_COLORS.white} style={{ marginLeft: 6 }} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => setShowStatusFilter(true)}
+            >
+              <View style={styles.filterOptionLeft}>
+                <Ionicons name="flag" size={20} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.filterOptionLabel}>Building Status</Text>
               </View>
-            </View>
+              <View style={styles.filterOptionRight}>
+                <Text style={styles.filterOptionValue}>
+                  {localFilters.building_status.length > 0 
+                    ? `${localFilters.building_status.length} selected` 
+                    : 'All'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+              </View>
+            </TouchableOpacity>
 
             {/* Floor Condition Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Floor Condition</Text>
-              <View style={styles.filterOptionsGrid}>
-                {FLOOR_CONDITION_OPTIONS.map((option) => {
-                  const isSelected = localFilters.floor_condition.includes(option.value);
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.filterChipButton,
-                        isSelected && styles.filterChipButtonActive
-                      ]}
-                      onPress={() => toggleFilterOption('floor_condition', option.value)}
-                    >
-                      <Text style={[
-                        styles.filterChipButtonText,
-                        isSelected && styles.filterChipButtonTextActive
-                      ]}>
-                        {option.label}
-                      </Text>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={16} color={WHATSAPP_COLORS.white} style={{ marginLeft: 6 }} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => setShowFloorConditionFilter(true)}
+            >
+              <View style={styles.filterOptionLeft}>
+                <Ionicons name="layers" size={20} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.filterOptionLabel}>Floor Condition</Text>
               </View>
-            </View>
+              <View style={styles.filterOptionRight}>
+                <Text style={styles.filterOptionValue}>
+                  {localFilters.floor_condition.length > 0 
+                    ? `${localFilters.floor_condition.length} selected` 
+                    : 'All'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+              </View>
+            </TouchableOpacity>
           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
-              <Text style={styles.clearButtonText}>Clear All</Text>
+          <View style={styles.filterModalFooter}>
+            <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
+              <Text style={styles.clearFiltersText}>Clear All Filters</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
-              <Text style={styles.applyButtonText}>Apply Filters</Text>
+            <TouchableOpacity style={styles.applyFiltersButton} onPress={applyFilters}>
+              <Text style={styles.applyFiltersText}>Apply Filters</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
-  ), [showFilterModal, localFilters, toggleFilterOption, clearFilters, applyFilters]);
+  ), [showFilterModal, localFilters, clearFilters, applyFilters]);
 
   // Render Actions Modal
   const renderActionsModal = useCallback(() => (
@@ -734,9 +743,14 @@ const ListSite: React.FC<ListSiteProps> = ({
   return (
     <View style={styles.container}>
       {/* Search Bar */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} />
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <Ionicons 
+            name="search" 
+            size={20} 
+            color={WHATSAPP_COLORS.textTertiary} 
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name, location..."
@@ -745,40 +759,42 @@ const ListSite: React.FC<ListSiteProps> = ({
             placeholderTextColor={WHATSAPP_COLORS.textTertiary}
           />
           {localSearchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch('')}>
+            <TouchableOpacity 
+              onPress={() => handleSearch('')}
+              style={styles.clearSearchButton}
+            >
               <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
             </TouchableOpacity>
           )}
-        </View>
-
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.iconButton, activeFilterCount > 0 && styles.iconButtonActive]}
-            onPress={() => setShowFilterModal(true)}
-          >
-            <Ionicons
-              name="funnel"
-              size={20}
-              color={activeFilterCount > 0 ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.textSecondary}
-            />
-            {activeFilterCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {selectionMode && (
+          <View style={styles.searchActions}>
             <TouchableOpacity
-              style={[styles.iconButton, styles.iconButtonActive]}
-              onPress={() => setShowActionsModal(true)}
+              onPress={() => setShowFilterModal(true)}
+              style={styles.filterButton}
             >
-              <Ionicons name="settings-outline" size={20} color={WHATSAPP_COLORS.white} />
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{selectedSites.length}</Text>
-              </View>
+              <Ionicons 
+                name="filter" 
+                size={20} 
+                color={activeFilterCount > 0 ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textSecondary} 
+              />
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          )}
+
+            {selectionMode && (
+              <TouchableOpacity
+                style={styles.actionIconButton}
+                onPress={() => setShowActionsModal(true)}
+              >
+                <Ionicons name="settings-outline" size={20} color={WHATSAPP_COLORS.textSecondary} />
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{selectedSites.length}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -794,43 +810,70 @@ const ListSite: React.FC<ListSiteProps> = ({
         </View>
       )}
 
-      {/* Active Filters Chips */}
+      {/* Active Filters */}
       {activeFilterCount > 0 && !selectionMode && (
-        <View style={styles.filtersChipsContainer}>
+        <View style={styles.activeFiltersContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {localFilters.building_status.map((value) => (
-              <View key={`status-${value}`} style={styles.filterChip}>
-                <Text style={styles.filterChipText}>
-                  {beautifyName(value)}
-                </Text>
-                <TouchableOpacity onPress={() => toggleFilterOption('building_status', value)}>
-                  <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {localFilters.floor_condition.map((value) => (
-              <View key={`floor-${value}`} style={styles.filterChip}>
-                <Text style={styles.filterChipText}>
-                  {beautifyName(value)}
-                </Text>
-                <TouchableOpacity onPress={() => toggleFilterOption('floor_condition', value)}>
-                  <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                </TouchableOpacity>
-              </View>
-            ))}
             {localFilters.property_type.map((value) => {
               const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
               return (
-                <View key={`prop-${value}`} style={styles.filterChip}>
-                  <Text style={styles.filterChipText}>
+                <View key={`prop-${value}`} style={styles.activeFilter}>
+                  <Text style={styles.activeFilterText}>
                     {option?.label || value}
                   </Text>
-                  <TouchableOpacity onPress={() => toggleFilterOption('property_type', value)}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      const newValues = localFilters.property_type.filter(v => v !== value);
+                      handleFilterChange('property_type', newValues);
+                      onFilter({
+                        ...filter,
+                        property_type: newValues.length > 0 ? newValues.join(',') : undefined
+                      });
+                    }}
+                  >
                     <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                   </TouchableOpacity>
                 </View>
               );
             })}
+            {localFilters.building_status.map((value) => (
+              <View key={`status-${value}`} style={styles.activeFilter}>
+                <Text style={styles.activeFilterText}>
+                  {beautifyName(value)}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    const newValues = localFilters.building_status.filter(v => v !== value);
+                    handleFilterChange('building_status', newValues);
+                    onFilter({
+                      ...filter,
+                      building_status: newValues.length > 0 ? newValues.join(',') : undefined
+                    });
+                  }}
+                >
+                  <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            {localFilters.floor_condition.map((value) => (
+              <View key={`floor-${value}`} style={styles.activeFilter}>
+                <Text style={styles.activeFilterText}>
+                  {beautifyName(value)}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    const newValues = localFilters.floor_condition.filter(v => v !== value);
+                    handleFilterChange('floor_condition', newValues);
+                    onFilter({
+                      ...filter,
+                      floor_condition: newValues.length > 0 ? newValues.join(',') : undefined
+                    });
+                  }}
+                >
+                  <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+            ))}
           </ScrollView>
         </View>
       )}
@@ -872,6 +915,49 @@ const ListSite: React.FC<ListSiteProps> = ({
       {renderFilterModal()}
       {renderActionsModal()}
 
+      {/* Filter Dropdowns */}
+      {renderFilterDropdown(
+        showPropertyTypeFilter,
+        'Select Property Type',
+        PROPERTY_TYPE_OPTIONS,
+        localFilters.property_type,
+        (value) => {
+          const newValues = localFilters.property_type.includes(value)
+            ? localFilters.property_type.filter(v => v !== value)
+            : [...localFilters.property_type, value];
+          handleFilterChange('property_type', newValues);
+        },
+        () => setShowPropertyTypeFilter(false)
+      )}
+
+      {renderFilterDropdown(
+        showStatusFilter,
+        'Select Building Status',
+        BUILDING_STATUS_OPTIONS,
+        localFilters.building_status,
+        (value) => {
+          const newValues = localFilters.building_status.includes(value)
+            ? localFilters.building_status.filter(v => v !== value)
+            : [...localFilters.building_status, value];
+          handleFilterChange('building_status', newValues);
+        },
+        () => setShowStatusFilter(false)
+      )}
+
+      {renderFilterDropdown(
+        showFloorConditionFilter,
+        'Select Floor Condition',
+        FLOOR_CONDITION_OPTIONS,
+        localFilters.floor_condition,
+        (value) => {
+          const newValues = localFilters.floor_condition.includes(value)
+            ? localFilters.floor_condition.filter(v => v !== value)
+            : [...localFilters.floor_condition, value];
+          handleFilterChange('floor_condition', newValues);
+        },
+        () => setShowFloorConditionFilter(false)
+      )}
+
       {/* Loading Overlay for Bulk Delete */}
       {deletingMultiple && (
         <View style={styles.loadingOverlay}>
@@ -890,104 +976,66 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: WHATSAPP_COLORS.background,
   },
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: WHATSAPP_COLORS.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  statItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statTextContainer: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  statDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: WHATSAPP_COLORS.border,
-    marginHorizontal: 16,
-  },
-  searchSection: {
-    flexDirection: 'row',
+  searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: WHATSAPP_COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 12,
   },
-  searchBar: {
-    flex: 1,
+  searchInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.backgroundSecondary,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 0,
-    gap: 10,
+    position: 'relative',
   },
   searchInput: {
+    backgroundColor: WHATSAPP_COLORS.backgroundSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 45,
+    paddingVertical: 12,
+    fontSize: 16,
     flex: 1,
-    fontSize: 15,
     color: WHATSAPP_COLORS.textPrimary,
   },
-  actionButtons: {
+  searchIcon: {
+    position: 'absolute',
+    left: 15,
+    zIndex: 1,
+  },
+  clearSearchButton: {
+    position: 'absolute',
+    right: 100,
+    zIndex: 1,
+    padding: 8,
+  },
+  searchActions: {
+    position: 'absolute',
+    right: 15,
+    zIndex: 1,
     flexDirection: 'row',
     gap: 8,
   },
-  iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: WHATSAPP_COLORS.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+  filterButton: {
+    padding: 8,
   },
-  iconButtonActive: {
-    backgroundColor: WHATSAPP_COLORS.primary,
+  actionIconButton: {
+    padding: 8,
   },
-  badge: {
+  filterBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: -2,
+    right: -2,
     backgroundColor: WHATSAPP_COLORS.danger,
     borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: WHATSAPP_COLORS.surface,
   },
-  badgeText: {
+  filterBadgeText: {
     color: WHATSAPP_COLORS.white,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '600',
   },
   selectionBar: {
     flexDirection: 'row',
@@ -1009,29 +1057,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: WHATSAPP_COLORS.danger,
   },
-  filtersChipsContainer: {
+  activeFiltersContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
     backgroundColor: WHATSAPP_COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
   },
-  filterChip: {
+  activeFilter: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.primaryLight + '15',
+    backgroundColor: WHATSAPP_COLORS.primary + '10',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 6,
+    borderRadius: 16,
     marginRight: 8,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.primaryLight + '30',
+    gap: 6,
   },
-  filterChipText: {
-    fontSize: 13,
+  activeFilterText: {
+    fontSize: 12,
     color: WHATSAPP_COLORS.primary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   listContainer: {
     flex: 1,
@@ -1123,12 +1169,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
   },
-  statusTimeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1146,18 +1186,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  timeText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.textTertiary,
-    fontWeight: '500',
-  },
   detailsScrollContainer: {
     marginBottom: 12,
   },
   detailsGrid: {
     flexDirection: 'row',
     gap: 8,
-    paddingRight: 16, // Add padding for better scroll experience
+    paddingRight: 16,
   },
   detailChip: {
     flexDirection: 'row',
@@ -1188,12 +1223,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: WHATSAPP_COLORS.success,
     fontWeight: '700',
-  },
-  arrowIndicator: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-    transform: [{ translateY: -10 }],
   },
   loadingContainer: {
     alignItems: 'center',
@@ -1276,104 +1305,85 @@ const styles = StyleSheet.create({
     backgroundColor: WHATSAPP_COLORS.overlay,
     justifyContent: 'flex-end',
   },
-  filterModal: {
+  filterModalContent: {
     backgroundColor: WHATSAPP_COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '85%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
   },
-  modalHeader: {
+  filterModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  filterContent: {
-    maxHeight: 450,
-  },
-  filterSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 16,
-  },
-  filterOptionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  filterChipButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: WHATSAPP_COLORS.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  filterChipButtonActive: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-    borderColor: WHATSAPP_COLORS.primaryDark,
-  },
-  filterChipButtonText: {
-    fontSize: 14,
+  filterModalTitle: {
+    fontSize: 18,
     fontWeight: '600',
     color: WHATSAPP_COLORS.textPrimary,
   },
-  filterChipButtonTextActive: {
-    color: WHATSAPP_COLORS.white,
+  filterList: {
+    maxHeight: 400,
   },
-  modalFooter: {
+  filterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  filterOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  filterOptionLabel: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  filterOptionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterOptionValue: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  filterModalFooter: {
     flexDirection: 'row',
     padding: 20,
     gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: WHATSAPP_COLORS.border,
   },
-  clearButton: {
+  clearFiltersButton: {
     flex: 1,
     paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 12,
+    borderRadius: 8,
   },
-  clearButtonText: {
+  clearFiltersText: {
     fontSize: 16,
     color: WHATSAPP_COLORS.textSecondary,
     fontWeight: '600',
   },
-  applyButton: {
+  applyFiltersButton: {
     flex: 1,
     paddingVertical: 14,
     alignItems: 'center',
     backgroundColor: WHATSAPP_COLORS.primary,
-    borderRadius: 12,
-    shadowColor: WHATSAPP_COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 8,
   },
-  applyButtonText: {
+  applyFiltersText: {
     fontSize: 16,
     color: WHATSAPP_COLORS.white,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   actionsModal: {
     backgroundColor: WHATSAPP_COLORS.surface,
@@ -1423,6 +1433,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: WHATSAPP_COLORS.textSecondary,
     fontWeight: '600',
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  dropdownContainer: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    maxHeight: '60%',
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 12,
+  },
+  dropdownScroll: {
+    maxHeight: 300,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  dropdownOptionText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textPrimary,
   },
   loadingOverlay: {
     position: 'absolute',

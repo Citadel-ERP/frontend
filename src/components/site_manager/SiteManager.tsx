@@ -19,7 +19,6 @@ import ListAssignment from './listAssignment';
 import CreateSite from './createSite';
 import CreateAssignment from './createAssignment';
 import EditSite from './editSite';
-import EditAssignment from './editAssignment';
 import SiteDetails from './siteDetails';
 import AssignmentDetails from './assignmentDetails';
 
@@ -104,7 +103,7 @@ interface Pagination {
     has_previous: boolean;
 }
 
-type ViewMode = 'list' | 'create' | 'edit' | 'details' | 'create-assignment' | 'edit-assignment' | 'assignment-details';
+type ViewMode = 'list' | 'create' | 'edit' | 'details' | 'create-assignment' | 'assignment-details';
 type TabMode = 'sites' | 'assignments';
 
 interface SiteManagerProps {
@@ -138,6 +137,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
     const [loadingMoreAssignments, setLoadingMoreAssignments] = useState(false);
     const [assignmentsSearchQuery, setAssignmentsSearchQuery] = useState('');
     const [assignmentsFilter, setAssignmentsFilter] = useState<any>({});
+    
+    // SiteDetails first load tracking
+    const [firstLoadSiteDetails, setFirstLoadSiteDetails] = useState(true);
 
     // Initialization
     useEffect(() => {
@@ -239,7 +241,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         }
     }, [token, sitesFilter]);
 
-
     const deleteSite = useCallback(async (siteId: number) => {
         if (!token) return;
 
@@ -258,7 +259,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     token,
-                                    site_ids: [siteId]  // Send as array
+                                    site_ids: [siteId]
                                 })
                             });
 
@@ -284,7 +285,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         }
     }, [token, fetchSites]);
 
-    // NEW: Add bulk delete function
     const bulkDeleteSites = useCallback(async (siteIds: number[]) => {
         if (!token) return;
 
@@ -294,7 +294,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     token,
-                    site_ids: siteIds  // Send all IDs at once
+                    site_ids: siteIds
                 })
             });
 
@@ -308,11 +308,10 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                 throw new Error(data.message || 'Failed to delete sites');
             }
 
-            // Refresh the sites list after successful deletion
             fetchSites(1);
         } catch (error) {
             console.error('Error deleting sites:', error);
-            throw error; // Re-throw to let the component handle it
+            throw error;
         }
     }, [token, fetchSites]);
 
@@ -327,7 +326,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                 setLoadingAssignments(true);
             }
 
-            // Use getFutureVisits endpoint instead of getSiteVisits
             const response = await fetch(`${BACKEND_URL}/manager/getFutureVisits`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -404,44 +402,68 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         }
     }, [token, assignmentsFilter]);
 
-    const deleteAssignment = useCallback(async (visitId: number) => {
+    // UPDATED: Update assignment instead of delete
+    const updateAssignmentStatus = useCallback(async (visitId: number, newStatus: 'admin_completed' | 'cancelled') => {
         if (!token) return;
 
         try {
-            Alert.alert(
-                'Delete Assignment',
-                'Are you sure you want to delete this assignment?',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                            const response = await fetch(`${BACKEND_URL}/manager/deleteSiteVisit`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ token, visit_id: visitId })
-                            });
+            const response = await fetch(`${BACKEND_URL}/manager/updateSiteVisit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token,
+                    visit_id: visitId,
+                    status: newStatus
+                })
+            });
 
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
-                            const data = await response.json();
+            const data = await response.json();
 
-                            if (data.message !== "Site visit deleted successfully") {
-                                throw new Error(data.message || 'Failed to delete assignment');
-                            }
+            if (data.message !== "Site visit updated successfully") {
+                throw new Error(data.message || 'Failed to update assignment');
+            }
 
-                            Alert.alert('Success', 'Assignment deleted successfully');
-                            fetchAssignments(1);
-                        }
-                    }
-                ]
-            );
+            return data;
         } catch (error) {
-            console.error('Error deleting assignment:', error);
-            Alert.alert('Error', 'Failed to delete assignment. Please try again.');
+            console.error('Error updating assignment:', error);
+            throw error;
+        }
+    }, [token]);
+
+    // NEW: Bulk update assignments
+    const bulkUpdateAssignments = useCallback(async (visitIds: number[], newStatus: 'admin_completed' | 'cancelled') => {
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/manager/bulkUpdateSiteVisits`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token,
+                    visit_ids: visitIds,
+                    status: newStatus
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (!data.message.includes('Successfully updated')) {
+                throw new Error(data.message || 'Failed to update assignments');
+            }
+
+            fetchAssignments(1);
+            return data;
+        } catch (error) {
+            console.error('Error bulk updating assignments:', error);
+            throw error;
         }
     }, [token, fetchAssignments]);
 
@@ -456,6 +478,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
     // Event Handlers
     const handleSitePress = useCallback((site: Site) => {
         setSelectedSite(site);
+        setFirstLoadSiteDetails(true); // Reset firstLoad when opening site details
         setViewMode('details');
     }, []);
 
@@ -477,16 +500,12 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         setViewMode('edit');
     }, []);
 
-    const handleEditAssignment = useCallback((assignment: Assignment) => {
-        setSelectedAssignment(assignment);
-        setViewMode('edit-assignment');
-    }, []);
-
     const handleBackPress = useCallback(() => {
         if (viewMode !== 'list') {
             setViewMode('list');
             setSelectedSite(null);
             setSelectedAssignment(null);
+            setFirstLoadSiteDetails(true); // Reset when going back
         } else {
             onBack();
         }
@@ -505,12 +524,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
 
     const handleAssignmentCreated = useCallback(() => {
         setViewMode('list');
-        fetchAssignments(1);
-    }, [fetchAssignments]);
-
-    const handleAssignmentUpdated = useCallback(() => {
-        setViewMode('list');
-        setSelectedAssignment(null);
         fetchAssignments(1);
     }, [fetchAssignments]);
 
@@ -543,6 +556,11 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
             fetchAssignments(1);
         }
     }, [assignmentsSearchQuery, searchAssignments, fetchAssignments]);
+    
+    // NEW: Handle first load complete callback from SiteDetails
+    const handleFirstLoadComplete = useCallback(() => {
+        setFirstLoadSiteDetails(false);
+    }, []);
 
     // Back Handler
     useEffect(() => {
@@ -560,7 +578,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
             case 'edit': return 'Edit Site';
             case 'details': return 'Site Details';
             case 'create-assignment': return 'Create Assignment';
-            case 'edit-assignment': return 'Edit Assignment';
             case 'assignment-details': return 'Assignment Details';
             default: return 'Database Manager';
         }
@@ -591,11 +608,13 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
             case 'details':
                 return selectedSite ? (
                     <SiteDetails
-                        site={selectedSite}
+                        site={selectedSite}  
                         token={token}
                         onBack={handleBackPress}
                         onEdit={() => handleEditSite(selectedSite)}
                         theme={WHATSAPP_COLORS}
+                        firstLoad={firstLoadSiteDetails}
+                        onFirstLoadComplete={handleFirstLoadComplete}
                     />
                 ) : null;
             case 'create-assignment':
@@ -608,23 +627,12 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                         theme={WHATSAPP_COLORS}
                     />
                 );
-            case 'edit-assignment':
-                return selectedAssignment ? (
-                    <EditAssignment
-                        assignment={selectedAssignment}
-                        token={token}
-                        onBack={handleBackPress}
-                        onAssignmentUpdated={handleAssignmentUpdated}
-                        theme={WHATSAPP_COLORS}
-                    />
-                ) : null;
             case 'assignment-details':
                 return selectedAssignment ? (
                     <AssignmentDetails
                         assignment={selectedAssignment}
                         token={token}
                         onBack={handleBackPress}
-                        onEdit={() => handleEditAssignment(selectedAssignment)}
                         theme={WHATSAPP_COLORS}
                     />
                 ) : null;
@@ -676,7 +684,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Tab Content - Now scrollable within the ScrollView */}
+                        {/* Tab Content */}
                         <View style={styles.listWrapper}>
                             {activeTab === 'sites' ? (
                                 <ListSite
@@ -690,7 +698,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                                     onSitePress={handleSitePress}
                                     onEditSite={handleEditSite}
                                     onDeleteSite={deleteSite}
-                                    onBulkDeleteSites={bulkDeleteSites}  // ADD THIS LINE
+                                    onBulkDeleteSites={bulkDeleteSites}
                                     onSearch={searchSites}
                                     onFilter={setSitesFilter}
                                     onLoadMore={handleLoadMoreSites}
@@ -707,9 +715,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                                     pagination={assignmentsPagination}
                                     searchQuery={assignmentsSearchQuery}
                                     filter={assignmentsFilter}
-                                    token={token}  // Add this line
-                                    onEditAssignment={handleEditAssignment}
-                                    onDeleteAssignment={deleteAssignment}
+                                    token={token}
+                                    onUpdateAssignmentStatus={updateAssignmentStatus}
+                                    onBulkUpdateAssignments={bulkUpdateAssignments}
                                     onSearch={searchAssignments}
                                     onFilter={setAssignmentsFilter}
                                     onLoadMore={handleLoadMoreAssignments}
@@ -742,18 +750,19 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         assignmentsPagination,
         assignmentsSearchQuery,
         assignmentsFilter,
+        firstLoadSiteDetails,
         handleBackPress,
         handleSiteCreated,
         handleSiteUpdated,
         handleAssignmentCreated,
-        handleAssignmentUpdated,
         handleSitePress,
         handleEditSite,
         handleAssignmentPress,
-        handleEditAssignment,
+        handleFirstLoadComplete,
         deleteSite,
         bulkDeleteSites,
-        deleteAssignment,
+        updateAssignmentStatus,
+        bulkUpdateAssignments,
         searchSites,
         searchAssignments,
         handleLoadMoreSites,

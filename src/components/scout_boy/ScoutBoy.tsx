@@ -55,6 +55,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState('');
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
+  // Ref to track if initial fetch has been done
+  const initialFetchDone = useRef(false);
+
   // Memoized Values
   const theme: ThemeColors = useMemo(() => 
     isDarkMode ? darkTheme : lightTheme, 
@@ -80,7 +83,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     initializeApp();
   }, []);
 
-  // API Functions
+  // API Functions - Using useCallback with stable dependencies
   const fetchVisits = useCallback(async (page: number = 1, append: boolean = false): Promise<void> => {
     if (!token) return;
 
@@ -131,7 +134,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token]); // Only depend on token
 
   const searchVisits = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) {
@@ -180,12 +183,13 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [token, fetchVisits]);
 
-  // Initial Data Fetch
+  // Initial Data Fetch - Only run once when token is available
   useEffect(() => {
-    if (token) {
+    if (token && !initialFetchDone.current) {
+      initialFetchDone.current = true;
       fetchVisits(1);
     }
-  }, [token, fetchVisits]);
+  }, [token]); // Removed fetchVisits from dependency array
 
   // Theme Toggle
   const toggleDarkMode = useCallback(async () => {
@@ -237,17 +241,20 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       case 'edit':
         setViewMode('list');
         setSelectedVisit(null);
-        fetchVisits(1);
+        // Refresh the list when coming back
+        if (token) {
+          fetchVisits(1);
+        }
         break;
       case 'list':
         onBack();
         break;
     }
-  }, [viewMode, fetchVisits, onBack]);
+  }, [viewMode, token, onBack]); // Removed fetchVisits from deps
 
   const handleEditPress = useCallback(() => {
-  setViewMode('edit');
-}, []);
+    setViewMode('edit');
+  }, []);
 
   const handleMarkComplete = useCallback(async () => {
     if (!selectedVisit || !token) return;
@@ -396,6 +403,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               token={token}
               theme={theme}
               isDarkMode={isDarkMode}
+              pagination={pagination}
             />
           </View>
         );
@@ -411,6 +419,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     loading,
     loadingMore,
     refreshing,
+    pagination,
+    isDarkMode,
     handleBackPress,
     handleEditPress,
     handleMarkComplete,
