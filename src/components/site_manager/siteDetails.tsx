@@ -669,14 +669,28 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       return;
     }
 
-    // Get the latest visit ID from siteVisits
-    if (!siteVisits || siteVisits.length === 0) {
-      Alert.alert('Error', 'No site visits found. Please create a visit first.');
-      return;
-    }
+    // Get the latest visit ID from siteVisits, or create a default visit
+let visitId;
+let latestVisit;
 
-    const latestVisit = siteVisits[0].visit;
-    const visitId = latestVisit.id;
+if (siteVisits && siteVisits.length > 0) {
+  latestVisit = siteVisits[0].visit;
+  visitId = latestVisit.id;
+}  else {
+  // If no visits exist, use the site ID as a fallback or create a visit automatically
+  // Option 1: Use site ID as visit context
+  visitId = site.id;
+  latestVisit = {
+    id: site.id,
+    status: 'active',
+    assigned_to: {
+      employee_id: currentUserEmployeeId || '',
+      first_name: currentUserName.split(' ')[0] || '',
+      last_name: currentUserName.split(' ')[1] || '',
+    },
+    created_at: new Date().toISOString(),
+  };
+}
 
     try {
       setAddingComment(true);
@@ -726,18 +740,27 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
         };
 
         // Update the siteVisits state to include the new comment
-        setSiteVisits(prevVisits => {
-          const updatedVisits = [...prevVisits];
-          if (updatedVisits.length > 0) {
-            updatedVisits[0] = {
-              ...updatedVisits[0],
-              comments: [...updatedVisits[0].comments, newCommentData],
-              total_comments_in_visit: updatedVisits[0].total_comments_in_visit + 1,
-              comments_shown: updatedVisits[0].comments_shown + 1,
-            };
-          }
-          return updatedVisits;
-        });
+        // Update the siteVisits state to include the new comment
+setSiteVisits(prevVisits => {
+  const updatedVisits = [...prevVisits];
+  if (updatedVisits.length > 0) {
+    updatedVisits[0] = {
+      ...updatedVisits[0],
+      comments: [...updatedVisits[0].comments, newCommentData],
+      total_comments_in_visit: updatedVisits[0].total_comments_in_visit + 1,
+      comments_shown: updatedVisits[0].comments_shown + 1,
+    };
+  } else {
+    // Create a new visit entry with the comment
+    updatedVisits.push({
+      visit: latestVisit,
+      comments: [newCommentData],
+      total_comments_in_visit: 1,
+      comments_shown: 1,
+    });
+  }
+  return updatedVisits;
+});
 
         // Clear input and documents - keep keyboard open
         setNewComment('');
