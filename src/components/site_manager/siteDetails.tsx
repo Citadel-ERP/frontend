@@ -1314,10 +1314,12 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    marginTop:10,
     backgroundColor: WHATSAPP_COLORS.primary,
   },
   // Header Styles
   headerSafeArea: {
+
     backgroundColor: WHATSAPP_COLORS.primary,
   },
   header: {
@@ -1386,6 +1388,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
     marginBottom: 1,
+    marginTop:10,
   },
   headerSubtitle: {
     fontSize: 12,
