@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -289,12 +290,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 
         {(siteData?.location_link || (siteData?.latitude && siteData?.longitude)) && (
           <View style={styles.actionButtons}>
-            {/* {siteData?.location_link && (
-              <TouchableOpacity style={styles.locationButton} onPress={openLocationLink}>
-                <Ionicons name="link" size={16} color={WHATSAPP_COLORS.white} />
-                <Text style={styles.locationButtonText}>Open Link</Text>
-              </TouchableOpacity>
-            )} */}
             {siteData?.latitude && siteData?.longitude && (
               <TouchableOpacity style={styles.mapButton} onPress={openGoogleMaps}>
                 <Ionicons name="map" size={16} color={WHATSAPP_COLORS.white} />
@@ -523,7 +518,7 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
         </View>
       </View>
 
-      {siteData?.building_photos?.length > 0 && (
+      {siteData?.building_photos && siteData.building_photos.length > 0 && (
         <View style={[styles.containerBox, { marginTop: 12 }]}>
           <View style={styles.containerHeader}>
             <MaterialIcons name="photo-library" size={20} color={WHATSAPP_COLORS.primary} />
@@ -614,16 +609,19 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
       transparent={false}
       visible={visible}
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={[styles.modalHeader, { paddingTop: Platform.OS === 'ios' ? 50 : 15 }]}>
-        <TouchableOpacity
-          onPress={onClose}
-          style={styles.modalBackButton}
-        >
-          <Ionicons name="close" size={24} color="#FFF" />
-        </TouchableOpacity>
-        <Text style={styles.modalTitle}>Site Details</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.modalBackButton}
+          >
+            <Ionicons name="close" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Site Details</Text>
+        </View>
+      </SafeAreaView>
 
       <View style={styles.contentContainer}>
         {renderStepIndicator()}
@@ -635,7 +633,11 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </Text>
         </View>
 
-        <ScrollView style={styles.scrollContainer}>
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           {renderCurrentStep()}
         </ScrollView>
 
@@ -663,7 +665,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
             </TouchableOpacity>
           ) : (
-            // On last step, show only one button
             <View style={{ flex: 1 }} />
           )}
         </View>
@@ -673,6 +674,9 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: WHATSAPP_COLORS.primary,
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -755,8 +759,11 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
+  scrollContentContainer: {
+    paddingBottom: 20,
+  },
   stepContent: {
-    padding: 16, // Added padding here for scroll content
+    padding: 16,
   },
   stepLabel: {
     fontSize: 13,
@@ -870,7 +877,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  // ADDED: Metro Station Styles
+  // Metro Station Styles
   metroStationContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -991,7 +998,7 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textPrimary,
     flex: 1
   },
-  // ADDED: Other Amenities Styles
+  // Other Amenities Styles
   otherAmenitiesSection: {
     marginTop: 8,
     paddingTop: 12,

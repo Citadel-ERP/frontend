@@ -503,12 +503,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({
       });
 
       const response = await fetch(`${BACKEND_URL}/manager/createSite`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - let browser set it automatically with boundary
+    });
 
       const responseText = await response.text();
       console.log('Response:', responseText);

@@ -78,11 +78,7 @@ const Header: React.FC<HeaderProps> = ({
                     {loading ? (
                       <ActivityIndicator size="small" color="#FFF" />
                     ) : (
-                      <Ionicons 
-                        name="add" 
-                        size={24} 
-                        color="#FFF" 
-                      />
+                      <Text style={styles.addButtonText}>Add</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -184,18 +180,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  addButtonContainer: {
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  borderRadius: 6,
+  borderWidth: 1,
+  borderColor: '#fff',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+addButtonText: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: '600',
+  letterSpacing: 0.5,
+},
   headerActions: {
-    position: 'absolute',
-    right: 0,
-    zIndex: 2,
-  },
+  position: 'absolute',
+  right: 10,  
+  zIndex: 2,
+  paddingVertical: 8,
+},
   createButton: {
-    padding: 8,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  borderRadius: 6,
+  borderWidth: 1,
+  borderColor: '#fff',
+},
 });
 
 export default Header;

@@ -751,17 +751,20 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           style={{ flex: 1 }} 
           behavior={IS_IOS ? 'padding' : undefined}
         >
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.searchModalHeader}>
-              <TouchableOpacity 
-                onPress={() => setShowSiteSearch(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
-              </TouchableOpacity>
-              <Text style={styles.searchModalTitle}>Select Sites</Text>
-              <View style={{ width: 24 }} />
-            </View>
+          <View style={styles.modalContainer}>
+            <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
+            <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
+              <View style={styles.searchModalHeader}>
+                <TouchableOpacity 
+                  onPress={() => setShowSiteSearch(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
+                </TouchableOpacity>
+                <Text style={styles.searchModalTitle}>Select Sites</Text>
+                <View style={{ width: 24 }} />
+              </View>
+            </SafeAreaView>
 
             {/* Search Container */}
             <View style={styles.searchContainer}>
@@ -1060,7 +1063,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                 </Text>
               </TouchableOpacity>
             </View>
-          </SafeAreaView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     );
@@ -1181,18 +1184,22 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         style={{ flex: 1 }} 
         behavior={IS_IOS ? 'padding' : undefined}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.searchModalHeader}>
-            <TouchableOpacity 
-              onPress={() => setShowScoutSearch(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
-            </TouchableOpacity>
-            <Text style={styles.searchModalTitle}>Select Scout</Text>
-            <View style={{ width: 24 }} />
-          </View>
 
+        <View style={styles.modalContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
+          <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
+            <View style={styles.searchModalHeader}>
+              <TouchableOpacity 
+                onPress={() => setShowScoutSearch(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
+              </TouchableOpacity>
+              <Text style={styles.searchModalTitle}>Select Scout</Text>
+              <View style={{ width: 24 }} />
+            </View>
+          </SafeAreaView>
+{/* >>>>>>> c0143d584040e9b2030d31e833d17c9d61b7752b */}
           <View style={styles.searchInputContainer}>
             <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} />
             <TextInput
@@ -1252,7 +1259,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               )}
             />
           )}
-        </SafeAreaView>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -1265,20 +1272,21 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   }, [localFilters]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
-      
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={onBack}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={24} color="#FFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Assignment</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
+      <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={onBack}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create Assignment</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      </SafeAreaView>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.formContainer}>
@@ -1503,7 +1511,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         },
         () => setShowFloorConditionFilter(false)
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -1713,6 +1721,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
+    marginTop: 0,
     backgroundColor: WHATSAPP_COLORS.surface,
   },
   searchModalHeader: {
