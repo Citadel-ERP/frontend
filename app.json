@@ -6,15 +6,20 @@
     "version": "1.2.1",
     "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
-    "icon": "./src/assets/logo.png",
+
+    "icon": "./src/assets/app-icon-ios.png",
+
     "userInterfaceStyle": "light",
     "scheme": "citadel",
+
     "splash": {
       "image": "./src/assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#e7e6e5"
     },
+
     "assetBundlePatterns": ["**/*"],
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
@@ -46,14 +51,16 @@
         "NSFaceIDUsageDescription":
           "Face ID is used to securely authenticate you.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
-          "attendance": "Your location is needed to verify you are at the office for attendance."
+          "attendance":
+            "Your location is needed to verify you are at the office for attendance."
         }
       }
     },
+
     "android": {
       "package": "com.citadelnetinc.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive_icon_android.png",
+        "foregroundImage": "./src/assets/logo.png",
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
@@ -75,6 +82,7 @@
         "WRITE_EXTERNAL_STORAGE"
       ]
     },
+
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
@@ -101,15 +109,17 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
-          "cameraPermission": "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
+          "photosPermission":
+            "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
+          "cameraPermission":
+            "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
           "saveToPhotosAlbum": true
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/adaptive_icon_android.png",
+          "icon": "./assets/icons/adaptive-foreground.png",
           "color": "#2D3748",
           "useNextNotificationsApi": true
         }
@@ -118,6 +128,7 @@
       "expo-background-fetch",
       "expo-web-browser"
     ],
+
     "extra": {
       "eas": {
         "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f"
