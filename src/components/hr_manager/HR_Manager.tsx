@@ -78,6 +78,7 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
             if (response.ok) {
                 const data = await response.json();
                 const itemsData = data[activeTab] || [];
+                console.log(`Raw ${activeTab} data:`,itemsData[0].raised_by.first_name);  
                 const transformedItems = itemsData.map((item: any) => ({
                     id: item.id.toString(),
                     nature: item.nature || item.issue_type,
@@ -86,8 +87,8 @@ const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
                     status: item.status,
                     created_at: item.created_at,
                     updated_at: item.updated_at,
-                    employee_name: item.employee_name || item.user_name,
-                    employee_email: item.employee_email || item.user_email,
+                    employee_name: item.raised_by.first_name + ' ' + item.raised_by.last_name || item.user_name,
+                    employee_email: item.raised_by.email || item.user_email,
                     comments: item.comments || []
                 }));
                 const sortedItems = transformedItems.sort((a: Item, b: Item) =>

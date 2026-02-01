@@ -77,7 +77,7 @@ export const Requests: React.FC<RequestsProps> = ({
     onFilterChange(null);
     setShowFilterModal(false);
   };
-
+  
   return (
     <View style={styles.content}>
       <ScrollView

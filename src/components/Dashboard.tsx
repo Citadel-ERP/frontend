@@ -1746,7 +1746,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Main dashboard render
   return (
-    <View style={[styles.safeContainer, isWeb && styles.safeContainerWeb]}>
+    <View style={[styles.safeContainer, { backgroundColor: theme.bgColor }, isWeb && styles.safeContainerWeb]}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'light-content'}
         backgroundColor={currentColors.headerBg}
@@ -1780,7 +1780,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         currentColors={currentColors}
       />
 
-      <View style={[styles.mainContent, { backgroundColor: theme.bgColor }, isWeb && styles.mainContentWeb]}>
+      <View style={[styles.mainContent, isWeb && styles.mainContentWeb]}>
         {/* Animated Circle Overlay */}
         {isAnimating && (
           <Animated.View
@@ -1798,7 +1798,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
         {isWeb ? (
           // Web Layout
-          <View style={[styles.webContainer, isWeb && styles.webContainerWeb]}>
+          <View style={[styles.webContainer, { backgroundColor: theme.bgColor }, isWeb && styles.webContainerWeb]}>
             {/* Left Side - User Profile & Navigation */}
             <View style={[styles.webLeftSide, { backgroundColor: theme.cardBg }]}>
               <View style={[styles.webUserProfile, { backgroundColor: theme.cardBg }]}>
@@ -2355,9 +2355,10 @@ const styles = StyleSheet.create({
   webContainer: {
   flex: 1,
   flexDirection: 'row',
-  alignItems: 'stretch', // Changed from 'flex-start' to 'stretch'
+  alignItems: 'stretch',
   paddingVertical: 0,
-  minHeight: 0, // Allow flex children to shrink
+  minHeight: 0,
+  backgroundColor: 'transparent', // Add this line if not present
 },
   webContainerWeb: {
     maxWidth: 1400,
@@ -2473,7 +2474,8 @@ webNavItemActive: {
   paddingHorizontal: 10,
   maxWidth: '100%',
   overflow: 'hidden',
-  alignSelf: 'stretch', // Match parent height
+  alignSelf: 'stretch',
+  backgroundColor: 'transparent',
 },
 
   webHeader: {

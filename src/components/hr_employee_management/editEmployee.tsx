@@ -76,6 +76,61 @@ interface EditEmployeeProps {
   onSuccess: () => void;
 }
 
+// Web-compatible date/time input component
+const WebDateInput: React.FC<{
+  value: Date | null;
+  onChange: (date: Date) => void;
+  mode?: 'date' | 'time';
+  style?: any;
+}> = ({ value, onChange, mode = 'date', style }) => {
+  if (Platform.OS !== 'web') return null;
+
+  const formatValueForInput = () => {
+    if (!value) return '';
+    if (mode === 'time') {
+      const hours = value.getHours().toString().padStart(2, '0');
+      const minutes = value.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    return value.toISOString().split('T')[0];
+  };
+
+  const handleChange = (e: any) => {
+    const inputValue = e.target.value;
+    if (!inputValue) return;
+
+    if (mode === 'time') {
+      const [hours, minutes] = inputValue.split(':');
+      const newDate = new Date(value || new Date());
+      newDate.setHours(parseInt(hours), parseInt(minutes), 0);
+      onChange(newDate);
+    } else {
+      onChange(new Date(inputValue));
+    }
+  };
+
+  return (
+    <input
+      type={mode}
+      value={formatValueForInput()}
+      onChange={handleChange}
+      style={{
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        padding: 12,
+        borderRadius: 8,
+        border: '1px solid #E0E0E0',
+        fontSize: 16,
+        backgroundColor: '#fff',
+        outline: 'none',
+        fontFamily: 'inherit',
+        ...style,
+      }}
+    />
+  );
+};
+
 const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
   visible,
   onClose,
@@ -572,69 +627,89 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                 {renderSection('Work Timings', 'time-outline', (
                   <View>
                     <Text style={styles.editLabel}>Login Time</Text>
-                    <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => {
-                        setShowLoginTimePicker(true);
-                        setActivePickerType('loginTime');
-                      }}
-                    >
-                      <Text style={styles.datePickerText}>
-                        {formatTimeForDisplay(loginTime)}
-                      </Text>
-                    </TouchableOpacity>
-                    {showLoginTimePicker && activePickerType === 'loginTime' && (
-                      <View>
-                        <DateTimePicker
-                          value={loginTime}
-                          mode="time"
-                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                          onChange={(event, time) => {
-                            handleDateChange(event, time, 'loginTime');
+                    {Platform.OS === 'web' ? (
+                      <WebDateInput
+                        value={loginTime}
+                        onChange={(time) => setLoginTime(time)}
+                        mode="time"
+                      />
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.datePickerButton}
+                          onPress={() => {
+                            setShowLoginTimePicker(true);
+                            setActivePickerType('loginTime');
                           }}
-                        />
-                        {Platform.OS === 'ios' && (
-                          <TouchableOpacity
-                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
-                            onPress={closeLoginTimePicker}
-                          >
-                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
-                          </TouchableOpacity>
+                        >
+                          <Text style={styles.datePickerText}>
+                            {formatTimeForDisplay(loginTime)}
+                          </Text>
+                        </TouchableOpacity>
+                        {showLoginTimePicker && activePickerType === 'loginTime' && (
+                          <View>
+                            <DateTimePicker
+                              value={loginTime}
+                              mode="time"
+                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                              onChange={(event, time) => {
+                                handleDateChange(event, time, 'loginTime');
+                              }}
+                            />
+                            {Platform.OS === 'ios' && (
+                              <TouchableOpacity
+                                style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                                onPress={closeLoginTimePicker}
+                              >
+                                <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         )}
-                      </View>
+                      </>
                     )}
 
                     <Text style={styles.editLabel}>Logout Time</Text>
-                    <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => {
-                        setShowLogoutTimePicker(true);
-                        setActivePickerType('logoutTime');
-                      }}
-                    >
-                      <Text style={styles.datePickerText}>
-                        {formatTimeForDisplay(logoutTime)}
-                      </Text>
-                    </TouchableOpacity>
-                    {showLogoutTimePicker && activePickerType === 'logoutTime' && (
-                      <View>
-                        <DateTimePicker
-                          value={logoutTime}
-                          mode="time"
-                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                          onChange={(event, time) => {
-                            handleDateChange(event, time, 'logoutTime');
+                    {Platform.OS === 'web' ? (
+                      <WebDateInput
+                        value={logoutTime}
+                        onChange={(time) => setLogoutTime(time)}
+                        mode="time"
+                      />
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.datePickerButton}
+                          onPress={() => {
+                            setShowLogoutTimePicker(true);
+                            setActivePickerType('logoutTime');
                           }}
-                        />
-                        {Platform.OS === 'ios' && (
-                          <TouchableOpacity
-                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
-                            onPress={closeLogoutTimePicker}
-                          >
-                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
-                          </TouchableOpacity>
+                        >
+                          <Text style={styles.datePickerText}>
+                            {formatTimeForDisplay(logoutTime)}
+                          </Text>
+                        </TouchableOpacity>
+                        {showLogoutTimePicker && activePickerType === 'logoutTime' && (
+                          <View>
+                            <DateTimePicker
+                              value={logoutTime}
+                              mode="time"
+                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                              onChange={(event, time) => {
+                                handleDateChange(event, time, 'logoutTime');
+                              }}
+                            />
+                            {Platform.OS === 'ios' && (
+                              <TouchableOpacity
+                                style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                                onPress={closeLogoutTimePicker}
+                              >
+                                <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         )}
-                      </View>
+                      </>
                     )}
                   </View>
                 ))}
@@ -643,71 +718,91 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                 {renderSection('Important Dates', 'calendar-outline', (
                   <View>
                     <Text style={styles.editLabel}>Birth Date</Text>
-                    <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => {
-                        setShowBirthDatePicker(true);
-                        setActivePickerType('birth');
-                      }}
-                    >
-                      <Text style={styles.datePickerText}>
-                        {formatDateForDisplay(birthDate)}
-                      </Text>
-                    </TouchableOpacity>
-                    {showBirthDatePicker && activePickerType === 'birth' && (
-                      <View>
-                        <DateTimePicker
-                          value={birthDate || new Date()}
-                          mode="date"
-                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                          onChange={(event, date) => {
-                            handleDateChange(event, date, 'birth');
+                    {Platform.OS === 'web' ? (
+                      <WebDateInput
+                        value={birthDate}
+                        onChange={(date) => setBirthDate(date)}
+                        mode="date"
+                      />
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.datePickerButton}
+                          onPress={() => {
+                            setShowBirthDatePicker(true);
+                            setActivePickerType('birth');
                           }}
-                          maximumDate={new Date()}
-                        />
-                        {Platform.OS === 'ios' && (
-                          <TouchableOpacity
-                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
-                            onPress={closeBirthDatePicker}
-                          >
-                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
-                          </TouchableOpacity>
+                        >
+                          <Text style={styles.datePickerText}>
+                            {formatDateForDisplay(birthDate)}
+                          </Text>
+                        </TouchableOpacity>
+                        {showBirthDatePicker && activePickerType === 'birth' && (
+                          <View>
+                            <DateTimePicker
+                              value={birthDate || new Date()}
+                              mode="date"
+                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                              onChange={(event, date) => {
+                                handleDateChange(event, date, 'birth');
+                              }}
+                              maximumDate={new Date()}
+                            />
+                            {Platform.OS === 'ios' && (
+                              <TouchableOpacity
+                                style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                                onPress={closeBirthDatePicker}
+                              >
+                                <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         )}
-                      </View>
+                      </>
                     )}
 
                     <Text style={styles.editLabel}>Joining Date</Text>
-                    <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => {
-                        setShowJoiningDatePicker(true);
-                        setActivePickerType('joining');
-                      }}
-                    >
-                      <Text style={styles.datePickerText}>
-                        {formatDateForDisplay(joiningDate)}
-                      </Text>
-                    </TouchableOpacity>
-                    {showJoiningDatePicker && activePickerType === 'joining' && (
-                      <View>
-                        <DateTimePicker
-                          value={joiningDate || new Date()}
-                          mode="date"
-                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                          onChange={(event, date) => {
-                            handleDateChange(event, date, 'joining');
+                    {Platform.OS === 'web' ? (
+                      <WebDateInput
+                        value={joiningDate}
+                        onChange={(date) => setJoiningDate(date)}
+                        mode="date"
+                      />
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.datePickerButton}
+                          onPress={() => {
+                            setShowJoiningDatePicker(true);
+                            setActivePickerType('joining');
                           }}
-                          maximumDate={new Date()}
-                        />
-                        {Platform.OS === 'ios' && (
-                          <TouchableOpacity
-                            style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
-                            onPress={closeJoiningDatePicker}
-                          >
-                            <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
-                          </TouchableOpacity>
+                        >
+                          <Text style={styles.datePickerText}>
+                            {formatDateForDisplay(joiningDate)}
+                          </Text>
+                        </TouchableOpacity>
+                        {showJoiningDatePicker && activePickerType === 'joining' && (
+                          <View>
+                            <DateTimePicker
+                              value={joiningDate || new Date()}
+                              mode="date"
+                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                              onChange={(event, date) => {
+                                handleDateChange(event, date, 'joining');
+                              }}
+                              maximumDate={new Date()}
+                            />
+                            {Platform.OS === 'ios' && (
+                              <TouchableOpacity
+                                style={[styles.datePickerButton, { marginTop: 8, backgroundColor: WHATSAPP_COLORS.primary }]}
+                                onPress={closeJoiningDatePicker}
+                              >
+                                <Text style={[styles.datePickerText, { color: '#fff' }]}>Done</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         )}
-                      </View>
+                      </>
                     )}
                   </View>
                 ))}

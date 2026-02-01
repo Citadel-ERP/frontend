@@ -789,7 +789,7 @@ export const styles = StyleSheet.create({
     padding: 2,
   },
   dayCircle: {
-    width: '85%',
+    width: Platform.OS === 'web' ? '35%' : '85%',
     aspectRatio: 1,
     borderRadius: 100,
     alignItems: 'center',
@@ -1134,20 +1134,6 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  addButton: {
-  backgroundColor: '#00d285', 
-  paddingHorizontal: 16,
-  paddingVertical: 8,
-  borderRadius: 8,
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 6,
-},
-addButtonText: {
-  color: '#FFFFFF',
-  fontWeight: '600',
-  fontSize: 14,
-},
   reasonInput: {
     borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,

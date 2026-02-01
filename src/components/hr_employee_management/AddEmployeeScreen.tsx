@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { Header } from './header';
@@ -77,6 +76,45 @@ interface StepValidationResult {
   errorMessage?: string;
 }
 
+// ==================== TIME INPUT COMPONENT ====================
+interface TimeInputProps {
+  value: string;
+  onChange: (time: string) => void;
+  placeholder?: string;
+}
+
+const TimeInputField: React.FC<TimeInputProps> = ({ value, onChange, placeholder = 'Select Time' }) => {
+  if (Platform.OS === 'web') {
+    return (
+      <input
+        type="time"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: '100%',
+          padding: '12px',
+          fontSize: '16px',
+          borderRadius: '8px',
+          border: '1px solid #ddd',
+          boxSizing: 'border-box' as const,
+        }}
+      />
+    );
+  }
+
+  // Fallback for native (simple text input)
+  return (
+    <TextInput
+      style={styles.input}
+      value={value}
+      onChangeText={onChange}
+      placeholder={placeholder}
+      placeholderTextColor="#999"
+    />
+  );
+};
+
 // ==================== COMPONENT ====================
 const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   token,
@@ -94,8 +132,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const [documents, setDocuments] = useState<Document[]>([]);
 
   const [showOfficePicker, setShowOfficePicker] = useState<boolean>(false);
-  const [showLoginTimePicker, setShowLoginTimePicker] = useState<boolean>(false);
-  const [showLogoutTimePicker, setShowLogoutTimePicker] = useState<boolean>(false);
 
   // Step 1: Basic Information
   const [basicInfo, setBasicInfo] = useState<BasicInfoData>({
@@ -224,21 +260,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     }));
   }, []);
 
-  const handleTimeSelect = useCallback((field: 'login_time' | 'logout_time', date: Date) => {
-    const timeString = date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    handleBasicInfoChange(field, timeString);
-
-    if (field === 'login_time') {
-      setShowLoginTimePicker(false);
-    } else {
-      setShowLogoutTimePicker(false);
-    }
-  }, [handleBasicInfoChange]);
-
   const handleAddressChange = useCallback(
     (addressType: 'home_address' | 'current_address', field: keyof AddressData, value: string) => {
       setAddressInfo(prev => ({
@@ -268,8 +289,8 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   }, []);
 
   const selectReportingTag = useCallback((tagId: string) => {
-  setSelectedReportingTag(tagId);
-}, []);
+    setSelectedReportingTag(tagId);
+  }, []);
 
   const pickDocuments = async () => {
     try {
@@ -369,14 +390,14 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   };
 
   const validateStep4 = (): StepValidationResult => {
-  if (!selectedReportingTag) {
-    return {
-      isValid: false,
-      errorMessage: 'Please select a reporting tag',
-    };
-  }
-  return { isValid: true };
-};
+    if (!selectedReportingTag) {
+      return {
+        isValid: false,
+        errorMessage: 'Please select a reporting tag',
+      };
+    }
+    return { isValid: true };
+  };
 
   const handleNext = () => {
     setShowOfficePicker(false);
@@ -686,7 +707,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             </View>
           </View>
 
-          {/* ADDED: Designation Field */}
+          {/* Designation Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Designation</Text>
             <TextInput
@@ -734,65 +755,32 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             <Text style={styles.helperText}>Default: Citadel2025@</Text>
           </View>
 
-          {/* ADDED: Login/Logout Time Fields */}
+          {/* Work Timing Section */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Work Timing (Optional)</Text>
             <View style={styles.row}>
               <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.label}>Login Time</Text>
-                <TouchableOpacity
-                  style={[styles.input, { justifyContent: 'center' }]}
-                  onPress={() => setShowLoginTimePicker(true)}
-                >
-                  <Text style={basicInfo.login_time ? {} : { color: '#999' }}>
-                    {basicInfo.login_time || 'Select Time'}
-                  </Text>
-                </TouchableOpacity>
+                <TimeInputField
+                  value={basicInfo.login_time}
+                  onChange={(time) => handleBasicInfoChange('login_time', time)}
+                  placeholder="HH:MM"
+                />
               </View>
 
               <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
                 <Text style={styles.label}>Logout Time</Text>
-                <TouchableOpacity
-                  style={[styles.input, { justifyContent: 'center' }]}
-                  onPress={() => setShowLogoutTimePicker(true)}
-                >
-                  <Text style={basicInfo.logout_time ? {} : { color: '#999' }}>
-                    {basicInfo.logout_time || 'Select Time'}
-                  </Text>
-                </TouchableOpacity>
+                <TimeInputField
+                  value={basicInfo.logout_time}
+                  onChange={(time) => handleBasicInfoChange('logout_time', time)}
+                  placeholder="HH:MM"
+                />
               </View>
             </View>
           </View>
 
-          {/* Time Pickers */}
-          {showLoginTimePicker && (
-            <DateTimePicker
-              value={basicInfo.login_time ? new Date(`2000-01-01T${basicInfo.login_time}`) : new Date()}
-              mode="time"
-              display="spinner"
-              onChange={(event, selectedDate) => {
-                if (selectedDate) {
-                  handleTimeSelect('login_time', selectedDate);
-                }
-              }}
-            />
-          )}
-
-          {showLogoutTimePicker && (
-            <DateTimePicker
-              value={basicInfo.logout_time ? new Date(`2000-01-01T${basicInfo.logout_time}`) : new Date()}
-              mode="time"
-              display="spinner"
-              onChange={(event, selectedDate) => {
-                if (selectedDate) {
-                  handleTimeSelect('logout_time', selectedDate);
-                }
-              }}
-            />
-          )}
-
           <View style={styles.section}>
-            <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: -30 }]}>Leave Allocation</Text>
+            <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: 20 }]}>Leave Allocation</Text>
             <View style={styles.row}>
               <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.label}>Earned Leaves</Text>
@@ -802,17 +790,19 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
                   onChangeText={value => handleBasicInfoChange('earned_leaves', value)}
                   keyboardType="numeric"
                   placeholder="0"
+                  placeholderTextColor="#999"
                 />
               </View>
 
               <View style={[styles.formGroup, { flex: 1, marginHorizontal: 8 }]}>
                 <Text style={styles.label}>Sick Leaves</Text>
                 <TextInput
-                  style={[styles.input, { marginTop: Platform.OS === 'ios' ? 0 : 16 }]}
+                  style={styles.input}
                   value={basicInfo.sick_leaves}
                   onChangeText={value => handleBasicInfoChange('sick_leaves', value)}
                   keyboardType="numeric"
                   placeholder="0"
+                  placeholderTextColor="#999"
                 />
               </View>
 
@@ -824,6 +814,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
                   onChangeText={value => handleBasicInfoChange('casual_leaves', value)}
                   keyboardType="numeric"
                   placeholder="0"
+                  placeholderTextColor="#999"
                 />
               </View>
             </View>
@@ -1117,47 +1108,47 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   );
 
   const renderStep4 = () => (
-  <ScrollView showsVerticalScrollIndicator={false}>
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
-        Assign Reporting Tag *
-      </Text>
-      <Text style={styles.sectionSubtitle}>
-        Select one tag this employee should report to
-      </Text>
+    <ScrollView showsVerticalScrollIndicator={false}>
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
+          Assign Reporting Tag *
+        </Text>
+        <Text style={styles.sectionSubtitle}>
+          Select one tag this employee should report to
+        </Text>
 
-      {tags.length === 0 ? (
-        <Text style={styles.noDataText}>No tags available</Text>
-      ) : (
-        <View style={styles.tagsContainer}>
-          {tags.map(tag => (
-            <TouchableOpacity
-              key={tag.tag_id}
-              style={[
-                styles.tagItem,
-                selectedReportingTag === tag.tag_id && styles.tagItemSelected,
-              ]}
-              onPress={() => selectReportingTag(tag.tag_id)}
-            >
-              <Text style={[
-                styles.tagText,
-                selectedReportingTag === tag.tag_id && styles.tagTextSelected,
-              ]}>
-                {tag.tag_name}
-              </Text>
-              {tag.tag_type && (
-                <Text style={styles.tagType}>{tag.tag_type}</Text>
-              )}
-              {selectedReportingTag === tag.tag_id && (
-                <Ionicons name="checkmark" size={16} color="#fff" style={styles.tagCheck} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
-  </ScrollView>
-);
+        {tags.length === 0 ? (
+          <Text style={styles.noDataText}>No tags available</Text>
+        ) : (
+          <View style={styles.tagsContainer}>
+            {tags.map(tag => (
+              <TouchableOpacity
+                key={tag.tag_id}
+                style={[
+                  styles.tagItem,
+                  selectedReportingTag === tag.tag_id && styles.tagItemSelected,
+                ]}
+                onPress={() => selectReportingTag(tag.tag_id)}
+              >
+                <Text style={[
+                  styles.tagText,
+                  selectedReportingTag === tag.tag_id && styles.tagTextSelected,
+                ]}>
+                  {tag.tag_name}
+                </Text>
+                {tag.tag_type && (
+                  <Text style={styles.tagType}>{tag.tag_type}</Text>
+                )}
+                {selectedReportingTag === tag.tag_id && (
+                  <Ionicons name="checkmark" size={16} color="#fff" style={styles.tagCheck} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  );
 
   const renderStep5 = () => (
     <ScrollView showsVerticalScrollIndicator={false}>
