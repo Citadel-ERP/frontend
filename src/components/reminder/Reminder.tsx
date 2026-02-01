@@ -12,14 +12,15 @@ import { BACKEND_URL } from '../../config/config';
 
 import { WHATSAPP_COLORS, TOKEN_KEY } from './constants';
 import { ReminderProps, ReminderItem, Employee, ViewMode } from './types';
-import { 
-  getColorValue, formatDateToYYYYMMDD, isDateBeforeToday, 
-  getColorName, convertTo24Hour, convertTo12Hour, formatDate, formatTime 
+import {
+  getColorValue, formatDateToYYYYMMDD, isDateBeforeToday,
+  getColorName, convertTo24Hour, convertTo12Hour, formatDate, formatTime
 } from './utils';
 import BackIcon from './BackIcon';
 import Calendar from './calendar';
 import NewReminder from './newReminder';
 import ReminderInfo from './reminderInfo';
+import DayView from './dayView';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -45,7 +46,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
-  
+
   const [newReminderData, setNewReminderData] = useState<any>({
     title: '',
     description: '',
@@ -80,7 +81,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
   const fetchReminders = async () => {
     if (!token) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/core/getReminders`, {
@@ -92,7 +93,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       });
 
       const result = await response.json();
-      
+
       if (response.ok && result.data) {
         setReminders(result.data);
       } else {
@@ -129,7 +130,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       const result = await response.json();
 
       if (response.ok && result.data) {
-        setReminders(reminders.map(r => 
+        setReminders(reminders.map(r =>
           r.id === reminderId ? { ...r, is_completed: !currentStatus } : r
         ));
         if (selectedReminder && selectedReminder.id === reminderId) {
@@ -272,9 +273,9 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
 
   const openEditMode = () => {
     if (!selectedReminder) return;
-    
+
     const time12 = convertTo12Hour(selectedReminder.reminder_time);
-    
+
     setNewReminderData({
       title: selectedReminder.title,
       description: selectedReminder.description,
@@ -285,7 +286,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
       selectedType: '',
       customType: '',
     });
-    
+
     setIsEditMode(true);
     setShowDetailModal(false);
     setShowCreateModal(true);
@@ -295,12 +296,12 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     dateObj.setHours(0, 0, 0, 0);
-    
+
     if (dateObj < today) {
       Alert.alert('Invalid Date', 'Cannot create reminder for past dates');
       return;
     }
-    
+
     setNewReminderData({
       ...newReminderData,
       date: formatDateToYYYYMMDD(dateObj),
@@ -367,165 +368,165 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
   };
 
   // Day View Component (Timeline) - Updated
-  const DayView = () => {
-    if (!selectedDate) return null;
-    
-    const dayReminders = getRemindersForDate(selectedDate);
-    
-    return (
-      <View style={styles.dayViewContainer}>
-        <View style={styles.dayViewHeader}>
-          <View style={styles.dayViewHeaderRow}>
-            <TouchableOpacity 
-              onPress={handleBackToCalendar}
-              style={styles.backToDayButton}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="chevron-back" size={24} color="#fff" />
-              <Text style={styles.backToDayText}>Back</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#00d285',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 8,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6
-              }}
-              onPress={() => openCreateModalForDate(selectedDate)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add" size={20} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.dayViewDateContainer}>
-            <Text style={styles.dayViewWeekday}>
-              {selectedDate.toLocaleDateString('en-US', { weekday: 'long' })}
-            </Text>
-            <Text style={styles.dayViewDate}>
-              {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-            </Text>
-          </View>
-        </View>
+  // const DayView = () => {
+  //   if (!selectedDate) return null;
 
-        <ScrollView 
-          style={styles.timelineScroll} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.timelineContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#25D366']}
-              tintColor={'#25D366'}
-            />
-          }
-        >
-          {dayReminders.length === 0 ? (
-            <View style={styles.emptyDayState}>
-              <Ionicons name="calendar-outline" size={64} color="#E5E5EA" />
-              <Text style={styles.emptyDayTitle}>No Reminders</Text>
-              <Text style={styles.emptyDaySubtitle}>
-                No reminders scheduled for this date
-              </Text>
-              <TouchableOpacity
-                style={styles.addReminderButtonLarge}
-                onPress={() => openCreateModalForDate(selectedDate)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={24} color="#fff" />
-                <Text style={styles.addReminderButtonTextLarge}>Add Reminder</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.timeline}>
-              {HOURS_24.map(hour => {
-                const remindersByMinute = getRemindersByHourAndMinute(hour, dayReminders);
-                const hasReminders = Object.keys(remindersByMinute).length > 0;
+  //   const dayReminders = getRemindersForDate(selectedDate);
 
-                return (
-                  <View key={hour} style={styles.timeSlot}>
-                    <Text style={styles.timeLabel}>{formatHourLabel(hour)}</Text>
-                    <View style={styles.timeSlotLine} />
-                    
-                    {hasReminders && Object.entries(remindersByMinute).map(([minute, reminders]) => {
-                      const topOffset = (parseInt(minute) / 60) * HOUR_HEIGHT;
-                      const reminderCount = reminders.length;
-                      
-                      const getWidthPercentage = () => {
-                        if (reminderCount === 1) return '100%';
-                        if (reminderCount === 2) return '49%';
-                        if (reminderCount === 3) return '32%';
-                        return '24%';
-                      };
+  //   return (
+  //     <View style={styles.dayViewContainer}>
+  //       <View style={styles.dayViewHeader}>
+  //         <View style={styles.dayViewHeaderRow}>
+  //           <TouchableOpacity
+  //             onPress={handleBackToCalendar}
+  //             style={styles.backToDayButton}
+  //             activeOpacity={0.7}
+  //           >
+  //             <Ionicons name="chevron-back" size={24} color="#fff" />
+  //             <Text style={styles.backToDayText}>Back</Text>
+  //           </TouchableOpacity>
 
-                      return (
-                        <View 
-                          key={`${hour}-${minute}`}
-                          style={[styles.reminderRow, { top: topOffset }]}
-                        >
-                          {reminders.slice(0, 4).map((reminder, index) => (
-                            <TouchableOpacity
-                              key={reminder.id}
-                              style={[
-                                styles.reminderBlock,
-                                {
-                                  backgroundColor: getColorValue(reminder.color) + '20',
-                                  borderLeftColor: getColorValue(reminder.color),
-                                  width: getWidthPercentage(),
-                                  marginRight: index < Math.min(reminderCount, 4) - 1 ? 4 : 0,
-                                }
-                              ]}
-                              onPress={() => openDetailModal(reminder)}
-                              activeOpacity={0.8}
-                            >
-                              <View style={styles.reminderBlockContent}>
-                                <View style={styles.reminderBlockHeader}>
-                                  <Text 
-                                    style={[
-                                      styles.reminderBlockTitle, 
-                                      { color: getColorValue(reminder.color) }
-                                    ]}
-                                    numberOfLines={reminderCount > 2 ? 1 : 2}
-                                  >
-                                    {reminder.title}
-                                  </Text>
-                                  {reminder.is_completed && (
-                                    <Ionicons name="checkmark-circle" size={14} color="#25D366" />
-                                  )}
-                                </View>
-                                {reminderCount <= 2 && (
-                                  <Text style={styles.reminderBlockTime}>
-                                    {formatTime(reminder.reminder_time)}
-                                  </Text>
-                                )}
-                              </View>
-                            </TouchableOpacity>
-                          ))}
-                          {reminders.length > 4 && (
-                            <View style={styles.moreIndicator}>
-                              <Text style={styles.moreIndicatorText}>
-                                +{reminders.length - 4}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </ScrollView>
-      </View>
-    );
-  };
+  //           <TouchableOpacity
+  //             style={{
+  //               backgroundColor: '#00d285',
+  //               paddingHorizontal: 16,
+  //               paddingVertical: 8,
+  //               borderRadius: 8,
+  //               flexDirection: 'row',
+  //               alignItems: 'center',
+  //               gap: 6
+  //             }}
+  //             onPress={() => openCreateModalForDate(selectedDate)}
+  //             activeOpacity={0.8}
+  //           >
+  //             <Ionicons name="add" size={20} color="#FFFFFF" />
+  //             <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
+  //           </TouchableOpacity>
+  //         </View>
+
+  //         <View style={styles.dayViewDateContainer}>
+  //           <Text style={styles.dayViewWeekday}>
+  //             {selectedDate.toLocaleDateString('en-US', { weekday: 'long' })}
+  //           </Text>
+  //           <Text style={styles.dayViewDate}>
+  //             {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+  //           </Text>
+  //         </View>
+  //       </View>
+
+  //       <ScrollView
+  //         style={styles.timelineScroll}
+  //         showsVerticalScrollIndicator={false}
+  //         contentContainerStyle={styles.timelineContent}
+  //         refreshControl={
+  //           <RefreshControl
+  //             refreshing={refreshing}
+  //             onRefresh={onRefresh}
+  //             colors={['#25D366']}
+  //             tintColor={'#25D366'}
+  //           />
+  //         }
+  //       >
+  //         {dayReminders.length === 0 ? (
+  //           <View style={styles.emptyDayState}>
+  //             <Ionicons name="calendar-outline" size={64} color="#E5E5EA" />
+  //             <Text style={styles.emptyDayTitle}>No Reminders</Text>
+  //             <Text style={styles.emptyDaySubtitle}>
+  //               No reminders scheduled for this date
+  //             </Text>
+  //             <TouchableOpacity
+  //               style={styles.addReminderButtonLarge}
+  //               onPress={() => openCreateModalForDate(selectedDate)}
+  //               activeOpacity={0.8}
+  //             >
+  //               <Ionicons name="add" size={24} color="#fff" />
+  //               <Text style={styles.addReminderButtonTextLarge}>Add Reminder</Text>
+  //             </TouchableOpacity>
+  //           </View>
+  //         ) : (
+  //           <View style={styles.timeline}>
+  //             {HOURS_24.map(hour => {
+  //               const remindersByMinute = getRemindersByHourAndMinute(hour, dayReminders);
+  //               const hasReminders = Object.keys(remindersByMinute).length > 0;
+
+  //               return (
+  //                 <View key={hour} style={styles.timeSlot}>
+  //                   <Text style={styles.timeLabel}>{formatHourLabel(hour)}</Text>
+  //                   <View style={styles.timeSlotLine} />
+
+  //                   {hasReminders && Object.entries(remindersByMinute).map(([minute, reminders]) => {
+  //                     const topOffset = (parseInt(minute) / 60) * HOUR_HEIGHT;
+  //                     const reminderCount = reminders.length;
+
+  //                     const getWidthPercentage = () => {
+  //                       if (reminderCount === 1) return '100%';
+  //                       if (reminderCount === 2) return '49%';
+  //                       if (reminderCount === 3) return '32%';
+  //                       return '24%';
+  //                     };
+
+  //                     return (
+  //                       <View
+  //                         key={`${hour}-${minute}`}
+  //                         style={[styles.reminderRow, { top: topOffset }]}
+  //                       >
+  //                         {reminders.slice(0, 4).map((reminder, index) => (
+  //                           <TouchableOpacity
+  //                             key={reminder.id}
+  //                             style={[
+  //                               styles.reminderBlock,
+  //                               {
+  //                                 backgroundColor: getColorValue(reminder.color) + '20',
+  //                                 borderLeftColor: getColorValue(reminder.color),
+  //                                 width: getWidthPercentage(),
+  //                                 marginRight: index < Math.min(reminderCount, 4) - 1 ? 4 : 0,
+  //                               }
+  //                             ]}
+  //                             onPress={() => openDetailModal(reminder)}
+  //                             activeOpacity={0.8}
+  //                           >
+  //                             <View style={styles.reminderBlockContent}>
+  //                               <View style={styles.reminderBlockHeader}>
+  //                                 <Text
+  //                                   style={[
+  //                                     styles.reminderBlockTitle,
+  //                                     { color: getColorValue(reminder.color) }
+  //                                   ]}
+  //                                   numberOfLines={reminderCount > 2 ? 1 : 2}
+  //                                 >
+  //                                   {reminder.title}
+  //                                 </Text>
+  //                                 {reminder.is_completed && (
+  //                                   <Ionicons name="checkmark-circle" size={14} color="#25D366" />
+  //                                 )}
+  //                               </View>
+  //                               {reminderCount <= 2 && (
+  //                                 <Text style={styles.reminderBlockTime}>
+  //                                   {formatTime(reminder.reminder_time)}
+  //                                 </Text>
+  //                               )}
+  //                             </View>
+  //                           </TouchableOpacity>
+  //                         ))}
+  //                         {reminders.length > 4 && (
+  //                           <View style={styles.moreIndicator}>
+  //                             <Text style={styles.moreIndicatorText}>
+  //                               +{reminders.length - 4}
+  //                             </Text>
+  //                           </View>
+  //                         )}
+  //                       </View>
+  //                     );
+  //                   })}
+  //                 </View>
+  //               );
+  //             })}
+  //           </View>
+  //         )}
+  //       </ScrollView>
+  //     </View>
+  //   );
+  // };
 
   return (
     <View style={styles.container}>
@@ -545,27 +546,27 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
               style={styles.headerImage}
               resizeMode="cover"
             />
-            
+
             <View style={styles.headerOverlay} />
-            
-            <View style={[styles.headerContent, { 
-              paddingTop: Platform.OS === 'ios' ? 50 : 40 
+
+            <View style={[styles.headerContent, {
+              paddingTop: Platform.OS === 'ios' ? 50 : 40
             }]}>
               <View style={styles.headerTopRow}>
                 <View style={styles.leftSection}>
-                  <TouchableOpacity 
-                    style={styles.backButton} 
+                  <TouchableOpacity
+                    style={styles.backButton}
                     onPress={onBack}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <BackIcon />
                   </TouchableOpacity>
                 </View>
-                
+
                 <View style={styles.centerSection}>
                   <Text style={styles.logoText}>CITADEL</Text>
                 </View>
-                
+
                 <View style={styles.rightSection}>
                   <TouchableOpacity
                     style={{
@@ -588,7 +589,7 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 </View>
               </View>
             </View>
-            
+
             <View style={styles.titleSection}>
               <Text style={styles.sectionTitle}>Reminders</Text>
               <Text style={styles.sectionSubtitle}>
@@ -634,7 +635,16 @@ const Reminder: React.FC<ReminderProps> = ({ onBack }) => {
                 />
               </ScrollView>
             ) : (
-              <DayView />
+              <DayView
+                selectedDate={selectedDate}
+                reminders={reminders}
+                onOpenDetailModal={openDetailModal}
+                onCreateReminder={() => openCreateModalForDate(selectedDate)}
+                getRemindersForDate={getRemindersForDate}
+                onBackToCalendar={handleBackToCalendar}
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+              />
             )}
           </>
         )}
@@ -737,13 +747,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actionButton: {
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  borderRadius: 8,
-  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  minHeight: 32,
-  justifyContent: 'center',
-},
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
   titleSection: {
     paddingHorizontal: 20,
     paddingBottom: 10,
@@ -782,7 +792,7 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 16,
   },
-  
+
   // Day View Styles - Updated
   dayViewContainer: {
     flex: 1,

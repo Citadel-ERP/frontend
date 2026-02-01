@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { IOS_COLORS } from './constants';
 import { ReminderItem } from './types';
 import { formatTime, getColorValue } from './utils';
 
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
 const SLOT_HEIGHT = 60; // Height of each hour slot in pixels
+const TIME_LABEL_WIDTH = 78; // Width reserved for time labels (70px label + 8px padding)
 
 interface DayViewProps {
   selectedDate: Date;
@@ -14,6 +14,9 @@ interface DayViewProps {
   onOpenDetailModal: (reminder: ReminderItem) => void;
   onCreateReminder: () => void;
   getRemindersForDate: (date: Date) => ReminderItem[];
+  onBackToCalendar: () => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 interface PositionedReminder extends ReminderItem {
@@ -29,6 +32,9 @@ const DayView: React.FC<DayViewProps> = ({
   onOpenDetailModal,
   onCreateReminder,
   getRemindersForDate,
+  onBackToCalendar,
+  refreshing = false,
+  onRefresh,
 }) => {
   const dayReminders = getRemindersForDate(selectedDate);
 
@@ -59,6 +65,7 @@ const DayView: React.FC<DayViewProps> = ({
       const startMinutes = timeToMinutes(reminder.reminder_time);
       // Default to 1 hour duration
       const endMinutes = startMinutes + 60;
+      
       return {
         ...reminder,
         startMinutes,
@@ -94,7 +101,7 @@ const DayView: React.FC<DayViewProps> = ({
       const overlapping = remindersWithTimes.filter(other => 
         other.id !== reminder.id && remindersOverlap(reminder, other)
       );
-
+      
       // Include this reminder's column too
       const allColumns = [reminder.column, ...overlapping.map(r => r.column)];
       reminder.totalColumns = Math.max(...allColumns) + 1;
@@ -106,103 +113,139 @@ const DayView: React.FC<DayViewProps> = ({
   // Get all positioned reminders once
   const allPositionedReminders = calculateAllReminderPositions();
 
-  // Filter reminders by hour for rendering
+  
   const getRemindersForHour = (hour: number): PositionedReminder[] => {
     const hourStart = hour * 60;
     const hourEnd = (hour + 1) * 60;
     
     return allPositionedReminders.filter(reminder => {
-      // Include reminder if it starts in this hour or overlaps with this hour
-      return (
-        (reminder.startMinutes >= hourStart && reminder.startMinutes < hourEnd) ||
-        (reminder.startMinutes < hourStart && reminder.endMinutes > hourStart)
-      );
+      // ONLY include if reminder STARTS in this hour
+      // This ensures each reminder is rendered exactly once
+      return reminder.startMinutes >= hourStart && reminder.startMinutes < hourEnd;
     });
   };
 
   return (
     <View style={styles.dayViewContainer}>
       <View style={styles.dayViewHeader}>
-        <View>
-          <Text style={styles.dayViewDate}>
-            {selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()}
+        <View style={styles.dayViewHeaderRow}>
+          <TouchableOpacity 
+            onPress={onBackToCalendar}
+            style={styles.backButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={onCreateReminder}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.dayViewDateContainer}>
+          <Text style={styles.dayViewWeekday}>
+            {selectedDate.toLocaleDateString('en-US', { weekday: 'long' })}
           </Text>
-          <Text style={styles.dayViewDay}>
+          <Text style={styles.dayViewDate}>
             {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={onCreateReminder}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView 
         style={styles.timelineScroll} 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.timelineContent}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#25D366']}
+              tintColor={'#25D366'}
+            />
+          ) : undefined
+        }
       >
         <View style={styles.timeline}>
           {HOURS_24.map(hour => {
             const hourReminders = getRemindersForHour(hour);
             const hourStart = hour * 60;
-
+            console.log(`Rendering hour ${hour} with ${hourReminders.length} reminders`, hourReminders);
             return (
               <View key={hour} style={styles.timeSlot}>
                 <Text style={styles.timeLabel}>{formatHourLabel(hour)}</Text>
                 <View style={styles.timeSlotLine} />
                 
                 {hourReminders.map((reminder) => {
-                  // Calculate position within this hour slot
+                  
                   const reminderStartInHour = Math.max(0, reminder.startMinutes - hourStart);
                   const reminderEndInHour = Math.min(60, reminder.endMinutes - hourStart);
                   
                   const topOffset = (reminderStartInHour / 60) * SLOT_HEIGHT;
-                  const height = Math.max(40, ((reminderEndInHour - reminderStartInHour) / 60) * SLOT_HEIGHT);
+                  const height = Math.max(60, ((reminderEndInHour - reminderStartInHour) / 60) * SLOT_HEIGHT);
                   
-                  // Calculate width as percentage of available space
-                  const widthPercentage = (1 / reminder.totalColumns) * 100;
-                  // Calculate left position as percentage
-                  const leftPercentage = (reminder.column / reminder.totalColumns) * 100;
-
+                  // Calculate width and position for each column
+                  const columnWidthPercent = 100 / reminder.totalColumns;
+                  const columnLeftPercent = (reminder.column / reminder.totalColumns) * 100;
+                  
                   return (
-                    <TouchableOpacity
+                    <View
                       key={reminder.id}
                       style={[
-                        styles.reminderBlock,
+                        styles.reminderWrapper,
                         {
-                          backgroundColor: getColorValue(reminder.color) + '20',
-                          borderLeftColor: getColorValue(reminder.color),
                           top: topOffset,
                           height: height,
-                          left: `${leftPercentage}%`,
-                          width: `${widthPercentage - 0.5}%`, // Small gap
                         }
                       ]}
-                      onPress={() => onOpenDetailModal(reminder)}
-                      activeOpacity={0.8}
                     >
-                      <Text 
-                        style={[
-                          styles.reminderBlockTitle, 
-                          { color: getColorValue(reminder.color) }
-                        ]}
-                        numberOfLines={2}
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: `${columnLeftPercent}%`,
+                          width: `${columnWidthPercent}%`,
+                          height: '100%',
+                          paddingRight: 4,
+                        }}
                       >
-                        {reminder.title}
-                      </Text>
-                      <Text style={styles.reminderBlockTime}>
-                        {formatTime(reminder.reminder_time)}
-                      </Text>
-                      {reminder.is_completed && (
-                        <View style={styles.completedIndicator}>
-                          <Ionicons name="checkmark-circle" size={14} color={IOS_COLORS.success} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.reminderBlock,
+                            {
+                              backgroundColor: getColorValue(reminder.color) + '20',
+                              borderLeftColor: getColorValue(reminder.color),
+                            }
+                          ]}
+                          onPress={() => onOpenDetailModal(reminder)}
+                          activeOpacity={0.8}
+                        >
+                          <Text 
+                            style={[
+                              styles.reminderBlockTitle, 
+                              { color: getColorValue(reminder.color) }
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {reminder.title}
+                          </Text>
+                          <Text style={styles.reminderBlockTime}>
+                            {formatTime(reminder.reminder_time)}
+                          </Text>
+                          {reminder.is_completed && (
+                            <View style={styles.completedIndicator}>
+                              <Ionicons name="checkmark-circle" size={14} color="#25D366" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   );
                 })}
               </View>
@@ -218,53 +261,62 @@ const styles = StyleSheet.create({
   dayViewContainer: {
     flex: 1,
     backgroundColor: '#fff',
-    marginTop: 8,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   dayViewHeader: {
+    backgroundColor: '#075E54',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingBottom: 16,
+  },
+  dayViewHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#C6C6C8',
-    backgroundColor: '#fff',
+    marginBottom: 16,
   },
-  dayViewDate: {
-    fontSize: 13,
-    color: '#8E8E93',
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  dayViewDay: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-    marginTop: 2,
+  backText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
   },
   addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#00d285',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    gap: 6,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  dayViewDateContainer: {
+    marginBottom: 8,
+  },
+  dayViewWeekday: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dayViewDate: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 4,
   },
   timelineScroll: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   timelineContent: {
     paddingBottom: 100,
@@ -273,42 +325,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   timeSlot: {
-    height: 60,
+    height: SLOT_HEIGHT,
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5EA',
     position: 'relative',
   },
   timeLabel: {
-    width: 60,
-    fontSize: 11,
+    width: 70,
+    fontSize: 12,
     color: '#8E8E93',
     paddingTop: 4,
-    paddingRight: 8,
+    paddingRight: 12,
     textAlign: 'right',
     fontWeight: '500',
   },
   timeSlotLine: {
     flex: 1,
   },
-  reminderBlock: {
+  reminderWrapper: {
     position: 'absolute',
-    left: 70, // Will be overridden by percentage
+    left: TIME_LABEL_WIDTH,
     right: 8,
-    borderLeftWidth: 3,
-    borderRadius: 6,
+  },
+  reminderBlock: {
+    flex: 1,
+    borderLeftWidth: 4,
+    borderRadius: 8,
     padding: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
     justifyContent: 'space-between',
   },
   reminderBlockTitle: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 3,
+    marginBottom: 4,
     lineHeight: 16,
   },
   reminderBlockTime: {

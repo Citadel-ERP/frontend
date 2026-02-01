@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     StyleSheet,
     StatusBar,
-    Alert,
     BackHandler,
     Dimensions,
     TouchableOpacity,
@@ -94,15 +93,6 @@ interface Assignment {
     comments: any[];
 }
 
-interface Pagination {
-    current_page: number;
-    total_pages: number;
-    total_items: number;
-    page_size: number;
-    has_next: boolean;
-    has_previous: boolean;
-}
-
 type ViewMode = 'list' | 'create' | 'edit' | 'details' | 'create-assignment' | 'assignment-details';
 type TabMode = 'sites' | 'assignments';
 
@@ -118,25 +108,12 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [activeTab, setActiveTab] = useState<TabMode>('sites');
 
-    // Sites State
+    // Sites State - Keep only for CreateAssignment component
     const [sites, setSites] = useState<Site[]>([]);
     const [selectedSite, setSelectedSite] = useState<Site | null>(null);
-    const [sitesPagination, setSitesPagination] = useState<Pagination | null>(null);
-    const [loadingSites, setLoadingSites] = useState(false);
-    const [refreshingSites, setRefreshingSites] = useState(false);
-    const [loadingMoreSites, setLoadingMoreSites] = useState(false);
-    const [sitesSearchQuery, setSitesSearchQuery] = useState('');
-    const [sitesFilter, setSitesFilter] = useState<any>({});
 
-    // Assignments State
-    const [assignments, setAssignments] = useState<Assignment[]>([]);
+    // Assignment State - Only for details view
     const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-    const [assignmentsPagination, setAssignmentsPagination] = useState<Pagination | null>(null);
-    const [loadingAssignments, setLoadingAssignments] = useState(false);
-    const [refreshingAssignments, setRefreshingAssignments] = useState(false);
-    const [loadingMoreAssignments, setLoadingMoreAssignments] = useState(false);
-    const [assignmentsSearchQuery, setAssignmentsSearchQuery] = useState('');
-    const [assignmentsFilter, setAssignmentsFilter] = useState<any>({});
     
     // SiteDetails first load tracking
     const [firstLoadSiteDetails, setFirstLoadSiteDetails] = useState(true);
@@ -154,70 +131,20 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         getToken();
     }, []);
 
-    // API Functions for Sites
-    const fetchSites = useCallback(async (page: number = 1, append: boolean = false) => {
+    // Fetch sites for CreateAssignment when needed
+    const fetchSitesForAssignment = useCallback(async () => {
         if (!token) return;
 
         try {
-            if (append) {
-                setLoadingMoreSites(true);
-            } else {
-                setLoadingSites(true);
-            }
-
-            const response = await fetch(`${BACKEND_URL}/manager/getSites`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    page,
-                    page_size: 20,
-                    filters: sitesFilter
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('Fetched sites data:', data);
-            if (data.message !== "Sites fetched successfully") {
-                throw new Error(data.message || 'Failed to fetch sites');
-            }
-
-            if (append) {
-                setSites(prev => [...prev, ...data.sites]);
-            } else {
-                setSites(data.sites);
-            }
-            setSitesPagination(data.pagination);
-        } catch (error) {
-            console.error('Error fetching sites:', error);
-            Alert.alert('Error', 'Failed to fetch sites. Please try again.');
-        } finally {
-            setLoadingSites(false);
-            setLoadingMoreSites(false);
-            setRefreshingSites(false);
-        }
-    }, [token, sitesFilter]);
-
-    const searchSites = useCallback(async (query: string) => {
-        if (!token) return;
-
-        try {
-            setLoadingSites(true);
-            setSitesSearchQuery(query);
-
             const response = await fetch(`${BACKEND_URL}/manager/searchAndFilterSites`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     token,
-                    query,
+                    query: '',
                     page: 1,
-                    page_size: 20,
-                    filters: sitesFilter
+                    page_size: 100,
+                    filters: {}
                 })
             });
 
@@ -226,259 +153,18 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
             }
 
             const data = await response.json();
-
-            if (data.message !== "Sites search successful") {
-                throw new Error(data.message || 'Failed to search sites');
+            if (data.message === "Sites search successful") {
+                setSites(data.sites);
             }
-
-            setSites(data.sites);
-            setSitesPagination(data.pagination);
         } catch (error) {
-            console.error('Error searching sites:', error);
-            Alert.alert('Error', 'Failed to search sites. Please try again.');
-        } finally {
-            setLoadingSites(false);
-        }
-    }, [token, sitesFilter]);
-
-    const deleteSite = useCallback(async (siteId: number) => {
-        if (!token) return;
-
-        try {
-            Alert.alert(
-                'Delete Site',
-                'Are you sure you want to delete this site?',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                            const response = await fetch(`${BACKEND_URL}/manager/deleteSite`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    token,
-                                    site_ids: [siteId]
-                                })
-                            });
-
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-
-                            const data = await response.json();
-
-                            if (data.message !== "Site deleted successfully") {
-                                throw new Error(data.message || 'Failed to delete site');
-                            }
-
-                            Alert.alert('Success', 'Site deleted successfully');
-                            fetchSites(1);
-                        }
-                    }
-                ]
-            );
-        } catch (error) {
-            console.error('Error deleting site:', error);
-            Alert.alert('Error', 'Failed to delete site. Please try again.');
-        }
-    }, [token, fetchSites]);
-
-    const bulkDeleteSites = useCallback(async (siteIds: number[]) => {
-        if (!token) return;
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/manager/deleteSite`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    site_ids: siteIds
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (data.message !== "Site deleted successfully") {
-                throw new Error(data.message || 'Failed to delete sites');
-            }
-
-            fetchSites(1);
-        } catch (error) {
-            console.error('Error deleting sites:', error);
-            throw error;
-        }
-    }, [token, fetchSites]);
-
-    // API Functions for Assignments
-    const fetchAssignments = useCallback(async (page: number = 1, append: boolean = false) => {
-        if (!token) return;
-
-        try {
-            if (append) {
-                setLoadingMoreAssignments(true);
-            } else {
-                setLoadingAssignments(true);
-            }
-
-            const response = await fetch(`${BACKEND_URL}/manager/getFutureVisits`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    page,
-                    page_size: 20,
-                    filters: assignmentsFilter
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (data.message !== "Future site visits fetched successfully") {
-                throw new Error(data.message || 'Failed to fetch assignments');
-            }
-
-            if (append) {
-                setAssignments(prev => [...prev, ...data.visits]);
-            } else {
-                setAssignments(data.visits);
-            }
-            setAssignmentsPagination(data.pagination);
-        } catch (error) {
-            console.error('Error fetching assignments:', error);
-            Alert.alert('Error', 'Failed to fetch assignments. Please try again.');
-        } finally {
-            setLoadingAssignments(false);
-            setLoadingMoreAssignments(false);
-            setRefreshingAssignments(false);
-        }
-    }, [token, assignmentsFilter]);
-
-    const searchAssignments = useCallback(async (query: string) => {
-        if (!token) return;
-
-        try {
-            setLoadingAssignments(true);
-            setAssignmentsSearchQuery(query);
-
-            const response = await fetch(`${BACKEND_URL}/manager/searchAndFilterSiteVisits`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    query,
-                    page: 1,
-                    page_size: 20,
-                    filters: assignmentsFilter
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (data.message !== "Site visits search successful") {
-                throw new Error(data.message || 'Failed to search assignments');
-            }
-
-            setAssignments(data.visits);
-            setAssignmentsPagination(data.pagination);
-        } catch (error) {
-            console.error('Error searching assignments:', error);
-            Alert.alert('Error', 'Failed to search assignments. Please try again.');
-        } finally {
-            setLoadingAssignments(false);
-        }
-    }, [token, assignmentsFilter]);
-
-    // UPDATED: Update assignment instead of delete
-    const updateAssignmentStatus = useCallback(async (visitId: number, newStatus: 'admin_completed' | 'cancelled') => {
-        if (!token) return;
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/manager/updateSiteVisit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    visit_id: visitId,
-                    status: newStatus
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (data.message !== "Site visit updated successfully") {
-                throw new Error(data.message || 'Failed to update assignment');
-            }
-
-            return data;
-        } catch (error) {
-            console.error('Error updating assignment:', error);
-            throw error;
-        }
-    }, [token]);
-
-    // NEW: Bulk update assignments
-    const bulkUpdateAssignments = useCallback(async (visitIds: number[], newStatus: 'admin_completed' | 'cancelled') => {
-        if (!token) return;
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/manager/bulkUpdateSiteVisits`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token,
-                    visit_ids: visitIds,
-                    status: newStatus
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (!data.message.includes('Successfully updated')) {
-                throw new Error(data.message || 'Failed to update assignments');
-            }
-
-            fetchAssignments(1);
-            return data;
-        } catch (error) {
-            console.error('Error bulk updating assignments:', error);
-            throw error;
-        }
-    }, [token, fetchAssignments]);
-
-    // Initial Data Fetch
-    useEffect(() => {
-        if (token) {
-            fetchSites(1);
-            fetchAssignments(1);
+            console.error('Error fetching sites for assignment:', error);
         }
     }, [token]);
 
     // Event Handlers
     const handleSitePress = useCallback((site: Site) => {
         setSelectedSite(site);
-        setFirstLoadSiteDetails(true); // Reset firstLoad when opening site details
+        setFirstLoadSiteDetails(true);
         setViewMode('details');
     }, []);
 
@@ -491,9 +177,12 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         setViewMode('create');
     }, []);
 
-    const handleCreateAssignment = useCallback(() => {
+    const handleCreateAssignment = useCallback(async () => {
+        if (sites.length === 0) {
+            await fetchSitesForAssignment();
+        }
         setViewMode('create-assignment');
-    }, []);
+    }, [sites, fetchSitesForAssignment]);
 
     const handleEditSite = useCallback((site: Site) => {
         setSelectedSite(site);
@@ -505,7 +194,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
             setViewMode('list');
             setSelectedSite(null);
             setSelectedAssignment(null);
-            setFirstLoadSiteDetails(true); // Reset when going back
+            setFirstLoadSiteDetails(true);
         } else {
             onBack();
         }
@@ -513,51 +202,18 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
 
     const handleSiteCreated = useCallback(() => {
         setViewMode('list');
-        fetchSites(1);
-    }, [fetchSites]);
+    }, []);
 
     const handleSiteUpdated = useCallback(() => {
         setViewMode('list');
         setSelectedSite(null);
-        fetchSites(1);
-    }, [fetchSites]);
+    }, []);
 
     const handleAssignmentCreated = useCallback(() => {
         setViewMode('list');
-        fetchAssignments(1);
-    }, [fetchAssignments]);
+        // ListAssignment will handle its own refresh
+    }, []);
 
-    const handleLoadMoreSites = useCallback(() => {
-        if (sitesPagination && sitesPagination.has_next && !loadingMoreSites) {
-            fetchSites(sitesPagination.current_page + 1, true);
-        }
-    }, [sitesPagination, loadingMoreSites, fetchSites]);
-
-    const handleLoadMoreAssignments = useCallback(() => {
-        if (assignmentsPagination && assignmentsPagination.has_next && !loadingMoreAssignments) {
-            fetchAssignments(assignmentsPagination.current_page + 1, true);
-        }
-    }, [assignmentsPagination, loadingMoreAssignments, fetchAssignments]);
-
-    const handleRefreshSites = useCallback(() => {
-        setRefreshingSites(true);
-        if (sitesSearchQuery) {
-            searchSites(sitesSearchQuery);
-        } else {
-            fetchSites(1);
-        }
-    }, [sitesSearchQuery, searchSites, fetchSites]);
-
-    const handleRefreshAssignments = useCallback(() => {
-        setRefreshingAssignments(true);
-        if (assignmentsSearchQuery) {
-            searchAssignments(assignmentsSearchQuery);
-        } else {
-            fetchAssignments(1);
-        }
-    }, [assignmentsSearchQuery, searchAssignments, fetchAssignments]);
-    
-    // NEW: Handle first load complete callback from SiteDetails
     const handleFirstLoadComplete = useCallback(() => {
         setFirstLoadSiteDetails(false);
     }, []);
@@ -648,7 +304,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                             onBack={handleBackPress}
                             onCreate={viewMode === 'list' ? (activeTab === 'sites' ? handleCreateSite : handleCreateAssignment) : undefined}
                             theme={WHATSAPP_COLORS}
-                            loading={viewMode === 'list' ? (activeTab === 'sites' ? loadingSites : loadingAssignments) : false}
+                            loading={false}
                             showCreateButton={viewMode === 'list'}
                         />
 
@@ -688,40 +344,17 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
                         <View style={styles.listWrapper}>
                             {activeTab === 'sites' ? (
                                 <ListSite
-                                    sites={sites}
-                                    loading={loadingSites}
-                                    loadingMore={loadingMoreSites}
-                                    refreshing={refreshingSites}
-                                    pagination={sitesPagination}
-                                    searchQuery={sitesSearchQuery}
-                                    filter={sitesFilter}
+                                    token={token}
                                     onSitePress={handleSitePress}
                                     onEditSite={handleEditSite}
-                                    onDeleteSite={deleteSite}
-                                    onBulkDeleteSites={bulkDeleteSites}
-                                    onSearch={searchSites}
-                                    onFilter={setSitesFilter}
-                                    onLoadMore={handleLoadMoreSites}
-                                    onRefresh={handleRefreshSites}
+                                    onDeleteSite={(siteId) => console.log('Delete site', siteId)}
                                     onCreateSite={handleCreateSite}
+                                    onRefreshParent={() => {}}
                                     theme={WHATSAPP_COLORS}
                                 />
                             ) : (
                                 <ListAssignment
-                                    assignments={assignments}
-                                    loading={loadingAssignments}
-                                    loadingMore={loadingMoreAssignments}
-                                    refreshing={refreshingAssignments}
-                                    pagination={assignmentsPagination}
-                                    searchQuery={assignmentsSearchQuery}
-                                    filter={assignmentsFilter}
                                     token={token}
-                                    onUpdateAssignmentStatus={updateAssignmentStatus}
-                                    onBulkUpdateAssignments={bulkUpdateAssignments}
-                                    onSearch={searchAssignments}
-                                    onFilter={setAssignmentsFilter}
-                                    onLoadMore={handleLoadMoreAssignments}
-                                    onRefresh={handleRefreshAssignments}
                                     onCreateAssignment={handleCreateAssignment}
                                     theme={WHATSAPP_COLORS}
                                 />
@@ -737,19 +370,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         selectedSite,
         selectedAssignment,
         sites,
-        assignments,
-        loadingSites,
-        loadingMoreSites,
-        refreshingSites,
-        sitesPagination,
-        sitesSearchQuery,
-        sitesFilter,
-        loadingAssignments,
-        loadingMoreAssignments,
-        refreshingAssignments,
-        assignmentsPagination,
-        assignmentsSearchQuery,
-        assignmentsFilter,
         firstLoadSiteDetails,
         handleBackPress,
         handleSiteCreated,
@@ -757,20 +377,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({ onBack }) => {
         handleAssignmentCreated,
         handleSitePress,
         handleEditSite,
-        handleAssignmentPress,
         handleFirstLoadComplete,
-        deleteSite,
-        bulkDeleteSites,
-        updateAssignmentStatus,
-        bulkUpdateAssignments,
-        searchSites,
-        searchAssignments,
-        handleLoadMoreSites,
-        handleLoadMoreAssignments,
-        handleRefreshSites,
-        handleRefreshAssignments,
         handleCreateSite,
-        handleCreateAssignment
+        handleCreateAssignment,
     ]);
 
     return (

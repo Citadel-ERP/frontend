@@ -161,28 +161,50 @@ interface SiteData {
   meta: Record<string, any>;
 }
 
-interface VisitWithComments {
-  visit: {
-    id: number;
-    assigned_to: {
-      first_name: string;
-      last_name: string;
-      employee_id: string;
-    };
-    status: string;
-    created_at: string;
+interface SiteVisit {
+  id: number;
+  assigned_to: {
+    first_name: string;
+    last_name: string;
+    employee_id: string;
   };
-  comments: any[];
-  total_comments_in_visit: number;
-  comments_shown: number;
+  status: string;
+  created_at: string;
+  assign_date: string;
+}
+
+interface Comment {
+  id: number;
+  user: {
+    employee_id: string;
+    full_name: string;
+  };
+  content: string;
+  created_at: string;
+  documents: Array<{
+    id: number;
+    document: string;
+    document_name: string;
+  }>;
 }
 
 interface ChatMessage {
   id: string;
   type: 'comment' | 'dateSeparator';
-  data?: any;
+  data?: Comment;
   date?: string;
   originalDate?: string;
+}
+
+interface PaginationInfo {
+  current_page: number;
+  total_pages: number;
+  total_comments: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+  next_page: number | null;
+  previous_page: number | null;
 }
 
 const SiteDetails: React.FC<SiteDetailsProps> = ({
@@ -196,7 +218,8 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [siteData, setSiteData] = useState<SiteData | null>(null);
-  const [siteVisits, setSiteVisits] = useState<VisitWithComments[]>([]);
+  const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [showFullImage, setShowFullImage] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [apiToken, setApiToken] = useState<string | null>(token);
@@ -211,10 +234,9 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [paginationInfo, setPaginationInfo] = useState<PaginationInfo | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreComments, setHasMoreComments] = useState(true);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
@@ -227,7 +249,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   const shouldAutoScrollRef = useRef(false);
   const [isFirstLoad, setIsFirstLoad] = useState(firstLoad);
 
-  // NEW: Debouncing and threshold refs for pagination
+  // Debouncing and threshold refs for pagination
   const lastScrollY = useRef(0);
   const scrollDirection = useRef<'up' | 'down'>('down');
   const paginationTriggeredAt = useRef(0);
@@ -339,11 +361,12 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       if (data.message === 'Site details fetched successfully') {
         setSiteData(data.site);
         setSiteVisits(data.site_visits || []);
+        setComments(data.comments || []);
 
         // Set pagination info
         if (data.pagination) {
+          setPaginationInfo(data.pagination);
           setCurrentPage(data.pagination.current_page);
-          setTotalPages(data.pagination.total_pages);
           setHasMoreComments(data.pagination.has_next);
         }
 
@@ -402,38 +425,13 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 
       if (data.message === 'Site details fetched successfully') {
         // Prepend the new comments to existing ones
-        setSiteVisits(prevVisits => {
-          const newVisits = data.site_visits || [];
-
-          // Merge comments from new visits with existing visits
-          const mergedVisits = [...prevVisits];
-
-          newVisits.forEach((newVisit: VisitWithComments) => {
-            const existingVisitIndex = mergedVisits.findIndex(
-              v => v.visit.id === newVisit.visit.id
-            );
-
-            if (existingVisitIndex >= 0) {
-              // Prepend new comments to existing visit
-              mergedVisits[existingVisitIndex] = {
-                ...mergedVisits[existingVisitIndex],
-                comments: [...newVisit.comments, ...mergedVisits[existingVisitIndex].comments],
-                total_comments_in_visit: newVisit.total_comments_in_visit,
-                comments_shown: mergedVisits[existingVisitIndex].comments_shown + newVisit.comments.length,
-              };
-            } else {
-              // Add new visit at the end
-              mergedVisits.push(newVisit);
-            }
-          });
-
-          return mergedVisits;
-        });
+        const newComments = data.comments || [];
+        setComments(prevComments => [...newComments, ...prevComments]);
 
         // Update pagination info
         if (data.pagination) {
+          setPaginationInfo(data.pagination);
           setCurrentPage(data.pagination.current_page);
-          setTotalPages(data.pagination.total_pages);
           setHasMoreComments(data.pagination.has_next);
         }
 
@@ -472,7 +470,6 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     // 4. Has more comments to load
     // 5. Not already loading
     const isNearTop = currentY < SCROLL_THRESHOLD;
-    console.log(`Scroll Y: ${currentY}, Direction: ${scrollDirection.current}, Near Top: ${isNearTop}`, { isFirstLoad, hasMoreComments, loadingMore });
 
     const shouldLoadMore =
       scrollDirection.current === 'up' &&
@@ -669,21 +666,17 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       return;
     }
 
-    // Get the latest visit ID from siteVisits
-    if (!siteVisits || siteVisits.length === 0) {
-      Alert.alert('Error', 'No site visits found. Please create a visit first.');
+    if (!site?.id) {
+      Alert.alert('Error', 'Site information not found');
       return;
     }
-
-    const latestVisit = siteVisits[0].visit;
-    const visitId = latestVisit.id;
 
     try {
       setAddingComment(true);
 
       const formData = new FormData();
       formData.append('token', apiToken);
-      formData.append('visit_id', visitId.toString());
+      formData.append('site_id', site.id.toString());
       formData.append('content', newComment.trim());
 
       // Add documents if any
@@ -714,32 +707,21 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 
       if (data.message === 'Comment added successfully') {
         // Add the new comment to the local state for real-time update
-        const newCommentData = {
-          ...data.comment,
-          visit_id: visitId,
-          visit_status: latestVisit.status,
-          assigned_to: latestVisit.assigned_to,
+        const newCommentData: Comment = {
+          id: data.comment.id,
           user: {
-            employee_id: currentUserEmployeeId,
+            employee_id: currentUserEmployeeId || '',
             full_name: currentUserName,
           },
+          content: data.comment.content,
+          created_at: data.comment.created_at,
+          documents: data.comment.documents || [],
         };
 
-        // Update the siteVisits state to include the new comment
-        setSiteVisits(prevVisits => {
-          const updatedVisits = [...prevVisits];
-          if (updatedVisits.length > 0) {
-            updatedVisits[0] = {
-              ...updatedVisits[0],
-              comments: [...updatedVisits[0].comments, newCommentData],
-              total_comments_in_visit: updatedVisits[0].total_comments_in_visit + 1,
-              comments_shown: updatedVisits[0].comments_shown + 1,
-            };
-          }
-          return updatedVisits;
-        });
+        // Append the new comment to the comments array
+        setComments(prevComments => [...prevComments, newCommentData]);
 
-        // Clear input and documents - keep keyboard open
+        // Clear input and documents
         setNewComment('');
         setSelectedDocuments([]);
 
@@ -765,38 +747,25 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   };
 
   const getProcessedComments = useCallback(() => {
-    if (!siteVisits || siteVisits.length === 0) return [];
+    if (!comments || comments.length === 0) return [];
 
     const processed: ChatMessage[] = [];
     let lastDate = '';
 
-    // Flatten all comments from all visits
-    const allComments: any[] = [];
-    siteVisits.forEach(visitData => {
-      visitData.comments.forEach(comment => {
-        allComments.push({
-          ...comment,
-          visit_id: visitData.visit.id,
-          visit_status: visitData.visit.status,
-          assigned_to: visitData.visit.assigned_to
-        });
-      });
-    });
-
-    // Sort by date
-    const sortedComments = allComments.sort((a, b) =>
-      new Date(a.created_at || a.date).getTime() - new Date(b.created_at || b.date).getTime()
+    // Sort comments by date (oldest to newest)
+    const sortedComments = [...comments].sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
     sortedComments.forEach((comment, index) => {
-      const commentDate = formatWhatsAppDate(comment.created_at || comment.date);
+      const commentDate = formatWhatsAppDate(comment.created_at);
 
       if (commentDate !== lastDate) {
         processed.push({
           type: 'dateSeparator',
           id: `date-${commentDate}-${index}`,
           date: commentDate,
-          originalDate: comment.created_at || comment.date
+          originalDate: comment.created_at
         });
         lastDate = commentDate;
       }
@@ -809,11 +778,11 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     });
 
     return processed;
-  }, [siteVisits, formatWhatsAppDate]);
+  }, [comments, formatWhatsAppDate]);
 
   // Auto-scroll effect - only for initial load and new user comments
   useEffect(() => {
-    if (initialLoadDone && shouldAutoScrollRef.current && siteVisits.length > 0) {
+    if (initialLoadDone && shouldAutoScrollRef.current && comments.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
         shouldAutoScrollRef.current = false;
@@ -827,7 +796,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
         }
       }, 150);
     }
-  }, [siteVisits, initialLoadDone, isFirstLoad, onFirstLoadComplete]);
+  }, [comments, initialLoadDone, isFirstLoad, onFirstLoadComplete]);
 
   const renderChatItem = useCallback(({ item }: { item: ChatMessage }) => {
     if (item.type === 'dateSeparator') {
@@ -841,9 +810,10 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     }
 
     const comment = item.data;
-    const time = formatTime(comment.created_at || comment.date);
-    const isCurrentUser = comment.user?.employee_id === currentUserEmployeeId ||
-      comment.assigned_to?.employee_id === currentUserEmployeeId;
+    if (!comment) return null;
+
+    const time = formatTime(comment.created_at);
+    const isCurrentUser = comment.user?.employee_id === currentUserEmployeeId;
 
     return (
       <View style={[
@@ -857,9 +827,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           {!isCurrentUser && (
             <View style={styles.senderHeader}>
               <Text style={styles.senderName}>
-                {comment.user?.full_name ||
-                  `${comment.assigned_to?.first_name} ${comment.assigned_to?.last_name}` ||
-                  'User'}
+                {comment.user?.full_name || 'User'}
               </Text>
             </View>
           )}
@@ -867,6 +835,26 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
             <Text style={styles.messageText}>
               {comment.content}
             </Text>
+          )}
+          {comment.documents && comment.documents.length > 0 && (
+            <View style={styles.documentsContainer}>
+              {comment.documents.map((doc, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.documentAttachment}
+                  onPress={() => {
+                    if (doc.document) {
+                      Linking.openURL(doc.document);
+                    }
+                  }}
+                >
+                  <MaterialIcons name="insert-drive-file" size={20} color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.documentName} numberOfLines={1}>
+                    {truncateFileName(doc.document_name, 25)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
           <View style={styles.messageFooter}>
             <Text style={styles.messageTime}>{time}</Text>
@@ -877,14 +865,14 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
         </View>
       </View>
     );
-  }, [currentUserEmployeeId, formatTime]);
+  }, [currentUserEmployeeId, formatTime, truncateFileName]);
 
   const BackIcon = () => (
-  <View style={styles.backIcon}>
-    <View style={styles.backArrow} />
-    <Text style={styles.backText}>Back</Text>
-  </View>
-);
+    <View style={styles.backIcon}>
+      <View style={styles.backArrow} />
+      <Text style={styles.backText}>Back</Text>
+    </View>
+  );
 
   const DetailsModal = useMemo(() => (
     <SiteDetailedInfo
@@ -972,12 +960,12 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       {DetailsModal}
 
       <View style={styles.chatContainer}>
-        {siteVisits.length === 0 ? (
+        {comments.length === 0 ? (
           <View style={styles.emptyChat}>
             <MaterialIcons name="forum" size={64} color={WHATSAPP_COLORS.border} />
-            <Text style={styles.emptyChatTitle}>No site visits yet</Text>
+            <Text style={styles.emptyChatTitle}>No comments yet</Text>
             <Text style={styles.emptyChatText}>
-              Site visit comments will appear here
+              Site comments will appear here
             </Text>
           </View>
         ) : (
@@ -1465,6 +1453,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: WHATSAPP_COLORS.textPrimary,
     lineHeight: 20,
+  },
+  documentsContainer: {
+    marginTop: 8,
+    gap: 6,
+  },
+  documentAttachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.background,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  documentName: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textPrimary,
+    flex: 1,
   },
   messageFooter: {
     flexDirection: 'row',

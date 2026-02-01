@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -80,22 +80,12 @@ interface Pagination {
 }
 
 interface ListSiteProps {
-  sites: Site[];
-  loading: boolean;
-  loadingMore: boolean;
-  refreshing: boolean;
-  pagination: Pagination | null;
-  searchQuery: string;
-  filter: any;
+  token: string | null;
   onSitePress: (site: Site) => void;
   onEditSite: (site: Site) => void;
   onDeleteSite: (siteId: number) => void;
-  onBulkDeleteSites: (siteIds: number[]) => Promise<void>;
-  onSearch: (query: string) => void;
-  onFilter: (filter: any) => void;
-  onLoadMore: () => void;
-  onRefresh: () => void;
   onCreateSite: () => void;
+  onRefreshParent?: () => void;
   theme: any;
 }
 
@@ -105,26 +95,23 @@ interface FilterOption {
 }
 
 const ListSite: React.FC<ListSiteProps> = ({
-  sites,
-  loading,
-  loadingMore,
-  refreshing,
-  pagination,
-  searchQuery,
-  filter,
+  token,
   onSitePress,
   onEditSite,
   onDeleteSite,
-  onBulkDeleteSites,
-  onSearch,
-  onFilter,
-  onLoadMore,
-  onRefresh,
   onCreateSite,
+  onRefreshParent,
   theme,
 }) => {
   // State Management
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const [searchTags, setSearchTags] = useState<string[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedSites, setSelectedSites] = useState<number[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -133,7 +120,7 @@ const ListSite: React.FC<ListSiteProps> = ({
   const [showStatusFilter, setShowStatusFilter] = useState(false);
   const [showFloorConditionFilter, setShowFloorConditionFilter] = useState(false);
   const [showPropertyTypeFilter, setShowPropertyTypeFilter] = useState(false);
-
+  
   // Local filter state
   const [localFilters, setLocalFilters] = useState({
     building_status: [] as string[],
@@ -164,6 +151,80 @@ const ListSite: React.FC<ListSiteProps> = ({
     { value: 'for_sale', label: 'For Sale' },
   ];
 
+  // API Call: Search and Filter Sites
+  const searchAndFilterSites = useCallback(async (
+    tags: string[] = [],
+    filters: any = {},
+    page: number = 1,
+    append: boolean = false
+  ) => {
+    if (!token) return;
+
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      // Build filters object for API
+      const apiFilters: any = {};
+      
+      if (filters.building_status && filters.building_status.length > 0) {
+        apiFilters.building_status = filters.building_status.join(',');
+      }
+      if (filters.floor_condition && filters.floor_condition.length > 0) {
+        apiFilters.floor_condition = filters.floor_condition.join(',');
+      }
+      if (filters.property_type && filters.property_type.length > 0) {
+        apiFilters.property_type = filters.property_type.join(',');
+      }
+
+      const response = await fetch(`${BACKEND_URL}/manager/searchAndFilterSites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          queries: tags, // Send array of search queries
+          page,
+          page_size: 20,
+          filters: apiFilters
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.message !== "Sites search successful") {
+        throw new Error(data.message || 'Failed to fetch sites');
+      }
+
+      if (append) {
+        setSites(prev => [...prev, ...data.sites]);
+      } else {
+        setSites(data.sites);
+      }
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+      Alert.alert('Error', 'Failed to fetch sites. Please try again.');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  }, [token]);
+
+  // Initial load
+  useEffect(() => {
+    if (token) {
+      searchAndFilterSites([], localFilters, 1, false);
+    }
+  }, [token]);
+
   // Helper Functions
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
@@ -177,11 +238,9 @@ const ListSite: React.FC<ListSiteProps> = ({
     if (!dateString) return '';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '';
-
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
     if (diffDays < 1) {
       return 'Today';
     } else if (diffDays < 7) {
@@ -216,7 +275,6 @@ const ListSite: React.FC<ListSiteProps> = ({
     if (!value) return '';
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) return '';
-
     if (num >= 10000000) {
       return `₹${(num / 10000000).toFixed(2)}Cr`;
     } else if (num >= 100000) {
@@ -227,64 +285,69 @@ const ListSite: React.FC<ListSiteProps> = ({
     return `₹${num.toLocaleString('en-IN')}`;
   }, []);
 
-  // Search & Filter Handlers
-  const handleSearch = useCallback((text: string) => {
-    setLocalSearchQuery(text);
-    onSearch(text);
-  }, [onSearch]);
-
-  const handleFilterChange = useCallback((key: string, values: string[]) => {
-    const newFilter: any = { ...filter };
-    
-    if (values.length === 0) {
-      delete newFilter[key];
-    } else {
-      newFilter[key] = values.join(',');
+  // Search Tag Handlers
+  const addSearchTag = useCallback(() => {
+    const trimmedQuery = localSearchQuery.trim();
+    if (trimmedQuery && !searchTags.includes(trimmedQuery)) {
+      const newTags = [...searchTags, trimmedQuery];
+      setSearchTags(newTags);
+      setLocalSearchQuery('');
+      searchAndFilterSites(newTags, localFilters, 1, false);
     }
-    
+  }, [localSearchQuery, searchTags, localFilters, searchAndFilterSites]);
+
+  const removeSearchTag = useCallback((tagToRemove: string) => {
+    const newTags = searchTags.filter(tag => tag !== tagToRemove);
+    setSearchTags(newTags);
+    searchAndFilterSites(newTags, localFilters, 1, false);
+  }, [searchTags, localFilters, searchAndFilterSites]);
+
+  const clearAllSearchTags = useCallback(() => {
+    setSearchTags([]);
+    setLocalSearchQuery('');
+    searchAndFilterSites([], localFilters, 1, false);
+  }, [localFilters, searchAndFilterSites]);
+
+  // Handle Enter key press to add tag
+  const handleSearchKeyPress = useCallback((e: any) => {
+    if (e.nativeEvent.key === 'Enter') {
+      addSearchTag();
+    }
+  }, [addSearchTag]);
+
+  // Filter Handlers
+  const handleFilterChange = useCallback((key: string, values: string[]) => {
     setLocalFilters(prev => ({
       ...prev,
       [key]: values
     }));
-  }, [filter]);
+  }, []);
 
   const applyFilters = useCallback(() => {
-    const newFilter: any = {};
-
-    if (localFilters.building_status.length > 0) {
-      newFilter.building_status = localFilters.building_status.join(',');
-    }
-
-    if (localFilters.floor_condition.length > 0) {
-      newFilter.floor_condition = localFilters.floor_condition.join(',');
-    }
-
-    if (localFilters.property_type.length > 0) {
-      newFilter.property_type = localFilters.property_type.join(',');
-    }
-
-    onFilter(newFilter);
+    searchAndFilterSites(searchTags, localFilters, 1, false);
     setShowFilterModal(false);
-  }, [localFilters, onFilter]);
+  }, [localFilters, searchTags, searchAndFilterSites]);
 
   const clearFilters = useCallback(() => {
-    setLocalFilters({
+    const emptyFilters = {
       building_status: [],
       floor_condition: [],
       property_type: [],
-    });
-    onFilter({});
+    };
+    setLocalFilters(emptyFilters);
+    searchAndFilterSites(searchTags, emptyFilters, 1, false);
     setShowFilterModal(false);
-  }, [onFilter]);
+  }, [searchTags, searchAndFilterSites]);
 
-  // Initialize local filters from props
-  React.useEffect(() => {
-    setLocalFilters({
-      building_status: filter.building_status ? filter.building_status.split(',') : [],
-      floor_condition: filter.floor_condition ? filter.floor_condition.split(',') : [],
-      property_type: filter.property_type ? filter.property_type.split(',') : [],
-    });
-  }, [filter]);
+  // Remove individual filter
+  const removeFilter = useCallback((filterKey: string, value: string) => {
+    const newFilters = {
+      ...localFilters,
+      [filterKey]: localFilters[filterKey].filter((v: string) => v !== value)
+    };
+    setLocalFilters(newFilters);
+    searchAndFilterSites(searchTags, newFilters, 1, false);
+  }, [localFilters, searchTags, searchAndFilterSites]);
 
   // Selection Handlers
   const handleLongPress = useCallback((siteId: number) => {
@@ -294,7 +357,6 @@ const ListSite: React.FC<ListSiteProps> = ({
 
   const handleSiteSelection = useCallback((siteId: number) => {
     if (!selectionMode) return;
-
     setSelectedSites(prev => {
       if (prev.includes(siteId)) {
         const newSelection = prev.filter(id => id !== siteId);
@@ -316,7 +378,6 @@ const ListSite: React.FC<ListSiteProps> = ({
   // Bulk Delete Handler
   const handleBulkDelete = useCallback(async () => {
     setShowActionsModal(false);
-
     Alert.alert(
       'Delete Sites',
       `Are you sure you want to delete ${selectedSites.length} site(s)? This action cannot be undone.`,
@@ -328,9 +389,31 @@ const ListSite: React.FC<ListSiteProps> = ({
           onPress: async () => {
             setDeletingMultiple(true);
             try {
-              await onBulkDeleteSites(selectedSites);
+              if (!token) return;
+              
+              const response = await fetch(`${BACKEND_URL}/manager/deleteSite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  token,
+                  site_ids: selectedSites
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+
+              const data = await response.json();
+
+              if (data.message !== "Site deleted successfully") {
+                throw new Error(data.message || 'Failed to delete sites');
+              }
+
               Alert.alert('Success', `${selectedSites.length} site(s) deleted successfully`);
               cancelSelection();
+              searchAndFilterSites(searchTags, localFilters, 1, false);
+              onRefreshParent?.();
             } catch (error) {
               console.error('Error deleting sites:', error);
               Alert.alert('Error', 'Failed to delete sites. Please try again.');
@@ -341,7 +424,20 @@ const ListSite: React.FC<ListSiteProps> = ({
         }
       ]
     );
-  }, [selectedSites, onBulkDeleteSites, cancelSelection]);
+  }, [selectedSites, token, cancelSelection, searchAndFilterSites, searchTags, localFilters, onRefreshParent]);
+
+  // Load More Handler
+  const handleLoadMore = useCallback(() => {
+    if (pagination && pagination.has_next && !loadingMore) {
+      searchAndFilterSites(searchTags, localFilters, pagination.current_page + 1, true);
+    }
+  }, [pagination, loadingMore, searchAndFilterSites, searchTags, localFilters]);
+
+  // Refresh Handler
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    searchAndFilterSites(searchTags, localFilters, 1, false);
+  }, [searchAndFilterSites, searchTags, localFilters]);
 
   // Render Site Item
   const renderSiteItem = useCallback((item: Site, index: number) => {
@@ -349,7 +445,6 @@ const ListSite: React.FC<ListSiteProps> = ({
     const statusColor = getStatusColor(item.building_status);
     const propertyType = getPropertyType(item);
     const isSelected = selectedSites.includes(item.id);
-
     const pricingText = item.managed_property && item.rent_per_seat
       ? `${formatCurrency(item.rent_per_seat)}/seat`
       : item.rent && item.total_area
@@ -404,7 +499,6 @@ const ListSite: React.FC<ListSiteProps> = ({
                   {item.building_name || 'Unnamed Site'}
                 </Text>
               </View>
-
               {!selectionMode && (
                 <TouchableOpacity
                   style={styles.editIconButton}
@@ -541,7 +635,6 @@ const ListSite: React.FC<ListSiteProps> = ({
         </View>
       );
     }
-
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyIconContainer}>
@@ -549,11 +642,11 @@ const ListSite: React.FC<ListSiteProps> = ({
         </View>
         <Text style={styles.emptyStateTitle}>No sites found</Text>
         <Text style={styles.emptyStateText}>
-          {searchQuery || Object.keys(filter).length > 0
+          {searchTags.length > 0 || activeFilterCount > 0
             ? 'Try adjusting your search or filter criteria'
             : 'Get started by creating your first site'}
         </Text>
-        {!searchQuery && Object.keys(filter).length === 0 && (
+        {searchTags.length === 0 && activeFilterCount === 0 && (
           <TouchableOpacity style={styles.createButton} onPress={onCreateSite}>
             <Ionicons name="add" size={20} color={WHATSAPP_COLORS.white} />
             <Text style={styles.createButtonText}>Create First Site</Text>
@@ -561,7 +654,7 @@ const ListSite: React.FC<ListSiteProps> = ({
         )}
       </View>
     );
-  }, [loading, searchQuery, filter, onCreateSite]);
+  }, [loading, searchTags, onCreateSite]);
 
   // Render Filter Dropdown
   const renderFilterDropdown = useCallback((
@@ -708,7 +801,6 @@ const ListSite: React.FC<ListSiteProps> = ({
           <Text style={styles.actionsModalTitle}>
             {selectedSites.length} site(s) selected
           </Text>
-
           <TouchableOpacity
             style={[styles.actionOption, styles.actionOptionDanger]}
             onPress={handleBulkDelete}
@@ -721,7 +813,6 @@ const ListSite: React.FC<ListSiteProps> = ({
             </View>
             <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.cancelActionButton}
             onPress={() => setShowActionsModal(false)}
@@ -753,17 +844,20 @@ const ListSite: React.FC<ListSiteProps> = ({
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by name, location..."
+            placeholder="Add search term "
             value={localSearchQuery}
-            onChangeText={handleSearch}
+            onChangeText={setLocalSearchQuery}
+            onSubmitEditing={addSearchTag}
+            onKeyPress={handleSearchKeyPress}
             placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+            returnKeyType="search"
           />
           {localSearchQuery.length > 0 && (
             <TouchableOpacity 
-              onPress={() => handleSearch('')}
-              style={styles.clearSearchButton}
+              onPress={addSearchTag}
+              style={styles.addSearchButton}
             >
-              <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
+              <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
             </TouchableOpacity>
           )}
           <View style={styles.searchActions}>
@@ -782,7 +876,6 @@ const ListSite: React.FC<ListSiteProps> = ({
                 </View>
               )}
             </TouchableOpacity>
-
             {selectionMode && (
               <TouchableOpacity
                 style={styles.actionIconButton}
@@ -810,6 +903,28 @@ const ListSite: React.FC<ListSiteProps> = ({
         </View>
       )}
 
+      {/* Search Tags */}
+      {searchTags.length > 0 && !selectionMode && (
+        <View style={styles.searchTagsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.searchTagsContent}>
+              {searchTags.map((tag, index) => (
+                <View key={`search-tag-${index}`} style={styles.searchTag}>
+                  <Ionicons name="search" size={12} color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.searchTagText}>{tag}</Text>
+                  <TouchableOpacity onPress={() => removeSearchTag(tag)}>
+                    <Ionicons name="close-circle" size={16} color={WHATSAPP_COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity onPress={clearAllSearchTags} style={styles.clearAllTagsButton}>
+                <Text style={styles.clearAllTagsText}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
       {/* Active Filters */}
       {activeFilterCount > 0 && !selectionMode && (
         <View style={styles.activeFiltersContainer}>
@@ -821,16 +936,7 @@ const ListSite: React.FC<ListSiteProps> = ({
                   <Text style={styles.activeFilterText}>
                     {option?.label || value}
                   </Text>
-                  <TouchableOpacity 
-                    onPress={() => {
-                      const newValues = localFilters.property_type.filter(v => v !== value);
-                      handleFilterChange('property_type', newValues);
-                      onFilter({
-                        ...filter,
-                        property_type: newValues.length > 0 ? newValues.join(',') : undefined
-                      });
-                    }}
-                  >
+                  <TouchableOpacity onPress={() => removeFilter('property_type', value)}>
                     <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                   </TouchableOpacity>
                 </View>
@@ -841,16 +947,7 @@ const ListSite: React.FC<ListSiteProps> = ({
                 <Text style={styles.activeFilterText}>
                   {beautifyName(value)}
                 </Text>
-                <TouchableOpacity 
-                  onPress={() => {
-                    const newValues = localFilters.building_status.filter(v => v !== value);
-                    handleFilterChange('building_status', newValues);
-                    onFilter({
-                      ...filter,
-                      building_status: newValues.length > 0 ? newValues.join(',') : undefined
-                    });
-                  }}
-                >
+                <TouchableOpacity onPress={() => removeFilter('building_status', value)}>
                   <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                 </TouchableOpacity>
               </View>
@@ -860,16 +957,7 @@ const ListSite: React.FC<ListSiteProps> = ({
                 <Text style={styles.activeFilterText}>
                   {beautifyName(value)}
                 </Text>
-                <TouchableOpacity 
-                  onPress={() => {
-                    const newValues = localFilters.floor_condition.filter(v => v !== value);
-                    handleFilterChange('floor_condition', newValues);
-                    onFilter({
-                      ...filter,
-                      floor_condition: newValues.length > 0 ? newValues.join(',') : undefined
-                    });
-                  }}
-                >
+                <TouchableOpacity onPress={() => removeFilter('floor_condition', value)}>
                   <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                 </TouchableOpacity>
               </View>
@@ -889,12 +977,11 @@ const ListSite: React.FC<ListSiteProps> = ({
         ) : (
           <>
             {sites.map((item, index) => renderSiteItem(item, index))}
-
             {/* Load More */}
             {pagination && pagination.has_next && (
               <TouchableOpacity
                 style={styles.loadMoreButton}
-                onPress={onLoadMore}
+                onPress={handleLoadMore}
                 disabled={loadingMore}
               >
                 {loadingMore ? (
@@ -929,7 +1016,6 @@ const ListSite: React.FC<ListSiteProps> = ({
         },
         () => setShowPropertyTypeFilter(false)
       )}
-
       {renderFilterDropdown(
         showStatusFilter,
         'Select Building Status',
@@ -943,7 +1029,6 @@ const ListSite: React.FC<ListSiteProps> = ({
         },
         () => setShowStatusFilter(false)
       )}
-
       {renderFilterDropdown(
         showFloorConditionFilter,
         'Select Floor Condition',
@@ -1002,11 +1087,11 @@ const styles = StyleSheet.create({
     left: 15,
     zIndex: 1,
   },
-  clearSearchButton: {
+  addSearchButton: {
     position: 'absolute',
-    right: 100,
+    right: 50,
     zIndex: 1,
-    padding: 8,
+    padding: 4,
   },
   searchActions: {
     position: 'absolute',
@@ -1056,6 +1141,47 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: WHATSAPP_COLORS.danger,
+  },
+  searchTagsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  searchTagsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.primary + '30',
+  },
+  searchTagText: {
+    fontSize: 13,
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '600',
+  },
+  clearAllTagsButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: WHATSAPP_COLORS.danger + '10',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.danger + '30',
+  },
+  clearAllTagsText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.danger,
+    fontWeight: '600',
   },
   activeFiltersContainer: {
     paddingHorizontal: 16,

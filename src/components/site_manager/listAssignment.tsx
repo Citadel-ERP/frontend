@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -81,20 +81,7 @@ interface Pagination {
 }
 
 interface ListAssignmentProps {
-  assignments: Assignment[];
-  loading: boolean;
-  loadingMore: boolean;
-  refreshing: boolean;
-  pagination: Pagination | null;
-  searchQuery: string;
-  filter: any;
   token: string | null;
-  onUpdateAssignmentStatus: (visitId: number, newStatus: 'admin_completed' | 'cancelled') => Promise<any>;
-  onBulkUpdateAssignments: (visitIds: number[], newStatus: 'admin_completed' | 'cancelled') => Promise<any>;
-  onSearch: (query: string) => void;
-  onFilter: (filter: any) => void;
-  onLoadMore: () => void;
-  onRefresh: () => void;
   onCreateAssignment: () => void;
   theme: any;
 }
@@ -105,24 +92,18 @@ interface FilterOption {
 }
 
 const ListAssignment: React.FC<ListAssignmentProps> = ({
-  assignments,
-  loading,
-  loadingMore,
-  refreshing,
-  pagination,
-  searchQuery,
-  filter,
   token,
-  onUpdateAssignmentStatus,
-  onBulkUpdateAssignments,
-  onSearch,
-  onFilter,
-  onLoadMore,
-  onRefresh,
   onCreateAssignment,
   theme,
 }) => {
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+  // State Management
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
   const [showVisibilityFilter, setShowVisibilityFilter] = useState(false);
@@ -140,6 +121,9 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
   const [showMultipleStatusEditModal, setShowMultipleStatusEditModal] = useState(false);
   const [updatingMultipleStatus, setUpdatingMultipleStatus] = useState(false);
 
+  // Local filter state
+  const [localFilters, setLocalFilters] = useState<any>({});
+
   const STATUS_OPTIONS: FilterOption[] = [
     { value: 'pending', label: 'Pending' },
     { value: 'scout_completed', label: 'Scout Completed' },
@@ -152,7 +136,6 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     { value: 'false', label: 'Hidden' },
   ];
 
-  // UPDATED: Only admin_completed and cancelled - removed scout_completed
   const EDITABLE_STATUS_OPTIONS: FilterOption[] = [
     { value: 'admin_completed', label: 'Completed' },
     { value: 'cancelled', label: 'Cancelled' },
@@ -163,26 +146,211 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     { value: 'cancelled', label: 'Cancelled' },
   ];
 
-  const handleSearch = useCallback((text: string) => {
-    setLocalSearchQuery(text);
-    onSearch(text);
-  }, [onSearch]);
+  // API Call: Fetch Assignments
+  const fetchAssignments = useCallback(async (page: number = 1, append: boolean = false) => {
+    if (!token) return;
 
-  const handleFilterChange = useCallback((key: string, value: string | null) => {
-    const newFilter = { ...filter };
-    if (value === null) {
-      delete newFilter[key];
-    } else {
-      newFilter[key] = value;
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      const response = await fetch(`${BACKEND_URL}/manager/getFutureVisits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          page,
+          page_size: 20,
+          filters: localFilters
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.message !== "Future site visits fetched successfully") {
+        throw new Error(data.message || 'Failed to fetch assignments');
+      }
+
+      if (append) {
+        setAssignments(prev => [...prev, ...data.visits]);
+      } else {
+        setAssignments(data.visits);
+      }
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Error fetching assignments:', error);
+      Alert.alert('Error', 'Failed to fetch assignments. Please try again.');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
     }
-    onFilter(newFilter);
-  }, [filter, onFilter]);
+  }, [token, localFilters]);
 
-  const clearFilters = useCallback(() => {
-    onFilter({});
-    setShowFilterModal(false);
-  }, [onFilter]);
+  // API Call: Search Assignments
+  const searchAssignments = useCallback(async (query: string) => {
+    if (!token) return;
 
+    try {
+      setLoading(true);
+
+      const response = await fetch(`${BACKEND_URL}/manager/searchAndFilterSiteVisits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          query,
+          page: 1,
+          page_size: 20,
+          filters: localFilters
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.message !== "Site visits search successful") {
+        throw new Error(data.message || 'Failed to search assignments');
+      }
+
+      setAssignments(data.visits);
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Error searching assignments:', error);
+      Alert.alert('Error', 'Failed to search assignments. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [token, localFilters]);
+
+  // API Call: Update Assignment Status
+  const updateAssignmentStatus = useCallback(async (visitId: number, newStatus: 'admin_completed' | 'cancelled') => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/updateSiteVisit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          visit_id: visitId,
+          status: newStatus
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.message !== "Site visit updated successfully") {
+        throw new Error(data.message || 'Failed to update assignment');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error updating assignment:', error);
+      throw error;
+    }
+  }, [token]);
+
+  // API Call: Bulk Update Assignments
+  const bulkUpdateAssignments = useCallback(async (visitIds: number[], newStatus: 'admin_completed' | 'cancelled') => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/bulkUpdateSiteVisits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          visit_ids: visitIds,
+          status: newStatus
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.message.includes('Successfully updated')) {
+        throw new Error(data.message || 'Failed to update assignments');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error bulk updating assignments:', error);
+      throw error;
+    }
+  }, [token]);
+
+  // API Call: Fetch History
+  const fetchHistory = useCallback(async (page: number = 1, append: boolean = false) => {
+    if (!token) return;
+
+    try {
+      if (append) {
+        setLoadingMoreHistory(true);
+      } else {
+        setLoadingHistory(true);
+      }
+
+      const response = await fetch(`${BACKEND_URL}/manager/getSiteVisits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          page,
+          page_size: 20,
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.message !== "Past site visits fetched successfully") {
+        throw new Error(data.message || 'Failed to fetch history');
+      }
+
+      if (append) {
+        setHistoryAssignments(prev => [...prev, ...data.visits]);
+      } else {
+        setHistoryAssignments(data.visits);
+      }
+      setHistoryPagination(data.pagination);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      Alert.alert('Error', 'Failed to fetch assignment history');
+    } finally {
+      setLoadingHistory(false);
+      setLoadingMoreHistory(false);
+    }
+  }, [token]);
+
+  // Initial load
+  useEffect(() => {
+    if (token) {
+      fetchAssignments(1, false);
+    }
+  }, [token]);
+
+  // Helper Functions
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
     return name
@@ -275,6 +443,55 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     }
   }, []);
 
+  // Search Handler
+  const handleSearch = useCallback((text: string) => {
+    setLocalSearchQuery(text);
+    if (text.trim()) {
+      searchAssignments(text);
+    } else {
+      fetchAssignments(1, false);
+    }
+  }, [searchAssignments, fetchAssignments]);
+
+  // Filter Handlers
+  const handleFilterChange = useCallback((key: string, value: string | null) => {
+    const newFilter = { ...localFilters };
+    if (value === null) {
+      delete newFilter[key];
+    } else {
+      newFilter[key] = value;
+    }
+    setLocalFilters(newFilter);
+  }, [localFilters]);
+
+  const applyFilters = useCallback(() => {
+    if (localSearchQuery) {
+      searchAssignments(localSearchQuery);
+    } else {
+      fetchAssignments(1, false);
+    }
+    setShowFilterModal(false);
+  }, [localSearchQuery, searchAssignments, fetchAssignments]);
+
+  const clearFilters = useCallback(() => {
+    setLocalFilters({});
+    setShowFilterModal(false);
+  }, []);
+
+  // Remove individual filter
+  const removeFilter = useCallback((filterKey: string) => {
+    const newFilters = { ...localFilters };
+    delete newFilters[filterKey];
+    setLocalFilters(newFilters);
+    
+    // Trigger immediate refresh with new filters
+    if (localSearchQuery) {
+      searchAssignments(localSearchQuery);
+    } else {
+      fetchAssignments(1, false);
+    }
+  }, [localFilters, localSearchQuery, searchAssignments, fetchAssignments]);
+
   // Selection Handlers
   const handleLongPress = useCallback((assignmentId: number) => {
     setSelectionMode(true);
@@ -302,7 +519,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     setSelectionMode(false);
   }, []);
 
-  // UPDATED: Single Status Update using onUpdateAssignmentStatus prop
+  // Single Status Update
   const handleEditStatus = useCallback((assignment: Assignment) => {
     setEditingAssignment(assignment);
     setShowStatusEditModal(true);
@@ -313,21 +530,27 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
 
     setUpdatingStatus(true);
     try {
-      await onUpdateAssignmentStatus(editingAssignment.id, newStatus);
+      await updateAssignmentStatus(editingAssignment.id, newStatus);
       
       Alert.alert('Success', 'Status updated successfully');
       setShowStatusEditModal(false);
       setEditingAssignment(null);
-      onRefresh();
+      
+      // Refresh assignments
+      if (localSearchQuery) {
+        searchAssignments(localSearchQuery);
+      } else {
+        fetchAssignments(1, false);
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       Alert.alert('Error', 'Failed to update status. Please try again.');
     } finally {
       setUpdatingStatus(false);
     }
-  }, [editingAssignment, onUpdateAssignmentStatus, onRefresh]);
+  }, [editingAssignment, updateAssignmentStatus, localSearchQuery, searchAssignments, fetchAssignments]);
 
-  // UPDATED: Bulk Status Update using onBulkUpdateAssignments prop
+  // Bulk Status Update
   const handleBulkStatusUpdate = useCallback(async (newStatus: 'admin_completed' | 'cancelled') => {
     if (selectedAssignments.length === 0) return;
 
@@ -335,64 +558,26 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     setUpdatingMultipleStatus(true);
 
     try {
-      await onBulkUpdateAssignments(selectedAssignments, newStatus);
+      await bulkUpdateAssignments(selectedAssignments, newStatus);
 
       Alert.alert('Success', `${selectedAssignments.length} assignment(s) status updated successfully`);
       cancelSelection();
-      onRefresh();
+      
+      // Refresh assignments
+      if (localSearchQuery) {
+        searchAssignments(localSearchQuery);
+      } else {
+        fetchAssignments(1, false);
+      }
     } catch (error) {
       console.error('Error updating multiple assignments:', error);
       Alert.alert('Error', 'Failed to update status for some assignments. Please try again.');
     } finally {
       setUpdatingMultipleStatus(false);
     }
-  }, [selectedAssignments, onBulkUpdateAssignments, cancelSelection, onRefresh]);
+  }, [selectedAssignments, bulkUpdateAssignments, cancelSelection, localSearchQuery, searchAssignments, fetchAssignments]);
 
-  const fetchHistory = useCallback(async (page: number = 1, append: boolean = false) => {
-    if (!token) return;
-
-    try {
-      if (append) {
-        setLoadingMoreHistory(true);
-      } else {
-        setLoadingHistory(true);
-      }
-
-      const response = await fetch(`${BACKEND_URL}/manager/getSiteVisits`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          page,
-          page_size: 20,
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.message !== "Past site visits fetched successfully") {
-        throw new Error(data.message || 'Failed to fetch history');
-      }
-
-      if (append) {
-        setHistoryAssignments(prev => [...prev, ...data.visits]);
-      } else {
-        setHistoryAssignments(data.visits);
-      }
-      setHistoryPagination(data.pagination);
-    } catch (error) {
-      console.error('Error fetching history:', error);
-      Alert.alert('Error', 'Failed to fetch assignment history');
-    } finally {
-      setLoadingHistory(false);
-      setLoadingMoreHistory(false);
-    }
-  }, [token]);
-
+  // History Handlers
   const handleViewHistory = useCallback(async () => {
     setShowHistoryModal(true);
     await fetchHistory(1);
@@ -404,6 +589,29 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
     }
   }, [historyPagination, loadingMoreHistory, fetchHistory]);
 
+  // Load More & Refresh Handlers
+  const handleLoadMore = useCallback(() => {
+    if (pagination && pagination.has_next && !loadingMore) {
+      if (localSearchQuery) {
+        // For search, we need to implement pagination in search endpoint
+        // For now, just fetch next page normally
+        fetchAssignments(pagination.current_page + 1, true);
+      } else {
+        fetchAssignments(pagination.current_page + 1, true);
+      }
+    }
+  }, [pagination, loadingMore, localSearchQuery, fetchAssignments]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    if (localSearchQuery) {
+      searchAssignments(localSearchQuery);
+    } else {
+      fetchAssignments(1, false);
+    }
+  }, [localSearchQuery, searchAssignments, fetchAssignments]);
+
+  // Render Assignment Item
   const renderAssignmentItem = useCallback(({ item, isHistory = false }: { item: Assignment; isHistory?: boolean }) => {
     const site = item.site;
     const scout = item.assigned_to;
@@ -575,11 +783,11 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         </View>
         <Text style={styles.emptyStateTitle}>No upcoming assignments</Text>
         <Text style={styles.emptyStateText}>
-          {searchQuery || Object.keys(filter).length > 0
+          {localSearchQuery || Object.keys(localFilters).length > 0
             ? 'Try changing your search or filter criteria'
             : 'Create new assignments for future dates'}
         </Text>
-        {!searchQuery && Object.keys(filter).length === 0 && (
+        {!localSearchQuery && Object.keys(localFilters).length === 0 && (
           <TouchableOpacity style={styles.createButton} onPress={onCreateAssignment}>
             <Ionicons name="add" size={20} color={WHATSAPP_COLORS.white} />
             <Text style={styles.createButtonText}>Create Assignment</Text>
@@ -587,7 +795,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         )}
       </View>
     );
-  }, [loading, searchQuery, filter, onCreateAssignment]);
+  }, [loading, localSearchQuery, localFilters, onCreateAssignment]);
 
   const renderFilterModal = useCallback(() => (
     <Modal
@@ -621,13 +829,11 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {filter.status ? beautifyName(filter.status) : 'All'}
+                  {localFilters.status ? beautifyName(localFilters.status) : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
               </View>
             </TouchableOpacity>
-
-            
           </ScrollView>
 
           <View style={styles.filterModalFooter}>
@@ -636,7 +842,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.applyFiltersButton}
-              onPress={() => setShowFilterModal(false)}
+              onPress={applyFilters}
             >
               <Text style={styles.applyFiltersText}>Apply Filters</Text>
             </TouchableOpacity>
@@ -644,7 +850,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         </View>
       </TouchableOpacity>
     </Modal>
-  ), [showFilterModal, filter, handleFilterChange, clearFilters, beautifyName]);
+  ), [showFilterModal, localFilters, clearFilters, applyFilters, beautifyName]);
 
   const renderHistoryModal = useCallback(() => (
     <Modal
@@ -914,8 +1120,8 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
   ), []);
 
   const activeFilterCount = useMemo(() => {
-    return Object.keys(filter).filter(key => filter[key] !== undefined && filter[key] !== '').length;
-  }, [filter]);
+    return Object.keys(localFilters).filter(key => localFilters[key] !== undefined && localFilters[key] !== '').length;
+  }, [localFilters]);
 
   return (
     <View style={styles.container}>
@@ -993,7 +1199,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
       {activeFilterCount > 0 && !selectionMode && (
         <View style={styles.activeFiltersContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {Object.entries(filter).map(([key, value]) => {
+            {Object.entries(localFilters).map(([key, value]) => {
               if (!value && value !== false && value !== 0) return null;
               
               let label = '';
@@ -1026,7 +1232,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
                   <Text style={styles.activeFilterText}>
                     {label}: {displayValue}
                   </Text>
-                  <TouchableOpacity onPress={() => handleFilterChange(key, null)}>
+                  <TouchableOpacity onPress={() => removeFilter(key)}>
                     <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                   </TouchableOpacity>
                 </View>
@@ -1043,12 +1249,12 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        onEndReached={onLoadMore}
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.1}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={handleRefresh}
             colors={[WHATSAPP_COLORS.primary]}
             tintColor={WHATSAPP_COLORS.primary}
           />
@@ -1084,7 +1290,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         showStatusFilter,
         'Select Status',
         STATUS_OPTIONS,
-        filter.status,
+        localFilters.status,
         (value) => handleFilterChange('status', value),
         () => setShowStatusFilter(false)
       )}
@@ -1093,7 +1299,7 @@ const ListAssignment: React.FC<ListAssignmentProps> = ({
         showVisibilityFilter,
         'Select Visibility',
         VISIBILITY_OPTIONS,
-        filter.is_visible_to_scout,
+        localFilters.is_visible_to_scout,
         (value) => handleFilterChange('is_visible_to_scout', value),
         () => setShowVisibilityFilter(false)
       )}
@@ -1146,9 +1352,10 @@ const styles = StyleSheet.create({
   },
   clearSearchButton: {
     position: 'absolute',
-    right: 120,
+    right: 90,
     zIndex: 1,
     padding: 8,
+    marginTop:2
   },
   searchActions: {
     position: 'absolute',

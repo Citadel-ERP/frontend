@@ -1,8 +1,3 @@
-// Key changes made:
-// 1. Fixed empty chat centering by using flex: 1 in emptyChat style
-// 2. Adjusted chatListContent padding to remove irregular bottom spacing
-// 3. Updated KeyboardAvoidingView behavior for better spacing
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,

@@ -64,6 +64,19 @@ interface Site {
   managed_property: boolean;
   conventional_property: boolean;
   for_sale_property?: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: any;
+  active: boolean;
+  building_photos: any[];
+  meta: any;
+  nearest_metro_station: any;
+  total_floors?: string;
+  number_of_basements?: string;
+  availble_floors?: string;
+  cam?: string;
+  oc?: boolean;
+  lease_term?: string;
 }
 
 interface Scout {
@@ -73,47 +86,68 @@ interface Scout {
   profile_picture: string;
 }
 
+interface Pagination {
+  current_page: number;
+  total_pages: number;
+  total_items: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
 interface CreateAssignmentProps {
   token: string | null;
-  sites: Site[];
   onBack: () => void;
   onAssignmentCreated: () => void;
   theme: any;
 }
 
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
 const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   token,
-  sites,
   onBack,
   onAssignmentCreated,
   theme,
 }) => {
+  // State Management
   const [loading, setLoading] = useState(false);
   const [loadingScouts, setLoadingScouts] = useState(false);
+  const [loadingSites, setLoadingSites] = useState(false);
+  const [loadingMoreSites, setLoadingMoreSites] = useState(false);
+  
+  const [sites, setSites] = useState<Site[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
   const [selectedSites, setSelectedSites] = useState<Site[]>([]);
   const [selectedScout, setSelectedScout] = useState<Scout | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>('09:00');
   const [scouts, setScouts] = useState<Scout[]>([]);
+  
   const [showSiteSearch, setShowSiteSearch] = useState(false);
   const [showScoutSearch, setShowScoutSearch] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [siteSearchQuery, setSiteSearchQuery] = useState('');
-  const [scoutSearchQuery, setScoutSearchQuery] = useState('');
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
   const [showFloorConditionFilter, setShowFloorConditionFilter] = useState(false);
   const [showPropertyTypeFilter, setShowPropertyTypeFilter] = useState(false);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-
-  const [activeFilters, setActiveFilters] = useState({
+  
+  const [siteSearchQuery, setSiteSearchQuery] = useState('');
+  const [searchTags, setSearchTags] = useState<string[]>([]);
+  const [scoutSearchQuery, setScoutSearchQuery] = useState('');
+  
+  const [localFilters, setLocalFilters] = useState({
     building_status: [] as string[],
     floor_condition: [] as string[],
     property_type: [] as string[],
   });
 
-  // Filter options
-  const BUILDING_STATUS_OPTIONS = [
+  // Filter Options
+  const BUILDING_STATUS_OPTIONS: FilterOption[] = [
     { value: 'available', label: 'Available' },
     { value: 'leased_out', label: 'Leased Out' },
     { value: 'readily_available', label: 'Readily Available' },
@@ -121,7 +155,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     { value: 'ready_for_fitouts', label: 'Ready for Fitouts' },
   ];
 
-  const FLOOR_CONDITION_OPTIONS = [
+  const FLOOR_CONDITION_OPTIONS: FilterOption[] = [
     { value: 'bareshell', label: 'Bareshell' },
     { value: 'warmshell', label: 'Warmshell' },
     { value: 'extended_warmshell', label: 'Extended Warmshell' },
@@ -129,7 +163,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     { value: 'semi_furnished', label: 'Semi Furnished' },
   ];
 
-  const PROPERTY_TYPE_OPTIONS = [
+  const PROPERTY_TYPE_OPTIONS: FilterOption[] = [
     { value: 'managed', label: 'Managed Office' },
     { value: 'conventional', label: 'Conventional Office' },
     { value: 'for_sale', label: 'For Sale' },
@@ -159,7 +193,6 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     if (!value) return '';
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) return '';
-
     if (num >= 10000000) {
       return `₹${(num / 10000000).toFixed(2)}Cr`;
     } else if (num >= 100000) {
@@ -184,31 +217,149 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     return '🏢 Office';
   }, []);
 
-  // Filter sites based on search query and active filters
-  const filteredSites = useMemo(() => {
-    return sites.filter(site => {
-      // Search filter
-      const matchesSearch = 
-        site.building_name.toLowerCase().includes(siteSearchQuery.toLowerCase()) ||
-        site.location.toLowerCase().includes(siteSearchQuery.toLowerCase());
+  // API Call: Search and Filter Sites
+  const searchAndFilterSites = useCallback(async (
+    tags: string[] = [],
+    filters: any = {},
+    page: number = 1,
+    append: boolean = false
+  ) => {
+    if (!token) return;
 
-      // Status filter
-      const matchesStatus = activeFilters.building_status.length === 0 ||
-        activeFilters.building_status.includes(site.building_status);
+    try {
+      if (append) {
+        setLoadingMoreSites(true);
+      } else {
+        setLoadingSites(true);
+      }
 
-      // Floor condition filter
-      const matchesFloorCondition = activeFilters.floor_condition.length === 0 ||
-        (site.floor_condition && activeFilters.floor_condition.includes(site.floor_condition));
+      // Build filters object for API
+      const apiFilters: any = {};
+      
+      if (filters.building_status && filters.building_status.length > 0) {
+        apiFilters.building_status = filters.building_status.join(',');
+      }
+      if (filters.floor_condition && filters.floor_condition.length > 0) {
+        apiFilters.floor_condition = filters.floor_condition.join(',');
+      }
+      if (filters.property_type && filters.property_type.length > 0) {
+        apiFilters.property_type = filters.property_type.join(',');
+      }
 
-      // Property type filter
-      const matchesPropertyType = activeFilters.property_type.length === 0 ||
-        (site.for_sale_property && activeFilters.property_type.includes('for_sale')) ||
-        (site.managed_property && activeFilters.property_type.includes('managed')) ||
-        (site.conventional_property && activeFilters.property_type.includes('conventional'));
+      const response = await fetch(`${BACKEND_URL}/manager/searchAndFilterSites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          queries: tags, // Send array of search queries
+          page,
+          page_size: 20,
+          filters: apiFilters
+        })
+      });
 
-      return matchesSearch && matchesStatus && matchesFloorCondition && matchesPropertyType;
-    });
-  }, [sites, siteSearchQuery, activeFilters]);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.message !== "Sites search successful") {
+        throw new Error(data.message || 'Failed to fetch sites');
+      }
+
+      if (append) {
+        setSites(prev => [...prev, ...data.sites]);
+      } else {
+        setSites(data.sites);
+      }
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+      Alert.alert('Error', 'Failed to fetch sites. Please try again.');
+    } finally {
+      setLoadingSites(false);
+      setLoadingMoreSites(false);
+    }
+  }, [token]);
+
+  // Load sites when modal opens
+  useEffect(() => {
+    if (showSiteSearch && token) {
+      searchAndFilterSites(searchTags, localFilters, 1, false);
+    }
+  }, [showSiteSearch, token]);
+
+  // Search Tag Handlers
+  const addSearchTag = useCallback(() => {
+    const trimmedQuery = siteSearchQuery.trim();
+    if (trimmedQuery && !searchTags.includes(trimmedQuery)) {
+      const newTags = [...searchTags, trimmedQuery];
+      setSearchTags(newTags);
+      setSiteSearchQuery('');
+      searchAndFilterSites(newTags, localFilters, 1, false);
+    }
+  }, [siteSearchQuery, searchTags, localFilters, searchAndFilterSites]);
+
+  const removeSearchTag = useCallback((tagToRemove: string) => {
+    const newTags = searchTags.filter(tag => tag !== tagToRemove);
+    setSearchTags(newTags);
+    searchAndFilterSites(newTags, localFilters, 1, false);
+  }, [searchTags, localFilters, searchAndFilterSites]);
+
+  const clearAllSearchTags = useCallback(() => {
+    setSearchTags([]);
+    setSiteSearchQuery('');
+    searchAndFilterSites([], localFilters, 1, false);
+  }, [localFilters, searchAndFilterSites]);
+
+  // Handle Enter key press to add tag
+  const handleSearchKeyPress = useCallback((e: any) => {
+    if (e.nativeEvent.key === 'Enter') {
+      addSearchTag();
+    }
+  }, [addSearchTag]);
+
+  // Filter Handlers
+  const handleFilterChange = useCallback((key: string, values: string[]) => {
+    setLocalFilters(prev => ({
+      ...prev,
+      [key]: values
+    }));
+  }, []);
+
+  const applyFilters = useCallback(() => {
+    searchAndFilterSites(searchTags, localFilters, 1, false);
+    setShowFilterModal(false);
+  }, [localFilters, searchTags, searchAndFilterSites]);
+
+  const clearFilters = useCallback(() => {
+    const emptyFilters = {
+      building_status: [],
+      floor_condition: [],
+      property_type: [],
+    };
+    setLocalFilters(emptyFilters);
+    searchAndFilterSites(searchTags, emptyFilters, 1, false);
+    setShowFilterModal(false);
+  }, [searchTags, searchAndFilterSites]);
+
+  // Remove individual filter
+  const removeFilter = useCallback((filterKey: string, value: string) => {
+    const newFilters = {
+      ...localFilters,
+      [filterKey]: (localFilters as any)[filterKey].filter((v: string) => v !== value)
+    };
+    setLocalFilters(newFilters);
+    searchAndFilterSites(searchTags, newFilters, 1, false);
+  }, [localFilters, searchTags, searchAndFilterSites]);
+
+  // Load More Handler
+  const handleLoadMore = useCallback(() => {
+    if (pagination && pagination.has_next && !loadingMoreSites) {
+      searchAndFilterSites(searchTags, localFilters, pagination.current_page + 1, true);
+    }
+  }, [pagination, loadingMoreSites, searchAndFilterSites, searchTags, localFilters]);
 
   const filteredScouts = scouts.filter(scout => 
     scout.first_name.toLowerCase().includes(scoutSearchQuery.toLowerCase()) ||
@@ -218,7 +369,6 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
 
   const fetchScouts = useCallback(async () => {
     if (!token) return;
-
     try {
       setLoadingScouts(true);
       const response = await fetch(`${BACKEND_URL}/manager/getScoutBoys`, {
@@ -315,10 +465,10 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   };
 
   const handleSelectAllSites = () => {
-    if (selectedSites.length === filteredSites.length) {
+    if (selectedSites.length === sites.length) {
       setSelectedSites([]);
     } else {
-      setSelectedSites([...filteredSites]);
+      setSelectedSites([...sites]);
     }
   };
 
@@ -326,24 +476,6 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     setSelectedScout(scout);
     setShowScoutSearch(false);
     setScoutSearchQuery('');
-  };
-
-  const handleFilterChange = (key: keyof typeof activeFilters, value: string) => {
-    setActiveFilters(prev => {
-      const currentValues = prev[key];
-      const newValues = currentValues.includes(value)
-        ? currentValues.filter(v => v !== value)
-        : [...currentValues, value];
-      return { ...prev, [key]: newValues };
-    });
-  };
-
-  const clearAllFilters = () => {
-    setActiveFilters({
-      building_status: [],
-      floor_condition: [],
-      property_type: [],
-    });
   };
 
   const getInitials = (name: string): string => {
@@ -604,9 +736,9 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
 
   const renderSiteSearchModal = () => {
     const activeFilterCount = 
-      activeFilters.building_status.length +
-      activeFilters.floor_condition.length +
-      activeFilters.property_type.length;
+      localFilters.building_status.length +
+      localFilters.floor_condition.length +
+      localFilters.property_type.length;
 
     return (
       <Modal
@@ -631,6 +763,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               <View style={{ width: 24 }} />
             </View>
 
+            {/* Search Container */}
             <View style={styles.searchContainer}>
               <View style={styles.searchInputWrapper}>
                 <Ionicons 
@@ -641,19 +774,20 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                 />
                 <TextInput
                   style={styles.searchModalInput}
-                  placeholder="Search sites..."
+                  placeholder="Add search term"
                   value={siteSearchQuery}
                   onChangeText={setSiteSearchQuery}
+                  onSubmitEditing={addSearchTag}
+                  onKeyPress={handleSearchKeyPress}
                   placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-                  autoFocus={!IS_IOS}
+                  returnKeyType="search"
                 />
                 {siteSearchQuery.length > 0 && (
                   <TouchableOpacity 
-                    onPress={() => setSiteSearchQuery('')}
-                    style={styles.clearSearchButton}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={addSearchTag}
+                    style={styles.addSearchButton}
                   >
-                    <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.textTertiary} />
+                    <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -675,11 +809,33 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               </View>
             </View>
 
+            {/* Search Tags */}
+            {searchTags.length > 0 && (
+              <View style={styles.searchTagsContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.searchTagsContent}>
+                    {searchTags.map((tag, index) => (
+                      <View key={`search-tag-${index}`} style={styles.searchTag}>
+                        <Ionicons name="search" size={12} color={WHATSAPP_COLORS.primary} />
+                        <Text style={styles.searchTagText}>{tag}</Text>
+                        <TouchableOpacity onPress={() => removeSearchTag(tag)}>
+                          <Ionicons name="close-circle" size={16} color={WHATSAPP_COLORS.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity onPress={clearAllSearchTags} style={styles.clearAllTagsButton}>
+                      <Text style={styles.clearAllTagsText}>Clear All</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
             {/* Active Filters */}
             {activeFilterCount > 0 && (
               <View style={styles.activeFiltersContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {activeFilters.property_type.map((value) => {
+                  {localFilters.property_type.map((value) => {
                     const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
                     return (
                       <View key={`prop-${value}`} style={styles.activeFilter}>
@@ -687,7 +843,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                           {option?.label || value}
                         </Text>
                         <TouchableOpacity 
-                          onPress={() => handleFilterChange('property_type', value)}
+                          onPress={() => removeFilter('property_type', value)}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
                           <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
@@ -695,26 +851,26 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                       </View>
                     );
                   })}
-                  {activeFilters.building_status.map((value) => (
+                  {localFilters.building_status.map((value) => (
                     <View key={`status-${value}`} style={styles.activeFilter}>
                       <Text style={styles.activeFilterText}>
                         {beautifyName(value)}
                       </Text>
                       <TouchableOpacity 
-                        onPress={() => handleFilterChange('building_status', value)}
+                        onPress={() => removeFilter('building_status', value)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
                         <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
                       </TouchableOpacity>
                     </View>
                   ))}
-                  {activeFilters.floor_condition.map((value) => (
+                  {localFilters.floor_condition.map((value) => (
                     <View key={`floor-${value}`} style={styles.activeFilter}>
                       <Text style={styles.activeFilterText}>
                         {beautifyName(value)}
                       </Text>
                       <TouchableOpacity 
-                        onPress={() => handleFilterChange('floor_condition', value)}
+                        onPress={() => removeFilter('floor_condition', value)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
                         <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
@@ -735,122 +891,154 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={styles.selectAllText}>
-                  {selectedSites.length === filteredSites.length ? 'Deselect All' : 'Select All'}
+                  {selectedSites.length === sites.length ? 'Deselect All' : 'Select All'}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <FlatList
-              data={filteredSites}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => {
-                const isSelected = selectedSites.some(s => s.id === item.id);
-                const statusColor = getStatusColor(item.building_status);
-                const propertyType = getPropertyTypeText(item);
-                const propertyTypeColor = getPropertyTypeBadgeColor(item);
-                
-                const pricingText = item.managed_property && item.rent_per_seat
-                  ? `${formatCurrency(item.rent_per_seat)}/seat`
-                  : item.rent && item.total_area
-                    ? `${formatCurrency(parseFloat(item.rent) / parseFloat(item.total_area))}/sq-ft`
-                    : item.rent ? formatCurrency(item.rent) : '';
+            {/* Sites List */}
+            {loadingSites ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.loadingText}>Loading sites...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={sites}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => {
+                  const isSelected = selectedSites.some(s => s.id === item.id);
+                  const statusColor = getStatusColor(item.building_status);
+                  const propertyType = getPropertyTypeText(item);
+                  const propertyTypeColor = getPropertyTypeBadgeColor(item);
+                  
+                  const pricingText = item.managed_property && item.rent_per_seat
+                    ? `${formatCurrency(item.rent_per_seat)}/seat`
+                    : item.rent && item.total_area
+                      ? `${formatCurrency(parseFloat(item.rent) / parseFloat(item.total_area))}/sq-ft`
+                      : item.rent ? formatCurrency(item.rent) : '';
 
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.siteCard,
-                      isSelected && styles.siteCardSelected
-                    ]}
-                    onPress={() => handleSelectSite(item)}
-                  >
-                    {/* Selection Checkbox */}
-                    <View style={styles.selectionCheckbox}>
-                      <View style={[
-                        styles.checkbox,
-                        isSelected && styles.checkboxSelected
-                      ]}>
-                        {isSelected && (
-                          <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />
-                        )}
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.siteCard,
+                        isSelected && styles.siteCardSelected
+                      ]}
+                      onPress={() => handleSelectSite(item)}
+                    >
+                      {/* Selection Checkbox */}
+                      <View style={styles.selectionCheckbox}>
+                        <View style={[
+                          styles.checkbox,
+                          isSelected && styles.checkboxSelected
+                        ]}>
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />
+                          )}
+                        </View>
                       </View>
-                    </View>
 
-                    <View style={styles.cardContent}>
-                      <View style={styles.cardHeader}>
-                        <View style={styles.headerLeft}>
-                          <Text style={styles.siteName} numberOfLines={1}>
-                            {item.building_name}
-                          </Text>
-                          <View style={[styles.propertyTypeBadge, { backgroundColor: propertyTypeColor }]}>
-                            <Text style={styles.propertyTypeText}>{propertyType}</Text>
+                      <View style={styles.cardContent}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <Text style={styles.siteName} numberOfLines={1}>
+                              {item.building_name}
+                            </Text>
+                            <View style={[styles.propertyTypeBadge, { backgroundColor: propertyTypeColor }]}>
+                              <Text style={styles.propertyTypeText}>{propertyType}</Text>
+                            </View>
                           </View>
                         </View>
+
+                        {item.location && (
+                          <View style={styles.locationRow}>
+                            <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
+                            <Text style={styles.locationText} numberOfLines={1}>
+                              {item.location}
+                            </Text>
+                          </View>
+                        )}
+
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.detailsScrollContainer}
+                          contentContainerStyle={styles.detailsGrid}
+                        >
+                          {/* Status Badge */}
+                          <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                            <Text style={[styles.statusText, { color: statusColor }]}>
+                              {beautifyName(item.building_status || 'unknown')}
+                            </Text>
+                          </View>
+
+                          {/* Floor Condition */}
+                          {item.floor_condition && (
+                            <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
+                              <Ionicons name="layers-outline" size={12} color={WHATSAPP_COLORS.info} />
+                              <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
+                                {beautifyName(item.floor_condition)}
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* Total Area */}
+                          {item.total_area && (
+                            <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
+                              <Ionicons name="expand-outline" size={12} color="#7C3AED" />
+                              <Text style={[styles.detailChipText, { color: "#7C3AED" }]}>
+                                {parseFloat(item.total_area).toLocaleString('en-IN')} sq ft
+                              </Text>
+                            </View>
+                          )}
+                        </ScrollView>
+
+                        {/* Pricing */}
+                        {pricingText && (
+                          <View style={styles.pricingRow}>
+                            <View style={styles.pricingBadge}>
+                              <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
+                              <Text style={styles.pricingText}>{pricingText}</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
-
-                      {item.location && (
-                        <View style={styles.locationRow}>
-                          <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
-                          <Text style={styles.locationText} numberOfLines={1}>
-                            {item.location}
-                          </Text>
-                        </View>
-                      )}
-
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.detailsScrollContainer}
-                        contentContainerStyle={styles.detailsGrid}
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={() => (
+                  <View style={styles.emptySearch}>
+                    <Ionicons name="business" size={48} color={WHATSAPP_COLORS.border} />
+                    <Text style={styles.emptySearchText}>
+                      {searchTags.length > 0 || activeFilterCount > 0
+                        ? 'No sites found matching your criteria'
+                        : 'No sites available'}
+                    </Text>
+                  </View>
+                )}
+                ListFooterComponent={() => (
+                  <>
+                    {pagination && pagination.has_next && (
+                      <TouchableOpacity
+                        style={styles.loadMoreButton}
+                        onPress={handleLoadMore}
+                        disabled={loadingMoreSites}
                       >
-                        {/* Status Badge */}
-                        <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
-                          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                          <Text style={[styles.statusText, { color: statusColor }]}>
-                            {beautifyName(item.building_status || 'unknown')}
-                          </Text>
-                        </View>
-
-                        {/* Floor Condition */}
-                        {item.floor_condition && (
-                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
-                            <Ionicons name="layers-outline" size={12} color={WHATSAPP_COLORS.info} />
-                            <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
-                              {beautifyName(item.floor_condition)}
-                            </Text>
-                          </View>
+                        {loadingMoreSites ? (
+                          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+                        ) : (
+                          <>
+                            <Ionicons name="chevron-down-circle-outline" size={20} color={WHATSAPP_COLORS.primary} />
+                            <Text style={styles.loadMoreText}>Load More</Text>
+                          </>
                         )}
-
-                        {/* Total Area */}
-                        {item.total_area && (
-                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
-                            <Ionicons name="expand-outline" size={12} color="#7C3AED" />
-                            <Text style={[styles.detailChipText, { color: "#7C3AED" }]}>
-                              {parseFloat(item.total_area).toLocaleString('en-IN')} sq ft
-                            </Text>
-                          </View>
-                        )}
-                      </ScrollView>
-
-                      {/* Pricing */}
-                      {pricingText && (
-                        <View style={styles.pricingRow}>
-                          <View style={styles.pricingBadge}>
-                            <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
-                            <Text style={styles.pricingText}>{pricingText}</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={() => (
-                <View style={styles.emptySearch}>
-                  <Ionicons name="business" size={48} color={WHATSAPP_COLORS.border} />
-                  <Text style={styles.emptySearchText}>No sites found</Text>
-                </View>
-              )}
-            />
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              />
+            )}
 
             {/* Selection Footer */}
             <View style={styles.selectionFooter}>
@@ -914,8 +1102,8 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {activeFilters.property_type.length > 0 
-                    ? `${activeFilters.property_type.length} selected` 
+                  {localFilters.property_type.length > 0 
+                    ? `${localFilters.property_type.length} selected` 
                     : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
@@ -933,8 +1121,8 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {activeFilters.building_status.length > 0 
-                    ? `${activeFilters.building_status.length} selected` 
+                  {localFilters.building_status.length > 0 
+                    ? `${localFilters.building_status.length} selected` 
                     : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
@@ -952,8 +1140,8 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {activeFilters.floor_condition.length > 0 
-                    ? `${activeFilters.floor_condition.length} selected` 
+                  {localFilters.floor_condition.length > 0 
+                    ? `${localFilters.floor_condition.length} selected` 
                     : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
@@ -964,17 +1152,17 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           <View style={styles.filterModalFooter}>
             <TouchableOpacity 
               style={styles.clearFiltersButton} 
-              onPress={clearAllFilters}
+              onPress={clearFilters}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={styles.clearFiltersText}>Clear All Filters</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.applyFiltersButton} 
-              onPress={() => setShowFilterModal(false)}
+              onPress={applyFilters}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.applyFiltersText}>Done</Text>
+              <Text style={styles.applyFiltersText}>Apply Filters</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1004,6 +1192,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
             <Text style={styles.searchModalTitle}>Select Scout</Text>
             <View style={{ width: 24 }} />
           </View>
+
           <View style={styles.searchInputContainer}>
             <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} />
             <TextInput
@@ -1015,6 +1204,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               autoFocus={!IS_IOS}
             />
           </View>
+
           {loadingScouts ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
@@ -1066,6 +1256,13 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
       </KeyboardAvoidingView>
     </Modal>
   );
+
+  // Active Filter Count
+  const activeFilterCount = useMemo(() => {
+    return localFilters.building_status.length +
+      localFilters.floor_condition.length +
+      localFilters.property_type.length;
+  }, [localFilters]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -1271,26 +1468,39 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         showPropertyTypeFilter,
         'Select Property Type',
         PROPERTY_TYPE_OPTIONS,
-        activeFilters.property_type,
-        (value) => handleFilterChange('property_type', value),
+        localFilters.property_type,
+        (value) => {
+          const newValues = localFilters.property_type.includes(value)
+            ? localFilters.property_type.filter(v => v !== value)
+            : [...localFilters.property_type, value];
+          handleFilterChange('property_type', newValues);
+        },
         () => setShowPropertyTypeFilter(false)
       )}
-
       {renderFilterDropdown(
         showStatusFilter,
         'Select Building Status',
         BUILDING_STATUS_OPTIONS,
-        activeFilters.building_status,
-        (value) => handleFilterChange('building_status', value),
+        localFilters.building_status,
+        (value) => {
+          const newValues = localFilters.building_status.includes(value)
+            ? localFilters.building_status.filter(v => v !== value)
+            : [...localFilters.building_status, value];
+          handleFilterChange('building_status', newValues);
+        },
         () => setShowStatusFilter(false)
       )}
-
       {renderFilterDropdown(
         showFloorConditionFilter,
         'Select Floor Condition',
         FLOOR_CONDITION_OPTIONS,
-        activeFilters.floor_condition,
-        (value) => handleFilterChange('floor_condition', value),
+        localFilters.floor_condition,
+        (value) => {
+          const newValues = localFilters.floor_condition.includes(value)
+            ? localFilters.floor_condition.filter(v => v !== value)
+            : [...localFilters.floor_condition, value];
+          handleFilterChange('floor_condition', newValues);
+        },
         () => setShowFloorConditionFilter(false)
       )}
     </SafeAreaView>
@@ -1546,11 +1756,11 @@ const styles = StyleSheet.create({
     left: 15,
     zIndex: 1,
   },
-  clearSearchButton: {
+  addSearchButton: {
     position: 'absolute',
-    right: 60,
+    right: 50,
     zIndex: 1,
-    padding: 8,
+    padding: 4,
   },
   filterButton: {
     position: 'absolute',
@@ -1582,6 +1792,47 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  searchTagsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  searchTagsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.primary + '30',
+  },
+  searchTagText: {
+    fontSize: 13,
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '600',
+  },
+  clearAllTagsButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: WHATSAPP_COLORS.danger + '10',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.danger + '30',
+  },
+  clearAllTagsText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.danger,
+    fontWeight: '600',
   },
   activeFiltersContainer: {
     paddingHorizontal: 16,
@@ -1830,6 +2081,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: WHATSAPP_COLORS.textSecondary,
     marginTop: 16,
+    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -1841,6 +2093,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: WHATSAPP_COLORS.textSecondary,
     marginTop: 16,
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+  },
+  loadMoreText: {
+    fontSize: 15,
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '600',
   },
   datePickerOverlay: {
     flex: 1,

@@ -10,6 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BACKEND_URL } from '../../config/config';
 
 const WHATSAPP_COLORS = {
   primary: '#075E54',
@@ -80,6 +81,10 @@ interface ListVisitsProps {
   token: string | null;
   theme: any;
   isDarkMode: boolean;
+  selectionMode: boolean;
+  selectedVisits: number[];
+  onVisitSelection: (visitId: number) => void;
+  onLongPress: (visitId: number) => void;
 }
 
 const VisitsList: React.FC<ListVisitsProps> = ({
@@ -94,7 +99,13 @@ const VisitsList: React.FC<ListVisitsProps> = ({
   token,
   theme,
   isDarkMode,
+  selectionMode,
+  selectedVisits,
+  onVisitSelection,
+  onLongPress,
 }) => {
+  const [markingComplete, setMarkingComplete] = useState(false);
+
   // Helper Functions
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
@@ -160,11 +171,18 @@ const VisitsList: React.FC<ListVisitsProps> = ({
     return `₹${num.toLocaleString('en-IN')}`;
   }, []);
 
+  const getPropertyTypeBadgeColor = (visit: Visit): string => {
+    if (visit.site.managed_property) return WHATSAPP_COLORS.lightBlue;
+    if (visit.site.conventional_property) return WHATSAPP_COLORS.lightGreen;
+    return WHATSAPP_COLORS.chipBackground;
+  };
+
   // Render Visit Item
   const renderVisitItem = useCallback((visit: Visit, index: number) => {
     const lastUpdated = formatDate(visit.updated_at);
     const statusColor = getStatusColor(visit.status);
     const propertyType = getPropertyType(visit);
+    const isSelected = selectedVisits.includes(visit.id);
 
     const pricingText = visit.site.managed_property && visit.site.rent_per_seat
       ? `${formatCurrency(visit.site.rent_per_seat)}/seat`
@@ -173,16 +191,42 @@ const VisitsList: React.FC<ListVisitsProps> = ({
         : visit.site.rent ? formatCurrency(visit.site.rent) : '';
 
     const handleCardPress = () => {
-      onVisitPress(visit, index);
+      if (selectionMode) {
+        onVisitSelection(visit.id);
+      } else {
+        onVisitPress(visit, index);
+      }
+    };
+
+    const handleCardLongPress = () => {
+      onLongPress(visit.id);
     };
 
     return (
       <TouchableOpacity
         key={visit.id}
-        style={styles.visitCard}
+        style={[
+          styles.visitCard,
+          isSelected && styles.visitCardSelected
+        ]}
         onPress={handleCardPress}
+        onLongPress={handleCardLongPress}
         activeOpacity={0.7}
       >
+        {/* Selection Checkbox - Positioned at bottom left */}
+        {selectionMode && (
+          <View style={styles.selectionCheckbox}>
+            <View style={[
+              styles.checkbox,
+              isSelected && styles.checkboxSelected
+            ]}>
+              {isSelected && (
+                <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Card Content */}
         <View style={styles.cardContent}>
           {/* Header Row */}
@@ -269,20 +313,17 @@ const VisitsList: React.FC<ListVisitsProps> = ({
       </TouchableOpacity>
     );
   }, [
+    selectedVisits,
+    selectionMode,
     onVisitPress,
+    onVisitSelection,
+    onLongPress,
     formatDate,
     getStatusColor,
     getPropertyType,
     beautifyName,
     formatCurrency
   ]);
-
-  // Helper function for property type badge color
-  const getPropertyTypeBadgeColor = (visit: Visit): string => {
-    if (visit.site.managed_property) return WHATSAPP_COLORS.lightBlue;
-    if (visit.site.conventional_property) return WHATSAPP_COLORS.lightGreen;
-    return WHATSAPP_COLORS.chipBackground;
-  };
 
   // Render Empty State
   const renderEmptyState = useCallback(() => {
@@ -316,7 +357,7 @@ const VisitsList: React.FC<ListVisitsProps> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       >
-        {visits.length === 0 ? (
+        {visits?.length === 0 ? (
           renderEmptyState()
         ) : (
           <>
@@ -369,6 +410,31 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
+  },
+  visitCardSelected: {
+    borderColor: WHATSAPP_COLORS.info,
+    backgroundColor: WHATSAPP_COLORS.lightBlue,
+  },
+  selectionCheckbox: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    zIndex: 10,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.border,
+    backgroundColor: WHATSAPP_COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: WHATSAPP_COLORS.info,
+    borderColor: WHATSAPP_COLORS.info,
   },
   cardContent: {
     flex: 1,

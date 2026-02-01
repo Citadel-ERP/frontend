@@ -5,7 +5,7 @@ import {
   StatusBar,
   Alert,
   BackHandler,
-  RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,10 +24,23 @@ import VisitsList from './lists';
 import VisitDetails from './visitDetails';
 import EditSiteVisit from './editSiteVisit';
 import CreateNewSite from './createNewSite';
-import VisitComment from './visitComment';
+import { Ionicons } from '@expo/vector-icons';
+import { Modal, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 
 const TOKEN_KEY = 'token_2';
 const DARK_MODE_KEY = 'dark_mode';
+
+const WHATSAPP_COLORS = {
+  primary: '#075E54',
+  success: '#25D366',
+  danger: '#EF4444',
+  info: '#3B82F6',
+  surface: '#FFFFFF',
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  lightGreen: '#D1FAE5',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
+};
 
 const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
@@ -49,6 +62,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [filterBy, setFilterBy] = useState('');
   const [filterValue, setFilterValue] = useState('');
+
+  // Selection State
+  const [selectedVisits, setSelectedVisits] = useState<number[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
+  const [markingComplete, setMarkingComplete] = useState(false);
 
   // Photo Modal State
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -83,7 +102,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     initializeApp();
   }, []);
 
-  // API Functions - Using useCallback with stable dependencies
+  // API Functions
   const fetchVisits = useCallback(async (page: number = 1, append: boolean = false): Promise<void> => {
     if (!token) return;
 
@@ -105,6 +124,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
+
       const transformedVisits: Visit[] = data.visits.map((visit: any) => ({
         id: visit.id,
         site: { ...visit.site },
@@ -134,7 +154,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [token]); // Only depend on token
+  }, [token]);
 
   const searchVisits = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) {
@@ -160,6 +180,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
+
       const transformedVisits: Visit[] = data.visits.map((visit: any) => ({
         id: visit.id,
         site: { ...visit.site },
@@ -183,13 +204,13 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [token, fetchVisits]);
 
-  // Initial Data Fetch - Only run once when token is available
+  // Initial Data Fetch
   useEffect(() => {
     if (token && !initialFetchDone.current) {
       initialFetchDone.current = true;
       fetchVisits(1);
     }
-  }, [token]); // Removed fetchVisits from dependency array
+  }, [token]);
 
   // Theme Toggle
   const toggleDarkMode = useCallback(async () => {
@@ -197,6 +218,78 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     setIsDarkMode(newDarkMode);
     await AsyncStorage.setItem(DARK_MODE_KEY, newDarkMode.toString());
   }, [isDarkMode]);
+
+  // Selection Handlers
+  const handleLongPress = useCallback((visitId: number) => {
+    setSelectionMode(true);
+    setSelectedVisits([visitId]);
+  }, []);
+
+  const handleVisitSelection = useCallback((visitId: number) => {
+    if (!selectionMode) return;
+    setSelectedVisits(prev => {
+      if (prev.includes(visitId)) {
+        const newSelection = prev.filter(id => id !== visitId);
+        if (newSelection.length === 0) {
+          setSelectionMode(false);
+        }
+        return newSelection;
+      } else {
+        return [...prev, visitId];
+      }
+    });
+  }, [selectionMode]);
+
+  const cancelSelection = useCallback(() => {
+    setSelectedVisits([]);
+    setSelectionMode(false);
+  }, []);
+
+  // Mark as Complete Handler
+  const handleMarkComplete = useCallback(async () => {
+    setShowActionsModal(false);
+    
+    Alert.alert(
+      'Mark as Complete',
+      `Are you sure you want to mark ${selectedVisits.length} visit(s) as completed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark Complete',
+          style: 'default',
+          onPress: async () => {
+            setMarkingComplete(true);
+            try {
+              const response = await fetch(`${BACKEND_URL}/employee/updateVisitDetails`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  token, 
+                  visit_ids: selectedVisits 
+                })
+              });
+
+              const data = await response.json();
+
+              if (!response.ok) {
+                throw new Error(data.message || `HTTP error! status: ${response.status}`);
+              }
+              
+              Alert.alert('Success', `${selectedVisits.length} visit(s) marked as completed!`);
+              cancelSelection();
+              // Refresh the list
+              fetchVisits(1);
+            } catch (error) {
+              console.error('Error marking visits complete:', error);
+              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to mark visits as complete');
+            } finally {
+              setMarkingComplete(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [selectedVisits, token, cancelSelection, fetchVisits]);
 
   // Event Handlers
   const handleSearch = useCallback((query: string) => {
@@ -241,7 +334,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       case 'edit':
         setViewMode('list');
         setSelectedVisit(null);
-        // Refresh the list when coming back
         if (token) {
           fetchVisits(1);
         }
@@ -250,13 +342,13 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         onBack();
         break;
     }
-  }, [viewMode, token, onBack]); // Removed fetchVisits from deps
+  }, [viewMode, token, onBack, fetchVisits]);
 
   const handleEditPress = useCallback(() => {
     setViewMode('edit');
   }, []);
 
-  const handleMarkComplete = useCallback(async () => {
+  const handleMarkCompleteDetail = useCallback(async () => {
     if (!selectedVisit || !token) return;
 
     try {
@@ -310,7 +402,6 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       handleBackPress();
       return true;
     });
-
     return () => backHandler.remove();
   }, [handleBackPress]);
 
@@ -324,6 +415,46 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [viewMode]);
 
+  // Render Actions Modal
+  const renderActionsModal = useCallback(() => (
+    <Modal
+      visible={showActionsModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowActionsModal(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowActionsModal(false)}
+      >
+        <View style={styles.actionsModal}>
+          <Text style={styles.actionsModalTitle}>
+            {selectedVisits.length} visit(s) selected
+          </Text>
+          <TouchableOpacity
+            style={styles.actionOption}
+            onPress={handleMarkComplete}
+          >
+            <View style={styles.actionOptionLeft}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={WHATSAPP_COLORS.success} />
+              <Text style={styles.actionOptionText}>
+                Mark as Complete
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cancelActionButton}
+            onPress={() => setShowActionsModal(false)}
+          >
+            <Text style={styles.cancelActionText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  ), [showActionsModal, selectedVisits, handleMarkComplete]);
+
   // Render Content Based on View Mode
   const renderContent = useCallback(() => {
     switch (viewMode) {
@@ -335,7 +466,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             totalVisits={visits.length}
             onBack={handleBackPress}
             onEdit={handleEditPress}
-            onMarkComplete={handleMarkComplete}
+            onMarkComplete={handleMarkCompleteDetail}
             onPhotoPress={(url, index) => {
               setSelectedPhotoUrl(url);
               setSelectedPhotoIndex(index);
@@ -386,12 +517,22 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
 
       default:
         return (
-          <View style={styles.listContainer}>
-            <SearchAndFilter
-              onSearch={handleSearch}
-              onFilter={handleFilter}
-              theme={theme}
-            />
+          <ScrollView
+            style={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            stickyHeaderIndices={[0]}
+          >
+            <View>
+              <SearchAndFilter
+                onSearch={handleSearch}
+                onFilter={handleFilter}
+                theme={theme}
+                selectionMode={selectionMode}
+                selectedCount={selectedVisits.length}
+                onSettingsPress={() => setShowActionsModal(true)}
+                onCancelSelection={cancelSelection}
+              />
+            </View>
             <VisitsList
               visits={filteredVisits}
               onVisitPress={handleVisitPress}
@@ -404,8 +545,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               theme={theme}
               isDarkMode={isDarkMode}
               pagination={pagination}
+              selectionMode={selectionMode}
+              selectedVisits={selectedVisits}
+              onVisitSelection={handleVisitSelection}
+              onLongPress={handleLongPress}
             />
-          </View>
+          </ScrollView>
         );
     }
   }, [
@@ -421,14 +566,19 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     refreshing,
     pagination,
     isDarkMode,
+    selectionMode,
+    selectedVisits,
     handleBackPress,
     handleEditPress,
-    handleMarkComplete,
+    handleMarkCompleteDetail,
     handleSearch,
     handleFilter,
     handleVisitPress,
     handleLoadMore,
-    handleRefresh
+    handleRefresh,
+    handleVisitSelection,
+    handleLongPress,
+    cancelSelection
   ]);
 
   return (
@@ -438,7 +588,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-
+      
       {viewMode === 'list' && (
         <Header
           title={getHeaderTitle()}
@@ -453,6 +603,21 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       <View style={[styles.contentContainer, { paddingBottom: insets.bottom }]}>
         {renderContent()}
       </View>
+
+      {/* Actions Modal */}
+      {renderActionsModal()}
+
+      {/* Loading Overlay */}
+      {markingComplete && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.loadingOverlayText}>
+              Marking {selectedVisits.length} visit(s) as complete...
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -461,11 +626,87 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  listContainer: {
+  scrollContainer: {
     flex: 1,
   },
   contentContainer: {
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.overlay,
+    justifyContent: 'flex-end',
+  },
+  actionsModal: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+  },
+  actionsModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  actionOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: WHATSAPP_COLORS.lightGreen,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  actionOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  actionOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.success,
+  },
+  cancelActionButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cancelActionText: {
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: WHATSAPP_COLORS.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingCard: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingOverlayText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: WHATSAPP_COLORS.textPrimary,
+    fontWeight: '600',
   },
 });
 

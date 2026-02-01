@@ -15,6 +15,10 @@ interface SearchAndFilterProps {
   onSearch: (query: string) => void;
   onFilter: (filterBy: string, filterValue: string) => void;
   theme: ThemeColors;
+  selectionMode?: boolean;
+  selectedCount?: number;
+  onSettingsPress?: () => void;
+  onCancelSelection?: () => void;
 }
 
 const WHATSAPP_COLORS = {
@@ -34,12 +38,17 @@ const WHATSAPP_COLORS = {
   success: '#25D366',
   info: '#3B82F6',
   white: '#FFFFFF',
+  lightBlue: '#EBF5FF',
 } as const;
 
 const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   onSearch,
   onFilter,
   theme,
+  selectionMode = false,
+  selectedCount = 0,
+  onSettingsPress,
+  onCancelSelection,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('');
@@ -79,86 +88,113 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Search Section */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputWrapper}>
-          <Ionicons 
-            name="search" 
-            size={20} 
-            color={WHATSAPP_COLORS.textTertiary} 
-            style={styles.searchIcon} 
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search visits..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearchSubmit}
-            returnKeyType="search"
-            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-              <Ionicons 
-                name="close-circle" 
-                size={20} 
-                color={WHATSAPP_COLORS.textTertiary} 
-              />
+      {/* Selection Mode Bar */}
+      {selectionMode ? (
+        <View style={styles.selectionBar}>
+          <Text style={styles.selectionText}>
+            {selectedCount} visit(s) selected
+          </Text>
+          <View style={styles.selectionActions}>
+            <TouchableOpacity 
+              style={styles.settingsButtonLarge}
+              onPress={onSettingsPress}
+            >
+              <Ionicons name="settings-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              {selectedCount > 0 && (
+                <View style={styles.settingsBadge}>
+                  <Text style={styles.settingsBadgeText}>{selectedCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Status Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabsContainer}
-        contentContainerStyle={styles.tabsContent}
-      >
-        {tabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[
-              styles.tab,
-              filterValue === tab.id && [
-                styles.activeTab, 
-                { backgroundColor: WHATSAPP_COLORS.primary }
-              ]
-            ]}
-            onPress={() => handleTabPress(tab.id)}
-          >
-            <Text style={[
-              styles.tabText,
-              { color: WHATSAPP_COLORS.textSecondary },
-              filterValue === tab.id && [
-                styles.activeTabText, 
-                { color: WHATSAPP_COLORS.white }
-              ]
-            ]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Search Mode Indicator */}
-      {isSearchMode && (
-        <View style={styles.searchModeIndicator}>
-          <View style={styles.searchModeBadge}>
-            <Ionicons 
-              name="search" 
-              size={14} 
-              color={WHATSAPP_COLORS.success} 
-            />
-            <Text style={styles.searchModeText}>
-              Search: "{searchQuery}"
-            </Text>
-            <TouchableOpacity onPress={clearSearch}>
-              <Text style={styles.clearSearchText}>Clear</Text>
+            <TouchableOpacity onPress={onCancelSelection}>
+              <Text style={styles.cancelSelectionText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
+      ) : (
+        <>
+          {/* Search Section */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Ionicons 
+                name="search" 
+                size={20} 
+                color={WHATSAPP_COLORS.textTertiary} 
+                style={styles.searchIcon} 
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search visits..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearchSubmit}
+                returnKeyType="search"
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+                  <Ionicons 
+                    name="close-circle" 
+                    size={20} 
+                    color={WHATSAPP_COLORS.textTertiary} 
+                  />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Status Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsContainer}
+            contentContainerStyle={styles.tabsContent}
+          >
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[
+                  styles.tab,
+                  filterValue === tab.id && [
+                    styles.activeTab, 
+                    { backgroundColor: WHATSAPP_COLORS.primary }
+                  ]
+                ]}
+                onPress={() => handleTabPress(tab.id)}
+              >
+                <Text style={[
+                  styles.tabText,
+                  { color: WHATSAPP_COLORS.textSecondary },
+                  filterValue === tab.id && [
+                    styles.activeTabText, 
+                    { color: WHATSAPP_COLORS.white }
+                  ]
+                ]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Search Mode Indicator */}
+          {isSearchMode && (
+            <View style={styles.searchModeIndicator}>
+              <View style={styles.searchModeBadge}>
+                <Ionicons 
+                  name="search" 
+                  size={14} 
+                  color={WHATSAPP_COLORS.success} 
+                />
+                <Text style={styles.searchModeText}>
+                  Search: "{searchQuery}"
+                </Text>
+                <TouchableOpacity onPress={clearSearch}>
+                  <Text style={styles.clearSearchText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </>
       )}
     </View>
   );
@@ -169,6 +205,52 @@ const styles = StyleSheet.create({
     backgroundColor: WHATSAPP_COLORS.background,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  selectionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: WHATSAPP_COLORS.lightBlue,
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.info,
+  },
+  selectionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.info,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  settingsButtonLarge: {
+    padding: 8,
+    position: 'relative',
+  },
+  settingsBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: WHATSAPP_COLORS.danger,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  settingsBadgeText: {
+    color: WHATSAPP_COLORS.white,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  cancelSelectionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.danger,
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -197,7 +279,7 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     position: 'absolute',
-    right: 20,
+    right: 15,
     zIndex: 1,
     padding: 4,
   },
