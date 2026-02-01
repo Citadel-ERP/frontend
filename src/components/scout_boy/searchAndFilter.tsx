@@ -50,6 +50,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     { id: 'all', label: 'All' },
     { id: 'pending', label: 'Pending' },
     { id: 'scout_completed', label: 'Completed' },
+    { id: 'cancelled', label: 'Cancel' },
   ];
 
   const handleSearchSubmit = () => {
@@ -123,7 +124,12 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               styles.tab,
               filterValue === tab.id && [
                 styles.activeTab, 
-                { backgroundColor: WHATSAPP_COLORS.primary }
+                { backgroundColor: 
+                  tab.id === 'cancelled' ? WHATSAPP_COLORS.danger : 
+                  tab.id === 'pending' ? WHATSAPP_COLORS.warning :
+                  tab.id === 'scout_completed' ? WHATSAPP_COLORS.success :
+                  WHATSAPP_COLORS.primary 
+                }
               ]
             ]}
             onPress={() => handleTabPress(tab.id)}
@@ -155,6 +161,42 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               Search: "{searchQuery}"
             </Text>
             <TouchableOpacity onPress={clearSearch}>
+              <Text style={styles.clearSearchText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Filter Mode Indicator */}
+      {filterValue !== 'all' && (
+        <View style={styles.searchModeIndicator}>
+          <View style={[
+            styles.searchModeBadge,
+            filterValue === 'cancelled' && { backgroundColor: WHATSAPP_COLORS.danger + '10' },
+            filterValue === 'pending' && { backgroundColor: WHATSAPP_COLORS.warning + '10' },
+            filterValue === 'scout_completed' && { backgroundColor: WHATSAPP_COLORS.success + '10' },
+          ]}>
+            <Ionicons 
+              name="filter" 
+              size={14} 
+              color={
+                filterValue === 'cancelled' ? WHATSAPP_COLORS.danger :
+                filterValue === 'pending' ? WHATSAPP_COLORS.warning :
+                WHATSAPP_COLORS.success
+              } 
+            />
+            <Text style={[
+              styles.searchModeText,
+              { 
+                color: 
+                  filterValue === 'cancelled' ? WHATSAPP_COLORS.danger :
+                  filterValue === 'pending' ? WHATSAPP_COLORS.warning :
+                  WHATSAPP_COLORS.success
+              }
+            ]}>
+              Filter: {tabs.find(t => t.id === filterValue)?.label}
+            </Text>
+            <TouchableOpacity onPress={() => handleTabPress('all')}>
               <Text style={styles.clearSearchText}>Clear</Text>
             </TouchableOpacity>
           </View>
@@ -218,7 +260,7 @@ const styles = StyleSheet.create({
     borderColor: WHATSAPP_COLORS.border,
   },
   activeTab: {
-    borderColor: WHATSAPP_COLORS.primary,
+    borderColor: 'transparent',
   },
   tabText: {
     fontSize: 14,
