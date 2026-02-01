@@ -45,7 +45,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
+const CALENDAR_PADDING = 32+40;
+const DAY_WIDTH = Math.floor((SCREEN_WIDTH - CALENDAR_PADDING) / 7);
 const STATUS_COLORS = {
   present: 'rgb(148, 228, 164)',
   leave: 'rgb(255, 185, 114)',
@@ -1727,12 +1728,7 @@ const styles = StyleSheet.create({
   },
   weekDays: {
     flexDirection: 'row',
-    marginBottom: 12, flex: 1,
-    textAlign: 'center',
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6b7280',
-    minWidth: 0,
+    marginBottom: 12, 
   },
   weekDay: {
     flex: 1,
@@ -1740,6 +1736,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#6b7280',
+    width:DAY_WIDTH
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -1747,7 +1744,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   calendarDay: {
-    width: `${100 / 7}%`,
+    width: DAY_WIDTH,
+    height:DAY_WIDTH,
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1755,9 +1753,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   dayCircle: {
-    width: '85%',
+    width: DAY_WIDTH - 8,
+    height : DAY_WIDTH-8,
     aspectRatio: 1,
-    borderRadius: 100,
+    borderRadius: (DAY_WIDTH - 8) / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f3f4f6',
