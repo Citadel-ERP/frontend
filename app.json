@@ -4,22 +4,23 @@
     "slug": "citadel",
     "owner": "ananyavishnoi",
     "version": "1.2.1",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "orientation": "portrait",
-
     "icon": "./src/assets/app-icon-ios.png",
-
     "userInterfaceStyle": "light",
     "scheme": "citadel",
-
     "splash": {
       "image": "./src/assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#e7e6e5"
     },
-
-    "assetBundlePatterns": ["**/*"],
-
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
@@ -36,27 +37,18 @@
           "com.citadelnetinc.app.location",
           "com.citadelnetinc.app.processing"
         ],
-        "NSLocationWhenInUseUsageDescription":
-          "Citadel uses your location to mark attendance when you are at the office.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription":
-          "Citadel requires background location access to automatically detect office entry and exit for attendance.",
-        "NSLocationAlwaysUsageDescription":
-          "Citadel uses your location even when the app is closed to enable geofencing-based attendance.",
-        "NSCameraUsageDescription":
-          "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
-        "NSPhotoLibraryUsageDescription":
-          "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
-        "NSPhotoLibraryAddUsageDescription":
-          "Citadel needs permission to save photos to your photo library.",
-        "NSFaceIDUsageDescription":
-          "Face ID is used to securely authenticate you.",
+        "NSLocationWhenInUseUsageDescription": "Citadel uses your location to mark attendance when you are at the office.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Citadel requires background location access to automatically detect office entry and exit for attendance.",
+        "NSLocationAlwaysUsageDescription": "Citadel uses your location even when the app is closed to enable geofencing-based attendance.",
+        "NSCameraUsageDescription": "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
+        "NSPhotoLibraryUsageDescription": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
+        "NSPhotoLibraryAddUsageDescription": "Citadel needs permission to save photos to your photo library.",
+        "NSFaceIDUsageDescription": "Face ID is used to securely authenticate you.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
-          "attendance":
-            "Your location is needed to verify you are at the office for attendance."
+          "attendance": "Your location is needed to verify you are at the office for attendance."
         }
       }
     },
-
     "android": {
       "package": "com.citadelnetinc.app",
       "adaptiveIcon": {
@@ -82,19 +74,19 @@
         "WRITE_EXTERNAL_STORAGE"
       ]
     },
-
+    "web": {
+      "bundler": "metro",
+      "favicon": "./src/assets/app-icon-ios.png"
+    },
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
       [
         "expo-location",
         {
-          "locationWhenInUsePermission":
-            "Allow Citadel to access your location while using the app.",
-          "locationAlwaysAndWhenInUsePermission":
-            "Allow Citadel to access your location in the background for attendance tracking.",
-          "locationAlwaysPermission":
-            "Allow Citadel to access your location even when the app is closed.",
+          "locationWhenInUsePermission": "Allow Citadel to access your location while using the app.",
+          "locationAlwaysAndWhenInUsePermission": "Allow Citadel to access your location in the background for attendance tracking.",
+          "locationAlwaysPermission": "Allow Citadel to access your location even when the app is closed.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
@@ -102,17 +94,14 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission":
-            "Allow Citadel to use Face ID for secure authentication."
+          "faceIDPermission": "Allow Citadel to use Face ID for secure authentication."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission":
-            "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
-          "cameraPermission":
-            "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
+          "photosPermission": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
+          "cameraPermission": "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
           "saveToPhotosAlbum": true
         }
       ],
@@ -128,7 +117,6 @@
       "expo-background-fetch",
       "expo-web-browser"
     ],
-
     "extra": {
       "eas": {
         "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f"
