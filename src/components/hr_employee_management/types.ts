@@ -21,6 +21,7 @@ export interface Employee {
   gift_basket_sent?: boolean;
   login_time?: string;
   logout_time?: string;
+  city?: string;
 }
 
 export interface AttendanceRecord {

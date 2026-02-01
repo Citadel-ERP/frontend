@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   TextInput,
   Image,
+  Platform,
   Linking
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -261,15 +262,30 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       const formDataToSend = new FormData();
       formDataToSend.append('token', token);
       formDataToSend.append('employee_id', employee.employee_id);
-      formDataToSend.append('signature', {
-        uri: signatureFile.uri,
-        type: signatureFile.mimeType || 'image/jpeg',
-        name: signatureFile.name || 'signature.jpg',
-      } as any);
+
+      if (Platform.OS === 'web') {
+        // For web, fetch the blob and create a File object
+        const response = await fetch(signatureFile.uri);
+        const blob = await response.blob();
+        const file = new File([blob], signatureFile.name || 'signature.jpg', {
+          type: signatureFile.mimeType || 'image/jpeg'
+        });
+        formDataToSend.append('signature', file);
+      } else {
+        // For mobile
+        formDataToSend.append('signature', {
+          uri: signatureFile.uri,
+          type: signatureFile.mimeType || 'image/jpeg',
+          name: signatureFile.name || 'signature.jpg',
+        } as any);
+      }
 
       const response = await fetch(`${BACKEND_URL}/manager/signMediclaim`, {
         method: 'POST',
         body: formDataToSend,
+        headers: Platform.OS === 'web' ? {} : {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
       const data = await response.json();
@@ -841,7 +857,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                 {modalMode === 'create' ? 'Create Mediclaim Policy' : 'Mediclaim Details'}
               </Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 if (modalMode === 'create') {
                   setModalMode('view');
@@ -850,7 +866,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                 } else {
                   onClose();
                 }
-              }} 
+              }}
               style={{ marginLeft: 12 }}
             >
               <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />

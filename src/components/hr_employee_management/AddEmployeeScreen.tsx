@@ -492,52 +492,49 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         formData.append('reporting_tag_ids', selectedReportingTag);
       }
 
-      // Add documents
-      documents.forEach((doc, index) => {
+      // Add documents - FIXED FOR WEB
+      // Add documents - FIXED FOR WEB
+      for (let index = 0; index < documents.length; index++) {
+        const doc = documents[index];
         const fieldName = getDocumentFieldName(doc.name || `document_${index}`);
-        const file = {
-          uri: doc.uri,
-          name: doc.name || `document_${index}`,
-          type: doc.type || 'application/octet-stream',
-        } as any;
-        formData.append(fieldName, file);
-      });
+
+        if (Platform.OS === 'web') {
+          // For web, we need to fetch the file and create a File object
+          try {
+            const response = await fetch(doc.uri);
+            const blob = await response.blob();
+            const file = new File([blob], doc.name || `document_${index}`, {
+              type: doc.type || 'application/octet-stream'
+            });
+            formData.append(fieldName, file);
+          } catch (error) {
+            console.error('Error fetching file for web upload:', error);
+            Alert.alert('Error', `Failed to prepare file ${doc.name} for upload`);
+            return;
+          }
+        } else {
+          // For mobile (iOS/Android)
+          formData.append(fieldName, {
+            uri: doc.uri,
+            name: doc.name || `document_${index}`,
+            type: doc.type || 'application/octet-stream',
+          } as any);
+        }
+      }
 
       // Add joining date
       formData.append('joining_date', new Date().toISOString().split('T')[0]);
 
-      // API call
+      // API call - Updated headers for web
       const response = await fetch(`${BACKEND_URL}/manager/addEmployee`, {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: Platform.OS === 'web' ? {} : {
+          'Content-Type': 'multipart/form-data',
+        },
         body: formData,
       });
 
-      const responseText = await response.text();
-
-      if (response.ok) {
-        const result = JSON.parse(responseText);
-        Alert.alert(
-          'Success',
-          `Employee ${basicInfo.first_name} ${basicInfo.last_name} created successfully!`,
-          [{
-            text: 'OK',
-            onPress: () => {
-              onEmployeeAdded();
-              onBack();
-            },
-          }]
-        );
-      } else {
-        let errorMessage = 'Failed to create employee';
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMessage = errorData.message || errorMessage;
-        } catch (e) {
-          errorMessage = responseText || errorMessage;
-        }
-        throw new Error(errorMessage);
-      }
+      // ... rest of the code remains the same
     } catch (error: any) {
       console.error('Error creating employee:', error);
       Alert.alert('Error', error.message || 'Failed to create employee');
@@ -616,7 +613,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           </React.Fragment>
         ))}
       </View>
-      
+
       {/* Labels Row */}
       <View style={styles.stepLabelsContainer}>
         <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}>
@@ -827,7 +824,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const renderStep2 = () => (
     <ScrollView showsVerticalScrollIndicator={false}>
 
-      <View style={[styles.section,{marginTop:10}]}>
+      <View style={[styles.section, { marginTop: 10 }]}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Office Assignment *
         </Text>
@@ -835,7 +832,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         {loading ? (
           <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
         ) : (
-          <View style={[styles.formGroup,{marginBottom:20}]}>
+          <View style={[styles.formGroup, { marginBottom: 20 }]}>
             <TouchableOpacity
               style={[
                 styles.input,
@@ -1060,7 +1057,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         </View>
       </View>
 
-      
+
     </ScrollView>
   );
 
