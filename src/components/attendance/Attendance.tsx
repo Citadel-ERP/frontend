@@ -108,7 +108,7 @@ const mapStatusForDisplay = (status: string): string => {
     'late_login_checkout_pending': 'late_login',
     'checkout_pending': 'present',
   };
-  
+
   return statusMapping[status.toLowerCase()] || status;
 };
 
@@ -137,13 +137,13 @@ const AttendanceButtonSection: React.FC<{
     return null;
   }
 
-  const buttonText = attendanceMarked 
-    ? 'Attendance Already Marked' 
-    : !locationPermission 
-    ? 'Enable Location to Mark Attendance' 
-    : isLateLogin 
-    ? 'Mark Late Attendance' 
-    : 'Mark Attendance';
+  const buttonText = attendanceMarked
+    ? 'Attendance Already Marked'
+    : !locationPermission
+      ? 'Enable Location to Mark Attendance'
+      : isLateLogin
+        ? 'Mark Late Attendance'
+        : 'Mark Attendance';
 
   return (
     <TouchableOpacity
@@ -264,7 +264,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
   const [attendanceForTodayMarked, setAttendanceForTodayMarked] = useState(false);
   const [checkoutForTodayMarked, setCheckoutForTodayMarked] = useState(false);
   const legendHeight = useRef(new Animated.Value(0)).current;
-  
+
   const [attendanceTimings, setAttendanceTimings] = useState({
     login_time: '09:00:00',
     login_allowed_till: '',
@@ -396,7 +396,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
     }
 
     const now = getISTTime();
-    
+
     // Before login allowed time
     if (!isCurrentTimeAfter(attendanceTimings.login_allowed_till)) {
       const loginTime = new Date(attendanceTimings.login_allowed_till).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -655,7 +655,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         attendanceTimings.login_allowed_till,
         attendanceTimings.late_login_allowed_till
       );
-      
+
       if (isLateLoginPeriod || isCurrentTimeAfter(attendanceTimings.time_not_allowed)) {
         requestBody.late_login = true;
       }
@@ -907,7 +907,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // Store attendance timings
         if (data.login_allowed_till && data.late_login_allowed_till && data.time_not_allowed) {
           setAttendanceTimings({
@@ -918,7 +918,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
             logout_time: data.logout_time || '18:00:00'
           });
         }
-        
+
         // Store today's attendance status flags
         if (typeof data.attendance_for_today_marked !== 'undefined') {
           setAttendanceForTodayMarked(data.attendance_for_today_marked);
@@ -926,7 +926,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
         if (typeof data.checkout_for_today_marked !== 'undefined') {
           setCheckoutForTodayMarked(data.checkout_for_today_marked);
         }
-        
+
         if (data.attendances && Array.isArray(data.attendances)) {
           const formattedRecords = data.attendances.map((attendance: any) => ({
             date: attendance.date,
@@ -1307,7 +1307,7 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
                 {todayAttendance?.check_out_time && (
                   <Text style={styles.markedTime}>Check-out: {todayAttendance.check_out_time}</Text>
                 )}
-                
+
                 {/* Show appropriate message/button based on checkout status */}
                 {checkoutForTodayMarked ? (
                   <Text style={styles.checkoutCompletedText}>
@@ -1727,7 +1727,12 @@ const styles = StyleSheet.create({
   },
   weekDays: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 12, flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+    minWidth: 0,
   },
   weekDay: {
     flex: 1,
@@ -1747,6 +1752,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 2,
+    minWidth: 0,
   },
   dayCircle: {
     width: '85%',

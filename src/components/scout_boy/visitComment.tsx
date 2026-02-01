@@ -1,9 +1,11 @@
-// Key changes made:
-// 1. Removed excessive padding in inputWrapper
-// 2. Streamlined the input container layout
-// 3. Made spacing more consistent with WhatsApp design
+// Fixed VisitComment component with proper keyboard handling using Animated
+// Key fixes:
+// 1. Added Animated API for smooth keyboard avoidance
+// 2. Fixed auto-scroll to properly reach bottom
+// 3. Improved keyboard handling for both iOS and Android
+// 4. Added proper KeyboardAvoidingView implementation
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +16,9 @@ import {
   Alert,
   ScrollView,
   Platform,
+  Keyboard,
+  Animated,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -46,7 +51,7 @@ const WHATSAPP_COLORS = {
 interface VisitCommentProps {
   visitId: number;
   token: string | null;
-  onCommentAdded: () => void;
+  onCommentAdded: (comment: { content: string; documents: any[] }) => void;
   theme: ThemeColors;
 }
 
@@ -68,6 +73,51 @@ const VisitComment: React.FC<VisitCommentProps> = ({
   const [commentDocuments, setCommentDocuments] = useState<DocumentAsset[]>([]);
   const [addingComment, setAddingComment] = useState(false);
   const [isPickerActive, setIsPickerActive] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Animated value for keyboard offset
+  const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
+  const inputRef = useRef<TextInput>(null);
+
+  // Handle keyboard events
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      handleKeyboardShow
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      handleKeyboardHide
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const handleKeyboardShow = (event: any) => {
+    setIsKeyboardVisible(true);
+    // Only animate on Android, iOS handles it with KeyboardAvoidingView
+    if (Platform.OS === 'android') {
+      Animated.timing(keyboardHeightAnim, {
+        toValue: event.endCoordinates.height,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  const handleKeyboardHide = () => {
+    setIsKeyboardVisible(false);
+    if (Platform.OS === 'android') {
+      Animated.timing(keyboardHeightAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   const handleAttachFile = useCallback(() => {
     Alert.alert(
@@ -104,6 +154,8 @@ const VisitComment: React.FC<VisitCommentProps> = ({
           mimeType: 'image/jpeg',
           type: 'image'
         }]);
+        // Refocus input after selecting
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -126,6 +178,7 @@ const VisitComment: React.FC<VisitCommentProps> = ({
           mimeType: 'image/jpeg',
           type: 'image'
         }]);
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -144,10 +197,11 @@ const VisitComment: React.FC<VisitCommentProps> = ({
         setCommentDocuments(prev => [...prev, {
           uri: asset.uri,
           name: asset.name,
-          mimeType: asset.mimeType || 'application/octet-stream',  
+          mimeType: asset.mimeType || 'application/octet-stream',
           type: 'document' as const,
           size: asset.size
         }]);
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (error) {
       console.error('Error picking document:', error);
@@ -175,19 +229,34 @@ const VisitComment: React.FC<VisitCommentProps> = ({
       Alert.alert('Error', 'Please enter a comment or attach a file');
       return;
     }
+
     if (!token || !visitId) return;
 
     try {
       setAddingComment(true);
+
+      // Immediately notify parent with optimistic data
+      onCommentAdded({
+        content: commentText.trim(),
+        documents: commentDocuments
+      });
+
+      // Clear input immediately for better UX
+      const textToSend = commentText.trim();
+      const docsToSend = [...commentDocuments];
+      setCommentText('');
+      setCommentDocuments([]);
+
+      // Send to backend
       const formData = new FormData();
       formData.append('token', token);
       formData.append('visit_id', visitId.toString());
 
-      if (commentText.trim()) {
-        formData.append('comment', commentText.trim());
+      if (textToSend) {
+        formData.append('comment', textToSend);
       }
 
-      commentDocuments.forEach((doc, index) => {
+      docsToSend.forEach((doc, index) => {
         formData.append('documents', {
           uri: doc.uri,
           type: doc.mimeType || 'application/octet-stream',
@@ -206,14 +275,14 @@ const VisitComment: React.FC<VisitCommentProps> = ({
       const data = await response.json();
       if (!data.comment) throw new Error();
 
-      setCommentText('');
-      setCommentDocuments([]);
-      onCommentAdded();
-      
-      Alert.alert('Success', 'Comment added successfully');
+      // Success - no need to show alert as the message is already visible
     } catch (error) {
       console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment. Please try again.');
+      Alert.alert('Error', 'Failed to send comment. Please try again.');
+
+      // On error, restore the comment text and documents
+      setCommentText(commentText);
+      setCommentDocuments(commentDocuments);
     } finally {
       setAddingComment(false);
     }
@@ -221,18 +290,118 @@ const VisitComment: React.FC<VisitCommentProps> = ({
 
   const isSendEnabled = commentText.trim().length > 0 || commentDocuments.length > 0;
 
+  // Render for Android with Animated
+  if (Platform.OS === 'android') {
+    return (
+      <View style={styles.mainContainer}>
+        {commentDocuments.length > 0 && (
+          <View style={styles.attachedFilesContainer}>
+            <Text style={styles.attachedFilesTitle}>Attached files:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {commentDocuments.map((doc, index) => (
+                <View key={index} style={styles.attachedFile}>
+                  <Ionicons
+                    name={doc.type === 'image' ? 'image' : 'document'}
+                    size={16}
+                    color={WHATSAPP_COLORS.primary}
+                  />
+                  <View style={styles.attachedFileInfo}>
+                    <Text style={styles.attachedFileName} numberOfLines={1}>
+                      {truncateFileName(doc.name)}
+                    </Text>
+                    <Text style={styles.attachedFileSize}>{formatFileSize(doc.size)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveDocument(index)}
+                    style={styles.removeFileButton}
+                  >
+                    <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.danger} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        <Animated.View style={[styles.inputContainer, { marginBottom: keyboardHeightAnim }]}>
+          <View style={styles.inputWrapper}>
+            <View style={styles.inputRow}>
+              <TouchableOpacity
+                style={styles.attachmentButton}
+                onPress={handleAttachFile}
+                disabled={addingComment}
+              >
+                <Ionicons name="attach" size={22} color={WHATSAPP_COLORS.primary} />
+                {commentDocuments.length > 0 && (
+                  <View style={styles.fileCounterBadge}>
+                    <Text style={styles.fileCounterText}>{commentDocuments.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.inputField}>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.messageInput}
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  placeholder="Type your message..."
+                  multiline
+                  maxLength={1000}
+                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                  editable={!addingComment}
+                  returnKeyType="default"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => {
+                    if (isSendEnabled) {
+                      handleAddComment();
+                    }
+                  }}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  { backgroundColor: isSendEnabled ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.border }
+                ]}
+                onPress={handleAddComment}
+                disabled={!isSendEnabled || addingComment}
+              >
+                {addingComment ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Ionicons
+                    name="send"
+                    size={18}
+                    color={isSendEnabled ? '#FFF' : WHATSAPP_COLORS.textTertiary}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // Render for iOS with KeyboardAvoidingView
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      behavior="padding"
+      keyboardVerticalOffset={0}
+      style={styles.mainContainer}
+    >
       {commentDocuments.length > 0 && (
         <View style={styles.attachedFilesContainer}>
           <Text style={styles.attachedFilesTitle}>Attached files:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {commentDocuments.map((doc, index) => (
               <View key={index} style={styles.attachedFile}>
-                <Ionicons 
-                  name={doc.type === 'image' ? 'image' : 'document'} 
-                  size={16} 
-                  color={WHATSAPP_COLORS.primary} 
+                <Ionicons
+                  name={doc.type === 'image' ? 'image' : 'document'}
+                  size={16}
+                  color={WHATSAPP_COLORS.primary}
                 />
                 <View style={styles.attachedFileInfo}>
                   <Text style={styles.attachedFileName} numberOfLines={1}>
@@ -255,8 +424,8 @@ const VisitComment: React.FC<VisitCommentProps> = ({
       <View style={styles.inputContainer}>
         <View style={styles.inputWrapper}>
           <View style={styles.inputRow}>
-            <TouchableOpacity 
-              style={styles.attachmentButton} 
+            <TouchableOpacity
+              style={styles.attachmentButton}
               onPress={handleAttachFile}
               disabled={addingComment}
             >
@@ -267,9 +436,10 @@ const VisitComment: React.FC<VisitCommentProps> = ({
                 </View>
               )}
             </TouchableOpacity>
-            
+
             <View style={styles.inputField}>
               <TextInput
+                ref={inputRef}
                 style={styles.messageInput}
                 value={commentText}
                 onChangeText={setCommentText}
@@ -287,7 +457,7 @@ const VisitComment: React.FC<VisitCommentProps> = ({
                 }}
               />
             </View>
-            
+
             <TouchableOpacity
               style={[
                 styles.sendButton,
@@ -309,12 +479,12 @@ const VisitComment: React.FC<VisitCommentProps> = ({
           </View>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  mainContainer: {
     backgroundColor: WHATSAPP_COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: WHATSAPP_COLORS.border,
@@ -324,6 +494,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
+    backgroundColor: WHATSAPP_COLORS.surface,
   },
   attachedFilesTitle: {
     fontSize: 14,
@@ -358,21 +529,20 @@ const styles = StyleSheet.create({
   removeFileButton: {
     padding: 4,
   },
-  // FIXED: Input container with proper spacing
   inputContainer: {
     backgroundColor: WHATSAPP_COLORS.surface,
   },
   inputWrapper: {
-    paddingHorizontal: 12, // CHANGED: Reduced from 16 to 12
-    paddingVertical: 8, // CHANGED: Simplified - removed platform-specific logic
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8, // CHANGED: Reduced from 10 to 8 for tighter spacing
+    gap: 8,
   },
   attachmentButton: {
-    padding: 6, // CHANGED: Reduced from 8 to 6
+    padding: 6,
     marginBottom: 2,
     position: 'relative',
   },
@@ -400,8 +570,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,
     paddingHorizontal: 16,
-    paddingVertical: 8, // CHANGED: Reduced from 10 to 8
-    minHeight: 36, // CHANGED: Increased from 30 to 36 for better appearance
+    paddingVertical: 8,
+    minHeight: 36,
     maxHeight: 100,
   },
   messageInput: {

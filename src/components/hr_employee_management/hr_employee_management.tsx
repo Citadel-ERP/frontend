@@ -22,20 +22,38 @@ import AddEmployeeScreen from './AddEmployeeScreen';
 import HolidayManagement from './holiday';
 import AttendanceDownloadModal from './AttendanceDownloadModal';
 
+interface CityGroup {
+  city: string;
+  employees: Employee[];
+}
+
+interface PaginationInfo {
+  current_page: number;
+  total_pages: number;
+  total_employees: number;
+  has_next: boolean;
+  has_previous: boolean;
+  page_size: number;
+}
+
 const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
   const [tokenLoaded, setTokenLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
+  const [employeesByCity, setEmployeesByCity] = useState<CityGroup[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showHolidayManagement, setShowHolidayManagement] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showAddEmployeeScreen, setShowAddEmployeeScreen] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Get token on mount - with enhanced debugging
   useEffect(() => {
@@ -96,30 +114,27 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     
     if (tokenLoaded && token) {
       console.log('Conditions met - calling fetchEmployees');
-      fetchEmployees();
+      fetchEmployees(1, true); // Reset to page 1
     } else if (tokenLoaded && !token) {
       console.log('Token loaded but is null - not fetching');
       setLoading(false);
     }
   }, [token, tokenLoaded]);
 
-  // Filter employees based on search
+  // Debounce search query
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredEmployees(employees);
-    } else {
-      const filtered = employees.filter(emp =>
-        emp.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.employee_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.designation?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredEmployees(filtered);
-    }
-  }, [searchQuery, employees]);
+    const delayDebounce = setTimeout(() => {
+      if (tokenLoaded && token) {
+        fetchEmployees(1, true); // Reset to page 1 when searching
+      }
+    }, 500);
 
-  const fetchEmployees = async () => {
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
+
+  const fetchEmployees = async (page: number = 1, reset: boolean = false) => {
     console.log('=== fetchEmployees called ===');
+    console.log('Page:', page, 'Reset:', reset);
     
     if (!token) {
       console.log('No token available for fetch - aborting');
@@ -127,20 +142,29 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       return;
     }
 
-    setLoading(true);
+    if (page === 1) {
+      setLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
     setError(null);
 
     try {
       const url = `${BACKEND_URL}/manager/getAllEmployees`;
       console.log('Fetching from URL:', url);
-      console.log('Request body token (first 30 chars):', token.substring(0, 30) + '...');
+      console.log('Request params:', { page, searchQuery });
       
       const response = await fetch(url, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ 
+          token,
+          page,
+          page_size: 50,
+          search_query: searchQuery
+        }),
       });
 
       console.log('Response received - Status:', response.status);
@@ -148,15 +172,39 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ SUCCESS - Employees fetched:', data.length);
-        if (data.length > 0) {
-          console.log('First employee sample:', {
-            name: data[0].full_name,
-            id: data[0].employee_id
+        console.log('✅ SUCCESS - Data received');
+        console.log('Cities count:', data.employees_by_city?.length);
+        console.log('Pagination:', data.pagination);
+        
+        if (reset || page === 1) {
+          // Replace all data
+          setEmployeesByCity(data.employees_by_city || []);
+          setCurrentPage(1);
+        } else {
+          // Append to existing data
+          setEmployeesByCity(prev => {
+            // Merge city groups
+            const merged = [...prev];
+            data.employees_by_city.forEach((newGroup: CityGroup) => {
+              const existingIndex = merged.findIndex(g => g.city === newGroup.city);
+              if (existingIndex >= 0) {
+                // City exists, merge employees
+                merged[existingIndex].employees = [
+                  ...merged[existingIndex].employees,
+                  ...newGroup.employees
+                ];
+              } else {
+                // New city, add it
+                merged.push(newGroup);
+              }
+            });
+            // Sort cities alphabetically
+            return merged.sort((a, b) => a.city.localeCompare(b.city));
           });
+          setCurrentPage(page);
         }
-        setEmployees(data);
-        setFilteredEmployees(data);
+        
+        setPagination(data.pagination);
       } else {
         const errorText = await response.text();
         console.error('❌ ERROR Response:', errorText);
@@ -180,13 +228,22 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     } finally {
       console.log('=== fetchEmployees completed ===');
       setLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadMoreEmployees = () => {
+    if (pagination && pagination.has_next && !isLoadingMore && !loading) {
+      console.log('Loading more employees, page:', currentPage + 1);
+      fetchEmployees(currentPage + 1, false);
     }
   };
 
   const onRefresh = async () => {
     console.log('=== Manual refresh triggered ===');
     setRefreshing(true);
-    await fetchEmployees();
+    setCurrentPage(1);
+    await fetchEmployees(1, true);
     setRefreshing(false);
   };
 
@@ -340,7 +397,11 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
   // Handle employee addition success
   const handleEmployeeAdded = () => {
-    fetchEmployees(); // Refresh the employee list
+    fetchEmployees(1, true); // Refresh the employee list
+  };
+
+  const getTotalDisplayedEmployees = () => {
+    return employeesByCity.reduce((sum, group) => sum + group.employees.length, 0);
   };
 
   if (selectedEmployee) {
@@ -382,7 +443,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       
       <Header
         title="HR Management"
-        subtitle={`${filteredEmployees.length} employee${filteredEmployees.length !== 1 ? 's' : ''}`}
+        subtitle={`${pagination?.total_employees || 0} employee${pagination?.total_employees !== 1 ? 's' : ''}`}
         onBack={onBack}
         showAddEmployee={() => setShowAddEmployeeScreen(true)}
       />
@@ -392,11 +453,11 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onSearchChange={setSearchQuery}
         onDownloadAttendance={() => setShowAttendanceModal(true)}
         onOpenHolidays={() => setShowHolidayManagement(true)}
-        placeholder="Search employees..."
+        placeholder="Search by name, ID, city, or designation..."
       />
 
       <EmployeeList
-        employees={filteredEmployees}
+        employeesByCity={employeesByCity}
         loading={loading}
         refreshing={refreshing}
         error={error}
@@ -404,6 +465,9 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onRefresh={onRefresh}
         onEmployeePress={handleEmployeePress}
         onClearSearch={() => setSearchQuery('')}
+        onLoadMore={loadMoreEmployees}
+        hasMore={pagination?.has_next || false}
+        totalEmployees={pagination?.total_employees || 0}
       />
 
       <AttendanceDownloadModal

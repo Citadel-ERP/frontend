@@ -1,5 +1,5 @@
 // hr_employee_management/list.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,27 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Employee } from './types';
 import { WHATSAPP_COLORS, getAvatarColor, getInitials, calculateExperience } from './constants';
 import { styles } from './styles';
 
-interface EmployeeListProps {
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+interface CityGroup {
+  city: string;
   employees: Employee[];
+}
+
+interface EmployeeListProps {
+  employeesByCity: CityGroup[];
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -22,10 +35,13 @@ interface EmployeeListProps {
   onRefresh: () => void;
   onEmployeePress: (employee: Employee) => void;
   onClearSearch: () => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  totalEmployees?: number;
 }
 
 export const EmployeeList: React.FC<EmployeeListProps> = ({
-  employees,
+  employeesByCity,
   loading,
   refreshing,
   error,
@@ -33,8 +49,30 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   onRefresh,
   onEmployeePress,
   onClearSearch,
+  onLoadMore,
+  hasMore = false,
+  totalEmployees = 0,
 }) => {
-  if (loading && employees.length === 0) {
+  const [collapsedCities, setCollapsedCities] = useState<Set<string>>(new Set());
+
+  const toggleCity = (city: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCollapsedCities(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(city)) {
+        newSet.delete(city);
+      } else {
+        newSet.add(city);
+      }
+      return newSet;
+    });
+  };
+
+  const getTotalEmployeesInView = () => {
+    return employeesByCity.reduce((sum, group) => sum + group.employees.length, 0);
+  };
+
+  if (loading && employeesByCity.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading employees...</Text>
@@ -59,7 +97,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     );
   }
 
-  if (employees.length === 0) {
+  if (employeesByCity.length === 0) {
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyStateIcon}>
@@ -100,97 +138,154 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
           progressBackgroundColor={WHATSAPP_COLORS.background}
         />
       }
+      onScroll={({ nativeEvent }) => {
+        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+        const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 100;
+        if (isCloseToBottom && hasMore && !loading && onLoadMore) {
+          onLoadMore();
+        }
+      }}
+      scrollEventThrottle={400}
     >
       <View style={styles.employeesList}>
-        {/* <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>Employees</Text>
-          <Text style={styles.listSubtitle}>
-            {searchQuery ? `Results for "${searchQuery}"` : 'All employees'}
+        {/* Summary Header */}
+        {/* <View style={styles.summaryHeader}>
+          <Text style={styles.summaryText}>
+            {searchQuery ? `Results for "${searchQuery}"` : `${totalEmployees} Total Employees`}
+          </Text>
+          <Text style={styles.summarySubtext}>
+            Showing {getTotalEmployeesInView()} employees across {employeesByCity.length} {employeesByCity.length === 1 ? 'city' : 'cities'}
           </Text>
         </View> */}
-        
-        {employees.map((employee) => (
-          <TouchableOpacity
-            key={employee.employee_id}
-            style={styles.employeeCard}
-            onPress={() => onEmployeePress(employee)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.employeeCardContent}>
-              <View style={styles.avatarContainer}>
-                {employee.profile_picture ? (
-                  <Image
-                    source={{ uri: employee.profile_picture }}
-                    style={styles.avatar}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.avatarDefault, 
-                    { backgroundColor: getAvatarColor(employee.employee_id) }
-                  ]}>
-                    <Text style={styles.avatarInitials}>
-                      {getInitials(employee.full_name)}
-                    </Text>
-                  </View>
-                )}
-                <View style={[
-                  styles.statusIndicator,
-                  { backgroundColor: employee.is_active ? WHATSAPP_COLORS.statusOnline : WHATSAPP_COLORS.statusOffline }
-                ]} />
-              </View>
 
-              <View style={styles.employeeInfo}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.employeeName} numberOfLines={1}>
-                    {employee.full_name}
-                  </Text>
-                  <Text style={styles.employeeTime}>
-                    {calculateExperience(employee.joining_date)}
+        {employeesByCity.map((cityGroup) => (
+          <View key={cityGroup.city} style={styles.citySection}>
+            {/* City Header */}
+            <TouchableOpacity
+              style={styles.cityHeader}
+              onPress={() => toggleCity(cityGroup.city)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cityHeaderLeft}>
+                <Ionicons 
+                  name="location" 
+                  size={20} 
+                  color={WHATSAPP_COLORS.accent} 
+                  style={styles.cityIcon}
+                />
+                <View>
+                  <Text style={styles.cityName}>{cityGroup.city}</Text>
+                  <Text style={styles.cityEmployeeCount}>
+                    {cityGroup.employees.length} employee{cityGroup.employees.length !== 1 ? 's' : ''}
                   </Text>
                 </View>
-                
-                <Text style={styles.employeeDesignation} numberOfLines={1}>
-                  {employee.designation || employee.designation}
-                </Text>
-                
-                <Text style={styles.employeeLastMessage} numberOfLines={1}>
-                  ID: {employee.employee_id} • {employee.email}
-                </Text>
-                
-                <View style={styles.leaveBadges}>
-                  <View style={[styles.leaveBadge, { backgroundColor: '#E8F5E9' }]}>
-                    <Text style={[styles.leaveBadgeText, { color: '#2E7D32' }]}>
-                      E: {employee.earned_leaves}
-                    </Text>
-                  </View>
-                  <View style={[styles.leaveBadge, { backgroundColor: '#FFF3E0' }]}>
-                    <Text style={[styles.leaveBadgeText, { color: '#EF6C00' }]}>
-                      S: {employee.sick_leaves}
-                    </Text>
-                  </View>
-                  <View style={[styles.leaveBadge, { backgroundColor: '#E3F2FD' }]}>
-                    <Text style={[styles.leaveBadgeText, { color: '#1565C0' }]}>
-                      C: {employee.casual_leaves}
-                    </Text>
-                  </View>
-                </View>
               </View>
-
-              <Ionicons 
-                name="chevron-forward" 
-                size={20} 
-                color={WHATSAPP_COLORS.textTertiary} 
-                style={styles.chevronIcon}
+              <Ionicons
+                name={collapsedCities.has(cityGroup.city) ? "chevron-down" : "chevron-up"}
+                size={24}
+                color={WHATSAPP_COLORS.textSecondary}
               />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+
+            {/* Employee Cards */}
+            {!collapsedCities.has(cityGroup.city) && (
+              <View style={styles.cityEmployeesContainer}>
+                {cityGroup.employees.map((employee) => (
+                  <TouchableOpacity
+                    key={employee.employee_id}
+                    style={styles.employeeCard}
+                    onPress={() => onEmployeePress(employee)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.employeeCardContent}>
+                      <View style={styles.avatarContainer}>
+                        {employee.profile_picture ? (
+                          <Image
+                            source={{ uri: employee.profile_picture }}
+                            style={styles.avatar}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.avatarDefault, 
+                            { backgroundColor: getAvatarColor(employee.employee_id) }
+                          ]}>
+                            <Text style={styles.avatarInitials}>
+                              {getInitials(employee.full_name)}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={[
+                          styles.statusIndicator,
+                          { backgroundColor: employee.is_active ? WHATSAPP_COLORS.statusOnline : WHATSAPP_COLORS.statusOffline }
+                        ]} />
+                      </View>
+
+                      <View style={styles.employeeInfo}>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.employeeName} numberOfLines={1}>
+                            {employee.full_name}
+                          </Text>
+                          <Text style={styles.employeeTime}>
+                            {calculateExperience(employee.joining_date)}
+                          </Text>
+                        </View>
+                        
+                        <Text style={styles.employeeDesignation} numberOfLines={1}>
+                          {employee.designation || employee.designation}
+                        </Text>
+                        
+                        <Text style={styles.employeeLastMessage} numberOfLines={1}>
+                          ID: {employee.employee_id} • {employee.email}
+                        </Text>
+                        
+                        <View style={styles.leaveBadges}>
+                          <View style={[styles.leaveBadge, { backgroundColor: '#E8F5E9' }]}>
+                            <Text style={[styles.leaveBadgeText, { color: '#2E7D32' }]}>
+                              E: {employee.earned_leaves}
+                            </Text>
+                          </View>
+                          <View style={[styles.leaveBadge, { backgroundColor: '#FFF3E0' }]}>
+                            <Text style={[styles.leaveBadgeText, { color: '#EF6C00' }]}>
+                              S: {employee.sick_leaves}
+                            </Text>
+                          </View>
+                          <View style={[styles.leaveBadge, { backgroundColor: '#E3F2FD' }]}>
+                            <Text style={[styles.leaveBadgeText, { color: '#1565C0' }]}>
+                              C: {employee.casual_leaves}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <Ionicons 
+                        name="chevron-forward" 
+                        size={20} 
+                        color={WHATSAPP_COLORS.textTertiary} 
+                        style={styles.chevronIcon}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         ))}
-        
-        <View style={styles.listFooter}>
-          <Text style={styles.listFooterText}>
-            End of list • {employees.length} employee{employees.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
+
+        {/* Load More Indicator */}
+        {loading && employeesByCity.length > 0 && (
+          <View style={styles.loadMoreContainer}>
+            <Text style={styles.loadMoreText}>Loading more employees...</Text>
+          </View>
+        )}
+
+        {/* End of List Footer */}
+        {!hasMore && (
+          <View style={styles.listFooter}>
+            <Text style={styles.listFooterText}>
+              End of list • {totalEmployees} total employee{totalEmployees !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );

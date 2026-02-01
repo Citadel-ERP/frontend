@@ -2496,4 +2496,73 @@ export const styles = StyleSheet.create({
   clearReportingButton: {
     padding: 4,
   },
+  citySection: {
+    marginBottom: 16,
+  },
+  cityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff00',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: WHATSAPP_COLORS.accent,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  cityHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cityIcon: {
+    marginRight: 10,
+  },
+  cityName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.accent,
+    letterSpacing: 0.3,
+  },
+  cityEmployeeCount: {
+    fontSize: 10,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginTop: 2,
+  },
+  cityEmployeesContainer: {
+    paddingLeft: 8,
+  },
+  summaryHeader: {
+    backgroundColor: '#ffffff00',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: WHATSAPP_COLORS.accent,
+  },
+  summaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.accent,
+    marginBottom: 4,
+  },
+  summarySubtext: {
+    fontSize: 13,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
+  loadMoreContainer: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textSecondary,
+    fontStyle: 'italic',
+  },
 });

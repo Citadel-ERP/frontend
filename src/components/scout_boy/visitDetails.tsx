@@ -16,9 +16,9 @@ import {
   Image,
   Linking,
   StatusBar,
-  Keyboard,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
@@ -88,8 +88,36 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
-
+  const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+
+  // Pagination and scroll management
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreComments, setHasMoreComments] = useState(true);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const shouldScrollToBottomRef = useRef(true);
+  const isLoadingMoreRef = useRef(false);
+  const lastScrollY = useRef(0);
+  const scrollDirection = useRef<'up' | 'down'>('down');
+  const paginationTriggeredAt = useRef(0);
+  const PAGINATION_COOLDOWN = 1000;
+  const SCROLL_THRESHOLD = 100;
+
+  // Fetch current user employee ID
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user_data');
+        if (userData) {
+          const parsedData = JSON.parse(userData);
+          setCurrentUserEmployeeId(parsedData.employee_id);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   const fetchComments = useCallback(async (page: number = 1, append: boolean = false) => {
     if (!token || !visit.id) return;
@@ -116,12 +144,21 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
         content: item.content,
         documents: item.documents || [],
         created_at: item.created_at,
+        employeeId: item.user?.employee_id,
       }));
 
       if (append) {
-        setComments(prev => [...prev, ...formattedComments]);
+        setComments(prev => [...formattedComments, ...prev]);
       } else {
         setComments(formattedComments);
+        setInitialLoadDone(true);
+        shouldScrollToBottomRef.current = true;
+      }
+
+      // Update pagination state
+      if (data.pagination) {
+        setHasMoreComments(data.pagination.has_next);
+        setCurrentPage(data.pagination.current_page);
       }
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -136,11 +173,92 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
     fetchComments(1, false);
   }, [fetchComments]);
 
-  const handleRefresh = useCallback(() => {
+  const fetchMoreComments = async () => {
+    const now = Date.now();
+    if (now - paginationTriggeredAt.current < PAGINATION_COOLDOWN) {
+      console.log('Pagination on cooldown, skipping...');
+      return;
+    }
+
+    if (!token || !visit.id || !hasMoreComments || isLoadingMoreRef.current || loadingMoreComments) {
+      return;
+    }
+
+    isLoadingMoreRef.current = true;
+    paginationTriggeredAt.current = now;
+
+    const nextPage = currentPage + 1;
+    await fetchComments(nextPage, true);
+    
+    isLoadingMoreRef.current = false;
+    shouldScrollToBottomRef.current = false; // Don't auto-scroll when loading older messages
+  };
+
+  const handleScroll = (event: any) => {
+    const { contentOffset } = event.nativeEvent;
+    const currentY = contentOffset.y;
+
+    // Determine scroll direction
+    if (currentY > lastScrollY.current) {
+      scrollDirection.current = 'down';
+    } else if (currentY < lastScrollY.current) {
+      scrollDirection.current = 'up';
+    }
+
+    lastScrollY.current = currentY;
+
+    // Check if user is near the top (for pagination)
+    const isNearTop = currentY < SCROLL_THRESHOLD;
+
+    // Trigger pagination when scrolling up near the top
+    const shouldLoadMore =
+      scrollDirection.current === 'up' &&
+      isNearTop &&
+      hasMoreComments &&
+      !loadingMoreComments &&
+      !isLoadingMoreRef.current;
+
+    if (shouldLoadMore) {
+      console.log('Triggering pagination - scroll position:', currentY);
+      fetchMoreComments();
+    }
+  };
+
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchComments(1, false);
+    await fetchComments(1, false);
     setRefreshing(false);
   }, [fetchComments]);
+
+  // Optimistic update handler
+  const handleCommentAdded = useCallback((newComment: {
+    content: string;
+    documents: any[];
+  }) => {
+    const optimisticComment: Comment = {
+      id: Date.now(),
+      user: {
+        id: currentUserEmployeeId ? parseInt(currentUserEmployeeId) : 0,
+        full_name: 'You',
+        employee_id: currentUserEmployeeId || '',
+      },
+      content: newComment.content,
+      documents: newComment.documents,
+      created_at: new Date().toISOString(),
+      employeeId: currentUserEmployeeId || '',
+    };
+
+    setComments(prev => [...prev, optimisticComment]);
+    shouldScrollToBottomRef.current = true;
+
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    setTimeout(() => {
+      fetchComments(1, false);
+    }, 1000);
+  }, [currentUserEmployeeId, fetchComments]);
 
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
@@ -176,7 +294,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
       const date = new Date(dateString);
       const now = new Date();
       const diff = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
       if (diff < 24) {
         return date.toLocaleTimeString('en-IN', {
           hour: '2-digit',
@@ -194,6 +311,16 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
       return '-';
     }
   }, []);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (initialLoadDone && shouldScrollToBottomRef.current && comments.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+        shouldScrollToBottomRef.current = false;
+      }, 150);
+    }
+  }, [comments, initialLoadDone]);
 
   const DetailRow = ({ icon, label, value }: { icon?: string; label: string; value: string | number | boolean }) => {
     const displayValue = typeof value === 'boolean' ? (value ? 'Yes' : 'No') : (value || '-');
@@ -246,7 +373,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
               { icon: 'construct', label: 'Developer Fitouts', value: site.will_developer_do_fitouts },
             ];
           }
-
         case 'Commercial Details':
           if (isManagedProperty) {
             return [
@@ -273,7 +399,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
               { icon: 'trending-up', label: 'Rental Escalation', value: site.rental_escalation ? `${site.rental_escalation}%` : '-' },
             ];
           }
-
         case 'Vehicle Information':
           return [
             { icon: 'car', label: 'Car Parking Charges', value: site.car_parking_charges ? `₹${site.car_parking_charges}` : '-' },
@@ -282,7 +407,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
             { icon: 'bicycle', label: 'Two Wheeler Parking', value: site.two_wheeler_charges ? `₹${site.two_wheeler_charges}` : '-' },
             { icon: 'grid', label: 'Two Wheeler Slots', value: site.two_wheeler_slots },
           ];
-
         case 'Contact Information':
           const contactItems = [
             { icon: 'person', label: 'Building Owner', value: site.building_owner_name },
@@ -302,7 +426,6 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
           }
           
           return contactItems;
-
         default:
           return [];
       }
@@ -346,13 +469,11 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
               </View>
               <View style={[styles.onlineIndicator, { backgroundColor: getStatusColor(visit.status) }]} />
             </View>
+
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {visit.site?.building_name || 'Visit'}
               </Text>
-              {/* <Text style={styles.headerSubtitle} numberOfLines={1}>
-                {currentIndex + 1} of {totalVisits}
-              </Text> */}
             </View>
           </TouchableOpacity>
 
@@ -574,31 +695,42 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
   );
 
   return (
-    <View style={styles.mainContainer}>
+    <KeyboardAvoidingView 
+      style={styles.mainContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       <Header />
       {ContactInfoModal()}
 
       <View style={styles.chatContainer}>
+        {loadingMoreComments && (
+          <View style={styles.loadingMoreContainer}>
+            <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+            <Text style={styles.loadingMoreText}>Loading more comments...</Text>
+          </View>
+        )}
+        
         <FlatList
           ref={flatListRef}
           data={comments}
           renderItem={({ item }) => {
-            const isOwnMessage = item.user?.id?.toString() === currentUserId;
+            const isCurrentUser = item.employeeId === currentUserEmployeeId;
             
             return (
               <View 
                 style={[
                   styles.chatBubbleContainer,
-                  isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
+                  isCurrentUser ? styles.ownMessageContainer : styles.otherMessageContainer
                 ]}
               >
                 <View 
                   style={[
                     styles.chatBubble,
-                    isOwnMessage ? styles.ownUserBubble : styles.otherUserBubble
+                    isCurrentUser ? styles.ownUserBubble : styles.otherUserBubble
                   ]}
                 >
-                  {!isOwnMessage && (
+                  {!isCurrentUser && (
                     <Text style={styles.senderName}>{item.user?.full_name || 'Unknown'}</Text>
                   )}
                   {item.content && (
@@ -615,6 +747,8 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
           inverted={false}
           contentContainerStyle={styles.chatListContent}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={400}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -623,6 +757,13 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
               tintColor={WHATSAPP_COLORS.primary}
             />
           }
+          onContentSizeChange={() => {
+            if (shouldScrollToBottomRef.current) {
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+            }
+          }}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
               <Ionicons name="chatbubbles" size={64} color={WHATSAPP_COLORS.chat} />
@@ -635,13 +776,15 @@ const VisitDetails: React.FC<VisitDetailsProps> = ({
         />
       </View>
 
-      <VisitComment
-        visitId={visit.id}
-        token={token}
-        onCommentAdded={() => fetchComments(1, false)}
-        theme={theme}
-      />
-    </View>
+      <SafeAreaView style={styles.inputSafeArea} edges={['bottom']}>
+        <VisitComment
+          visitId={visit.id}
+          token={token}
+          onCommentAdded={handleCommentAdded}
+          theme={theme}
+        />
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -694,8 +837,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerActionButton: { padding: 8 },
-
-  // Modal styles - redesigned
+  
   modalMainContainer: { 
     flex: 1, 
     backgroundColor: '#F5F5F5',
@@ -732,8 +874,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   modalFooterSpace: { height: 24 },
-
-  // Card styles - WhatsApp message bubble inspired
+  
   modalCard: {
     backgroundColor: WHATSAPP_COLORS.surface,
     borderRadius: 12,
@@ -745,8 +886,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
   },
-
-  // Lead profile header - redesigned
+  
   leadProfileHeader: {
     alignItems: 'center',
     paddingVertical: 24,
@@ -818,8 +958,7 @@ const styles = StyleSheet.create({
     fontSize: 13, 
     fontWeight: '600',
   },
-
-  // Section header - redesigned
+  
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -870,8 +1009,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-
-  // Photos section - redesigned
+  
   photosScrollView: {
     paddingVertical: 12,
   },
@@ -902,7 +1040,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 8,
-    background: 'linear-gradient(to top, rgba(0,0,0,0.3), transparent)',
   },
   photoIndexBadge: {
     position: 'absolute',
@@ -918,8 +1055,7 @@ const styles = StyleSheet.create({
     fontSize: 12, 
     fontWeight: '600' 
   },
-
-  // Detail section - redesigned for WhatsApp feel
+  
   detailSectionContainer: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -954,14 +1090,25 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     maxWidth: '50%',
   },
-
-  // Chat section - FIXED: Better centering and spacing
+  
   chatContainer: { flex: 1, backgroundColor: WHATSAPP_COLORS.chatBg },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: WHATSAPP_COLORS.chatBg,
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 13,
+    color: WHATSAPP_COLORS.textSecondary,
+  },
   chatListContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8, // CHANGED: Reduced from 20 to 8 to fix irregular spacing
-    flexGrow: 1, // ADDED: Allows content to grow and enables proper centering
+    paddingBottom: 8,
+    flexGrow: 1,
   },
   chatBubbleContainer: { 
     marginVertical: 4,
@@ -1005,12 +1152,12 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   chatTimeText: { fontSize: 10, color: WHATSAPP_COLORS.textTertiary },
-  // FIXED: Empty chat state with proper vertical centering
+  
   emptyChat: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1, // ADDED: Enables vertical centering in FlatList
-    paddingVertical: 60, // CHANGED: Reduced from 100 to 60
+    flex: 1,
+    paddingVertical: 60,
     gap: 16
   },
   emptyChatTitle: {
@@ -1023,7 +1170,11 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textSecondary,
     textAlign: 'center',
     maxWidth: 200
-  }
+  },
+  
+  inputSafeArea: {
+    backgroundColor: WHATSAPP_COLORS.surface,
+  },
 });
 
 export default VisitDetails;
