@@ -48,7 +48,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [filterBy, setFilterBy] = useState('');
-  const [filterValue, setFilterValue] = useState('all');
+  const [filterValue, setFilterValue] = useState('');
 
   // Photo Modal State
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -84,7 +84,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   }, []);
 
   // API Functions - Using useCallback with stable dependencies
-  const fetchVisits = useCallback(async (page: number = 1, append: boolean = false, statusFilter?: string): Promise<void> => {
+  const fetchVisits = useCallback(async (page: number = 1, append: boolean = false): Promise<void> => {
     if (!token) return;
 
     try {
@@ -94,17 +94,10 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         setLoading(true);
       }
 
-      const requestBody: any = { token, page };
-      
-      // Add status filter if provided
-      if (statusFilter && statusFilter !== 'all') {
-        requestBody.status = statusFilter;
-      }
-
       const response = await fetch(`${BACKEND_URL}/employee/getAssignedVisits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({ token, page })
       });
 
       if (!response.ok) {
@@ -141,7 +134,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token]); // Only depend on token
 
   const searchVisits = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) {
@@ -196,7 +189,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       initialFetchDone.current = true;
       fetchVisits(1);
     }
-  }, [token]);
+  }, [token]); // Removed fetchVisits from dependency array
 
   // Theme Toggle
   const toggleDarkMode = useCallback(async () => {
@@ -214,33 +207,22 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const handleFilter = useCallback((filterBy: string, filterValue: string) => {
     setFilterBy(filterBy);
     setFilterValue(filterValue);
-    
-    // Pass the filter value to fetchVisits
-    if (filterValue === 'all') {
-      fetchVisits(1, false);
-    } else {
-      fetchVisits(1, false, filterValue);
-    }
-  }, [fetchVisits]);
+  }, []);
 
   const handleLoadMore = useCallback(() => {
     if (pagination && pagination.has_next && !loadingMore && !isSearchMode) {
-      // Pass the current filter value when loading more
-      const statusFilter = filterValue !== 'all' ? filterValue : undefined;
-      fetchVisits(pagination.current_page + 1, true, statusFilter);
+      fetchVisits(pagination.current_page + 1, true);
     }
-  }, [pagination, loadingMore, isSearchMode, fetchVisits, filterValue]);
+  }, [pagination, loadingMore, isSearchMode, fetchVisits]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     if (isSearchMode) {
       searchVisits(searchQuery);
     } else {
-      // Pass the current filter value when refreshing
-      const statusFilter = filterValue !== 'all' ? filterValue : undefined;
-      fetchVisits(1, false, statusFilter);
+      fetchVisits(1);
     }
-  }, [isSearchMode, searchQuery, searchVisits, fetchVisits, filterValue]);
+  }, [isSearchMode, searchQuery, searchVisits, fetchVisits]);
 
   const handleVisitPress = useCallback((visit: Visit, index: number) => {
     setSelectedVisit({ ...visit });
@@ -261,15 +243,14 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         setSelectedVisit(null);
         // Refresh the list when coming back
         if (token) {
-          const statusFilter = filterValue !== 'all' ? filterValue : undefined;
-          fetchVisits(1, false, statusFilter);
+          fetchVisits(1);
         }
         break;
       case 'list':
         onBack();
         break;
     }
-  }, [viewMode, token, fetchVisits, filterValue, onBack]);
+  }, [viewMode, token, onBack]); // Removed fetchVisits from deps
 
   const handleEditPress = useCallback(() => {
     setViewMode('edit');
@@ -310,15 +291,17 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [selectedVisit, token, visits, currentVisitIndex]);
 
-  // Filtered Visits - This is now handled by backend, but we keep client-side filtering as fallback
+  // Filtered Visits
   const filteredVisits = useMemo(() => {
-    // If backend already filtered by status, just return all visits
-    if (filterBy === 'status' && filterValue !== 'all') {
-      return visits.filter(visit => visit.status === filterValue);
-    }
-    
-    // If no filter or 'all', return all visits
-    return visits;
+    return visits.filter(visit => {
+      if (!filterBy || !filterValue) return true;
+      
+      if (filterBy === 'status') {
+        return visit.status === filterValue;
+      }
+      
+      return true;
+    });
   }, [visits, filterBy, filterValue]);
 
   // Back Handler
