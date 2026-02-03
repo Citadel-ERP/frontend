@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -394,7 +395,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
 
-  // Page visibility states
+  // Page visibility states - keep for mobile
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
@@ -405,7 +406,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showScoutBoy, setShowScoutBoy] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [showBUP, setShowBUP] = useState(false);
-  const[showSiteManager,setShowSiteManager] = useState(false);
+  const [showSiteManager,setShowSiteManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
   const [showHREmployeeManager, setShowHREmployeeManagement] = useState(false);
@@ -415,6 +416,34 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
   const [showDriverManager, setShowDriverManager] = useState(false);
   const [showHrManager, setShowHrManager] = useState(false);
+
+  // NEW: Active page state for web layout
+  type ActivePage = 
+    | 'dashboard' 
+    | 'profile' 
+    | 'settings' 
+    | 'notifications' 
+    | 'privacy' 
+    | 'messages'
+    | 'attendance'
+    | 'hr'
+    | 'cab'
+    | 'driver'
+    | 'bdt'
+    | 'medical'
+    | 'scoutBoy'
+    | 'reminder'
+    | 'bup'
+    | 'siteManager'
+    | 'employeeManagement'
+    | 'hrEmployeeManager'
+    | 'driverManager'
+    | 'hrManager'
+    | 'chat'
+    | 'chatRoom'
+    | 'validation';
+
+  const [activePage, setActivePage] = useState<ActivePage>('dashboard');
 
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -841,52 +870,112 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     switch (page.toLowerCase()) {
       case 'attendance':
-        setAttendanceKey(prev => prev + 1);
-        setShowAttendance(true);
+        if (isWeb) {
+          setActivePage('attendance');
+        } else {
+          setAttendanceKey(prev => prev + 1);
+          setShowAttendance(true);
+        }
         break;
       case 'hr':
-        setShowHR(true);
+        if (isWeb) {
+          setActivePage('hr');
+        } else {
+          setShowHR(true);
+        }
         break;
       case 'cab':
-        setShowCab(true);
+        if (isWeb) {
+          setActivePage('cab');
+        } else {
+          setShowCab(true);
+        }
         break;
       case 'profile':
-        setShowProfile(true);
+        if (isWeb) {
+          setActivePage('profile');
+        } else {
+          setShowProfile(true);
+        }
         break;
       case 'driver':
-        setShowDriver(true);
+        if (isWeb) {
+          setActivePage('driver');
+        } else {
+          setShowDriver(true);
+        }
         break;
       case 'bdt':
-        setShowBDT(true);
+        if (isWeb) {
+          setActivePage('bdt');
+        } else {
+          setShowBDT(true);
+        }
         break;
       case 'medical':
       case 'mediclaim':
-        setShowMedical(true);
+        if (isWeb) {
+          setActivePage('medical');
+        } else {
+          setShowMedical(true);
+        }
         break;
       case 'scoutboy':
       case 'scout_boy':
-        setShowScoutBoy(true);
+        if (isWeb) {
+          setActivePage('scoutBoy');
+        } else {
+          setShowScoutBoy(true);
+        }
         break;
       case 'reminder':
-        setShowReminder(true);
+        if (isWeb) {
+          setActivePage('reminder');
+        } else {
+          setShowReminder(true);
+        }
         break;
       case 'bup':
-        setShowBUP(true);
+        if (isWeb) {
+          setActivePage('bup');
+        } else {
+          setShowBUP(true);
+        }
         break;
       case 'site_manager':
-        setShowSiteManager(true);
+        if (isWeb) {
+          setActivePage('siteManager');
+        } else {
+          setShowSiteManager(true);
+        }
         break;
       case 'employee_management':
-        setShowEmployeeManagement(true);
+        if (isWeb) {
+          setActivePage('employeeManagement');
+        } else {
+          setShowEmployeeManagement(true);
+        }
         break;
       case 'driver_manager':
-        setShowDriverManager(true);
+        if (isWeb) {
+          setActivePage('driverManager');
+        } else {
+          setShowDriverManager(true);
+        }
         break;
       case 'hr_manager':
-        setShowHrManager(true)
+        if (isWeb) {
+          setActivePage('hrManager');
+        } else {
+          setShowHrManager(true);
+        }
         break;
       case 'hr_employee_management':
-        setShowHREmployeeManagement(true);
+        if (isWeb) {
+          setActivePage('hrEmployeeManager');
+        } else {
+          setShowHREmployeeManagement(true);
+        }
         break;
       default:
         console.log('Unknown page:', page);
@@ -1250,7 +1339,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     });
   };
 
-  // Handle module press
+  // Handle module press - UPDATED for web
   const handleModulePress = (moduleName: string, moduleUniqueName?: string) => {
     const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
     let moduleData = null;
@@ -1278,41 +1367,74 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     saveLastOpenedModule(moduleData);
 
-    if (key.includes('attendance')) {
-      setAttendanceKey(prev => prev + 1);
-      setShowAttendance(true);
-    } else if (key.includes('hr') && key != "hr_manager" && key !="hr_employee_management") {
-      setShowHR(true);
-    } else if (key.includes('cab')) {
-      setShowCab(true);
-    } else if (key.includes('driver') && key != "driver_manager") {
-      setShowDriver(true);
-    } else if (key.includes('bdt')) {
-      setShowBDT(true);
-    } else if (key.includes('mediclaim') || key.includes('medical')) {
-      setShowMedical(true);
-    } else if (key.includes('scout')) {
-      setShowScoutBoy(true);
-    } else if (key.includes('reminder')) {
-      setShowReminder(true);
-    } else if (key.includes('bup') || key.includes('business update')) {
-      setShowBUP(true);
-    } else if(key.includes('site_manager') || key.includes('site manager')) {
-      setShowSiteManager(true);
-    } else if (key.includes('employee_management') && key != "hr_employee_management") {
-      setShowEmployeeManagement(true);
-    }
-    else if(key.includes('hr_employee_management')){
-      setShowHREmployeeManagement(true)
-    }
-    else if (key.includes('driver_manager') || key.includes('driver manager')) {
-      setShowDriverManager(true);
-    }
-    else if(key.includes('hr_manager') || key.includes('hr manager')) {
-      setShowHrManager(true);
-    }
-    else {
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+    // Handle web vs mobile navigation
+    if (isWeb) {
+      // For web, load in middle section
+      if (key.includes('attendance')) {
+        setActivePage('attendance');
+      } else if (key.includes('hr') && key !== "hr_manager" && key !== "hr_employee_management") {
+        setActivePage('hr');
+      } else if (key.includes('cab')) {
+        setActivePage('cab');
+      } else if (key.includes('driver') && key !== "driver_manager") {
+        setActivePage('driver');
+      } else if (key.includes('bdt')) {
+        setActivePage('bdt');
+      } else if (key.includes('mediclaim') || key.includes('medical')) {
+        setActivePage('medical');
+      } else if (key.includes('scout')) {
+        setActivePage('scoutBoy');
+      } else if (key.includes('reminder')) {
+        setActivePage('reminder');
+      } else if (key.includes('bup') || key.includes('business update')) {
+        setActivePage('bup');
+      } else if (key.includes('site_manager') || key.includes('site manager')) {
+        setActivePage('siteManager');
+      } else if (key.includes('employee_management') && key !== "hr_employee_management") {
+        setActivePage('employeeManagement');
+      } else if (key.includes('hr_employee_management')) {
+        setActivePage('hrEmployeeManager');
+      } else if (key.includes('driver_manager') || key.includes('driver manager')) {
+        setActivePage('driverManager');
+      } else if (key.includes('hr_manager') || key.includes('hr manager')) {
+        setActivePage('hrManager');
+      } else {
+        Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      }
+    } else {
+      // Mobile - existing full screen behavior
+      if (key.includes('attendance')) {
+        setAttendanceKey(prev => prev + 1);
+        setShowAttendance(true);
+      } else if (key.includes('hr') && key !== "hr_manager" && key !== "hr_employee_management") {
+        setShowHR(true);
+      } else if (key.includes('cab')) {
+        setShowCab(true);
+      } else if (key.includes('driver') && key !== "driver_manager") {
+        setShowDriver(true);
+      } else if (key.includes('bdt')) {
+        setShowBDT(true);
+      } else if (key.includes('mediclaim') || key.includes('medical')) {
+        setShowMedical(true);
+      } else if (key.includes('scout')) {
+        setShowScoutBoy(true);
+      } else if (key.includes('reminder')) {
+        setShowReminder(true);
+      } else if (key.includes('bup') || key.includes('business update')) {
+        setShowBUP(true);
+      } else if (key.includes('site_manager') || key.includes('site manager')) {
+        setShowSiteManager(true);
+      } else if (key.includes('employee_management') && key !== "hr_employee_management") {
+        setShowEmployeeManagement(true);
+      } else if (key.includes('hr_employee_management')) {
+        setShowHREmployeeManagement(true);
+      } else if (key.includes('driver_manager') || key.includes('driver manager')) {
+        setShowDriverManager(true);
+      } else if (key.includes('hr_manager') || key.includes('hr manager')) {
+        setShowHrManager(true);
+      } else {
+        Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
+      }
     }
   };
 
@@ -1379,6 +1501,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         modulesArray = uniqueModules.slice(0, 4);
         await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
         setLastOpenedModules(modulesArray);
+        if (modulesArray.length < 4 && data.modules.length > 0) {
+          populateMissingLastOpenedModules();
+        }
       }
     } catch (error) {
       console.error('Error populating missing modules:', error);
@@ -1438,29 +1563,33 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   const [showValidation, setShowValidation] = useState(false);
 
-  // Handle back from pages
+  // Handle back from pages - UPDATED for web
   const handleBackFromPage = () => {
-    setShowAttendance(false);
-    setShowProfile(false);
-    setShowHR(false);
-    setShowCab(false);
-    setShowDriver(false);
-    setShowBDT(false);
-    setShowMedical(false);
-    setShowScoutBoy(false);
-    setShowReminder(false);
-    setShowBUP(false);
-    setShowSiteManager(false);
-    setShowNotifications(false);
-    setShowSettings(false);
-    setShowEmployeeManagement(false);
-    setShowHREmployeeManagement(false);
-    setShowChat(false);
-    setShowChatRoom(false);
-    setShowValidation(false);
-    setShowDriverManager(false);
-    setShowHrManager(false);
-    setActiveMenuItem('Dashboard');
+    if (isWeb) {
+      setActivePage('dashboard');
+    } else {
+      setShowAttendance(false);
+      setShowProfile(false);
+      setShowHR(false);
+      setShowCab(false);
+      setShowDriver(false);
+      setShowBDT(false);
+      setShowMedical(false);
+      setShowScoutBoy(false);
+      setShowReminder(false);
+      setShowBUP(false);
+      setShowSiteManager(false);
+      setShowNotifications(false);
+      setShowSettings(false);
+      setShowEmployeeManagement(false);
+      setShowHREmployeeManagement(false);
+      setShowChat(false);
+      setShowChatRoom(false);
+      setShowValidation(false);
+      setShowDriverManager(false);
+      setShowHrManager(false);
+      setActiveMenuItem('Dashboard');
+    }
   };
 
   // Handle logout
@@ -1504,7 +1633,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (navItem === 'message') {
       Alert.alert('Support', 'Citadel Hub will be available soon!');
     } else if (navItem === 'hr') {
-      setShowHR(true);
+      if (isWeb) {
+        setActivePage('hr');
+      } else {
+        setShowHR(true);
+      }
     } else if (navItem === 'support') {
       Alert.alert('Support', 'Support feature will be available soon!');
     } else if (navItem !== 'home') {
@@ -1554,15 +1687,31 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     setActiveMenuItem(item.title);
     closeMenu();
     if (item.id === 'profile') {
-      setShowProfile(true);
+      if (isWeb) {
+        setActivePage('profile');
+      } else {
+        setShowProfile(true);
+      }
     } else if (item.id === 'settings') {
-      setShowSettings(true);
+      if (isWeb) {
+        setActivePage('settings');
+      } else {
+        setShowSettings(true);
+      }
     } else if (item.id === 'validation') {
-      setShowValidation(true);
+      if (isWeb) {
+        setActivePage('validation');
+      } else {
+        setShowValidation(true);
+      }
     } else if (item.id === 'messages') {
       Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
     } else if (item.id === 'notifications') {
-      setShowNotifications(true);
+      if (isWeb) {
+        setActivePage('notifications');
+      } else {
+        setShowNotifications(true);
+      }
     } else if (item.id === 'logout') {
       handleLogout();
     } else {
@@ -1605,143 +1754,147 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  if (showValidation) {
+  if (showValidation && !isWeb) {
     return (
       <ValidationScreen onBack={handleBackFromPage} />
     );
   }
 
-  // Render different pages
-  if (showChatRoom && selectedChatRoom) {
-    return (
-      <ChatRoomScreen
-        chatRoom={selectedChatRoom}
-        onBack={handleBackFromPage}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
-    );
-  }
+  // Render different pages - Mobile only
+  if (!isWeb) {
+    if (showChatRoom && selectedChatRoom) {
+      return (
+        <ChatRoomScreen
+          chatRoom={selectedChatRoom}
+          onBack={handleBackFromPage}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      );
+    }
 
-  if (showChat) {
-    return (
-      <ChatScreen
-        onBack={handleBackFromPage}
-        onOpenChatRoom={setSelectedChatRoom}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
-    );
-  }
+    if (showChat) {
+      return (
+        <ChatScreen
+          onBack={handleBackFromPage}
+          onOpenChatRoom={setSelectedChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      );
+    }
 
-  if (showNotifications) {
-    return (
-      <Notifications onBack={handleBackFromPage} isDark={isDark} />
-    );
-  }
+    if (showNotifications) {
+      return (
+        <Notifications onBack={handleBackFromPage} isDark={isDark} />
+      );
+    }
 
-  if (showDriverManager) {
-    return (
-      <DriverManager onBack={handleBackFromPage} />
-    );
-  }
+    if (showDriverManager) {
+      return (
+        <DriverManager onBack={handleBackFromPage} />
+      );
+    }
 
-  if(showHrManager){
-    return (
-      <HR_Manager onBack={handleBackFromPage} />
-    );
-  }
+    if (showHrManager) {
+      return (
+        <HR_Manager onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showAttendance) {
-    return (
-      <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
-    );
-  }
+    if (showAttendance) {
+      return (
+        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
+      );
+    }
 
-  // UPDATED: Profile component with callback for real-time updates
-  if (showProfile) {
-    return (
-      <Profile 
-        onBack={handleBackFromPage} 
-        userData={userData} 
-        onProfileUpdate={(updatedData) => {
-          // Update Dashboard's userData immediately
-          setUserData(updatedData);
-          // Also refresh from backend to get all latest data
-          refreshUserData();
-        }}
-      />
-    );
-  }
+    if (showProfile) {
+      return (
+        <Profile 
+  onBack={handleBackFromPage} 
+  userData={userData} 
+  onProfileUpdate={(updatedData: UserData) => {
+    // Ensure all required fields are present
+    const completeData: UserData = {
+      ...userData!,
+      ...updatedData
+    };
+    setUserData(completeData);
+    refreshUserData();
+  }}
+/>
+      );
+    }
 
-  if (showHR) {
-    return (
-      <HR onBack={handleBackFromPage} />
-    );
-  }
+    if (showHR) {
+      return (
+        <HR onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showCab) {
-    return (
-      <Cab onBack={handleBackFromPage} />
-    );
-  }
+    if (showCab) {
+      return (
+        <Cab onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showDriver) {
-    return (
-      <Driver onBack={handleBackFromPage} />
-    );
-  }
+    if (showDriver) {
+      return (
+        <Driver onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showBDT) {
-    return (
-      <BDT onBack={handleBackFromPage} />
-    );
-  }
+    if (showBDT) {
+      return (
+        <BDT onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showMedical) {
-    return (
-      <Medical onBack={handleBackFromPage} />
-    );
-  }
+    if (showMedical) {
+      return (
+        <Medical onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showScoutBoy) {
-    return (
-      <ScoutBoy onBack={handleBackFromPage} />
-    );
-  }
+    if (showScoutBoy) {
+      return (
+        <ScoutBoy onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showReminder) {
-    return (
-      <Reminder onBack={handleBackFromPage} />
-    );
-  }
+    if (showReminder) {
+      return (
+        <Reminder onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showBUP) {
-    return (
-      <BUP onBack={handleBackFromPage} />
-    );
-  }
+    if (showBUP) {
+      return (
+        <BUP onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showSiteManager) {
-    return (
-      <SiteManager onBack={handleBackFromPage} />
-    );
-  }
+    if (showSiteManager) {
+      return (
+        <SiteManager onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showSettings) {
-    return (
-      <Settings onBack={handleBackFromPage} />
-    );
-  }
+    if (showSettings) {
+      return (
+        <Settings onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showEmployeeManagement) {
-    return (
-      <EmployeeManagement onBack={handleBackFromPage} />
-    );
-  }
+    if (showEmployeeManagement) {
+      return (
+        <EmployeeManagement onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showHREmployeeManager){
-    return (
-      <HREmployeeManager onBack={handleBackFromPage} />
-    );
+    if (showHREmployeeManager) {
+      return (
+        <HREmployeeManager onBack={handleBackFromPage} />
+      );
+    }
   }
 
   // Main dashboard render
@@ -1797,11 +1950,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         )}
 
         {isWeb ? (
-          // Web Layout
+          // Web Layout - Three Column
           <View style={[styles.webContainer, { backgroundColor: theme.bgColor }, isWeb && styles.webContainerWeb]}>
             {/* Left Side - User Profile & Navigation */}
-            <View style={[styles.webLeftSide, { backgroundColor: theme.cardBg }]}>
-              <View style={[styles.webUserProfile, { backgroundColor: theme.cardBg }]}>
+            <View style={[styles.webLeftSide, { backgroundColor: theme.navBg }]}>
+              <View style={[styles.webUserProfile, { backgroundColor: theme.navBg }]}>
                 {userData?.profile_picture ? (
                   <Image
                     source={{ uri: userData.profile_picture }}
@@ -1823,8 +1976,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </Text>
                 </View>
                 <TouchableOpacity 
-                  style={[styles.webSettingsButton, { backgroundColor: theme.cardBg }]}
-                  onPress={() => setShowSettings(true)}
+                  style={[styles.webSettingsButton, { backgroundColor: theme.navBg }]}
+                  onPress={() => setActivePage('settings')}
                 >
                   <Ionicons name="settings-outline" size={24} color={theme.textMain} />
                 </TouchableOpacity>
@@ -1835,23 +1988,24 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 <TouchableOpacity 
                   style={[
                     styles.webNavItem, 
-                    { backgroundColor: theme.cardBg },
-                    activeNavItem === 'home' && styles.webNavItemActive
+                    { backgroundColor: theme.navBg },
+                    activePage === 'dashboard' && styles.webNavItemActive
                   ]}
                   onPress={() => {
                     setActiveNavItem('home');
+                    setActivePage('dashboard');
                   }}
                 >
                   <Ionicons 
                     name="home" 
                     size={24} 
-                    color={activeNavItem === 'home' ? currentColors.primaryBlue : theme.textSub} 
+                    color={activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub} 
                   />
                   <Text style={[
                     styles.webNavText, 
                     { 
-                      color: activeNavItem === 'home' ? currentColors.primaryBlue : theme.textSub,
-                      fontWeight: activeNavItem === 'home' ? '600' : '400'
+                      color: activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activePage === 'dashboard' ? '600' : '400'
                     }
                   ]}>
                     Home
@@ -1860,169 +2014,313 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
                 {/* Profile */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'profile' && styles.webNavItemActive
+                  ]}
                   onPress={() => {
                     setActiveNavItem('profile');
-                    setShowProfile(true);
+                    setActivePage('profile');
                   }}
                 >
-                  <Ionicons name="person-circle-outline" size={24} color={currentColors.primaryBlue} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="person-circle-outline" 
+                    size={24} 
+                    color={activePage === 'profile' ? currentColors.primaryBlue : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'profile' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activePage === 'profile' ? '600' : '400'
+                    }
+                  ]}>
                     Profile
                   </Text>
                 </TouchableOpacity>
 
                 {/* Settings */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'settings' && styles.webNavItemActive
+                  ]}
                   onPress={() => {
                     setActiveNavItem('settings');
-                    setShowSettings(true);
+                    setActivePage('settings');
                   }}
                 >
-                  <Ionicons name="settings-outline" size={24} color={currentColors.primaryBlue} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="settings-outline" 
+                    size={24} 
+                    color={activePage === 'settings' ? currentColors.primaryBlue : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'settings' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activePage === 'settings' ? '600' : '400'
+                    }
+                  ]}>
                     Settings
                   </Text>
                 </TouchableOpacity>
 
                 {/* Notifications */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'notifications' && styles.webNavItemActive
+                  ]}
                   onPress={() => {
                     setActiveNavItem('notifications');
-                    setShowNotifications(true);
+                    setActivePage('notifications');
                   }}
                 >
-                  <Ionicons name="notifications-outline" size={24} color={currentColors.warning} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="notifications-outline" 
+                    size={24} 
+                    color={activePage === 'notifications' ? currentColors.warning : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'notifications' ? currentColors.warning : theme.textSub,
+                      fontWeight: activePage === 'notifications' ? '600' : '400'
+                    }
+                  ]}>
                     Notifications
                   </Text>
                 </TouchableOpacity>
 
                 {/* Privacy Policy */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
-                  onPress={() => Alert.alert('Privacy Policy', 'Privacy Policy feature will be available soon!')}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'privacy' && styles.webNavItemActive
+                  ]}
+                  onPress={() => {
+                    setActiveNavItem('privacy');
+                    setActivePage('privacy');
+                  }}
                 >
-                  <Ionicons name="shield-checkmark-outline" size={24} color="#1E40AF" />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="shield-checkmark-outline" 
+                    size={24} 
+                    color={activePage === 'privacy' ? '#1E40AF' : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'privacy' ? '#1E40AF' : theme.textSub,
+                      fontWeight: activePage === 'privacy' ? '600' : '400'
+                    }
+                  ]}>
                     Privacy Policy
                   </Text>
                 </TouchableOpacity>
 
                 {/* Messages */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
-                  onPress={() => Alert.alert('Coming Soon', 'Messages feature will be available soon!')}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'messages' && styles.webNavItemActive
+                  ]}
+                  onPress={() => {
+                    setActiveNavItem('messages');
+                    setActivePage('messages');
+                  }}
                 >
-                  <Ionicons name="chatbubbles-outline" size={24} color={currentColors.success} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="chatbubbles-outline" 
+                    size={24} 
+                    color={activePage === 'messages' ? currentColors.success : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'messages' ? currentColors.success : theme.textSub,
+                      fontWeight: activePage === 'messages' ? '600' : '400'
+                    }
+                  ]}>
                     Messages
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Logout */}
-                <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
-                  onPress={handleLogout}
-                >
-                  <Ionicons name="log-out-outline" size={24} color={currentColors.error} />
-                  <Text style={[styles.webNavText, { color: currentColors.error }]}>
-                    Logout
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Center Content */}
+            {/* Center Content - Dynamic based on activePage */}
             <ScrollView 
               style={[styles.webCenterContent, { backgroundColor: theme.bgColor }]}
               showsVerticalScrollIndicator={false}
             >
-              {/* Header */}
-              <LinearGradient
-                colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.webHeader, isWeb && styles.webHeaderWeb]}
-              >
-                <Image
-                  source={require('../assets/bg.jpeg')}
-                  style={[styles.webHeaderImage, isWeb && styles.webHeaderImageWeb]}
-                  resizeMode="cover"
-                />
-                <View style={[styles.webHeaderOverlay, {
-                  backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-                }]} />
-                <View style={styles.webHeaderContent}>
-                  <View style={styles.webTopNav}>
-                    <View style={styles.webLogoContainer}>
-                      <Text style={[styles.webLogoText, isWeb && styles.webLogoTextWeb]}>CITADEL</Text>
+              {activePage === 'dashboard' ? (
+                // Dashboard Content - no wrapper needed
+                <>
+                  {/* Header */}
+                  <LinearGradient
+                    colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.webHeader, isWeb && styles.webHeaderWeb]}
+                  >
+                    <Image
+                      source={require('../assets/bg.jpeg')}
+                      style={[styles.webHeaderImage, isWeb && styles.webHeaderImageWeb]}
+                      resizeMode="cover"
+                    />
+                    <View style={[styles.webHeaderOverlay, {
+                      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
+                    }]} />
+                    <View style={styles.webHeaderContent}>
+                      <View style={styles.webTopNav}>
+                        <View style={styles.webLogoContainer}>
+                          <Text style={styles.webLogoText}>CITADEL</Text>
+                        </View>
+                      </View>
+                      <View style={{ marginTop: 40 }}>
+                        <Text style={styles.webWelcomeText}>Welcome back!</Text>
+                        <Text style={styles.webEmployeeText}>
+                          {userData?.first_name + ' ' + userData?.last_name || 'User'}
+                        </Text>
+                      </View>
                     </View>
+                  </LinearGradient>
+
+                  {/* Quick Actions */}
+                  <QuickActions
+                    lastOpenedModules={lastOpenedModules}
+                    modules={modules}
+                    theme={theme}
+                    handleModulePress={handleModulePress}
+                  />
+
+                  {/* Upcoming Reminder */}
+                  <UpcomingReminder
+                    reminders={reminders}
+                    theme={theme}
+                    currentColors={currentColors}
+                    onPress={() => handleModulePress('Reminder')}
+                  />
+
+                  {/* Work Statistics */}
+                  <WorkStatistics
+                    hoursWorked={hoursWorked}
+                    overtimeHours={overtimeHours}
+                    userData={userData}
+                    theme={theme}
+                    currentColors={currentColors}
+                  />
+
+                  {/* Upcoming Events */}
+                  <View style={styles.upcomingEventsWrapper}>
+                    <UpcomingEvents
+                      upcomingEvents={upcomingEvents}
+                      theme={theme}
+                      currentColors={currentColors}
+                      getInitials={getInitials}
+                      formatEventDate={formatEventDate}
+                      formatAnniversaryYears={formatAnniversaryYears}
+                    />
                   </View>
-                  <View style={{ marginTop: 40 }}>
-                    <Text style={[styles.webWelcomeText, isWeb && styles.webWelcomeTextWeb]}>Welcome back!</Text>
-                    <Text style={[styles.webEmployeeText, isWeb && styles.webEmployeeTextWeb]}>
-                      {userData?.first_name + ' ' + userData?.last_name || 'User'}
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
-
-              {/* Quick Actions */}
-              <QuickActions
-                lastOpenedModules={lastOpenedModules}
-                modules={modules}
-                theme={theme}
-                handleModulePress={handleModulePress}
-              />
-
-              {/* Upcoming Reminder */}
-              <UpcomingReminder
-                reminders={reminders}
-                theme={theme}
-                currentColors={currentColors}
-                onPress={() => handleModulePress('Reminder')}
-              />
-
-              {/* Work Statistics */}
-              <WorkStatistics
-                hoursWorked={hoursWorked}
-                overtimeHours={overtimeHours}
-                userData={userData}
-                theme={theme}
-                currentColors={currentColors}
-              />
-
-          
-              {/* Upcoming Events */}
-              <View style={styles.upcomingEventsWrapper}>
-                <UpcomingEvents
-                  upcomingEvents={upcomingEvents}
-                  theme={theme}
-                  currentColors={currentColors}
-                  getInitials={getInitials}
-                  formatEventDate={formatEventDate}
-                  formatAnniversaryYears={formatAnniversaryYears}
-                />
-              </View>
-
-              {/* Footer */}
-              {/* Footer - Hidden on web */}
-              {!isWeb && (
-                <View style={[styles.webFooter, isWeb && styles.webFooterWeb]}>
-                  <Text style={[styles.webFooterLogo, isWeb && styles.webFooterLogoWeb]}>CITADEL</Text>
-                  <Text style={[styles.webFooterText, isWeb && styles.webFooterTextWeb]}>Made with ❤️</Text>
+                </>
+              ) : (
+                // ALL OTHER PAGES - Add wrapper
+                <View style={styles.webEmbeddedPage}>
+                  {activePage === 'profile' ? (
+                    <Profile 
+                      onBack={() => setActivePage('dashboard')} 
+                      userData={userData}
+                      onProfileUpdate={(updatedData) => {
+                        setUserData(updatedData);
+                        refreshUserData();
+                      }}
+                      isEmbedded={true}
+                    />
+                  ) : activePage === 'settings' ? (
+                    <Settings onBack={() => setActivePage('dashboard')} isDark={isDark} isEmbedded={true} />
+                  ) : activePage === 'notifications' ? (
+                    <Notifications 
+                      onBack={() => setActivePage('dashboard')} 
+                      isDark={isDark}
+                      onBadgeUpdate={(count) => {/* handle badge */}}
+                    />
+                  ) : activePage === 'privacy' ? (
+                    <View style={[styles.moduleContainer, { backgroundColor: theme.cardBg }]}>
+                      {/* Privacy content */}
+                    </View>
+                  ) : activePage === 'messages' ? (
+                    <View style={[styles.moduleContainer, { backgroundColor: theme.cardBg }]}>
+                      {/* Messages content */}
+                    </View>
+                  ) : activePage === 'attendance' ? (
+                    <AttendanceWrapper 
+                      onBack={() => setActivePage('dashboard')} 
+                      attendanceKey={attendanceKey} 
+                      isEmbedded={true}
+                    />
+                  ) : activePage === 'hr' ? (
+                    <HR onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'cab' ? (
+                    <Cab onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'driver' ? (
+                    <Driver onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'bdt' ? (
+                    <BDT onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'medical' ? (
+                    <Medical onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'scoutBoy' ? (
+                    <ScoutBoy onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'reminder' ? (
+                    <Reminder onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'bup' ? (
+                    <BUP onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'siteManager' ? (
+                    <SiteManager onBack={() => setActivePage('dashboard')} />
+                  ) : activePage === 'employeeManagement' ? (
+                    <EmployeeManagement onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'hrEmployeeManager' ? (
+                    <HREmployeeManager onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'driverManager' ? (
+                    <DriverManager onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'hrManager' ? (
+                    <HR_Manager onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : activePage === 'validation' ? (
+                    <ValidationScreen onBack={() => setActivePage('dashboard')} isEmbedded={true} />
+                  ) : (
+                    <View style={styles.centerContent}>
+                      <Text style={[styles.privacyText, { color: theme.textMain }]}>
+                        Page not found
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
             </ScrollView>
 
             {/* Right Side - All Modules Grid */}
-            <View style={[styles.webRightSide, { backgroundColor: theme.cardBg }]}>
-              <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
-                All Modules
-              </Text>
+            <View style={[styles.webRightSide, { backgroundColor: theme.navBg }]}>
+              <View style={styles.modulesHeader}>
+                <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
+                  All Modules
+                </Text>
+                <TouchableOpacity 
+                  style={styles.refreshButton}
+                  onPress={refreshUserData}
+                  disabled={refreshing}
+                >
+                  <Ionicons 
+                    name="refresh" 
+                    size={20} 
+                    color={refreshing ? theme.textSub : theme.accentBlue} 
+                  />
+                </TouchableOpacity>
+              </View>
               <ScrollView 
                 style={styles.modulesGridScroll}
                 showsVerticalScrollIndicator={false}
@@ -2072,7 +2370,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             >
               <Image
                 source={require('../assets/bg.jpeg')}
-                style={styles.headerImage as any}
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  opacity: 1,
+                }}
                 resizeMode="cover"
               />
               <View style={[styles.headerOverlay, {
@@ -2324,6 +2627,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8
   },
+  webEmbeddedPage: {
+  flex: 1,
+  backgroundColor: 'transparent',
+  minHeight: Dimensions.get('window').height - 32,
+  borderRadius: 16,
+  overflow: 'hidden',
+},
   retryButtonText: {
     fontSize: 16,
     fontWeight: '600'
@@ -2353,46 +2663,38 @@ const styles = StyleSheet.create({
   
   // Web-specific styles
   webContainer: {
-  flex: 1,
-  flexDirection: 'row',
-  alignItems: 'stretch',
-  paddingVertical: 0,
-  minHeight: 0,
-  backgroundColor: 'transparent', // Add this line if not present
-},
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: '100vh',
+    backgroundColor: 'transparent',
+    padding: 16,  
+    gap: 0,
+  },
   webContainerWeb: {
     maxWidth: 1400,
     marginHorizontal: 'auto',
   },
   webLeftSide: {
-  width: 280,
-  padding: 20,
-  borderRightWidth: 1,
-  borderRightColor: '#e5e7eb',
-  borderRadius: 20,
-  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  shadowColor: '#000',
-  shadowOffset: { width: 2, height: 0 },
-  shadowOpacity: 0.1,
-  shadowRadius: 10,
-  elevation: 5,
-  marginTop: 20,
-  marginBottom: 20,
-  marginLeft: 20,
-  maxHeight: 'calc(100vh - 40px)', // 100vh minus top and bottom margins
-  minHeight: 1000, // Minimum height
-},
+    width: 280,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    overflow: 'hidden',
+    margin: 16,  
+    borderRadius: 16,
+  },
   webUserProfile: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    padding: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   webUserAvatar: {
     width: 50,
@@ -2430,24 +2732,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   webNavigation: {
-    marginTop: 20,
+    paddingVertical: 16,
   },
   webNavItem: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingVertical: 12,
-  paddingHorizontal: 15,
-  borderRadius: 10,
-  marginBottom: 8,
-  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-  borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.1)',
-},
-webNavItemActive: {
-  backgroundColor: 'rgba(0, 128, 105, 0.15)',
-  borderColor: 'rgba(0, 128, 105, 0.3)',
-  borderWidth: 1,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginVertical: 2,
+    borderRadius: 0,
+  },
+  webNavItemActive: {
+    backgroundColor: 'rgba(0, 128, 105, 0.1)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#008069',
+  },
   webNavText: {
     marginLeft: 12,
     fontSize: 14,
@@ -2469,26 +2768,24 @@ webNavItemActive: {
   },
   
   webCenterContent: {
-  flex: 1,
-  minWidth: 0,
-  paddingHorizontal: 10,
-  maxWidth: '100%',
-  overflow: 'hidden',
-  alignSelf: 'stretch',
-  backgroundColor: 'transparent',
-  width: 700,
-},
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    margin: 16,  
+    marginLeft: 0,  
+    marginRight: 0, 
+  },
 
   webHeader: {
-    height: 250,
-    borderRadius: 20,
+    height: 220,
+    borderRadius: 0,
     overflow: 'hidden',
     position: 'relative',
-    margin: 20,
-    marginBottom: 15,
+    marginBottom: 20,
   },
   webHeaderWeb: {
-    marginTop: 20,
+    marginTop: 0,
   },
   webHeaderImage: {
     position: 'absolute',
@@ -2522,48 +2819,58 @@ webNavItemActive: {
   },
   webWelcomeText: {
     color: 'white',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
   },
   webEmployeeText: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 18,
     opacity: 0.8,
     marginTop: 4,
   },
   
   webRightSide: {
-  width: 300,
-  padding: 20,
-  borderLeftWidth: 1,
-  borderLeftColor: '#e5e7eb',
-  borderRadius: 20,
-  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  shadowColor: '#000',
-  shadowOffset: { width: -2, height: 0 },
-  shadowOpacity: 0.1,
-  shadowRadius: 10,
-  elevation: 5,
-  marginTop: 20,
-  marginBottom: 20,
-  marginRight: 20,
-  maxHeight: 'calc(100vh - 40px)', // Same as left panel
-  minHeight: 1000, // Same as left panel
-},
-webUpcomingEventsContainer: {
-  marginHorizontal: 20,
-  marginTop: 20,
-  marginBottom: 20,
-},
-upcomingEventsWrapper: {
-  maxWidth: '100%',
-  overflow: 'hidden',
-},
+    width: 280,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    margin: 16,  
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  webUpcomingEventsContainer: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  upcomingEventsWrapper: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
 
+  modulesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
   modulesGridTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 20,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   modulesGridScroll: {
     flex: 1,
@@ -2572,15 +2879,18 @@ upcomingEventsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    padding: 16,
+    gap: 12, 
   },
   moduleGridItem: {
-    width: '48%',
-    marginBottom: 15,
+    width: '47%',  
+    aspectRatio: 1, 
+    marginBottom: 12,
     padding: 15,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(0,0,0,0.05)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -2604,6 +2914,45 @@ upcomingEventsWrapper: {
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  
+  moduleContainer: {
+  flex: 1,
+  borderRadius: 16,  // Add border radius
+  overflow: 'hidden',
+  backgroundColor: 'transparent',
+},
+  moduleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  backButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  moduleTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  privacyContent: {
+    padding: 20,
+  },
+  privacyText: {
+    fontSize: 16,
+    lineHeight: 24,
   },
   
   webFooter: {
