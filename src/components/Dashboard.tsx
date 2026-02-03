@@ -63,301 +63,23 @@ import { BACKEND_URL } from '../config/config';
 const { width, height } = Dimensions.get('window');
 const TOKEN_2_KEY = 'token_2';
 
-// Interfaces
-interface IconItem {
-  name: string;
-  color: string;
-  icon: string;
-  library: 'fa5' | 'mci';
-  module_unique_name?: string;
-  iconUrl?: string;
-}
-
-interface Event {
-  name: string;
-  date: string;
-  image: string;
-  type?: 'birthday' | 'anniversary';
-  years?: number;
-}
-
-interface UserData {
-  role: string;
-  employee_id: string;
-  email: string;
-  token: string;
-  first_name: string;
-  last_name: string;
-  full_name: string;
-  mpin: string;
-  home_address: any;
-  office: any;
-  phone_number: string;
-  profile_picture: string | undefined;
-  current_location: any;
-  is_approved_by_hr: boolean;
-  is_approved_by_admin: boolean;
-  approved_by_hr_at: string | null;
-  approved_by_admin_at: string | null;
-  is_archived: boolean;
-  created_at: string;
-  birth_date: string;
-  joining_date: string;
-  updated_at: string;
-  earned_leaves: number;
-  sick_leaves: number;
-  casual_leaves: number;
-  login_time: string | null;
-  logout_time: string | null;
-  first_login: boolean;
-  bio: string;
-  designation?: string;
-  user_tags: Array<any>;
-  reporting_tags: Array<any>;
-  days_present: number;
-  leaves_applied: number;
-  holidays: number;
-  late_arrivals: number;
-}
-
-interface Module {
-  title: string;
-  iconUrl: string;
-  module_unique_name: string;
-  is_generic: boolean;
-}
-
-interface ReminderItem {
-  id: string;
-  title: string;
-  reminder_date: string;
-  description?: string;
-  created_by?: any;
-  color?: string;
-  is_completed?: boolean;
-}
-
-interface UpcomingEvent {
-  full_name: string;
-  date: string;
-  type: 'birthday' | 'anniversary';
-  years?: number;
-  anniversaryYears?: number;
-}
-
-interface ApiResponse {
-  message: string;
-  modules: Array<{
-    module_name: string;
-    is_generic: boolean;
-    module_id: string;
-    module_unique_name: string;
-    module_icon: string;
-    created_at: string;
-    updated_at: string;
-  }>;
-  user: any;
-  upcoming_birthdays: any[];
-  is_driver: boolean;
-  upcoming_anniversary: any[];
-  autoReconfigure: boolean;
-  hours_worked_last_7_attendance: any[];
-  overtime_hours: any[];
-  upcoming_reminder: any[];
-  city?: string;
-}
-
-// Theme Colors
-const lightColors = {
-  primary: '#e7e6e5',
-  backgroundSecondary: '#F8F9FA',
-  white: '#FFFFFF',
-  text: '#1A1A1A',
-  textSecondary: '#666666',
-  textLight: '#999999',
-  border: '#E5E7EB',
-  info: '#3B82F6',
-  error: '#EF4444',
-  success: '#10B981',
-  warning: '#F59E0B',
-  attendanceGreen: '#00D492',
-  hrPink: '#FF637F',
-  cabOrange: '#FFBB64',
-  headerBg: '#2D3748',
-  primaryBlue: '#008069',
-  gradientStart: '#086755ff',
-  gradientEnd: '#036c59ff',
-};
-
-const darkColors = {
-  primary: '#000D24',
-  backgroundSecondary: '#0C1D33',
-  white: '#0C1D33',
-  text: '#FFFFFF',
-  textSecondary: '#CCCCCC',
-  textLight: '#999999',
-  border: '#404040',
-  info: '#3B82F6',
-  error: '#EF4444',
-  success: '#10B981',
-  warning: '#F59E0B',
-  attendanceGreen: '#00D492',
-  hrPink: '#FF637F',
-  cabOrange: '#FFBB64',
-  headerBg: '#141414ff',
-  primaryBlue: '#008069',
-  gradientStart: '#086755ff',
-  gradientEnd: '#036c59ff',
-  headerBgLight: '#d8d8d8ff',
-};
-
-// WhatsApp-style Hamburger Menu Component - Only for mobile
-interface HamburgerMenuProps {
-  isVisible: boolean;
-  onClose: () => void;
-  userData: UserData | null;
-  menuItems: any[];
-  activeMenuItem: string;
-  onMenuItemPress: (item: any) => void;
-  onLogout: () => void;
-  isDark: boolean;
-  slideAnim: Animated.Value;
-  getInitials: (fullName: string) => string;
-  currentColors: any;
-}
-
-const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
-  isVisible,
-  onClose,
-  userData,
-  menuItems,
-  activeMenuItem,
-  onMenuItemPress,
-  onLogout,
-  isDark,
-  slideAnim,
+// Import helper functions and types
+import {
+  UserData,
+  Module,
+  ReminderItem,
+  UpcomingEvent,
+  ApiResponse,
+  ActivePage,
+  lightColors,
+  darkColors,
   getInitials,
-  currentColors,
-}) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const { width: screenWidth } = useWindowDimensions();
-  const isWeb = Platform.OS === 'web';
-
-  // WhatsApp-style menu items with icons and colors
-  const whatsappMenuItems = [
-    { id: 'profile', title: 'Profile', icon: 'person-circle-outline', color: '#008069' },
-    { id: 'settings', title: 'Settings', icon: 'settings-outline', color: '#008069' },
-    { id: 'notifications', title: 'Notifications', icon: 'notifications-outline', color: '#F59E0B' },
-    { id: 'privacy', title: 'Privacy Policy', icon: 'shield-checkmark-outline', color: '#1E40AF' },
-    { id: 'messages', title: 'Messages', icon: 'chatbubbles-outline', color: '#10B981' },
-    { id: 'logout', title: 'Logout', icon: 'log-out-outline', color: '#EF4444' },
-  ];
-
-  // Filter menu items based on search
-  const filteredMenuItems = whatsappMenuItems.filter(item =>
-    item.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  if (!isVisible || isWeb) return null; // Hide on web
-
-  return (
-    <>
-      {/* Backdrop */}
-      <TouchableOpacity
-        style={[styles.menuBackdrop]}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <Animated.View
-          style={[
-            styles.menuContainer,
-            {
-              transform: [{ translateX: slideAnim }],
-              backgroundColor: isDark ? '#111B21' : '#e7e6e5',
-              width: width * 0.85,
-            },
-          ]}
-        >
-          {/* Header Section - WhatsApp Style */}
-          <View style={[styles.menuHeader, { backgroundColor: isDark ? '#202C33' : '#008069' }]}>
-            <View style={styles.userInfoContainer}>
-              {userData?.profile_picture ? (
-                <Image
-                  source={{ uri: userData.profile_picture }}
-                  style={styles.userAvatar}
-                />
-              ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#0c4036ff' }]}>
-                  <Text style={styles.avatarText}>
-                    {getInitials(userData?.full_name || 'User')}
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.userDetails}>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {userData?.full_name || 'User'}
-                </Text>
-                <Text style={styles.userStatus} numberOfLines={1}>
-                  {userData?.designation || 'Employee'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Menu Items */}
-          <ScrollView style={styles.menuItemsContainer}>
-            {filteredMenuItems.map((item, index) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.menuItem,
-                  activeMenuItem === item.title && styles.activeMenuItem,
-                  index === filteredMenuItems.length - 1 && styles.lastMenuItem,
-                ]}
-                onPress={() => {
-                  if (item.id === 'logout') {
-                    onLogout();
-                  } else {
-                    onMenuItemPress(item);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
-                  <Ionicons
-                    name={item.icon as any}
-                    size={22}
-                    color={item.color}
-                  />
-                </View>
-                <Text style={[styles.menuItemText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
-                  {item.title}
-                </Text>
-
-                {item.id !== 'logout' && (
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={isDark ? '#8696A0' : '#667781'}
-                    style={styles.chevronIcon}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Footer - App Version */}
-          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#2A3942' : '#F0F2F5' }]}>
-            <Text style={[styles.versionText, { color: isDark ? '#8696A0' : '#667781' }]}>
-              Citadel v1.0.0
-            </Text>
-          </View>
-        </Animated.View>
-      </TouchableOpacity>
-    </>
-  );
-};
+  formatEventDate,
+  formatAnniversaryYears,
+  getModuleColor
+} from './DashboardTypes';
+import { handleModulePress, saveLastOpenedModule, getDisplayModules } from './DashboardHelpers';
+import { HamburgerMenu } from './DashboardComponents';
 
 // Configure notification handler
 NotificationsExpo.setNotificationHandler({
@@ -394,7 +116,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
 
-  // Page visibility states
+  // Page visibility states - keep for mobile
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
@@ -405,7 +127,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showScoutBoy, setShowScoutBoy] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [showBUP, setShowBUP] = useState(false);
-  const[showSiteManager,setShowSiteManager] = useState(false);
+  const [showSiteManager, setShowSiteManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
   const [showHREmployeeManager, setShowHREmployeeManagement] = useState(false);
@@ -415,6 +137,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [selectedChatRoom, setSelectedChatRoom] = useState<any>(null);
   const [showDriverManager, setShowDriverManager] = useState(false);
   const [showHrManager, setShowHrManager] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+
+  // Active page state for web layout
+  const [activePage, setActivePage] = useState<ActivePage>('dashboard');
 
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -453,11 +179,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     navBg: isDark ? '#0a111f' : '#ffffff',
   };
 
-  // Default modules for new users
-  const defaultLastOpened: IconItem[] = [
-    { name: 'Attendance', color: '#ffb157', icon: 'book', library: 'fa5', module_unique_name: 'attendance' },
-  ];
-
   // NEW: Function to refresh user data from backend
   const refreshUserData = useCallback(async () => {
     if (!token) return;
@@ -479,11 +200,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             profile_picture: data.user.profile_picture || undefined
           };
           
-          // Update state
           setUserData(transformedUserData);
           setModules(data.modules || []);
           
-          // Update AsyncStorage
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
           if (data.city) {
@@ -507,7 +226,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
           setUpcomingEvents(events);
 
-          // Update last opened modules with fresh data
           const storedModules = await AsyncStorage.getItem('last_opened_modules');
           if (storedModules) {
             let modulesArray = JSON.parse(storedModules);
@@ -550,13 +268,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [token]);
 
-  // NEW: Auto-refresh when returning from Profile screen
+  // AUTO-REFRESH when returning from Profile screen
   useEffect(() => {
     if (!showProfile && userData) {
-      // Refresh data when coming back from Profile screen
       refreshUserData();
     }
-  }, [showProfile, refreshUserData]);
+  }, [showProfile, refreshUserData, userData]);
 
   // Debug logging function
   const debugLog = async (message: string, data?: any) => {
@@ -638,7 +355,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       await debugLog('[Push Token Error]', error.message);
       return undefined;
     }
-  };
+  }
 
   // Function to send token to backend
   const sendTokenToBackend = async (expoToken: string, userToken: string) => {
@@ -681,86 +398,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       await debugLog('❌ Network error', error.message);
     }
   };
-
-  // Function to auto-mark attendance
-  const autoMarkAttendance = async () => {
-    console.log('🎯 AUTO-MARK ATTENDANCE: Starting automatic attendance marking...');
-    try {
-      const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-      if (!token) {
-        console.log('❌ No token found');
-        return;
-      }
-
-      const lastMarked = await AsyncStorage.getItem('last_attendance_marked');
-      if (lastMarked) {
-        const lastDate = new Date(lastMarked);
-        const today = new Date();
-        if (
-          lastDate.getDate() === today.getDate() &&
-          lastDate.getMonth() === today.getMonth() &&
-          lastDate.getFullYear() === today.getFullYear()
-        ) {
-          console.log('✅ Attendance already marked today via notification');
-          return;
-        }
-      }
-
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('❌ Location permission denied');
-        const bgStatus = await Location.requestBackgroundPermissionsAsync();
-        if (bgStatus.status !== 'granted') {
-          console.log('❌ Background location permission also denied');
-          return;
-        }
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-      });
-
-      console.log('📍 Location obtained:', location.coords);
-      const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          latitude: location.coords.latitude.toString(),
-          longitude: location.coords.longitude.toString(),
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Attendance marked successfully:', result);
-        await AsyncStorage.setItem('last_attendance_marked', new Date().toISOString());
-        Alert.alert(
-          'Attendance Marked',
-          'Your attendance has been marked automatically!',
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.log('❌ Failed to mark attendance:', response.status);
-      }
-    } catch (error) {
-      console.error('❌ Auto-mark attendance error:', error);
-    }
-  };
-
-  useEffect(() => {
-    const navItems = ['home', 'message', 'hrpedia', 'support'];
-    const activeIndex = navItems.indexOf(activeNavItem);
-    Animated.spring(bulgeAnim, {
-      toValue: activeIndex,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 40,
-    }).start();
-  }, [activeNavItem]);
 
   // Setup push notifications
   useEffect(() => {
@@ -839,84 +476,64 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
-    switch (page.toLowerCase()) {
-      case 'attendance':
-        setAttendanceKey(prev => prev + 1);
-        setShowAttendance(true);
-        break;
-      case 'hr':
-        setShowHR(true);
-        break;
-      case 'cab':
-        setShowCab(true);
-        break;
-      case 'profile':
-        setShowProfile(true);
-        break;
-      case 'driver':
-        setShowDriver(true);
-        break;
-      case 'bdt':
-        setShowBDT(true);
-        break;
-      case 'medical':
-      case 'mediclaim':
-        setShowMedical(true);
-        break;
-      case 'scoutboy':
-      case 'scout_boy':
-        setShowScoutBoy(true);
-        break;
-      case 'reminder':
-        setShowReminder(true);
-        break;
-      case 'bup':
-        setShowBUP(true);
-        break;
-      case 'site_manager':
-        setShowSiteManager(true);
-        break;
-      case 'employee_management':
-        setShowEmployeeManagement(true);
-        break;
-      case 'driver_manager':
-        setShowDriverManager(true);
-        break;
-      case 'hr_manager':
-        setShowHrManager(true)
-        break;
-      case 'hr_employee_management':
-        setShowHREmployeeManagement(true);
-        break;
-      default:
-        console.log('Unknown page:', page);
-    }
-  };
+    const pageMap: Record<string, ActivePage> = {
+      'attendance': 'attendance',
+      'hr': 'hr',
+      'cab': 'cab',
+      'profile': 'profile',
+      'driver': 'driver',
+      'bdt': 'bdt',
+      'medical': 'medical',
+      'mediclaim': 'medical',
+      'scoutboy': 'scoutBoy',
+      'scout_boy': 'scoutBoy',
+      'reminder': 'reminder',
+      'bup': 'bup',
+      'site_manager': 'siteManager',
+      'employee_management': 'employeeManagement',
+      'driver_manager': 'driverManager',
+      'hr_manager': 'hrManager',
+      'hr_employee_management': 'hrEmployeeManager'
+    };
 
-  // Function to set autoReconfigure
-  const setAutoReconfigure = async () => {
-    if (!token) return;
-    const response = await fetch(`${BACKEND_URL}/core/updateDeviceId`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ token }),
-    });
-
-    let SecureStore: any = null;
-    if (Platform.OS !== 'web') {
-      SecureStore = require('expo-secure-store');
-    }
-
-    if (response.ok) {
-      console.log('Device ID updated successfully');
-      const data = await response.json();
-      if (SecureStore) {
-        await SecureStore.setItemAsync('device_id', data.device_id);
+    const targetPage = pageMap[page.toLowerCase()];
+    if (targetPage) {
+      if (isWeb) {
+        setActivePage(targetPage);
+      } else {
+        // Mobile handlers
+        const mobileHandlers: Record<ActivePage, () => void> = {
+          'attendance': () => {
+            setAttendanceKey(prev => prev + 1);
+            setShowAttendance(true);
+          },
+          'hr': () => setShowHR(true),
+          'cab': () => setShowCab(true),
+          'profile': () => setShowProfile(true),
+          'driver': () => setShowDriver(true),
+          'bdt': () => setShowBDT(true),
+          'medical': () => setShowMedical(true),
+          'scoutBoy': () => setShowScoutBoy(true),
+          'reminder': () => setShowReminder(true),
+          'bup': () => setShowBUP(true),
+          'siteManager': () => setShowSiteManager(true),
+          'employeeManagement': () => setShowEmployeeManagement(true),
+          'driverManager': () => setShowDriverManager(true),
+          'hrManager': () => setShowHrManager(true),
+          'hrEmployeeManager': () => setShowHREmployeeManagement(true),
+          'dashboard': () => {},
+          'settings': () => setShowSettings(true),
+          'notifications': () => setShowNotifications(true),
+          'privacy': () => {},
+          'messages': () => {},
+          'chat': () => setShowChat(true),
+          'chatRoom': () => {},
+          'validation': () => setShowValidation(true)
+        };
+        mobileHandlers[targetPage]();
       }
     } else {
-      console.error('Failed to update device ID');
+      console.log('Unknown page:', page);
     }
   };
 
@@ -983,10 +600,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             console.log('Upcoming events:', events);
             setUpcomingEvents(events);
 
-            if (data.autoReconfigure) {
-              setAutoReconfigure();
-            }
-
             const storedModules = await AsyncStorage.getItem('last_opened_modules');
             if (storedModules) {
               let modulesArray = JSON.parse(storedModules);
@@ -1016,12 +629,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 modulesArray = uniqueModules.slice(0, 4);
                 await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
                 setLastOpenedModules(modulesArray);
-                if (modulesArray.length < 4 && data.modules.length > 0) {
-                  populateMissingLastOpenedModules();
-                }
               }
-            } else {
-              populateMissingLastOpenedModules();
             }
           }
         }
@@ -1036,64 +644,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     fetchToken();
     fetchUserData();
   }, []);
-
-  const loadLastOpenedModules = async () => {
-    try {
-      const storedModules = await AsyncStorage.getItem('last_opened_modules');
-      if (storedModules) {
-        let modulesArray = JSON.parse(storedModules);
-        const uniqueModules: any[] = [];
-        const seen = new Set();
-        for (const module of modulesArray) {
-          if (!seen.has(module.module_unique_name)) {
-            seen.add(module.module_unique_name);
-            uniqueModules.push(module);
-          }
-        }
-        modulesArray = uniqueModules.slice(0, 4);
-        if (modules.length > 0) {
-          modulesArray = modulesArray.map((storedModule: any) => {
-            const backendModule = modules.find(
-              m => m.module_unique_name === storedModule.module_unique_name ||
-                m.module_name.toLowerCase().replace('_', ' ') === storedModule.title.toLowerCase()
-            );
-            if (backendModule) {
-              return {
-                ...storedModule,
-                title: backendModule.module_name.charAt(0).toUpperCase() +
-                  backendModule.module_name.slice(1).replace('_', ' '),
-                iconUrl: backendModule.module_icon,
-                module_unique_name: backendModule.module_unique_name
-              };
-            }
-            const partialMatch = modules.find(m =>
-              m.module_name.toLowerCase().includes(storedModule.title.toLowerCase()) ||
-              storedModule.title.toLowerCase().includes(m.module_name.toLowerCase())
-            );
-            if (partialMatch) {
-              return {
-                ...storedModule,
-                title: partialMatch.module_name.charAt(0).toUpperCase() +
-                  partialMatch.module_name.slice(1).replace('_', ' '),
-                iconUrl: partialMatch.module_icon,
-                module_unique_name: partialMatch.module_unique_name
-              };
-            }
-            return storedModule;
-          });
-          await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
-        }
-        setLastOpenedModules(modulesArray);
-        if (modulesArray.length < 4) {
-          populateMissingLastOpenedModules();
-        }
-      } else {
-        populateMissingLastOpenedModules();
-      }
-    } catch (error) {
-      console.error('Error loading last opened modules:', error);
-    }
-  };
 
   // Initialize background services
   useEffect(() => {
@@ -1201,35 +751,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     return events.slice(0, 3);
   };
 
-  // Function to get initials from name
-  const getInitials = (fullName: string): string => {
-    return fullName.split(' ').map(name => name.charAt(0).toUpperCase()).join('').substring(0, 2);
-  };
-
-  // Function to format date beautifully
-  const formatEventDate = (dateString: string): { day: string, month: string, year?: string } => {
-    const date = new Date(dateString);
-    return {
-      day: date.getDate().toString().padStart(2, '0'),
-      month: date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-      year: date.getFullYear().toString()
-    };
-  };
-
-  // Function to format anniversary years
-  const formatAnniversaryYears = (years: number): string => {
-    if (years === 1) return '1st';
-    if (years === 2) return '2nd';
-    if (years === 3) return '3rd';
-    return `${years}th`;
-  };
-
-  // Get icon URL helper
-  const getIconUrl = (item: IconItem): string => {
-    if (item.iconUrl) return item.iconUrl;
-    return `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`;
-  };
-
   // Handle theme toggle with animation
   const handleThemeToggle = () => {
     if (isAnimating) return;
@@ -1251,216 +772,60 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   };
 
   // Handle module press
-  const handleModulePress = (moduleName: string, moduleUniqueName?: string) => {
-    const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
-    let moduleData = null;
-    if (modules.length > 0) {
-      const backendModule = modules.find(
-        m => m.module_unique_name === moduleUniqueName ||
-          m.module_name.toLowerCase().replace('_', ' ') === moduleName.toLowerCase()
-      );
-      if (backendModule) {
-        moduleData = {
-          title: backendModule.module_name.charAt(0).toUpperCase() +
-            backendModule.module_name.slice(1).replace('_', ' '),
-          iconUrl: backendModule.module_icon,
-          module_unique_name: backendModule.module_unique_name
-        };
-      }
-    }
-    if (!moduleData) {
-      moduleData = {
-        title: moduleName,
-        iconUrl: `https://cdn-icons-png.flaticon.com/512/3135/3135715.png`,
-        module_unique_name: moduleUniqueName || moduleName.toLowerCase()
-      };
-    }
-
-    saveLastOpenedModule(moduleData);
-
-    if (key.includes('attendance')) {
-      setAttendanceKey(prev => prev + 1);
-      setShowAttendance(true);
-    } else if (key.includes('hr') && key != "hr_manager" && key !="hr_employee_management") {
-      setShowHR(true);
-    } else if (key.includes('cab')) {
-      setShowCab(true);
-    } else if (key.includes('driver') && key != "driver_manager") {
-      setShowDriver(true);
-    } else if (key.includes('bdt')) {
-      setShowBDT(true);
-    } else if (key.includes('mediclaim') || key.includes('medical')) {
-      setShowMedical(true);
-    } else if (key.includes('scout')) {
-      setShowScoutBoy(true);
-    } else if (key.includes('reminder')) {
-      setShowReminder(true);
-    } else if (key.includes('bup') || key.includes('business update')) {
-      setShowBUP(true);
-    } else if(key.includes('site_manager') || key.includes('site manager')) {
-      setShowSiteManager(true);
-    } else if (key.includes('employee_management') && key != "hr_employee_management") {
-      setShowEmployeeManagement(true);
-    }
-    else if(key.includes('hr_employee_management')){
-      setShowHREmployeeManagement(true)
-    }
-    else if (key.includes('driver_manager') || key.includes('driver manager')) {
-      setShowDriverManager(true);
-    }
-    else if(key.includes('hr_manager') || key.includes('hr manager')) {
-      setShowHrManager(true);
-    }
-    else {
-      Alert.alert('Coming Soon', `${moduleName} module will be available soon!`);
-    }
+  const handleModulePressWrapper = (moduleName: string, moduleUniqueName?: string) => {
+    handleModulePress({
+      moduleName,
+      moduleUniqueName,
+      modules,
+      saveLastOpenedModule: (module) => saveLastOpenedModule(module, modules, setLastOpenedModules),
+      setActivePage,
+      isWeb,
+      setAttendanceKey,
+      setShowAttendance,
+      setShowHR,
+      setShowCab,
+      setShowDriver,
+      setShowBDT,
+      setShowMedical,
+      setShowScoutBoy,
+      setShowReminder,
+      setShowBUP,
+      setShowSiteManager,
+      setShowEmployeeManagement,
+      setShowHREmployeeManagement,
+      setShowDriverManager,
+      setShowHrManager,
+      Alert
+    });
   };
-
-  const populateMissingLastOpenedModules = async () => {
-    try {
-      const storedModules = await AsyncStorage.getItem('last_opened_modules');
-      let modulesArray = storedModules ? JSON.parse(storedModules) : [];
-      if (modulesArray.length < 4 && modules.length > 0) {
-        const existingModuleNames = new Set(modulesArray.map((m: any) => m.module_unique_name));
-        const availableBackendModules = modules.filter(
-          (backendModule: any) => !existingModuleNames.has(backendModule.module_unique_name)
-        );
-        const shuffledModules = [...availableBackendModules].sort(() => 0.5 - Math.random());
-        while (modulesArray.length < 4 && shuffledModules.length > 0) {
-          const randomModule = shuffledModules.pop();
-          if (randomModule) {
-            modulesArray.push({
-              title: randomModule.module_name.charAt(0).toUpperCase() +
-                randomModule.module_name.slice(1).replace('_', ' '),
-              iconUrl: randomModule.module_icon,
-              module_unique_name: randomModule.module_unique_name
-            });
-          }
-        }
-        if (modulesArray.length < 4) {
-          const defaultModules = [...defaultLastOpened];
-          const shuffledDefaults = [...defaultModules].sort(() => 0.5 - Math.random());
-          while (modulesArray.length < 4 && shuffledDefaults.length > 0) {
-            const defaultModule = shuffledDefaults.pop();
-            if (defaultModule) {
-              const alreadyExists = modulesArray.some(
-                (m: any) => m.module_unique_name === defaultModule.module_unique_name
-              );
-              if (!alreadyExists) {
-                const backendModule = modules.find(
-                  (m: any) => m.module_unique_name === defaultModule.module_unique_name
-                );
-                if (backendModule) {
-                  modulesArray.push({
-                    title: backendModule.module_name.charAt(0).toUpperCase() +
-                      backendModule.module_name.slice(1).replace('_', ' '),
-                    iconUrl: backendModule.module_icon,
-                    module_unique_name: backendModule.module_unique_name
-                  });
-                } else {
-                  modulesArray.push({
-                    title: defaultModule.name,
-                    iconUrl: getIconUrl(defaultModule),
-                    module_unique_name: defaultModule.module_unique_name || defaultModule.name.toLowerCase()
-                  });
-                }
-              }
-            }
-          }
-        }
-        const uniqueModules: any[] = [];
-        const seen = new Set();
-        for (const module of modulesArray) {
-          if (!seen.has(module.module_unique_name)) {
-            seen.add(module.module_unique_name);
-            uniqueModules.push(module);
-          }
-        }
-        modulesArray = uniqueModules.slice(0, 4);
-        await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
-        setLastOpenedModules(modulesArray);
-      }
-    } catch (error) {
-      console.error('Error populating missing modules:', error);
-    }
-  };
-
-  // Save last opened module
-  const saveLastOpenedModule = async (module: any) => {
-    try {
-      const storedModules = await AsyncStorage.getItem('last_opened_modules');
-      let modulesArray = storedModules ? JSON.parse(storedModules) : [];
-
-      let moduleData = module;
-      if (modules.length > 0) {
-        const backendModule = modules.find(
-          m => m.module_unique_name === module.module_unique_name ||
-            m.module_name.toLowerCase().replace('_', ' ') === module.title.toLowerCase()
-        );
-        if (backendModule) {
-          moduleData = {
-            title: backendModule.module_name.charAt(0).toUpperCase() +
-              backendModule.module_name.slice(1).replace('_', ' '),
-            iconUrl: backendModule.module_icon,
-            module_unique_name: backendModule.module_unique_name
-          };
-        } else if (module.module_unique_name) {
-          const backendModuleByName = modules.find(
-            m => m.module_unique_name === module.module_unique_name
-          );
-          if (backendModuleByName) {
-            moduleData = {
-              title: backendModuleByName.module_name.charAt(0).toUpperCase() +
-                backendModuleByName.module_name.slice(1).replace('_', ' '),
-              iconUrl: backendModuleByName.module_icon,
-              module_unique_name: backendModuleByName.module_unique_name
-            };
-          }
-        }
-      }
-
-      modulesArray = modulesArray.filter((m: any) =>
-        m.module_unique_name !== moduleData.module_unique_name
-      );
-
-      modulesArray.unshift(moduleData);
-
-      if (modulesArray.length > 4) {
-        modulesArray = modulesArray.slice(0, 4);
-      }
-
-      await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
-      setLastOpenedModules(modulesArray);
-    } catch (error) {
-      console.error('Error saving last opened module:', error);
-    }
-  };
-
-  const [showValidation, setShowValidation] = useState(false);
 
   // Handle back from pages
   const handleBackFromPage = () => {
-    setShowAttendance(false);
-    setShowProfile(false);
-    setShowHR(false);
-    setShowCab(false);
-    setShowDriver(false);
-    setShowBDT(false);
-    setShowMedical(false);
-    setShowScoutBoy(false);
-    setShowReminder(false);
-    setShowBUP(false);
-    setShowSiteManager(false);
-    setShowNotifications(false);
-    setShowSettings(false);
-    setShowEmployeeManagement(false);
-    setShowHREmployeeManagement(false);
-    setShowChat(false);
-    setShowChatRoom(false);
-    setShowValidation(false);
-    setShowDriverManager(false);
-    setShowHrManager(false);
-    setActiveMenuItem('Dashboard');
+    if (isWeb) {
+      setActivePage('dashboard');
+    } else {
+      setShowAttendance(false);
+      setShowProfile(false);
+      setShowHR(false);
+      setShowCab(false);
+      setShowDriver(false);
+      setShowBDT(false);
+      setShowMedical(false);
+      setShowScoutBoy(false);
+      setShowReminder(false);
+      setShowBUP(false);
+      setShowSiteManager(false);
+      setShowNotifications(false);
+      setShowSettings(false);
+      setShowEmployeeManagement(false);
+      setShowHREmployeeManagement(false);
+      setShowChat(false);
+      setShowChatRoom(false);
+      setShowValidation(false);
+      setShowDriverManager(false);
+      setShowHrManager(false);
+      setActiveMenuItem('Dashboard');
+    }
   };
 
   // Handle logout
@@ -1484,7 +849,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Open menu - Only for mobile
   const openMenu = () => {
-    if (isWeb) return; // Don't open menu on web
+    if (isWeb) return;
     setIsMenuVisible(true);
     Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
   };
@@ -1504,7 +869,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (navItem === 'message') {
       Alert.alert('Support', 'Citadel Hub will be available soon!');
     } else if (navItem === 'hr') {
-      setShowHR(true);
+      if (isWeb) {
+        setActivePage('hr');
+      } else {
+        setShowHR(true);
+      }
     } else if (navItem === 'support') {
       Alert.alert('Support', 'Support feature will be available soon!');
     } else if (navItem !== 'home') {
@@ -1513,35 +882,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   };
 
   // Get display modules
-  const getDisplayModules = () => {
-    if (modules.length > 0) {
-      return modules.map(module => ({
-        title: module.module_name.charAt(0).toUpperCase() + module.module_name.slice(1).replace('_', ' '),
-        iconUrl: module.module_icon,
-        module_unique_name: module.module_unique_name,
-        is_generic: module.is_generic
-      }));
-    }
-    return defaultLastOpened.map(item => {
-      const backendModule = modules.find(m =>
-        m.module_unique_name === item.module_unique_name ||
-        m.module_name.toLowerCase().replace('_', ' ') === item.name.toLowerCase()
-      );
-      return {
-        title: item.name,
-        iconUrl: backendModule ? backendModule.module_icon : getIconUrl(item),
-        module_unique_name: item.module_unique_name || item.name.toLowerCase(),
-        is_generic: true
-      };
-    });
-  };
+  const displayModules = getDisplayModules(modules);
 
   // Filter modules based on search query
-  const filteredModules = getDisplayModules().filter(module =>
+  const filteredModules = displayModules.filter(module =>
     module.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Menu items for the old menu (keeping for reference but not used)
+  // Menu items
   const drawerMenuItems = [
     { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
     { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
@@ -1553,20 +901,46 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const handleMenuItemPress = (item: any) => {
     setActiveMenuItem(item.title);
     closeMenu();
-    if (item.id === 'profile') {
-      setShowProfile(true);
-    } else if (item.id === 'settings') {
-      setShowSettings(true);
-    } else if (item.id === 'validation') {
-      setShowValidation(true);
-    } else if (item.id === 'messages') {
-      Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
-    } else if (item.id === 'notifications') {
-      setShowNotifications(true);
-    } else if (item.id === 'logout') {
-      handleLogout();
-    } else {
-      Alert.alert('Coming Soon', `${item.title} feature will be available soon!`);
+    const pageMap: Record<string, ActivePage> = {
+      'profile': 'profile',
+      'settings': 'settings',
+      'validation': 'validation',
+      'notifications': 'notifications',
+      'logout': 'dashboard'
+    };
+
+    const targetPage = pageMap[item.id];
+    if (targetPage) {
+      if (isWeb) {
+        setActivePage(targetPage);
+      } else {
+        const mobileHandlers: Record<ActivePage, () => void> = {
+          'profile': () => setShowProfile(true),
+          'settings': () => setShowSettings(true),
+          'notifications': () => setShowNotifications(true),
+          'validation': () => setShowValidation(true),
+          'dashboard': () => {},
+          'attendance': () => {},
+          'hr': () => {},
+          'cab': () => {},
+          'driver': () => {},
+          'bdt': () => {},
+          'medical': () => {},
+          'scoutBoy': () => {},
+          'reminder': () => {},
+          'bup': () => {},
+          'siteManager': () => {},
+          'employeeManagement': () => {},
+          'driverManager': () => {},
+          'hrManager': () => {},
+          'hrEmployeeManager': () => {},
+          'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy feature will be available soon!'),
+          'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
+          'chat': () => {},
+          'chatRoom': () => {}
+        };
+        mobileHandlers[targetPage]();
+      }
     }
   };
 
@@ -1605,143 +979,146 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  if (showValidation) {
+  if (showValidation && !isWeb) {
     return (
       <ValidationScreen onBack={handleBackFromPage} />
     );
   }
 
-  // Render different pages
-  if (showChatRoom && selectedChatRoom) {
-    return (
-      <ChatRoomScreen
-        chatRoom={selectedChatRoom}
-        onBack={handleBackFromPage}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
-    );
-  }
+  // Render different pages - Mobile only
+  if (!isWeb) {
+    if (showChatRoom && selectedChatRoom) {
+      return (
+        <ChatRoomScreen
+          chatRoom={selectedChatRoom}
+          onBack={handleBackFromPage}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      );
+    }
 
-  if (showChat) {
-    return (
-      <ChatScreen
-        onBack={handleBackFromPage}
-        onOpenChatRoom={setSelectedChatRoom}
-        currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
-      />
-    );
-  }
+    if (showChat) {
+      return (
+        <ChatScreen
+          onBack={handleBackFromPage}
+          onOpenChatRoom={setSelectedChatRoom}
+          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        />
+      );
+    }
 
-  if (showNotifications) {
-    return (
-      <Notifications onBack={handleBackFromPage} isDark={isDark} />
-    );
-  }
+    if (showNotifications) {
+      return (
+        <Notifications onBack={handleBackFromPage} isDark={isDark} />
+      );
+    }
 
-  if (showDriverManager) {
-    return (
-      <DriverManager onBack={handleBackFromPage} />
-    );
-  }
+    if (showDriverManager) {
+      return (
+        <DriverManager onBack={handleBackFromPage} />
+      );
+    }
 
-  if(showHrManager){
-    return (
-      <HR_Manager onBack={handleBackFromPage} />
-    );
-  }
+    if (showHrManager) {
+      return (
+        <HR_Manager onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showAttendance) {
-    return (
-      <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
-    );
-  }
+    if (showAttendance) {
+      return (
+        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
+      );
+    }
 
-  // UPDATED: Profile component with callback for real-time updates
-  if (showProfile) {
-    return (
-      <Profile 
-        onBack={handleBackFromPage} 
-        userData={userData} 
-        onProfileUpdate={(updatedData) => {
-          // Update Dashboard's userData immediately
-          setUserData(updatedData);
-          // Also refresh from backend to get all latest data
-          refreshUserData();
-        }}
-      />
-    );
-  }
+    if (showProfile) {
+      return (
+        <Profile 
+          onBack={handleBackFromPage} 
+          userData={userData} 
+          onProfileUpdate={(updatedData: UserData) => {
+            const completeData: UserData = {
+              ...userData!,
+              ...updatedData
+            };
+            setUserData(completeData);
+            refreshUserData();
+          }}
+        />
+      );
+    }
 
-  if (showHR) {
-    return (
-      <HR onBack={handleBackFromPage} />
-    );
-  }
+    if (showHR) {
+      return (
+        <HR onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showCab) {
-    return (
-      <Cab onBack={handleBackFromPage} />
-    );
-  }
+    if (showCab) {
+      return (
+        <Cab onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showDriver) {
-    return (
-      <Driver onBack={handleBackFromPage} />
-    );
-  }
+    if (showDriver) {
+      return (
+        <Driver onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showBDT) {
-    return (
-      <BDT onBack={handleBackFromPage} />
-    );
-  }
+    if (showBDT) {
+      return (
+        <BDT onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showMedical) {
-    return (
-      <Medical onBack={handleBackFromPage} />
-    );
-  }
+    if (showMedical) {
+      return (
+        <Medical onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showScoutBoy) {
-    return (
-      <ScoutBoy onBack={handleBackFromPage} />
-    );
-  }
+    if (showScoutBoy) {
+      return (
+        <ScoutBoy onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showReminder) {
-    return (
-      <Reminder onBack={handleBackFromPage} />
-    );
-  }
+    if (showReminder) {
+      return (
+        <Reminder onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showBUP) {
-    return (
-      <BUP onBack={handleBackFromPage} />
-    );
-  }
+    if (showBUP) {
+      return (
+        <BUP onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showSiteManager) {
-    return (
-      <SiteManager onBack={handleBackFromPage} />
-    );
-  }
+    if (showSiteManager) {
+      return (
+        <SiteManager onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showSettings) {
-    return (
-      <Settings onBack={handleBackFromPage} />
-    );
-  }
+    if (showSettings) {
+      return (
+        <Settings onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showEmployeeManagement) {
-    return (
-      <EmployeeManagement onBack={handleBackFromPage} />
-    );
-  }
+    if (showEmployeeManagement) {
+      return (
+        <EmployeeManagement onBack={handleBackFromPage} />
+      );
+    }
 
-  if (showHREmployeeManager){
-    return (
-      <HREmployeeManager onBack={handleBackFromPage} />
-    );
+    if (showHREmployeeManager) {
+      return (
+        <HREmployeeManager onBack={handleBackFromPage} />
+      );
+    }
   }
 
   // Main dashboard render
@@ -1775,7 +1152,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         modules={filteredModules}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onModulePress={handleModulePress}
+        onModulePress={handleModulePressWrapper}
         theme={theme}
         currentColors={currentColors}
       />
@@ -1797,11 +1174,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         )}
 
         {isWeb ? (
-          // Web Layout
-          <View style={[styles.webContainer, { backgroundColor: theme.bgColor }, isWeb && styles.webContainerWeb]}>
+          // Web Layout - Three Column
+          <View style={[styles.webContainer, { backgroundColor: theme.bgColor }]}>
             {/* Left Side - User Profile & Navigation */}
-            <View style={[styles.webLeftSide, { backgroundColor: theme.cardBg }]}>
-              <View style={[styles.webUserProfile, { backgroundColor: theme.cardBg }]}>
+            <View style={[styles.webLeftSide, { backgroundColor: theme.navBg }]}>
+              <View style={[styles.webUserProfile, { backgroundColor: theme.navBg }]}>
                 {userData?.profile_picture ? (
                   <Image
                     source={{ uri: userData.profile_picture }}
@@ -1823,8 +1200,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </Text>
                 </View>
                 <TouchableOpacity 
-                  style={[styles.webSettingsButton, { backgroundColor: theme.cardBg }]}
-                  onPress={() => setShowSettings(true)}
+                  style={[styles.webSettingsButton, { backgroundColor: theme.navBg }]}
+                  onPress={() => setActivePage('settings')}
                 >
                   <Ionicons name="settings-outline" size={24} color={theme.textMain} />
                 </TouchableOpacity>
@@ -1835,23 +1212,24 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 <TouchableOpacity 
                   style={[
                     styles.webNavItem, 
-                    { backgroundColor: theme.cardBg },
-                    activeNavItem === 'home' && styles.webNavItemActive
+                    { backgroundColor: theme.navBg },
+                    activePage === 'dashboard' && styles.webNavItemActive
                   ]}
                   onPress={() => {
                     setActiveNavItem('home');
+                    setActivePage('dashboard');
                   }}
                 >
                   <Ionicons 
                     name="home" 
                     size={24} 
-                    color={activeNavItem === 'home' ? currentColors.primaryBlue : theme.textSub} 
+                    color={activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub} 
                   />
                   <Text style={[
                     styles.webNavText, 
                     { 
-                      color: activeNavItem === 'home' ? currentColors.primaryBlue : theme.textSub,
-                      fontWeight: activeNavItem === 'home' ? '600' : '400'
+                      color: activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activePage === 'dashboard' ? '600' : '400'
                     }
                   ]}>
                     Home
@@ -1860,169 +1238,324 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
                 {/* Profile */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'profile' && styles.webNavItemActive
+                  ]}
                   onPress={() => {
                     setActiveNavItem('profile');
-                    setShowProfile(true);
+                    setActivePage('profile');
                   }}
                 >
-                  <Ionicons name="person-circle-outline" size={24} color={currentColors.primaryBlue} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="person-circle-outline" 
+                    size={24} 
+                    color={activePage === 'profile' ? currentColors.primaryBlue : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'profile' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activePage === 'profile' ? '600' : '400'
+                    }
+                  ]}>
                     Profile
                   </Text>
                 </TouchableOpacity>
 
                 {/* Settings */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'settings' && styles.webNavItemActive
+                  ]}
                   onPress={() => {
                     setActiveNavItem('settings');
-                    setShowSettings(true);
+                    setActivePage('settings');
                   }}
                 >
-                  <Ionicons name="settings-outline" size={24} color={currentColors.primaryBlue} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="settings-outline" 
+                    size={24} 
+                    color={activePage === 'settings' ? currentColors.primaryBlue : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'settings' ? currentColors.primaryBlue : theme.textSub,
+                      fontWeight: activePage === 'settings' ? '600' : '400'
+                    }
+                  ]}>
                     Settings
                   </Text>
                 </TouchableOpacity>
 
                 {/* Notifications */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'notifications' && styles.webNavItemActive
+                  ]}
                   onPress={() => {
                     setActiveNavItem('notifications');
-                    setShowNotifications(true);
+                    setActivePage('notifications');
                   }}
                 >
-                  <Ionicons name="notifications-outline" size={24} color={currentColors.warning} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="notifications-outline" 
+                    size={24} 
+                    color={activePage === 'notifications' ? currentColors.warning : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'notifications' ? currentColors.warning : theme.textSub,
+                      fontWeight: activePage === 'notifications' ? '600' : '400'
+                    }
+                  ]}>
                     Notifications
                   </Text>
                 </TouchableOpacity>
 
                 {/* Privacy Policy */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
-                  onPress={() => Alert.alert('Privacy Policy', 'Privacy Policy feature will be available soon!')}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'privacy' && styles.webNavItemActive
+                  ]}
+                  onPress={() => {
+                    setActiveNavItem('privacy');
+                    setActivePage('privacy');
+                  }}
                 >
-                  <Ionicons name="shield-checkmark-outline" size={24} color="#1E40AF" />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="shield-checkmark-outline" 
+                    size={24} 
+                    color={activePage === 'privacy' ? '#1E40AF' : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'privacy' ? '#1E40AF' : theme.textSub,
+                      fontWeight: activePage === 'privacy' ? '600' : '400'
+                    }
+                  ]}>
                     Privacy Policy
                   </Text>
                 </TouchableOpacity>
 
                 {/* Messages */}
                 <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
-                  onPress={() => Alert.alert('Coming Soon', 'Messages feature will be available soon!')}
+                  style={[
+                    styles.webNavItem, 
+                    { backgroundColor: theme.navBg },
+                    activePage === 'messages' && styles.webNavItemActive
+                  ]}
+                  onPress={() => {
+                    setActiveNavItem('messages');
+                    setActivePage('messages');
+                  }}
                 >
-                  <Ionicons name="chatbubbles-outline" size={24} color={currentColors.success} />
-                  <Text style={[styles.webNavText, { color: theme.textSub }]}>
+                  <Ionicons 
+                    name="chatbubbles-outline" 
+                    size={24} 
+                    color={activePage === 'messages' ? currentColors.success : theme.textSub} 
+                  />
+                  <Text style={[
+                    styles.webNavText, 
+                    { 
+                      color: activePage === 'messages' ? currentColors.success : theme.textSub,
+                      fontWeight: activePage === 'messages' ? '600' : '400'
+                    }
+                  ]}>
                     Messages
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Logout */}
-                <TouchableOpacity 
-                  style={[styles.webNavItem, { backgroundColor: theme.cardBg }]}
-                  onPress={handleLogout}
-                >
-                  <Ionicons name="log-out-outline" size={24} color={currentColors.error} />
-                  <Text style={[styles.webNavText, { color: currentColors.error }]}>
-                    Logout
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Center Content */}
+            {/* Center Content - Dynamic based on activePage */}
             <ScrollView 
               style={[styles.webCenterContent, { backgroundColor: theme.bgColor }]}
               showsVerticalScrollIndicator={false}
             >
-              {/* Header */}
-              <LinearGradient
-                colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.webHeader, isWeb && styles.webHeaderWeb]}
-              >
-                <Image
-                  source={require('../assets/bg.jpeg')}
-                  style={[styles.webHeaderImage, isWeb && styles.webHeaderImageWeb]}
-                  resizeMode="cover"
-                />
-                <View style={[styles.webHeaderOverlay, {
-                  backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-                }]} />
-                <View style={styles.webHeaderContent}>
-                  <View style={styles.webTopNav}>
-                    <View style={styles.webLogoContainer}>
-                      <Text style={[styles.webLogoText, isWeb && styles.webLogoTextWeb]}>CITADEL</Text>
+              {activePage === 'dashboard' ? (
+                // Dashboard Content
+                <View style={styles.dashboardContainer}>
+                  <LinearGradient
+                    colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.webHeader}
+                  >
+                    <Image
+                      source={require('../assets/bg.jpeg')}
+                      style={styles.webHeaderImage}
+                      resizeMode="cover"
+                    />
+                    <View style={[styles.webHeaderOverlay, {
+                      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
+                    }]} />
+                    <View style={styles.webHeaderContent}>
+                      <View style={styles.webTopNav}>
+                        <View style={styles.webLogoContainer}>
+                          <Text style={styles.webLogoText}>CITADEL</Text>
+                        </View>
+                      </View>
+                      <View style={{ marginTop: 40 }}>
+                        <Text style={styles.webWelcomeText}>Welcome back!</Text>
+                        <Text style={styles.webEmployeeText}>
+                          {userData?.first_name + ' ' + userData?.last_name || 'User'}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={{ marginTop: 40 }}>
-                    <Text style={[styles.webWelcomeText, isWeb && styles.webWelcomeTextWeb]}>Welcome back!</Text>
-                    <Text style={[styles.webEmployeeText, isWeb && styles.webEmployeeTextWeb]}>
-                      {userData?.first_name + ' ' + userData?.last_name || 'User'}
-                    </Text>
+                  </LinearGradient>
+
+                  <QuickActions
+                    lastOpenedModules={lastOpenedModules}
+                    modules={modules}
+                    theme={theme}
+                    handleModulePress={handleModulePressWrapper}
+                  />
+
+                  <UpcomingReminder
+                    reminders={reminders}
+                    theme={theme}
+                    currentColors={currentColors}
+                    onPress={() => handleModulePressWrapper('Reminder')}
+                  />
+
+                  <WorkStatistics
+                    hoursWorked={hoursWorked}
+                    overtimeHours={overtimeHours}
+                    userData={userData}
+                    theme={theme}
+                    currentColors={currentColors}
+                  />
+
+                  <View style={styles.upcomingEventsWrapper}>
+                    <UpcomingEvents
+                      upcomingEvents={upcomingEvents}
+                      theme={theme}
+                      currentColors={currentColors}
+                      getInitials={getInitials}
+                      formatEventDate={formatEventDate}
+                      formatAnniversaryYears={formatAnniversaryYears}
+                    />
                   </View>
                 </View>
-              </LinearGradient>
-
-              {/* Quick Actions */}
-              <QuickActions
-                lastOpenedModules={lastOpenedModules}
-                modules={modules}
-                theme={theme}
-                handleModulePress={handleModulePress}
-              />
-
-              {/* Upcoming Reminder */}
-              <UpcomingReminder
-                reminders={reminders}
-                theme={theme}
-                currentColors={currentColors}
-                onPress={() => handleModulePress('Reminder')}
-              />
-
-              {/* Work Statistics */}
-              <WorkStatistics
-                hoursWorked={hoursWorked}
-                overtimeHours={overtimeHours}
-                userData={userData}
-                theme={theme}
-                currentColors={currentColors}
-              />
-
-          
-              {/* Upcoming Events */}
-              <View style={styles.upcomingEventsWrapper}>
-                <UpcomingEvents
-                  upcomingEvents={upcomingEvents}
-                  theme={theme}
-                  currentColors={currentColors}
-                  getInitials={getInitials}
-                  formatEventDate={formatEventDate}
-                  formatAnniversaryYears={formatAnniversaryYears}
-                />
-              </View>
-
-              {/* Footer */}
-              {/* Footer - Hidden on web */}
-              {!isWeb && (
-                <View style={[styles.webFooter, isWeb && styles.webFooterWeb]}>
-                  <Text style={[styles.webFooterLogo, isWeb && styles.webFooterLogoWeb]}>CITADEL</Text>
-                  <Text style={[styles.webFooterText, isWeb && styles.webFooterTextWeb]}>Made with ❤️</Text>
+              ) : (
+                // ALL OTHER PAGES
+                <View style={styles.embeddedPageWrapper}>
+                  <View style={styles.webEmbeddedPage}>
+                    {activePage === 'profile' && (
+                      <Profile 
+                        onBack={() => setActivePage('dashboard')} 
+                        userData={userData}
+                        onProfileUpdate={(updatedData) => {
+                          setUserData(updatedData);
+                          refreshUserData();
+                        }}
+                      />
+                    )}
+                    {activePage === 'settings' && (
+                      <Settings onBack={() => setActivePage('dashboard')} isDark={isDark} />
+                    )}
+                    {activePage === 'notifications' && (
+                      <Notifications 
+                        onBack={() => setActivePage('dashboard')} 
+                        isDark={isDark}
+                      />
+                    )}
+                    {activePage === 'privacy' && (
+                      <View style={[styles.moduleContainer, { backgroundColor: theme.cardBg }]}>
+                        <Text style={[styles.privacyText, { color: theme.textMain }]}>
+                          Privacy Policy Content
+                        </Text>
+                      </View>
+                    )}
+                    {activePage === 'messages' && (
+                      <View style={[styles.moduleContainer, { backgroundColor: theme.cardBg }]}>
+                        <Text style={[styles.privacyText, { color: theme.textMain }]}>
+                          Messages Content
+                        </Text>
+                      </View>
+                    )}
+                    {activePage === 'attendance' && (
+                      <AttendanceWrapper 
+                        onBack={() => setActivePage('dashboard')} 
+                        attendanceKey={attendanceKey} 
+                      />
+                    )}
+                    {activePage === 'hr' && (
+                      <HR onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'cab' && (
+                      <Cab onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'driver' && (
+                      <Driver onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'bdt' && (
+                      <BDT onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'medical' && (
+                      <Medical onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'scoutBoy' && (
+                      <ScoutBoy onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'reminder' && (
+                      <Reminder onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'bup' && (
+                      <BUP onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'siteManager' && (
+                      <SiteManager onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'employeeManagement' && (
+                      <EmployeeManagement onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'hrEmployeeManager' && (
+                      <HREmployeeManager onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'driverManager' && (
+                      <DriverManager onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'hrManager' && (
+                      <HR_Manager onBack={() => setActivePage('dashboard')} />
+                    )}
+                    {activePage === 'validation' && (
+                      <ValidationScreen onBack={() => setActivePage('dashboard')} />
+                    )}
+                  </View>
                 </View>
               )}
             </ScrollView>
 
             {/* Right Side - All Modules Grid */}
-            <View style={[styles.webRightSide, { backgroundColor: theme.cardBg }]}>
-              <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
-                All Modules
-              </Text>
+            <View style={[styles.webRightSide, { backgroundColor: theme.navBg }]}>
+              <View style={styles.modulesHeader}>
+                <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
+                  All Modules
+                </Text>
+                <TouchableOpacity 
+                  style={styles.refreshButton}
+                  onPress={refreshUserData}
+                  disabled={refreshing}
+                >
+                  <Ionicons 
+                    name="refresh" 
+                    size={20} 
+                    color={refreshing ? theme.textSub : theme.accentBlue} 
+                  />
+                </TouchableOpacity>
+              </View>
               <ScrollView 
                 style={styles.modulesGridScroll}
                 showsVerticalScrollIndicator={false}
@@ -2032,7 +1565,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     <TouchableOpacity
                       key={`${module.module_unique_name}-${index}`}
                       style={[styles.moduleGridItem, { backgroundColor: theme.cardBg }]}
-                      onPress={() => handleModulePress(module.title, module.module_unique_name)}
+                      onPress={() => handleModulePressWrapper(module.title, module.module_unique_name)}
                       activeOpacity={0.7}
                     >
                       <View style={[
@@ -2058,12 +1591,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
           </View>
         ) : (
-          // Mobile Layout (Original)
+          // Mobile Layout
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Header Banner with dark overlay */}
             <LinearGradient
               colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
               start={{ x: 0, y: 0 }}
@@ -2072,7 +1604,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             >
               <Image
                 source={require('../assets/bg.jpeg')}
-                style={styles.headerImage as any}
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  opacity: 1,
+                }}
                 resizeMode="cover"
               />
               <View style={[styles.headerOverlay, {
@@ -2095,27 +1632,24 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               </View>
             </LinearGradient>
 
-            {/* Quick Actions */}
             <QuickActions
               lastOpenedModules={lastOpenedModules}
               modules={modules}
               theme={theme}
-              handleModulePress={handleModulePress}
+              handleModulePress={handleModulePressWrapper}
             />
 
-            {/* Upcoming Reminder */}
             <UpcomingReminder
               reminders={reminders}
               theme={theme}
               currentColors={currentColors}
-              onPress={() => handleModulePress('Reminder')}
+              onPress={() => handleModulePressWrapper('Reminder')}
             />
 
-            {/* Module Grid - Mobile version */}
             <View style={styles.moduleGrid}>
               <TouchableOpacity
                 style={styles.moduleAttendance}
-                onPress={() => handleModulePress('Attendance', 'attendance')}
+                onPress={() => handleModulePressWrapper('Attendance', 'attendance')}
                 activeOpacity={0.9}
               >
                 <LinearGradient
@@ -2139,7 +1673,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               <View style={styles.moduleColumn}>
                 <TouchableOpacity
                   style={styles.moduleSmall}
-                  onPress={() => handleModulePress('Car', 'cab')}
+                  onPress={() => handleModulePressWrapper('Car', 'cab')}
                   activeOpacity={0.9}
                 >
                   <LinearGradient
@@ -2162,7 +1696,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.moduleSmall}
-                  onPress={() => handleModulePress('HR', 'hr')}
+                  onPress={() => handleModulePressWrapper('HR', 'hr')}
                   activeOpacity={0.9}
                 >
                   <LinearGradient
@@ -2186,7 +1720,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               </View>
             </View>
 
-            {/* View All Modules Button */}
             <TouchableOpacity
               style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
               onPress={() => setAllModulesVisible(true)}
@@ -2207,7 +1740,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Work Statistics */}
             <WorkStatistics
               hoursWorked={hoursWorked}
               overtimeHours={overtimeHours}
@@ -2216,7 +1748,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               currentColors={currentColors}
             />
 
-            {/* Upcoming Events */}
             <UpcomingEvents
               upcomingEvents={upcomingEvents}
               theme={theme}
@@ -2226,7 +1757,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               formatAnniversaryYears={formatAnniversaryYears}
             />
 
-            {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerLogo}>CITADEL</Text>
               <Text style={styles.footerText}>Made with ❤️</Text>
@@ -2235,7 +1765,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         )}
       </View>
 
-      {/* Bottom Bar - Only show on mobile */}
       {!isWeb && (
         <BottomBar
           activeNavItem={activeNavItem}
@@ -2250,7 +1779,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-// Main Export
 export default function CitadelDashboard({ onLogout }: { onLogout: () => void }) {
   return (
     <SafeAreaProvider>
@@ -2258,22 +1786,6 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
     </SafeAreaProvider>
   );
 }
-
-// Helper function to get module color
-const getModuleColor = (moduleName: string): string => {
-  switch (moduleName.toLowerCase()) {
-    case 'hr':
-      return '#00d285';
-    case 'car':
-      return '#ff5e7a';
-    case 'attendance':
-      return '#ffb157';
-    case 'bdt':
-      return '#1da1f2';
-    default:
-      return '#008069';
-  }
-};
 
 const styles = StyleSheet.create({
   safeContainer: {
@@ -2350,49 +1862,45 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
-  
-  // Web-specific styles
   webContainer: {
-  flex: 1,
-  flexDirection: 'row',
-  alignItems: 'stretch',
-  paddingVertical: 0,
-  minHeight: 0,
-  backgroundColor: 'transparent', // Add this line if not present
-},
-  webContainerWeb: {
-    maxWidth: 1400,
-    marginHorizontal: 'auto',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: '100vh' as any,
+    backgroundColor: 'transparent',
   },
   webLeftSide: {
-  width: 280,
-  padding: 20,
-  borderRightWidth: 1,
-  borderRightColor: '#e5e7eb',
-  borderRadius: 20,
-  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  shadowColor: '#000',
-  shadowOffset: { width: 2, height: 0 },
-  shadowOpacity: 0.1,
-  shadowRadius: 10,
-  elevation: 5,
-  marginTop: 20,
-  marginBottom: 20,
-  marginLeft: 20,
-  maxHeight: 'calc(100vh - 40px)', // 100vh minus top and bottom margins
-  minHeight: 1000, // Minimum height
-},
+    width: 280,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(0,0,0,0.1)',
+    overflow: 'hidden',
+  },
+  embeddedPageWrapper: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    maxWidth: '100%',
+    width: '100%',
+  },
+  dashboardContainer: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    maxWidth: '100%',
+    width: '100%',
+  },
+  webEmbeddedPage: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    maxWidth: '100%',
+    width: '100%',
+  },
   webUserProfile: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    padding: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   webUserAvatar: {
     width: 50,
@@ -2430,65 +1938,36 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   webNavigation: {
-    marginTop: 20,
+    paddingVertical: 16,
   },
   webNavItem: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingVertical: 12,
-  paddingHorizontal: 15,
-  borderRadius: 10,
-  marginBottom: 8,
-  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-  borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.1)',
-},
-webNavItemActive: {
-  backgroundColor: 'rgba(0, 128, 105, 0.15)',
-  borderColor: 'rgba(0, 128, 105, 0.3)',
-  borderWidth: 1,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginVertical: 2,
+  },
+  webNavItemActive: {
+    backgroundColor: 'rgba(0, 128, 105, 0.1)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#008069',
+  },
   webNavText: {
     marginLeft: 12,
     fontSize: 14,
     flex: 1,
   },
-  notificationBadge: {
-    backgroundColor: '#EF4444',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  notificationBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  
   webCenterContent: {
-  flex: 1,
-  minWidth: 0,
-  paddingHorizontal: 10,
-  maxWidth: '100%',
-  overflow: 'hidden',
-  alignSelf: 'stretch',
-  backgroundColor: 'transparent',
-  width: 700,
-},
-
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
   webHeader: {
-    height: 250,
-    borderRadius: 20,
+    height: 220,
     overflow: 'hidden',
     position: 'relative',
-    margin: 20,
-    marginBottom: 15,
-  },
-  webHeaderWeb: {
-    marginTop: 20,
   },
   webHeaderImage: {
     position: 'absolute',
@@ -2522,48 +2001,43 @@ webNavItemActive: {
   },
   webWelcomeText: {
     color: 'white',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
   },
   webEmployeeText: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 18,
     opacity: 0.8,
     marginTop: 4,
   },
-  
   webRightSide: {
-  width: 300,
-  padding: 20,
-  borderLeftWidth: 1,
-  borderLeftColor: '#e5e7eb',
-  borderRadius: 20,
-  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  shadowColor: '#000',
-  shadowOffset: { width: -2, height: 0 },
-  shadowOpacity: 0.1,
-  shadowRadius: 10,
-  elevation: 5,
-  marginTop: 20,
-  marginBottom: 20,
-  marginRight: 20,
-  maxHeight: 'calc(100vh - 40px)', // Same as left panel
-  minHeight: 1000, // Same as left panel
-},
-webUpcomingEventsContainer: {
-  marginHorizontal: 20,
-  marginTop: 20,
-  marginBottom: 20,
-},
-upcomingEventsWrapper: {
-  maxWidth: '100%',
-  overflow: 'hidden',
-},
-
+    width: 280,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(0,0,0,0.1)',
+    overflow: 'hidden',
+  },
+  upcomingEventsWrapper: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  modulesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
   modulesGridTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 20,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   modulesGridScroll: {
     flex: 1,
@@ -2572,15 +2046,18 @@ upcomingEventsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    padding: 16,
+    gap: 12,
   },
   moduleGridItem: {
-    width: '48%',
-    marginBottom: 15,
+    width: '47%',
+    aspectRatio: 1,
+    marginBottom: 12,
     padding: 15,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(0,0,0,0.05)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -2605,25 +2082,16 @@ upcomingEventsWrapper: {
     textAlign: 'center',
     lineHeight: 16,
   },
-  
-  webFooter: {
-    alignItems: 'center',
-    padding: 30,
-    marginTop: 20,
+  moduleContainer: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
-  webFooterLogo: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: 5,
-    color: '#a9a9a9b6',
-    marginBottom: 5,
+  privacyText: {
+    fontSize: 16,
+    lineHeight: 24,
   },
-  webFooterText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  
-  // Mobile styles (unchanged)
   headerBanner: {
     height: 250,
     borderBottomLeftRadius: 30,
@@ -2631,17 +2099,10 @@ upcomingEventsWrapper: {
     overflow: 'hidden',
     position: 'relative',
   },
-  headerImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    opacity: 1,
-  },
   headerOverlay: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   headerContent: {
     padding: 20,
@@ -2783,106 +2244,5 @@ upcomingEventsWrapper: {
   footerText: {
     fontSize: 10,
     color: '#666',
-  },
-  
-  // WhatsApp-style Hamburger Menu Styles
-  menuBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    zIndex: 1000,
-  },
-  menuContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: width * 0.85,
-    maxWidth: 340,
-    zIndex: 1001,
-  },
-  menuHeader: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-  },
-  userInfoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  avatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  userDetails: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  userName: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  userStatus: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 14,
-  },
-  menuItemsContainer: {
-    flex: 1,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  activeMenuItem: {
-    backgroundColor: 'rgba(0, 128, 105, 0.1)',
-  },
-  lastMenuItem: {
-    marginBottom: 0,
-  },
-  menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  menuItemText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '400',
-  },
-  chevronIcon: {
-    marginLeft: 8,
-  },
-  menuFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-  },
-  versionText: {
-    fontSize: 12,
-    textAlign: 'center',
   },
 });
