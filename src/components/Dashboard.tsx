@@ -576,50 +576,119 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   };
 
+  // Error logging function for push token errors - sends to backend
+  const logPushTokenError = async (error: string, details?: any) => {
+    console.error('[Push Token Error]', error, details);
+    try {
+      const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+      if (!userToken) {
+        console.error('Cannot log error: No user token available');
+        return;
+      }
+
+      const errorPayload = {
+        token: userToken,
+        error: `[Push Token] ${error}`,
+        details: details ? JSON.stringify(details) : null,
+        timestamp: new Date().toISOString(),
+        platform: Platform.OS,
+        deviceInfo: {
+          isDevice: Device.isDevice,
+          modelName: Device.modelName,
+          osVersion: Device.osVersion,
+        }
+      };
+
+      const response = await fetch(`${BACKEND_URL}/core/logError`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(errorPayload),
+      });
+
+      if (response.ok) {
+        console.log('✅ Error logged to backend successfully');
+      } else {
+        console.error('❌ Failed to log error to backend:', response.status);
+      }
+    } catch (logError) {
+      console.error('❌ Failed to send error log to backend:', logError);
+    }
+  };
+
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
     let token;
     try {
       await debugLog('[Push Token] Starting registration...');
+      
       if (!Device.isDevice) {
+        const errorMsg = 'Not a physical device - push notifications unavailable';
         await debugLog('[Push Token] Not a physical device');
-        Alert.alert('Debug', 'Not a physical device');
+        await logPushTokenError(errorMsg, { isDevice: Device.isDevice });
+        Alert.alert('Debug', errorMsg);
         return undefined;
       }
+      
       await debugLog('[Push Token] Device check passed');
 
       if (Platform.OS === 'android') {
-        await NotificationsExpo.setNotificationChannelAsync('default', {
-          name: 'default',
-          importance: NotificationsExpo.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#2D3748',
+        try {
+          await NotificationsExpo.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: NotificationsExpo.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#2D3748',
+          });
+          await debugLog('[Push Token] Notification channel created');
+        } catch (channelError: any) {
+          await logPushTokenError('Failed to create notification channel', {
+            error: channelError.message,
+            stack: channelError.stack
+          });
+          throw channelError;
+        }
+      }
+
+      try {
+        const { status: existingStatus } = await NotificationsExpo.getPermissionsAsync();
+        await debugLog('[Push Token] Existing permission status', existingStatus);
+        
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await NotificationsExpo.requestPermissionsAsync();
+          finalStatus = status;
+          await debugLog('[Push Token] New permission status', status);
+        }
+
+        if (finalStatus !== 'granted') {
+          const errorMsg = 'Permission denied for notifications';
+          await debugLog('[Push Token] Permission denied');
+          await logPushTokenError(errorMsg, { status: finalStatus });
+          Alert.alert('Permission Denied', 'Please enable notifications in settings');
+          return undefined;
+        }
+      } catch (permissionError: any) {
+        await logPushTokenError('Failed to get/request notification permissions', {
+          error: permissionError.message,
+          stack: permissionError.stack
         });
-        await debugLog('[Push Token] Notification channel created');
-      }
-
-      const { status: existingStatus } = await NotificationsExpo.getPermissionsAsync();
-      await debugLog('[Push Token] Existing permission status', existingStatus);
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await NotificationsExpo.requestPermissionsAsync();
-        finalStatus = status;
-        await debugLog('[Push Token] New permission status', status);
-      }
-
-      if (finalStatus !== 'granted') {
-        await debugLog('[Push Token] Permission denied');
-        Alert.alert('Permission Denied', 'Please enable notifications in settings');
-        return undefined;
+        throw permissionError;
       }
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId
         || Constants.easConfig?.projectId;
+      
       await debugLog('[Push Token] Project ID', projectId);
 
       if (!projectId) {
+        const errorMsg = 'No project ID found in configuration';
         await debugLog('[Push Token] ERROR: No project ID found');
+        await logPushTokenError(errorMsg, {
+          expoConfig: Constants.expoConfig?.extra,
+          easConfig: Constants.easConfig
+        });
         Alert.alert(
           'Configuration Error',
           'Project ID missing. Please contact support.'
@@ -627,27 +696,46 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         return undefined;
       }
 
-      await debugLog('[Push Token] Getting token for project', projectId);
-      const tokenData = await NotificationsExpo.getExpoPushTokenAsync({
-        projectId
-      });
-      token = tokenData.data;
-      await debugLog('[Push Token] Success', token);
-      return token;
+      try {
+        await debugLog('[Push Token] Getting token for project', projectId);
+        const tokenData = await NotificationsExpo.getExpoPushTokenAsync({
+          projectId
+        });
+        token = tokenData.data;
+        await debugLog('[Push Token] Success', token);
+        return token;
+      } catch (tokenError: any) {
+        await logPushTokenError('Failed to get Expo push token', {
+          error: tokenError.message,
+          stack: tokenError.stack,
+          projectId: projectId
+        });
+        throw tokenError;
+      }
     } catch (error: any) {
       await debugLog('[Push Token Error]', error.message);
+      await logPushTokenError('Unhandled error in registerForPushNotificationsAsync', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return undefined;
     }
-  };
+  }
 
   // Function to send token to backend
   const sendTokenToBackend = async (expoToken: string, userToken: string) => {
     await debugLog('=== SENDING TOKEN TO BACKEND ===');
     await debugLog('Expo Token', expoToken);
     await debugLog('User Token exists', !!userToken);
-
+    
     if (!expoToken || !userToken) {
+      const errorMsg = 'Missing tokens for backend submission';
       await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
+      await logPushTokenError(errorMsg, { 
+        hasExpoToken: !!expoToken, 
+        hasUserToken: !!userToken 
+      });
       return;
     }
 
@@ -657,8 +745,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         token: userToken,
         expo_token: expoToken,
       };
-
       await debugLog('Request body', requestBody);
+
       const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
         method: 'POST',
         headers: {
@@ -668,6 +756,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       });
 
       await debugLog('Response status', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        await logPushTokenError('Backend rejected token registration', {
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: errorText
+        });
+      }
+      
       const data = await response.json();
       await debugLog('Backend response', data);
 
@@ -676,9 +774,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         await AsyncStorage.setItem('expo_push_token', expoToken);
       } else {
         await debugLog('❌ Failed to register push token', data.message);
+        await logPushTokenError('Failed to register push token with backend', {
+          message: data.message,
+          response: data
+        });
       }
     } catch (error: any) {
       await debugLog('❌ Network error', error.message);
+      await logPushTokenError('Network error while sending token to backend', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
     }
   };
 
@@ -765,69 +872,113 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Setup push notifications
   useEffect(() => {
     let isMounted = true;
+    
     const setupNotifications = async () => {
       if (!token) {
         await debugLog('Setup aborted: No user token');
         return;
       }
+
       try {
         await debugLog('Starting notification setup', { token: !!token });
+        
         const pushToken = await registerForPushNotificationsAsync();
         await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
-
+        
         if (pushToken && isMounted) {
           setExpoPushToken(pushToken);
           await debugLog('Calling sendTokenToBackend');
           await sendTokenToBackend(pushToken, token);
+        } else if (!pushToken) {
+          await logPushTokenError('Push token registration returned undefined', {
+            isMounted,
+            hasToken: !!token
+          });
         }
 
-        notificationListener.current = NotificationsExpo.addNotificationReceivedListener(notification => {
-          debugLog('📱 Notification received in foreground', notification);
-          setNotification(notification);
-          const data = notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
-            AttendanceUtils.executeAttendanceFlow('manual', true);
-          }
-        });
-
-        responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(response => {
-          debugLog('👆 Notification tapped', response);
-          const data = response.notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            AttendanceUtils.executeAttendanceFlow('manual', true);
-          } else if (data?.page) {
-            handleNotificationNavigation(data.page as string);
-          }
-        });
-
-        const lastNotificationResponse = await NotificationsExpo.getLastNotificationResponseAsync();
-        if (lastNotificationResponse) {
-          debugLog('📬 App opened from notification', lastNotificationResponse);
-          const data = lastNotificationResponse.notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            setTimeout(() => {
+        try {
+          notificationListener.current = NotificationsExpo.addNotificationReceivedListener(notification => {
+            debugLog('📱 Notification received in foreground', notification);
+            setNotification(notification);
+            
+            const data = notification.request.content.data;
+            if (data?.page === 'autoMarkAttendance') {
+              debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
               AttendanceUtils.executeAttendanceFlow('manual', true);
-            }, 1000);
-          } else if (data?.page) {
-            setTimeout(() => {
+            }
+          });
+
+          responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(response => {
+            debugLog('👆 Notification tapped', response);
+            const data = response.notification.request.content.data;
+            
+            if (data?.page === 'autoMarkAttendance') {
+              AttendanceUtils.executeAttendanceFlow('manual', true);
+            } else if (data?.page) {
               handleNotificationNavigation(data.page as string);
-            }, 500);
+            }
+          });
+        } catch (listenerError: any) {
+          await logPushTokenError('Failed to setup notification listeners', {
+            error: listenerError.message,
+            stack: listenerError.stack
+          });
+        }
+
+        try {
+          const lastNotificationResponse = await NotificationsExpo.getLastNotificationResponseAsync();
+          if (lastNotificationResponse) {
+            debugLog('📬 App opened from notification', lastNotificationResponse);
+            const data = lastNotificationResponse.notification.request.content.data;
+            
+            if (data?.page === 'autoMarkAttendance') {
+              setTimeout(() => {
+                AttendanceUtils.executeAttendanceFlow('manual', true);
+              }, 1000);
+            } else if (data?.page) {
+              setTimeout(() => {
+                handleNotificationNavigation(data.page as string);
+              }, 500);
+            }
           }
+        } catch (lastNotifError: any) {
+          await logPushTokenError('Failed to get last notification response', {
+            error: lastNotifError.message,
+            stack: lastNotifError.stack
+          });
         }
       } catch (error: any) {
         await debugLog('Error in setupNotifications', error.message);
+        await logPushTokenError('Unhandled error in setupNotifications', {
+          error: error.message,
+          stack: error.stack,
+          name: error.name
+        });
       }
     };
 
     if (!isWeb) {
-      setupNotifications();
+      setupNotifications().catch(async (error: any) => {
+        await logPushTokenError('setupNotifications promise rejected', {
+          error: error.message,
+          stack: error.stack
+        });
+      });
     }
 
     return () => {
       isMounted = false;
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
+      
+      try {
+        notificationListener.current?.remove();
+        responseListener.current?.remove();
+      } catch (cleanupError: any) {
+        console.error('Error cleaning up notification listeners:', cleanupError);
+        logPushTokenError('Error during notification listener cleanup', {
+          error: cleanupError.message,
+          stack: cleanupError.stack
+        });
+      }
     };
   }, [token]);
 
