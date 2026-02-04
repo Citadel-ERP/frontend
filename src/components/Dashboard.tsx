@@ -1,3 +1,4 @@
+// Dashboard.tsx - Fixed Version
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -268,12 +269,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [token]);
 
-  // AUTO-REFRESH when returning from Profile screen
+  // FIXED: Auto-REFRESH when returning from Profile screen
   useEffect(() => {
-    if (!showProfile && userData) {
+    if (!showProfile && userData && token) {
       refreshUserData();
     }
-  }, [showProfile, refreshUserData, userData]);
+  }, [showProfile]); // ✅ Only depend on showProfile
 
   // Debug logging function
   const debugLog = async (message: string, data?: any) => {
@@ -537,12 +538,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  // Fetch user data from backend
+  // FIXED: Fetch user data from backend with cleanup
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchToken = async () => {
       try {
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-        setToken(storedToken);
+        if (isMounted) {
+          setToken(storedToken);
+        }
         return storedToken;
       } catch (error) {
         console.error('Error getting token:', error);
@@ -555,12 +560,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         const token = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!token) return;
 
-        setLoading(true);
+        if (isMounted) {
+          setLoading(true);
+        }
+        
         const response = await fetch(`${BACKEND_URL}/core/getUser`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
+
+        if (!isMounted) return; // Don't update if unmounted
 
         if (response.ok) {
           const data: ApiResponse = await response.json();
@@ -569,8 +579,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               ...data.user,
               profile_picture: data.user.profile_picture || undefined
             };
-            setUserData(transformedUserData);
-            setModules(data.modules || []);
+            
+            if (isMounted) {
+              setUserData(transformedUserData);
+              setModules(data.modules || []);
+            }
+            
             try {
               await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
               await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
@@ -582,72 +596,85 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               console.error('❌ Error saving to AsyncStorage:', storageError);
             }
 
-            setUpcomingBirthdays(data.upcoming_birthdays || []);
-            setUpcomingAnniversaries(data.upcoming_anniversary || []);
+            if (isMounted) {
+              setUpcomingBirthdays(data.upcoming_birthdays || []);
+              setUpcomingAnniversaries(data.upcoming_anniversary || []);
 
-            if (Array.isArray(data.upcoming_reminder)) {
-              setReminders(data.upcoming_reminder);
-            } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
-              setReminders([data.upcoming_reminder]);
-            } else {
-              setReminders([]);
-            }
+              if (Array.isArray(data.upcoming_reminder)) {
+                setReminders(data.upcoming_reminder);
+              } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
+                setReminders([data.upcoming_reminder]);
+              } else {
+                setReminders([]);
+              }
 
-            setHoursWorked(data.hours_worked_last_7_attendance || []);
-            setOvertimeHours(data.overtime_hours || []);
+              setHoursWorked(data.hours_worked_last_7_attendance || []);
+              setOvertimeHours(data.overtime_hours || []);
 
-            const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
-            console.log('Upcoming events:', events);
-            setUpcomingEvents(events);
+              const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
+              console.log('Upcoming events:', events);
+              setUpcomingEvents(events);
 
-            const storedModules = await AsyncStorage.getItem('last_opened_modules');
-            if (storedModules) {
-              let modulesArray = JSON.parse(storedModules);
-              if (data.modules && data.modules.length > 0) {
-                modulesArray = modulesArray.map((storedModule: any) => {
-                  const backendModule = data.modules.find(
-                    (m: any) => m.module_unique_name === storedModule.module_unique_name
-                  );
-                  if (backendModule) {
-                    return {
-                      ...storedModule,
-                      iconUrl: backendModule.module_icon,
-                      title: backendModule.module_name.charAt(0).toUpperCase() +
-                        backendModule.module_name.slice(1).replace('_', ' ')
-                    };
+              // Load last opened modules
+              const storedModules = await AsyncStorage.getItem('last_opened_modules');
+              if (storedModules) {
+                let modulesArray = JSON.parse(storedModules);
+                if (data.modules && data.modules.length > 0) {
+                  modulesArray = modulesArray.map((storedModule: any) => {
+                    const backendModule = data.modules.find(
+                      (m: any) => m.module_unique_name === storedModule.module_unique_name
+                    );
+                    if (backendModule) {
+                      return {
+                        ...storedModule,
+                        iconUrl: backendModule.module_icon,
+                        title: backendModule.module_name.charAt(0).toUpperCase() +
+                          backendModule.module_name.slice(1).replace('_', ' ')
+                      };
+                    }
+                    return storedModule;
+                  });
+                  const uniqueModules: any[] = [];
+                  const seen = new Set();
+                  for (const module of modulesArray) {
+                    if (!seen.has(module.module_unique_name)) {
+                      seen.add(module.module_unique_name);
+                      uniqueModules.push(module);
+                    }
                   }
-                  return storedModule;
-                });
-                const uniqueModules: any[] = [];
-                const seen = new Set();
-                for (const module of modulesArray) {
-                  if (!seen.has(module.module_unique_name)) {
-                    seen.add(module.module_unique_name);
-                    uniqueModules.push(module);
-                  }
+                  modulesArray = uniqueModules.slice(0, 4);
+                  await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+                  setLastOpenedModules(modulesArray);
                 }
-                modulesArray = uniqueModules.slice(0, 4);
-                await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
-                setLastOpenedModules(modulesArray);
               }
             }
           }
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
+        if (isMounted) {
+          setError(error instanceof Error ? error.message : 'Failed to fetch user data');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchToken();
     fetchUserData();
-  }, []);
 
-  // Initialize background services
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty array = run once on mount
+
+  // FIXED: Initialize background services with cleanup
   useEffect(() => {
     if (!token || !userData || isWeb) return;
+
+    let isMounted = true;
 
     const initializeBackgroundServices = async () => {
       try {
@@ -690,6 +717,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     };
 
     initializeBackgroundServices();
+
+    return () => {
+      isMounted = false;
+    };
   }, [token, userData]);
 
   // Function to get upcoming events

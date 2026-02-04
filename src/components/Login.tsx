@@ -486,7 +486,7 @@ const getDynamicStyles = (responsive: ReturnType<typeof getResponsiveValues>) =>
       fontSize: responsive.fontSize + 1,
     },
     mpinButtonMargin: {
-      marginTop: responsive.spacing * 0.5,
+      marginTop: responsive.spacing * 0.3,
     },
     mpinButtonText: {
       fontSize: responsive.fontSize - 1,
