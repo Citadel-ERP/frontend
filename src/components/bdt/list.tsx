@@ -232,7 +232,7 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
   if (leads.length === 0) {
     return (
       <View style={styles.emptyState}>
-        <Ionicons name="people" size={64} color={WHATSAPP_COLORS.border} />
+        <Ionicons name="people" size={64} color={WHATSAPP_COLORS.primary} />
         <Text style={styles.emptyStateText}>No leads found</Text>
         <Text style={styles.emptyStateSubtext}>
           Your leads will appear here when they are created
@@ -359,6 +359,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
+    backgroundColor: '#ECE5DD',
   },
   emptyStateText: {
     fontSize: 16,
