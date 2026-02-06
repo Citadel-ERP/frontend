@@ -141,6 +141,12 @@ const Cities: React.FC<CitiesProps> = ({
               <Text style={styles.cityName}>{city.label}</Text>
             </TouchableOpacity>
           ))}
+          {/* Add empty placeholders to maintain alignment */}
+          {filteredCities.length % 3 !== 0 && (
+            Array.from({ length: 3 - (filteredCities.length % 3) }).map((_, index) => (
+              <View key={`placeholder-${index}`} style={styles.cityCard} />
+            ))
+          )}
         </View>
 
         {/* Bottom Spacing */}
@@ -285,12 +291,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   cityCard: {
     width: '30%',
     alignItems: 'center',
     marginBottom: 25,
+    marginRight: '3.33%',
   },
   cityIconContainer: {
     width: 70,
