@@ -74,7 +74,8 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
     return (
         <Animated.View style={[
             styles.bookingCard,
-            isLargeScreen && styles.bookingCardDesktop
+            isLargeScreen && styles.bookingCardDesktop,
+            { transform: [{ translateY: slideAnim }] }
         ]}>
             <View style={styles.bookingCardHeader}>
                 <View style={styles.vehicleInfo}>
@@ -170,10 +171,7 @@ const PreviousBookingsSection: React.FC<PreviousBookingsSectionProps> = ({ booki
 
     if (loading) {
         return (
-            <View style={[
-                styles.previousBookingsContainer,
-                isLargeScreen && styles.previousBookingsContainerDesktop
-            ]}>
+            <View style={styles.previousBookingsContainer}>
                 <Text style={[
                     styles.sectionTitle,
                     isLargeScreen && styles.sectionTitleDesktop
@@ -187,10 +185,7 @@ const PreviousBookingsSection: React.FC<PreviousBookingsSectionProps> = ({ booki
 
     if (bookings.length === 0) {
         return (
-            <View style={[
-                styles.previousBookingsContainer,
-                isLargeScreen && styles.previousBookingsContainerDesktop
-            ]}>
+            <View style={styles.previousBookingsContainer}>
                 <Text style={[
                     styles.sectionTitle,
                     isLargeScreen && styles.sectionTitleDesktop
@@ -220,22 +215,19 @@ const PreviousBookingsSection: React.FC<PreviousBookingsSectionProps> = ({ booki
     return (
         <Animated.View style={[
             styles.previousBookingsContainer,
-            isLargeScreen && styles.previousBookingsContainerDesktop,
             { opacity: fadeAnim }
         ]}>
             <Text style={[
                 styles.sectionTitle,
                 isLargeScreen && styles.sectionTitleDesktop
             ]}>Previous Bookings</Text>
-            <View style={isLargeScreen ? styles.bookingCardsGrid : {}}>
-                {bookings.map((booking, index) => (
-                    <BookingCard 
-                        key={booking.id || index} 
-                        booking={booking} 
-                        index={index} 
-                    />
-                ))}
-            </View>
+            {bookings.map((booking, index) => (
+                <BookingCard 
+                    key={booking.id || index} 
+                    booking={booking} 
+                    index={index} 
+                />
+            ))}
         </Animated.View>
     );
 };
@@ -321,342 +313,335 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
 
     const handleBack = () => {
         if (bookingStep === 2) {
-            // Go back to step 1 (Where from)
             setBookingStep(1);
         } else if (bookingStep === 3) {
-            // Go back to step 2 (Where to)
             setBookingStep(2);
         } else {
-            // On step 1, use the original onBack function (go to cities)
             onBack();
         }
     };
 
     return (
-        <View style={[
-            styles.screenContainer,
-            isWeb && styles.screenContainerWeb
-        ]}>
-            <StatusBar translucent 
-            backgroundColor="transparent" 
-            barStyle="light-content"  />
+        <View style={styles.container}>
+            <StatusBar 
+                translucent 
+                backgroundColor="transparent" 
+                barStyle="light-content" 
+            />
             <SafeAreaView style={styles.safeArea}>
                 <ScrollView
-                    style={[styles.scrollContainer,{marginTop:Platform.OS === 'ios' ? -60 : 0}]}
-                    contentContainerStyle={[
-                        styles.scrollContent,
-                        isWeb && styles.scrollContentWeb
-                    ]}
+                    style={[styles.scrollContainer, { marginTop: Platform.OS === 'ios' ? -60 : 0 }]}
+                    contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={isWeb}
                 >
-
-                    <View style={[
-                        styles.header,
-                        styles.headerBanner,
-                        isLargeScreen && styles.headerBannerDesktop
-                    ]}>
-                        <LinearGradient
-                            colors={['#4A5568', '#2D3748']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={[
-                                styles.headerBanner,
-                                isLargeScreen && styles.headerBannerDesktop
-                            ]}
-                        >
-                            <Image
-                                source={require('../../assets/cars.jpeg')}
+                    {/* Header Banner */}
+                    <View style={styles.headerWrapper}>
+                        <View style={styles.header}>
+                            <LinearGradient
+                                colors={['#4A5568', '#2D3748']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
                                 style={[
-                                    styles.headerImage,
-                                    isLargeScreen && styles.headerImageDesktop
+                                    styles.headerBanner,
+                                    isLargeScreen && styles.headerBannerDesktop
                                 ]}
-                                resizeMode="cover"
-                            />
-                            <View style={styles.headerOverlay} />
+                            >
+                                <Image
+                                    source={require('../../assets/cars.jpeg')}
+                                    style={[
+                                        styles.headerImage,
+                                        isLargeScreen && styles.headerImageDesktop
+                                    ]}
+                                    resizeMode="cover"
+                                />
+                                <View style={styles.headerOverlay} />
 
-                            <View style={[
-                                styles.headerContent,
-                                isWeb && styles.headerContentWeb
-                            ]}>
-                                <View style={[styles.headerTopRow,{paddingTop:Platform.OS === 'ios' ? 40 : 0}]}>
-                                    <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                                        <BackIcon />
-                                    </TouchableOpacity>
-                                    <View style={styles.headerCenter}>
-                                        <Text style={[
-                                            styles.logoText,
-                                            isLargeScreen && styles.logoTextDesktop
-                                        ]}>CITADEL</Text>
+                                <View style={[
+                                    styles.headerContent,
+                                    { paddingTop: Platform.OS === 'ios' ? 50 : 40 }
+                                ]}>
+                                    <View style={styles.headerTopRow}>
+                                        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                                            <BackIcon />
+                                        </TouchableOpacity>
+                                        <View style={styles.headerCenter}>
+                                            <Text style={[
+                                                styles.logoText,
+                                                isLargeScreen && styles.logoTextDesktop
+                                            ]}>CITADEL</Text>
+                                        </View>
+                                        <View style={{ width: 80 }} />
                                     </View>
-                                    <View style={{ width: 2 }} />
                                 </View>
-                            </View>
 
-                            <View style={[
-                                styles.cityTitleContainer, 
-                                styles.titleSection,
-                                isLargeScreen && styles.titleSectionDesktop
-                            ]}>
-                                <Text style={[
-                                    styles.headerTitle,
-                                    isLargeScreen && styles.headerTitleDesktop
-                                ]}>{selectedCity}</Text>
-                            </View>
-                        </LinearGradient>
+                                <View style={[
+                                    styles.titleSection,
+                                    isLargeScreen && styles.titleSectionDesktop
+                                ]}>
+                                    <Text style={[
+                                        styles.headerTitle,
+                                        isLargeScreen && styles.headerTitleDesktop
+                                    ]}>{selectedCity}</Text>
+                                </View>
+                            </LinearGradient>
+                        </View>
                     </View>
 
-                    <View style={[
-                        styles.bookingFormContent,
-                        isWeb && styles.bookingFormContentWeb
-                    ]}>
-                        {/* Step 1: From Location */}
-                        {bookingStep === 1 && (
-                            <View style={[
-                                styles.formStep,
-                                isLargeScreen && styles.formStepDesktop
-                            ]}>
-                                <View style={styles.stepHeader}>
-                                    <View style={styles.stepIcon}>
-                                        <MaterialCommunityIcons name="map-marker" size={24} color="#fff" />
-                                    </View>
-                                    <View>
-                                        <Text style={[
-                                            styles.stepTitle,
-                                            isLargeScreen && styles.stepTitleDesktop
-                                        ]}>Where from?</Text>
-                                        <Text style={[
-                                            styles.stepSubtitle,
-                                            isLargeScreen && styles.stepSubtitleDesktop
-                                        ]}>Enter your pickup location</Text>
-                                    </View>
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <TextInput
-                                        ref={fromInputRef}
-                                        style={[
-                                            styles.formInput,
-                                            isLargeScreen && styles.formInputDesktop
-                                        ]}
-                                        value={bookingForm.fromLocation}
-                                        onChangeText={(text) => setBookingForm({ ...bookingForm, fromLocation: text })}
-                                        placeholder="Enter pickup location"
-                                        placeholderTextColor="#999"
-                                        autoFocus={bookingStep === 1}
-                                    />
-                                </View>
-
-                                <TouchableOpacity
-                                    style={[
-                                        styles.searchBtn, 
-                                        !bookingForm.fromLocation.trim() && styles.disabledBtn,
-                                        isLargeScreen && styles.searchBtnDesktop
-                                    ]}
-                                    onPress={() => handleNextStep(2)}
-                                    disabled={!bookingForm.fromLocation.trim()}
-                                >
-                                    <Text style={styles.searchBtnText}>Next →</Text>
-                                </TouchableOpacity>
-
-                                {/* Previous Bookings in Step 1 */}
-                                <PreviousBookingsSection 
-                                    bookings={previousBookings} 
-                                    loading={bookingsLoading} 
-                                />
-                            </View>
-                        )}
-
-                        {/* Step 2: To Location */}
-                        {bookingStep === 2 && (
-                            <>
+                    {/* Main Content Area with Fixed Width */}
+                    <View style={styles.contentWrapper}>
+                        <View style={[
+                            styles.bookingFormContent,
+                            isWeb && styles.bookingFormContentWeb
+                        ]}>
+                            {/* Step 1: From Location */}
+                            {bookingStep === 1 && (
                                 <View style={[
                                     styles.formStep,
                                     isLargeScreen && styles.formStepDesktop
                                 ]}>
                                     <View style={styles.stepHeader}>
                                         <View style={styles.stepIcon}>
-                                            <MaterialCommunityIcons name="map-marker-check" size={24} color="#fff" />
+                                            <MaterialCommunityIcons name="map-marker" size={24} color="#fff" />
                                         </View>
                                         <View>
                                             <Text style={[
                                                 styles.stepTitle,
                                                 isLargeScreen && styles.stepTitleDesktop
-                                            ]}>Where to?</Text>
+                                            ]}>Where from?</Text>
                                             <Text style={[
                                                 styles.stepSubtitle,
                                                 isLargeScreen && styles.stepSubtitleDesktop
-                                            ]}>Enter your destination</Text>
+                                            ]}>Enter your pickup location</Text>
                                         </View>
                                     </View>
 
                                     <View style={styles.formGroup}>
                                         <TextInput
-                                            ref={toInputRef}
+                                            ref={fromInputRef}
                                             style={[
                                                 styles.formInput,
                                                 isLargeScreen && styles.formInputDesktop
                                             ]}
-                                            value={bookingForm.toLocation}
-                                            onChangeText={(text) => setBookingForm({ ...bookingForm, toLocation: text })}
-                                            placeholder="Enter destination"
+                                            value={bookingForm.fromLocation}
+                                            onChangeText={(text) => setBookingForm({ ...bookingForm, fromLocation: text })}
+                                            placeholder="Enter pickup location"
                                             placeholderTextColor="#999"
-                                            autoFocus={bookingStep === 2}
+                                            autoFocus={bookingStep === 1}
                                         />
                                     </View>
 
                                     <TouchableOpacity
                                         style={[
                                             styles.searchBtn, 
-                                            !bookingForm.toLocation.trim() && styles.disabledBtn,
+                                            !bookingForm.fromLocation.trim() && styles.disabledBtn,
                                             isLargeScreen && styles.searchBtnDesktop
                                         ]}
-                                        onPress={() => handleNextStep(3)}
-                                        disabled={!bookingForm.toLocation.trim()}
+                                        onPress={() => handleNextStep(2)}
+                                        disabled={!bookingForm.fromLocation.trim()}
                                     >
                                         <Text style={styles.searchBtnText}>Next →</Text>
                                     </TouchableOpacity>
+
+                                    {/* Previous Bookings in Step 1 */}
+                                    <PreviousBookingsSection 
+                                        bookings={previousBookings} 
+                                        loading={bookingsLoading} 
+                                    />
                                 </View>
+                            )}
 
-                                {/* Show Previous Bookings after entering locations */}
-                                <PreviousBookingsSection 
-                                    bookings={previousBookings} 
-                                    loading={bookingsLoading} 
-                                />
-                            </>
-                        )}
+                            {/* Step 2: To Location */}
+                            {bookingStep === 2 && (
+                                <>
+                                    <View style={[
+                                        styles.formStep,
+                                        isLargeScreen && styles.formStepDesktop
+                                    ]}>
+                                        <View style={styles.stepHeader}>
+                                            <View style={styles.stepIcon}>
+                                                <MaterialCommunityIcons name="map-marker-check" size={24} color="#fff" />
+                                            </View>
+                                            <View>
+                                                <Text style={[
+                                                    styles.stepTitle,
+                                                    isLargeScreen && styles.stepTitleDesktop
+                                                ]}>Where to?</Text>
+                                                <Text style={[
+                                                    styles.stepSubtitle,
+                                                    isLargeScreen && styles.stepSubtitleDesktop
+                                                ]}>Enter your destination</Text>
+                                            </View>
+                                        </View>
 
-                        {/* Step 3: Schedule */}
-                        {bookingStep === 3 && (
-                            <View style={[
-                                styles.formStep,
-                                isLargeScreen && styles.formStepDesktop
-                            ]}>
-                                <View style={styles.stepHeader}>
-                                    <View style={styles.stepIcon}>
-                                        <MaterialCommunityIcons name="clock-outline" size={24} color="#fff" />
+                                        <View style={styles.formGroup}>
+                                            <TextInput
+                                                ref={toInputRef}
+                                                style={[
+                                                    styles.formInput,
+                                                    isLargeScreen && styles.formInputDesktop
+                                                ]}
+                                                value={bookingForm.toLocation}
+                                                onChangeText={(text) => setBookingForm({ ...bookingForm, toLocation: text })}
+                                                placeholder="Enter destination"
+                                                placeholderTextColor="#999"
+                                                autoFocus={bookingStep === 2}
+                                            />
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.searchBtn, 
+                                                !bookingForm.toLocation.trim() && styles.disabledBtn,
+                                                isLargeScreen && styles.searchBtnDesktop
+                                            ]}
+                                            onPress={() => handleNextStep(3)}
+                                            disabled={!bookingForm.toLocation.trim()}
+                                        >
+                                            <Text style={styles.searchBtnText}>Next →</Text>
+                                        </TouchableOpacity>
                                     </View>
-                                    <View>
+
+                                    {/* Show Previous Bookings after entering locations */}
+                                    <PreviousBookingsSection 
+                                        bookings={previousBookings} 
+                                        loading={bookingsLoading} 
+                                    />
+                                </>
+                            )}
+
+                            {/* Step 3: Schedule */}
+                            {bookingStep === 3 && (
+                                <View style={[
+                                    styles.formStep,
+                                    isLargeScreen && styles.formStepDesktop
+                                ]}>
+                                    <View style={styles.stepHeader}>
+                                        <View style={styles.stepIcon}>
+                                            <MaterialCommunityIcons name="clock-outline" size={24} color="#fff" />
+                                        </View>
+                                        <View>
+                                            <Text style={[
+                                                styles.stepTitle,
+                                                isLargeScreen && styles.stepTitleDesktop
+                                            ]}>When?</Text>
+                                            <Text style={[
+                                                styles.stepSubtitle,
+                                                isLargeScreen && styles.stepSubtitleDesktop
+                                            ]}>Select date and time</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.formGroup}>
                                         <Text style={[
-                                            styles.stepTitle,
-                                            isLargeScreen && styles.stepTitleDesktop
-                                        ]}>When?</Text>
+                                            styles.formLabel,
+                                            isLargeScreen && styles.formLabelDesktop
+                                        ]}>Start Date & Time</Text>
+                                        <View style={[
+                                            styles.dateTimeRow,
+                                            isLargeScreen && styles.dateTimeRowDesktop
+                                        ]}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.dateTimeInput,
+                                                    isLargeScreen && styles.dateTimeInputDesktop
+                                                ]}
+                                                onPress={() => onSetActivePickerType('startDate')}
+                                            >
+                                                <MaterialCommunityIcons name="calendar" size={20} color="#00d285" />
+                                                <Text style={[
+                                                    styles.dateTimeText,
+                                                    isLargeScreen && styles.dateTimeTextDesktop
+                                                ]}>
+                                                    {formatDateForDisplay(bookingForm.startDate)}
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.dateTimeInput,
+                                                    isLargeScreen && styles.dateTimeInputDesktop
+                                                ]}
+                                                onPress={() => onSetActivePickerType('startTime')}
+                                            >
+                                                <MaterialCommunityIcons name="clock-outline" size={20} color="#00d285" />
+                                                <Text style={[
+                                                    styles.dateTimeText,
+                                                    isLargeScreen && styles.dateTimeTextDesktop
+                                                ]}>
+                                                    {formatTimeForDisplay(bookingForm.startTime)}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.formGroup}>
                                         <Text style={[
-                                            styles.stepSubtitle,
-                                            isLargeScreen && styles.stepSubtitleDesktop
-                                        ]}>Select date and time</Text>
+                                            styles.formLabel,
+                                            isLargeScreen && styles.formLabelDesktop
+                                        ]}>End Date & Time</Text>
+                                        <View style={[
+                                            styles.dateTimeRow,
+                                            isLargeScreen && styles.dateTimeRowDesktop
+                                        ]}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.dateTimeInput,
+                                                    isLargeScreen && styles.dateTimeInputDesktop
+                                                ]}
+                                                onPress={() => onSetActivePickerType('endDate')}
+                                            >
+                                                <MaterialCommunityIcons name="calendar" size={20} color="#ff5e7a" />
+                                                <Text style={[
+                                                    styles.dateTimeText,
+                                                    isLargeScreen && styles.dateTimeTextDesktop
+                                                ]}>
+                                                    {formatDateForDisplay(bookingForm.endDate)}
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.dateTimeInput,
+                                                    isLargeScreen && styles.dateTimeInputDesktop
+                                                ]}
+                                                onPress={() => onSetActivePickerType('endTime')}
+                                            >
+                                                <MaterialCommunityIcons name="clock-outline" size={20} color="#ff5e7a" />
+                                                <Text style={[
+                                                    styles.dateTimeText,
+                                                    isLargeScreen && styles.dateTimeTextDesktop
+                                                ]}>
+                                                    {formatTimeForDisplay(bookingForm.endTime)}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
-                                </View>
 
-                                <View style={styles.formGroup}>
-                                    <Text style={[
-                                        styles.formLabel,
-                                        isLargeScreen && styles.formLabelDesktop
-                                    ]}>Start Date & Time</Text>
-                                    <View style={[
-                                        styles.dateTimeRow,
-                                        isLargeScreen && styles.dateTimeRowDesktop
-                                    ]}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.dateTimeInput,
-                                                isLargeScreen && styles.dateTimeInputDesktop
-                                            ]}
-                                            onPress={() => onSetActivePickerType('startDate')}
-                                        >
-                                            <MaterialCommunityIcons name="calendar" size={20} color="#00d285" />
-                                            <Text style={[
-                                                styles.dateTimeText,
-                                                isLargeScreen && styles.dateTimeTextDesktop
-                                            ]}>
-                                                {formatDateForDisplay(bookingForm.startDate)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.dateTimeInput,
-                                                isLargeScreen && styles.dateTimeInputDesktop
-                                            ]}
-                                            onPress={() => onSetActivePickerType('startTime')}
-                                        >
-                                            <MaterialCommunityIcons name="clock-outline" size={20} color="#00d285" />
-                                            <Text style={[
-                                                styles.dateTimeText,
-                                                isLargeScreen && styles.dateTimeTextDesktop
-                                            ]}>
-                                                {formatTimeForDisplay(bookingForm.startTime)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <Text style={[
-                                        styles.formLabel,
-                                        isLargeScreen && styles.formLabelDesktop
-                                    ]}>End Date & Time</Text>
-                                    <View style={[
-                                        styles.dateTimeRow,
-                                        isLargeScreen && styles.dateTimeRowDesktop
-                                    ]}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.dateTimeInput,
-                                                isLargeScreen && styles.dateTimeInputDesktop
-                                            ]}
-                                            onPress={() => onSetActivePickerType('endDate')}
-                                        >
-                                            <MaterialCommunityIcons name="calendar" size={20} color="#ff5e7a" />
-                                            <Text style={[
-                                                styles.dateTimeText,
-                                                isLargeScreen && styles.dateTimeTextDesktop
-                                            ]}>
-                                                {formatDateForDisplay(bookingForm.endDate)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.dateTimeInput,
-                                                isLargeScreen && styles.dateTimeInputDesktop
-                                            ]}
-                                            onPress={() => onSetActivePickerType('endTime')}
-                                        >
-                                            <MaterialCommunityIcons name="clock-outline" size={20} color="#ff5e7a" />
-                                            <Text style={[
-                                                styles.dateTimeText,
-                                                isLargeScreen && styles.dateTimeTextDesktop
-                                            ]}>
-                                                {formatTimeForDisplay(bookingForm.endTime)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                {loading ? (
-                                    <View style={[
-                                        styles.searchBtn,
-                                        isLargeScreen && styles.searchBtnDesktop
-                                    ]}>
-                                        <ActivityIndicator color="#fff" />
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity 
-                                        style={[
+                                    {loading ? (
+                                        <View style={[
                                             styles.searchBtn,
                                             isLargeScreen && styles.searchBtnDesktop
-                                        ]} 
-                                        onPress={onSearchCabs}
-                                    >
-                                        <Text style={styles.searchBtnText}>Search Available Cabs</Text>
-                                    </TouchableOpacity>
-                                )}
+                                        ]}>
+                                            <ActivityIndicator color="#fff" />
+                                        </View>
+                                    ) : (
+                                        <TouchableOpacity 
+                                            style={[
+                                                styles.searchBtn,
+                                                isLargeScreen && styles.searchBtnDesktop
+                                            ]} 
+                                            onPress={onSearchCabs}
+                                        >
+                                            <Text style={styles.searchBtnText}>Search Available Cabs</Text>
+                                        </TouchableOpacity>
+                                    )}
 
-                                {/* Previous Bookings in Step 3 */}
-                                <PreviousBookingsSection 
-                                    bookings={previousBookings} 
-                                    loading={bookingsLoading} 
-                                />
-                            </View>
-                        )}
+                                    {/* Previous Bookings in Step 3 */}
+                                    <PreviousBookingsSection 
+                                        bookings={previousBookings} 
+                                        loading={bookingsLoading} 
+                                    />
+                                </View>
+                            )}
+                        </View>
                     </View>
                 </ScrollView>
             </SafeAreaView>
@@ -665,25 +650,9 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-    headerImage: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
-        height: '100%',
-        opacity: 1,
-    },
-    headerImageDesktop: {
-        height: 320,
-    },
-    screenContainer: {
+    container: {
         flex: 1,
-        backgroundColor: '#e7e6e5',
-    },
-    screenContainerWeb: {
-        alignItems: 'center',
+        backgroundColor: '#F5F5F5',
     },
     safeArea: {
         flex: 1,
@@ -696,12 +665,13 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
     },
-    scrollContentWeb: {
-        maxWidth: 1200,
+    headerWrapper: {
         width: '100%',
-        alignSelf: 'center',
+        alignItems: 'center',
     },
     header: {
+        width: '100%',
+        maxWidth: 1100,
         position: 'relative',
         overflow: 'hidden',
     },
@@ -713,20 +683,37 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     headerBannerDesktop: {
-        height: 320,
+        height: 280,
+    },
+    headerImage: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        opacity: 1,
+    },
+    headerImageDesktop: {
+        height: 280,
+    },
+    headerOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
     },
     headerContent: {
         flex: 1,
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'ios' ? 10 : 40,
         paddingVertical: 20,
         position: 'relative',
         zIndex: 1,
-    },
-    headerContentWeb: {
-        maxWidth: 1200,
-        alignSelf: 'center',
-        width: '100%',
     },
     headerTopRow: {
         flexDirection: 'row',
@@ -736,39 +723,38 @@ const styles = StyleSheet.create({
     headerCenter: {
         flex: 1,
         alignItems: 'center',
-        marginRight: 60,
     },
     titleSection: {
         paddingHorizontal: 20,
         paddingVertical: 25,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
+        position: 'relative',
+        zIndex: 1,
     },
     titleSectionDesktop: {
         paddingHorizontal: 40,
-        paddingVertical: 40,
-    },
-    cityTitleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
+        paddingVertical: 35,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: '600',
         color: '#fff',
-        marginRight: 8,
     },
     headerTitleDesktop: {
-        fontSize: 32,
+        fontSize: 28,
+    },
+    contentWrapper: {
+        width: '100%',
+        alignItems: 'center',
     },
     bookingFormContent: {
+        width: '100%',
         padding: 20,
         paddingBottom: 100,
     },
     bookingFormContentWeb: {
-        maxWidth: 1200,
-        width: '100%',
+        maxWidth: 1100,
         alignSelf: 'center',
     },
     formStep: {
@@ -784,10 +770,10 @@ const styles = StyleSheet.create({
         minHeight: 300,
     },
     formStepDesktop: {
-        padding: 32,
+        padding: 28,
         borderRadius: 20,
-        marginBottom: 32,
-        minHeight: 400,
+        marginBottom: 24,
+        minHeight: 350,
     },
     stepHeader: {
         flexDirection: 'row',
@@ -809,7 +795,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     stepTitleDesktop: {
-        fontSize: 24,
+        fontSize: 22,
     },
     stepSubtitle: {
         fontSize: 14,
@@ -817,7 +803,7 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     stepSubtitleDesktop: {
-        fontSize: 16,
+        fontSize: 15,
     },
     formGroup: {
         marginBottom: 20,
@@ -829,7 +815,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     formLabelDesktop: {
-        fontSize: 16,
+        fontSize: 15,
     },
     formInput: {
         backgroundColor: '#fff',
@@ -842,15 +828,15 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     formInputDesktop: {
-        paddingVertical: 18,
-        fontSize: 18,
+        paddingVertical: 16,
+        fontSize: 16,
     },
     dateTimeRow: {
         flexDirection: 'row',
         gap: 10,
     },
     dateTimeRowDesktop: {
-        gap: 16,
+        gap: 12,
     },
     dateTimeInput: {
         flex: 1,
@@ -864,8 +850,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dateTimeInputDesktop: {
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
     dateTimeText: {
         fontSize: 13,
@@ -873,7 +859,7 @@ const styles = StyleSheet.create({
         marginLeft: 10,
     },
     dateTimeTextDesktop: {
-        fontSize: 15,
+        fontSize: 14,
     },
     searchBtn: {
         backgroundColor: '#00d285',
@@ -883,8 +869,8 @@ const styles = StyleSheet.create({
         marginTop: 20,
     },
     searchBtnDesktop: {
-        padding: 20,
-        borderRadius: 16,
+        padding: 18,
+        borderRadius: 14,
     },
     searchBtnText: {
         color: '#fff',
@@ -902,8 +888,8 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     logoTextDesktop: {
-        fontSize: 20,
-        letterSpacing: 2,
+        fontSize: 18,
+        letterSpacing: 1.5,
     },
     backIcon: {
         height: 24,
@@ -931,10 +917,7 @@ const styles = StyleSheet.create({
     },
     // Previous Bookings Styles
     previousBookingsContainer: {
-        marginTop: 20,
-    },
-    previousBookingsContainerDesktop: {
-        marginTop: 32,
+        marginTop: 24,
     },
     sectionTitle: {
         fontSize: 18,
@@ -943,8 +926,8 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
     sectionTitleDesktop: {
-        fontSize: 22,
-        marginBottom: 20,
+        fontSize: 20,
+        marginBottom: 18,
     },
     loadingContainer: {
         backgroundColor: '#fff',
@@ -971,7 +954,7 @@ const styles = StyleSheet.create({
     },
     emptyStateContainerDesktop: {
         padding: 48,
-        borderRadius: 20,
+        borderRadius: 18,
     },
     emptyIconCircle: {
         width: 100,
@@ -989,7 +972,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     emptyStateTitleDesktop: {
-        fontSize: 22,
+        fontSize: 20,
     },
     emptyStateText: {
         fontSize: 14,
@@ -998,8 +981,8 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     emptyStateTextDesktop: {
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 15,
+        lineHeight: 22,
     },
     bookingCard: {
         backgroundColor: '#fff',
@@ -1015,14 +998,9 @@ const styles = StyleSheet.create({
         borderLeftColor: '#008069',
     },
     bookingCardDesktop: {
-        padding: 20,
-        borderRadius: 16,
-        marginBottom: 16,
-    },
-    bookingCardsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 16,
+        padding: 18,
+        borderRadius: 14,
+        marginBottom: 14,
     },
     bookingCardHeader: {
         flexDirection: 'row',
@@ -1043,7 +1021,7 @@ const styles = StyleSheet.create({
         flexShrink: 1,
     },
     vehicleNameDesktop: {
-        fontSize: 18,
+        fontSize: 17,
     },
     statusBadge: {
         flexDirection: 'row',
@@ -1073,7 +1051,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     locationTextDesktop: {
-        fontSize: 16,
+        fontSize: 15,
     },
     arrowContainer: {
         marginLeft: 8,
@@ -1097,17 +1075,7 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     dateTimeInfoTextDesktop: {
-        fontSize: 16,
-    },
-    headerOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        fontSize: 15,
     },
 });
 
