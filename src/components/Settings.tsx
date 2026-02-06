@@ -190,6 +190,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
       { text: 'OK' },
     ]);
   };
+
   const BackIcon = () => (
     <View style={styles.backIcon}>
       <View style={styles.backArrow} />
@@ -204,8 +205,8 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
     }]}>
       <View style={styles.headerContent}>
         <TouchableOpacity 
-          style={styles.backButton} 
           onPress={onBack}
+          style={styles.backButton}
           activeOpacity={0.7}
         >
           <BackIcon />
@@ -401,28 +402,26 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    height: 106,
-    zIndex: 1000, // Ensure header stays on top
+    paddingBottom: 20,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    height: 56,
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: 15,
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
-    textAlign: 'center',
-    marginLeft: -40,
+    marginLeft: -15,
   },
   headerSpacer: {
     width: 40,
@@ -495,7 +494,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 2,
   },
 });
