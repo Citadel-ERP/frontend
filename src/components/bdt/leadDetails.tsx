@@ -799,14 +799,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
             <View style={s.avatarContainer}>
               <View style={s.avatarPlaceholder}>
                 <Text style={s.avatarText}>
-                  {getInitials(lead.name || 'L')}
+                  {getInitials(lead.company || 'L')}
                 </Text>
               </View>
               <View style={s.onlineIndicator} />
             </View>
             <View style={s.headerTextContainer}>
               <Text style={s.headerTitle} numberOfLines={1}>
-                {lead.name || 'Lead'}
+                {lead.company || 'Lead'}
               </Text>
               <Text style={s.headerSubtitle} numberOfLines={1}>
                 {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
@@ -837,15 +837,15 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
               <View style={s.leadAvatarSection}>
                 <View style={s.leadAvatar}>
                   <Text style={s.leadAvatarText}>
-                    {getInitials(lead.name || 'L')}
+                    {getInitials(lead.company || 'L')}
                   </Text>
                 </View>
               </View>
               
               <View style={s.leadHeaderSection}>
-                <Text style={s.leadNameText}>{lead.name || 'Lead'}</Text>
-                {lead.company && (
-                  <Text style={s.leadCompanyText}>{lead.company}</Text>
+                <Text style={s.leadNameText}>{lead.company || 'Lead'}</Text>
+                {lead.city && (
+                  <Text style={s.leadCompanyText}>{lead.city}</Text>
                 )}
               </View>
             </View>

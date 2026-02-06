@@ -19,6 +19,7 @@ import LeadDetails from './leadDetails';
 import EditLead from './editLead';
 import Incentive from './incentive';
 import CreateInvoice from './createInvoice';
+import CreateLead from './createLead';
 
 const TOKEN_KEY = 'token_2';
 
@@ -297,6 +298,10 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     });
   }, [leads, filterBy, filterValue]);
 
+  const handleCreateLead = useCallback(() => {
+    setViewMode('create');
+  }, []);
+
   const handleBackPress = useCallback(() => {
     if (viewMode === 'incentive') {
       setViewMode('detail');
@@ -307,6 +312,8 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       setViewMode('list');
       setSelectedLead(null);
       fetchLeads(1);
+    } else if (viewMode === 'create') {
+      setViewMode('list');
     } else if (viewMode === 'list') {
       onBack();
     }
@@ -461,11 +468,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     setShowInvoiceForm(false);
   }, []);
 
-
+  const handleLeadCreated = useCallback(async () => {
+    setViewMode('list');
+    await fetchLeads(1);
+    await fetchStatusCounts();
+  }, [fetchLeads, fetchStatusCounts]);
 
   const getHeaderTitle = () => {
     if (viewMode === 'incentive') return 'Incentive Checklist';
     if (viewMode === 'detail') return 'Lead Details';
+    if (viewMode === 'create') return 'Create New Lead';
     return 'BDT';
   };
 
@@ -475,11 +487,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         <Incentive
           onBack={handleBackPress}
           leadId={selectedLead.id}
-          leadName={selectedLead.name}
+          leadName={selectedLead.company}
           hideHeader={false}
         />
       );
     }
+    
     if (viewMode === 'detail' && selectedLead) {
       if (isEditMode) {
         return (
@@ -504,6 +517,19 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         />
       );
     }
+
+    if (viewMode === 'create') {
+      return (
+        <CreateLead
+          onBack={handleBackPress}
+          onCreate={handleLeadCreated}
+          token={token}
+          theme={theme}
+          fetchSubphases={fetchSubphases}
+        />
+      );
+    }
+
     return (
       <View style={styles.listContainer}>
         <SearchAndFilter
@@ -533,6 +559,67 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     );
   };
 
+  const getHeaderActions = () => {
+    if (viewMode === 'list') {
+      return {
+        showBackButton: true,
+        onBack: handleBackPress,
+        showAddButton: true,
+        onAddPress: handleCreateLead,
+        addButtonText: 'Add',
+        showThemeToggle: true,
+        onThemeToggle: toggleDarkMode,
+      };
+    }
+    
+    if (viewMode === 'detail') {
+      if (isEditMode) {
+        return {
+          showBackButton: true,
+          onBack: () => setIsEditMode(false),
+          showSaveButton: false,
+          showThemeToggle: true,
+          onThemeToggle: toggleDarkMode,
+        };
+      }
+      return {
+        showBackButton: true,
+        onBack: handleBackPress,
+        showEditButton: true,
+        onEdit: handleEditPress,
+        showThemeToggle: true,
+        onThemeToggle: toggleDarkMode,
+      };
+    }
+    
+    if (viewMode === 'create') {
+      return {
+        showBackButton: true,
+        onBack: handleBackPress,
+        showThemeToggle: true,
+        onThemeToggle: toggleDarkMode,
+      };
+    }
+    
+    if (viewMode === 'incentive') {
+      return {
+        showBackButton: true,
+        onBack: handleBackPress,
+        showThemeToggle: true,
+        onThemeToggle: toggleDarkMode,
+      };
+    }
+
+    return {
+      showBackButton: true,
+      onBack: handleBackPress,
+      showThemeToggle: true,
+      onThemeToggle: toggleDarkMode,
+    };
+  };
+
+  const headerActions = getHeaderActions();
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar
@@ -541,14 +628,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         translucent
       />
 
-      {viewMode === 'list' && (
+      {viewMode !== 'detail' && viewMode !== 'create' && viewMode !== 'incentive' && (
         <Header
           title={getHeaderTitle()}
-          onBack={handleBackPress}
-          onThemeToggle={toggleDarkMode}
+          {...headerActions}
           isDarkMode={isDarkMode}
           theme={theme}
-          showThemeToggle={true}
           loading={loading}
         />
       )}
@@ -562,7 +647,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           visible={showInvoiceForm}
           onClose={() => setShowInvoiceForm(false)}
           leadId={selectedLead.id}
-          leadName={selectedLead.name}
+          leadName={selectedLead.company}
           onInvoiceCreated={handleInvoiceCreated}
           onCancel={handleInvoiceCancel}
           theme={theme}

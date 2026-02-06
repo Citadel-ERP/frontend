@@ -652,7 +652,7 @@ const EditLead: React.FC<EditLeadProps> = ({
             Edit Lead
           </Text>
           <Text style={s.headerSubtitle} numberOfLines={1}>
-            {lead.name || 'Lead Details'}
+            {lead.company || 'Lead Details'}
           </Text>
         </View>
         
@@ -687,46 +687,6 @@ const EditLead: React.FC<EditLeadProps> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scrollContent}
       >
-        {/* Basic Information Card */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.primary + '15' }]}>
-              <Ionicons name="person-outline" size={20} color={THEME_COLORS.primary} />
-            </View>
-            <Text style={s.cardTitle}>Basic Information</Text>
-          </View>
-          
-          <View style={s.field}>
-            <Text style={s.label}>Lead Name</Text>
-            <TextInput
-              style={s.input}
-              value={editedLead.name}
-              onChangeText={(text) => setEditedLead({...editedLead, name: text})}
-              placeholder="Enter lead name"
-              placeholderTextColor={THEME_COLORS.textTertiary}
-            />
-          </View>
-
-          <View style={s.field}>
-            <Text style={s.label}>Company</Text>
-            <TextInput
-              style={s.input}
-              value={editedLead.company || ''}
-              onChangeText={(text) => setEditedLead({...editedLead, company: text})}
-              placeholder="Enter company name"
-              placeholderTextColor={THEME_COLORS.textTertiary}
-            />
-          </View>
-
-          <View style={s.field}>
-            <Text style={s.label}>City</Text>
-            <View style={s.readOnlyField}>
-              <Ionicons name="location" size={16} color={THEME_COLORS.primary} style={s.fieldIcon} />
-              <Text style={s.readOnlyText}>{lead.city}</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Lead Specific Information Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>

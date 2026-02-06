@@ -58,24 +58,24 @@ const beautifyName = (name: string): string => {
     .join(' ');
 };
 
-const getInitials = (name: string): string => {
-  if (!name || name.trim().length === 0) return '?';
+const getInitials = (company: string): string => {
+  if (!company || company.trim().length === 0) return '?';
   
-  const nameParts = name.trim().split(/\s+/);
+  const companyParts = company.trim().split(/\s+/);
   
-  if (nameParts.length === 1) {
-    return nameParts[0].charAt(0).toUpperCase();
+  if (companyParts.length === 1) {
+    return companyParts[0].charAt(0).toUpperCase();
   } else {
-    return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
+    return (companyParts[0].charAt(0) + companyParts[1].charAt(0)).toUpperCase();
   }
 };
 
-const getAvatarColor = (name: string): string => {
-  if (!name) return avatarColors[0];
+const getAvatarColor = (company: string): string => {
+  if (!company) return avatarColors[0];
   
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < company.length; i++) {
+    hash = company.charCodeAt(i) + ((hash << 5) - hash);
   }
   
   const index = Math.abs(hash) % avatarColors.length;
@@ -137,8 +137,8 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
 }) => {
   // Memoize the render function
   const renderLeadItem = useCallback(({ item: lead }: { item: Lead }) => {
-    const avatarColor = getAvatarColor(lead.name);
-    const initials = getInitials(lead.name);
+    const avatarColor = getAvatarColor(lead.company);
+    const initials = getInitials(lead.company);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
     const statusIcon = getStatusIcon(lead.status);
     
@@ -154,15 +154,15 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
         
         <View style={styles.leadContent}>
           <View style={styles.leadHeader}>
-            <Text style={styles.leadName} numberOfLines={1}>
-              {lead.name}
+            <Text style={styles.leadCompany} numberOfLines={1}>
+              {lead.company || 'No company specified'}
             </Text>
             <Text style={styles.leadTime}>{lastOpened}</Text>
           </View>
           
-          <View style={styles.leadMessage}>
-            <Text style={styles.leadMessageText} numberOfLines={1}>
-              {lead.company || 'No company specified'}
+          <View style={styles.leadInfo}>
+            <Text style={styles.leadPhase} numberOfLines={1}>
+              {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
             </Text>
             <Ionicons 
               name={statusIcon.icon as any} 
@@ -171,17 +171,20 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
             />
           </View>
           
-          <View style={styles.leadStatus}>
-            <Text style={styles.leadStatusText}>
-              {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
-            </Text>
-          </View>
-          
           {lead.emails.length > 0 && (
             <View style={styles.leadContact}>
               <Ionicons name="mail" size={12} color={WHATSAPP_COLORS.textTertiary} />
               <Text style={styles.leadContactText} numberOfLines={1}>
                 {lead.emails[0].email}
+              </Text>
+            </View>
+          )}
+          
+          {lead.phone_numbers && lead.phone_numbers.length > 0 && (
+            <View style={styles.leadContact}>
+              <Ionicons name="call" size={12} color={WHATSAPP_COLORS.textTertiary} />
+              <Text style={styles.leadContactText} numberOfLines={1}>
+                {lead.phone_numbers[0].phone_number}
               </Text>
             </View>
           )}
@@ -303,7 +306,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  leadName: {
+  leadCompany: {
     fontSize: 16,
     fontWeight: '600',
     color: WHATSAPP_COLORS.textPrimary,
@@ -314,30 +317,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: WHATSAPP_COLORS.textTertiary,
   },
-  leadMessage: {
+  leadInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
   },
-  leadMessageText: {
+  leadPhase: {
     fontSize: 14,
     color: WHATSAPP_COLORS.textSecondary,
     flex: 1,
     marginRight: 8,
   },
-  leadStatus: {
-    marginBottom: 4,
-  },
-  leadStatusText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.primary,
-    fontWeight: '500',
-  },
   leadContact: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: 2,
   },
   leadContactText: {
     fontSize: 12,

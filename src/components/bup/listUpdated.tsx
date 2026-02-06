@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { ThemeColors, Lead, Pagination } from './types';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +54,9 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
   onLeadPress,
   loading,
   loadingMore,
+  refreshing,
+  onLoadMore,
+  onRefresh,
   pagination,
   isSearchMode,
   searchQuery,
@@ -133,7 +137,7 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
     }
   };
 
-  const renderLeadItem = (lead: Lead) => {
+  const renderLeadItem = ({ item: lead }: { item: Lead }) => {
     const avatarColor = getAvatarColor(lead.name);
     const initials = getInitials(lead.name);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
@@ -141,7 +145,6 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
     
     return (
       <TouchableOpacity 
-        key={lead.id}
         style={styles.leadItem} 
         onPress={() => onLeadPress(lead)}
         activeOpacity={0.7}
@@ -192,16 +195,20 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
     );
   };
 
-  if (loading && leads.length === 0) {
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
-        <Text style={styles.loadingText}>Loading leads...</Text>
+      <View style={styles.loadMoreContainer}>
+        <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+        <Text style={styles.loadMoreText}>Loading more leads...</Text>
       </View>
     );
-  }
+  };
 
-  if (leads.length === 0) {
+  const renderEmptyComponent = () => {
+    if (loading) return null;
+    
     return (
       <View style={styles.emptyState}>
         <Ionicons name="people" size={64} color={WHATSAPP_COLORS.border} />
@@ -216,27 +223,51 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
         </Text>
       </View>
     );
+  };
+
+  const renderEndOfList = () => {
+    if (!pagination || pagination.has_next || isSearchMode || leads.length === 0) return null;
+    
+    return (
+      <View style={styles.endOfListContainer}>
+        <Text style={styles.endOfListText}>
+          You've reached the end of the list
+        </Text>
+      </View>
+    );
+  };
+
+  if (loading && leads.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+        <Text style={styles.loadingText}>Loading leads...</Text>
+      </View>
+    );
   }
 
   return (
-    <View style={styles.listContainer}>
-      {leads.map(lead => renderLeadItem(lead))}
-      
-      {loadingMore && (
-        <View style={styles.loadMoreContainer}>
-          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-          <Text style={styles.loadMoreText}>Loading more leads...</Text>
-        </View>
+    <FlatList
+      data={leads}
+      keyExtractor={(item) => item.id.toString()}
+      renderItem={renderLeadItem}
+      contentContainerStyle={[
+        styles.listContainer,
+        leads.length === 0 && styles.emptyListContainer
+      ]}
+      showsVerticalScrollIndicator={true}
+      onEndReached={onLoadMore}
+      onEndReachedThreshold={0.5}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      ListEmptyComponent={renderEmptyComponent}
+      ListFooterComponent={() => (
+        <>
+          {renderFooter()}
+          {renderEndOfList()}
+        </>
       )}
-      
-      {pagination && !pagination.has_next && !isSearchMode && (
-        <View style={styles.endOfListContainer}>
-          <Text style={styles.endOfListText}>
-            You've reached the end of the list
-          </Text>
-        </View>
-      )}
-    </View>
+    />
   );
 };
 
@@ -245,6 +276,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+  },
+  emptyListContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   leadItem: {
     flexDirection: 'row',

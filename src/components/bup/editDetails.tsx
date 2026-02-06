@@ -69,6 +69,7 @@ interface EditLeadProps {
   lead: Lead;
   onBack: () => void;
   onSave: (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => void;
+  onDelete: () => void;
   token: string | null;
   theme: ThemeColors;
   fetchSubphases: (phase: string) => Promise<void>;
@@ -109,7 +110,7 @@ const useDebounce = (value: string, delay: number) => {
 };
 
 const EditLead: React.FC<EditLeadProps> = ({
-  lead, onBack, onSave, token, theme, fetchSubphases, selectedCity,
+  lead, onBack, onSave, onDelete, token, theme, fetchSubphases, selectedCity,
 }) => {
   const [editedLead, setEditedLead] = useState<Lead>(lead);
   const [editingEmails, setEditingEmails] = useState<string[]>(lead.emails.map(e => e.email));
@@ -131,6 +132,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [assignedToSearch, setAssignedToSearch] = useState('');
   const [assignedToResults, setAssignedToResults] = useState<AssignedTo[]>([]);
   const [assignedToLoading, setAssignedToLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Lead Specific Information States
   const [areaRequirements, setAreaRequirements] = useState<string>(
@@ -198,7 +200,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     if (activeDropdown === 'assigned') searchAssignedToUsers(debouncedAssignedSearch);
   }, [debouncedAssignedSearch, activeDropdown]);
 
-  // Keep your exact header as requested
   const ModernHeader = () => (
     <SafeAreaView style={s.header}>
       <View style={s.headerContent}>
@@ -212,6 +213,18 @@ const EditLead: React.FC<EditLeadProps> = ({
         </View>
 
         <View style={s.headerActions}>
+          <TouchableOpacity 
+            onPress={handleDelete} 
+            style={[s.deleteHeaderButton, { marginRight: 12 }]}
+            disabled={deleteLoading || loading}
+          >
+            {deleteLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+          
           {loading ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
@@ -223,6 +236,29 @@ const EditLead: React.FC<EditLeadProps> = ({
       </View>
     </SafeAreaView>
   );
+
+  const handleDelete = async () => {
+    try {
+      setDeleteLoading(true);
+      Alert.alert(
+        'Delete Lead',
+        'Are you sure you want to delete this lead? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setDeleteLoading(false) },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              await onDelete();
+              setDeleteLoading(false);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      setDeleteLoading(false);
+    }
+  };
 
   const fetchPhases = async () => {
     try {
@@ -994,6 +1030,23 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
         </View>
 
+        {/* Delete Button */}
+        <TouchableOpacity 
+          style={[s.deleteBtn, (deleteLoading || loading) && s.deleteBtnDisabled]} 
+          onPress={handleDelete}
+          disabled={deleteLoading || loading}
+          activeOpacity={0.8}
+        >
+          {deleteLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+              <Text style={s.deleteBtnText}>Delete Lead</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         {/* Save Button */}
         <TouchableOpacity 
           style={[s.saveBtn, loading && s.saveBtnDisabled]} 
@@ -1161,6 +1214,15 @@ const s = StyleSheet.create({
   headerActions: { 
     flexDirection: 'row', 
     alignItems: 'center' 
+  },
+  deleteHeaderButton: {
+    padding: 8,
+    backgroundColor: '#EF4444',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveHeaderButton: { 
     paddingHorizontal: 16, 
@@ -1473,6 +1535,30 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: THEME_COLORS.primary,
+  },
+  
+  // Delete Button
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  deleteBtnDisabled: {
+    opacity: 0.6,
+  },
+  deleteBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   
   // Save Button
