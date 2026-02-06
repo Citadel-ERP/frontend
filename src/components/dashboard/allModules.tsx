@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     },
     backText: {
         color: 'white',
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '600',
         marginLeft: 2,
     },

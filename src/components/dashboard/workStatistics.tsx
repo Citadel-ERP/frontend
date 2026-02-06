@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  Platform,
 } from 'react-native';
 
 interface UserData {
@@ -107,16 +108,16 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({
 
 const styles = StyleSheet.create({
   sectionCard: {
-    marginHorizontal: 20,
-    marginBottom: 15,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
-  },
+  marginHorizontal: Platform.OS === 'web' ? 0 : 20,
+  marginBottom: 15,
+  padding: 16,
+  borderRadius: 16,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.05,
+  shadowRadius: 15,
+  elevation: 3,
+},
   labelSmall: {
     fontSize: 10,
     textTransform: 'uppercase',

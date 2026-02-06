@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,12 +22,34 @@ interface HeaderProps {
   variant?: 'main' | 'details';
 }
 
+// Custom BackIcon Component
 const BackIcon = () => (
-  <View style={styles.backIcon}>
-    <View style={styles.backArrow} />
-    <Text style={styles.backText}>Back</Text>
+  <View style={backIconStyles.backIcon}>
+    <View style={backIconStyles.backArrow} />
+    <Text style={backIconStyles.backText}>Back</Text>
   </View>
 );
+
+const backIconStyles = StyleSheet.create({
+  backIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 16,
+    marginLeft: 2,
+  },
+});
 
 export const Header: React.FC<HeaderProps> = ({
   title,
@@ -64,12 +87,31 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Top row with back button, logo, and actions */}
           <View style={styles.headerTopRow}>
             {/* Left side - Back button */}
-            <View style={styles.leftSection}>
+            <View style={[styles.leftSection, { zIndex: 10 }]}>
               {showBack && (
                 <TouchableOpacity 
-                  style={styles.backButton} 
+                  style={[
+                    styles.backButton,
+                    {
+                      paddingVertical: 16,
+                      paddingHorizontal: 12,
+                      marginLeft: -12,
+                      marginTop: -16,
+                      minWidth: 100,
+                      minHeight: 50,
+                      justifyContent: 'center',
+                      alignItems: 'flex-start',
+                    },
+                    Platform.OS === 'web' && {
+                      cursor: 'pointer',
+                    }
+                  ]} 
                   onPress={onBack}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  hitSlop={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                  activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel="Go back"
+                  accessibilityRole="button"
                 >
                   <BackIcon />
                 </TouchableOpacity>
@@ -77,7 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
             </View>
             
             {/* Center - Logo */}
-            <View style={styles.centerSectionFull}>
+            <View style={[styles.centerSectionFull, { pointerEvents: 'none' }]}>
               <Text style={styles.logoText}>CITADEL</Text>
             </View>
             

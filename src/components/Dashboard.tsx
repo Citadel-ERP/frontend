@@ -1597,38 +1597,44 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     </View>
                   </LinearGradient>
 
-                  <QuickActions
-                    lastOpenedModules={lastOpenedModules}
-                    modules={modules}
-                    theme={theme}
-                    handleModulePress={handleModulePressWrapper}
-                  />
+                  <View style={{ paddingHorizontal: 20 }}>
+                      <QuickActions
+                        lastOpenedModules={lastOpenedModules}
+                        modules={modules}
+                        theme={theme}
+                        handleModulePress={handleModulePressWrapper}
+                      />
+                    </View>
 
-                  <UpcomingReminder
-                    reminders={reminders}
-                    theme={theme}
-                    currentColors={currentColors}
-                    onPress={() => handleModulePressWrapper('Reminder')}
-                  />
+                    <View style={{ paddingHorizontal: 20 }}>
+                      <UpcomingReminder
+                        reminders={reminders}
+                        theme={theme}
+                        currentColors={currentColors}
+                        onPress={() => handleModulePressWrapper('Reminder')}
+                      />
+                    </View>
 
-                  <WorkStatistics
-                    hoursWorked={hoursWorked}
-                    overtimeHours={overtimeHours}
-                    userData={userData}
-                    theme={theme}
-                    currentColors={currentColors}
-                  />
+                    <View style={{ paddingHorizontal: 20 }}>
+                      <WorkStatistics
+                        hoursWorked={hoursWorked}
+                        overtimeHours={overtimeHours}
+                        userData={userData}
+                        theme={theme}
+                        currentColors={currentColors}
+                      />
+                    </View>
 
-                  <View style={styles.upcomingEventsWrapper}>
-                    <UpcomingEvents
-                      upcomingEvents={upcomingEvents}
-                      theme={theme}
-                      currentColors={currentColors}
-                      getInitials={getInitials}
-                      formatEventDate={formatEventDate}
-                      formatAnniversaryYears={formatAnniversaryYears}
-                    />
-                  </View>
+                    <View style={{ paddingHorizontal: 20 }}>
+                      <UpcomingEvents
+                        upcomingEvents={upcomingEvents}
+                        theme={theme}
+                        currentColors={currentColors}
+                        getInitials={getInitials}
+                        formatEventDate={formatEventDate}
+                        formatAnniversaryYears={formatAnniversaryYears}
+                      />
+                    </View>
                 </View>
               ) : (
                 // ALL OTHER PAGES

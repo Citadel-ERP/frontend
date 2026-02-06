@@ -1052,15 +1052,19 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'flex-end',
+        justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
+        alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
     },
     modalContent: {
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        maxHeight: '80%',
-        paddingTop: 20,
-    },
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingTop: 20,
+    ...(Platform.OS === 'web' && {
+        borderRadius: 24,
+    }),
+},
     modalContentTablet: {
         maxHeight: '60%',
         alignSelf: 'center',
@@ -1069,12 +1073,13 @@ const styles = StyleSheet.create({
         borderBottomRightRadius: 24,
     },
     modalContentDesktop: {
-        maxHeight: '70%',
-        width: 600,
-        alignSelf: 'center',
-        borderRadius: 24,
-        maxWidth: '90%',
-    },
+    maxHeight: '70%',
+    width: 600,
+    borderRadius: 24,
+    maxWidth: '90%',
+    alignSelf: 'center',
+    marginHorizontal: 'auto',
+},
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1140,7 +1145,7 @@ const styles = StyleSheet.create({
     },
     backText: {
         color: colors.white,
-        fontSize: 14,
+        fontSize: 16,
         marginLeft: 2,
     },
 });

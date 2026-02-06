@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -48,11 +49,12 @@ const QuickActions: React.FC<QuickActionsProps> = ({
     // If we have less than 4 modules, fill with placeholders from backend modules
     if (displayedItems.length < 4) {
       const availableModules = modules.filter(
-        (backendModule: any) =>
-          !displayedItems.some(
-            (m: any) => m.module_unique_name === backendModule.module_unique_name
-          )
-      );
+          (backendModule: any) =>
+            !displayedItems.some(
+              (m: any) => m.module_unique_name === backendModule.module_unique_name
+            ) &&
+            backendModule.module_unique_name !== 'attendance'
+        );
 
       for (let i = displayedItems.length; i < 4; i++) {
         if (availableModules.length > 0) {
@@ -132,16 +134,16 @@ const QuickActions: React.FC<QuickActionsProps> = ({
 
 const styles = StyleSheet.create({
   sectionCard: {
-    marginHorizontal: 20,
-    marginBottom: 15,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
-  },
+  marginHorizontal: Platform.OS === 'web' ? 0 : 20,
+  marginBottom: 15,
+  padding: 16,
+  borderRadius: 16,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.05,
+  shadowRadius: 15,
+  elevation: 3,
+},
   labelSmall: {
     fontSize: 10,
     textTransform: 'uppercase',
