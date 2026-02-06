@@ -142,9 +142,9 @@ export const DEFAULT_CITIES = [
     { name: 'Delhi', icon: '🏛️' },
     { name: 'Noida', icon: '🏙️' },
     { name: 'Chennai', icon: '🕍' },
-    { name: 'Kolkata', icon: '🌉' },
+    // { name: 'Kolkata', icon: '🌉' },
     { name: 'Ahmedabad', icon: '🕌' },
-    { name: 'Jaipur', icon: '🏰' },
+    // { name: 'Jaipur', icon: '🏰' },
     { name: 'Lucknow', icon: '🏛️' },
     { name: 'Chandigarh', icon: '🏙️' }
 ];

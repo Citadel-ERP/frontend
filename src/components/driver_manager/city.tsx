@@ -30,12 +30,12 @@ const CITIES = [
   { value: 'Delhi', label: 'Delhi', image: require('../../assets/delhi.png') },
   { value: 'Bangalore', label: 'Bangalore', image: require('../../assets/bangalore.png') },
   { value: 'Chennai', label: 'Chennai', image: require('../../assets/chennai.png') },
-  { value: 'Kolkata', label: 'Kolkata', image: require('../../assets/kolkata.png') },
+  // { value: 'Kolkata', label: 'Kolkata', image: require('../../assets/kolkata.png') },
   { value: 'Hyderabad', label: 'Hyderabad', image: require('../../assets/hyderabad.png') },
   { value: 'Pune', label: 'Pune', image: require('../../assets/pune.png') },
   { value: 'Gurgaon', label: 'Gurgaon', image: require('../../assets/gurgaon.png') },
   { value: 'Noida', label: 'Noida', image: require('../../assets/noida.png') },
-  { value: 'Jaipur', label: 'Jaipur', image: require('../../assets/jaipur.png') },
+  // { value: 'Jaipur', label: 'Jaipur', image: require('../../assets/jaipur.png') },
 ];
 
 const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) => {

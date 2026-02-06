@@ -232,12 +232,12 @@ const HolidayScreen: React.FC<HolidayScreenProps> = ({ onBack, token }) => {
     if (cityLower.includes('delhi')) return require('../../assets/delhi.png');
     if (cityLower.includes('bangalore') || cityLower.includes('bengaluru')) return require('../../assets/bangalore.png');
     if (cityLower.includes('chennai')) return require('../../assets/chennai.png');
-    if (cityLower.includes('kolkata')) return require('../../assets/kolkata.png');
+    // if (cityLower.includes('kolkata')) return require('../../assets/kolkata.png');
     if (cityLower.includes('hyderabad')) return require('../../assets/hyderabad.png');
     if (cityLower.includes('pune')) return require('../../assets/pune.png');
     if (cityLower.includes('gurgaon')) return require('../../assets/gurgaon.png');
     if (cityLower.includes('noida')) return require('../../assets/noida.png');
-    if (cityLower.includes('jaipur')) return require('../../assets/jaipur.png');
+    // if (cityLower.includes('jaipur')) return require('../../assets/jaipur.png');
     return require('../../assets/pune.png');
   };
 
@@ -880,7 +880,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 2,
   },
   cityIconImage: {
