@@ -2058,11 +2058,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   webLeftSide: {
-    width: 280,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-  },
+  width: 280,
+  height: '100vh',
+  flexDirection: 'column',
+  borderRightWidth: 1,
+  borderRightColor: 'rgba(0,0,0,0.1)',
+  overflow: 'hidden',  // Keep this for the container
+},
   embeddedPageWrapper: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -2126,8 +2128,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   webNavigation: {
-    paddingVertical: 16,
-  },
+  flex: 1,  // ADD THIS - makes it take remaining space
+  overflow: 'auto',  // ADD THIS - enables scrolling
+  paddingVertical: 16,
+},
   webNavItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2146,12 +2150,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   webCenterContent: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: '100%',
-    overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
+  flex: 1,
+  maxHeight: '100vh',
+  overflow: 'auto',  // CHANGE from 'hidden'
+  backgroundColor: 'transparent',
+},
+  webRightSide: {
+  width: 280,
+  height: '100vh',
+  flexDirection: 'column',  // ADD THIS
+  borderLeftWidth: 1,
+  borderLeftColor: 'rgba(0,0,0,0.1)',
+  overflow: 'hidden',  // Keep this for the container
+},
   webHeader: {
     height: 220,
     overflow: 'hidden',
@@ -2198,12 +2209,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginTop: 4,
   },
-  webRightSide: {
-    width: 280,
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-  },
+
   upcomingEventsWrapper: {
     maxWidth: '100%',
     overflow: 'hidden',

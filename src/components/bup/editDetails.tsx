@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   ActivityIndicator, Alert, SafeAreaView, StatusBar, Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView, Modal 
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption, AssignedTo } from './types';
@@ -1102,69 +1102,107 @@ const EditLead: React.FC<EditLeadProps> = ({
       />
 
       {/* Assigned To Modal */}
-      {activeDropdown === 'assigned' && (
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Assign Lead To</Text>
-              <TouchableOpacity 
-                onPress={() => setActiveDropdown(null)}
+      // Replace the Assigned To Modal section (around line 850-920) with this:
+
+{/* Assigned To Modal */}
+{/* Assigned To Modal */}
+{activeDropdown === 'assigned' && (
+  <Modal
+    visible={true}
+    transparent={true}
+    animationType="fade"
+    onRequestClose={() => setActiveDropdown(null)}
+  >
+    <TouchableOpacity 
+      style={s.modalOverlay}
+      activeOpacity={1} 
+      onPress={() => setActiveDropdown(null)}
+    >
+      <TouchableOpacity 
+        activeOpacity={1} 
+        onPress={(e) => e.stopPropagation()}
+        style={s.modalContent}
+      >
+        <View style={s.modalHeader}>
+          <Text style={s.modalTitle}>Assign Lead To</Text>
+          <TouchableOpacity 
+            onPress={() => setActiveDropdown(null)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={s.searchContainer}>
+          <TextInput
+            style={s.searchInput}
+            value={assignedToSearch}
+            onChangeText={setAssignedToSearch}
+            placeholder="Search employees..."
+            placeholderTextColor={THEME_COLORS.textTertiary}
+            autoCapitalize="none"
+          />
+          {assignedToLoading && (
+            <ActivityIndicator 
+              size="small" 
+              color={THEME_COLORS.primary} 
+              style={s.searchLoader} 
+            />
+          )}
+        </View>
+
+        <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+          {assignedToResults.length > 0 ? (
+            assignedToResults.map((user) => (
+              <TouchableOpacity
+                key={user.email}
+                style={[
+                  s.modalItem, 
+                  editedLead.assigned_to?.email === user.email && s.modalItemSelected
+                ]}
+                onPress={() => handleAssignToUser(user)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.searchContainer}>
-              <TextInput
-                style={s.searchInput}
-                value={assignedToSearch}
-                onChangeText={setAssignedToSearch}
-                placeholder="Search employees..."
-                placeholderTextColor={THEME_COLORS.textTertiary}
-                autoCapitalize="none"
-              />
-              {assignedToLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
-            </View>
-
-            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-              {assignedToResults.length > 0 ? (
-                assignedToResults.map((user) => (
-                  <TouchableOpacity
-                    key={user.email}
-                    style={[s.modalItem, editedLead.assigned_to?.email === user.email && s.modalItemSelected]}
-                    onPress={() => handleAssignToUser(user)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={s.modalItemContent}>
-                      <Ionicons 
-                        name="person" 
-                        size={18} 
-                        color={editedLead.assigned_to?.email === user.email ? THEME_COLORS.primary : THEME_COLORS.textSecondary} 
-                      />
-                      <View style={s.modalItemInfo}>
-                        <Text style={s.modalItemName} numberOfLines={1}>
-                          {user.full_name || `${user.first_name} ${user.last_name}`}
-                        </Text>
-                        <Text style={s.modalItemEmail} numberOfLines={1}>{user.email}</Text>
-                      </View>
-                    </View>
-                    {editedLead.assigned_to?.email === user.email && (
-                      <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))
-              ) : (
-                !assignedToLoading && (
-                  <View style={s.emptyState}>
-                    <Text style={s.emptyText}>No users found</Text>
+                <View style={s.modalItemContent}>
+                  <Ionicons 
+                    name="person" 
+                    size={18} 
+                    color={
+                      editedLead.assigned_to?.email === user.email 
+                        ? THEME_COLORS.primary 
+                        : THEME_COLORS.textSecondary
+                    } 
+                  />
+                  <View style={s.modalItemInfo}>
+                    <Text style={s.modalItemName} numberOfLines={1}>
+                      {user.full_name || `${user.first_name} ${user.last_name}`}
+                    </Text>
+                    <Text style={s.modalItemEmail} numberOfLines={1}>
+                      {user.email}
+                    </Text>
                   </View>
-                )
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      )}
+                </View>
+                {editedLead.assigned_to?.email === user.email && (
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={20} 
+                    color={THEME_COLORS.primary} 
+                  />
+                )}
+              </TouchableOpacity>
+            ))
+          ) : (
+            !assignedToLoading && (
+              <View style={s.emptyState}>
+                <Text style={s.emptyText}>No users found</Text>
+              </View>
+            )
+          )}
+        </ScrollView>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  </Modal>
+)}
     </KeyboardAvoidingView>
   );
 };
@@ -1385,10 +1423,7 @@ const s = StyleSheet.create({
     color: THEME_COLORS.textPrimary,
     flex: 1,
   },
-  deleteBtn: {
-    padding: 4,
-    marginLeft: 8,
-  },
+  
   
   // Add Rows
   addRow: {
@@ -1424,6 +1459,7 @@ const s = StyleSheet.create({
     position: 'relative',
   },
   searchInput: {
+    marginBottom: 70,
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
     borderRadius: 10,

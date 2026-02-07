@@ -783,6 +783,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   }, [renderDateSeparator, renderCommentItem]);
 
   const ModernHeader = useMemo(() => (
+  <View style={s.headerWrapper}>
     <SafeAreaView style={s.headerSafeArea} edges={['top']}>
       <View style={s.header}>
         <StatusBar barStyle="light-content" backgroundColor={C.primary} />
@@ -825,7 +826,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
         </View>
       </View>
     </SafeAreaView>
-  ), [onBack, onIncentivePress, onEdit, lead, beautifyName, getInitials]);
+  </View>
+), [onBack, onIncentivePress, onEdit, lead, beautifyName, getInitials]);
 
   const renderModalSection = useCallback(({ item }: { item: string }) => {
     switch (item) {
@@ -1459,10 +1461,33 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
 LeadDetails.displayName = 'LeadDetails';
 
 const s = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: C.chatBg },
+  mainContainer: { 
+  flex: 1, 
+  backgroundColor: C.chatBg,
+  ...(Platform.OS === 'web' ? {
+    height: '100vh',
+    width: '100%',
+    overflow: 'hidden',
+    position: 'relative',
+  } : {}),
+},
+headerWrapper: {
+  ...(Platform.OS === 'web' ? {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  } : {}),
+},
   androidContainer: { flex: 1 },
   iosContainer: { flex: 1 },
-  headerSafeArea: { backgroundColor: C.primary },
+  headerSafeArea: { 
+  backgroundColor: C.primary,
+  ...(Platform.OS === 'web' ? {
+    flexShrink: 0,
+  } : {}),
+},
   header: {
     backgroundColor: C.primary,
     borderBottomWidth: 1,
@@ -1845,7 +1870,19 @@ const s = StyleSheet.create({
   collaboratorsGridOld: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   collaboratorItem: { alignItems: 'center', width: 80 },
   notesContainer: { backgroundColor: C.background, padding: 16, borderRadius: 8 },
-  chatContainer: { flex: 1, backgroundColor: C.chatBg },
+  chatContainer: { 
+  flex: 1, 
+  backgroundColor: C.chatBg,
+  ...(Platform.OS === 'web' ? {
+    position: 'fixed',
+    top: 116,
+    bottom: 68,
+    left: 0,
+    right: 0,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+  } : {}),
+},
   chatListContent: {
     paddingHorizontal: 8,
     paddingTop: 8,
@@ -1919,12 +1956,19 @@ const s = StyleSheet.create({
   chatTimeText: { fontSize: 10 },
   deliveryIcon: { marginLeft: 4 },
   selectedFilesPreview: {
-    backgroundColor: C.surface,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12
-  },
+  backgroundColor: C.surface,
+  borderTopWidth: 1,
+  borderTopColor: C.border,
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  ...(Platform.OS === 'web' ? {
+    position: 'fixed',
+    bottom: 68,
+    left: 0,
+    right: 0,
+    zIndex: 9,
+  } : {}),
+},
   selectedFilesTitle: {
     fontSize: 14,
     fontWeight: '500',
@@ -1951,10 +1995,17 @@ const s = StyleSheet.create({
   },
   selectedDocumentSize: { fontSize: 11, color: C.textTertiary },
   inputContainerWrapper: {
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    backgroundColor: C.surface,
-  },
+  borderTopWidth: 1,
+  borderTopColor: C.border,
+  backgroundColor: C.surface,
+  ...(Platform.OS === 'web' ? {
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  } : {}),
+},
   androidInputContainer: {
     borderTopWidth: 1,
     borderTopColor: C.border,
