@@ -21,10 +21,15 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 
-const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmployee, onBack, token }) => {
+const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ 
+  employee: initialEmployee, 
+  onBack, 
+  token,
+  onDataChange // Add this optional prop to notify parent of data changes
+}) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   const [loading, setLoading] = useState(false);
-  const [employee, setEmployee] = useState(initialEmployee); // Add local state for employee
+  const [employee, setEmployee] = useState(initialEmployee);
   const [employeeDetails, setEmployeeDetails] = useState<any>(null);
   const [attendanceReport, setAttendanceReport] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -33,6 +38,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
   const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showEditLeaves, setShowEditLeaves] = useState(false);
+  const [dataChanged, setDataChanged] = useState(false); // Track if data changed
 
   useEffect(() => {
     fetchEmployeeDetails();
@@ -62,7 +68,6 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
         setEmployeeDetails(data);
         
         // Update the employee state with fresh data from API
-        // This ensures leave balances and other fields are updated
         setEmployee({
           ...employee,
           earned_leaves: data.earned_leaves,
@@ -70,7 +75,9 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
           casual_leaves: data.casual_leaves,
           birth_date: data.birth_date,
           joining_date: data.joining_date,
-          // Add any other fields that might be updated
+          leaves: data.leaves,
+          any_action: data.any_action,
+          action_type: data.action_type,
         });
       } else {
         Alert.alert('Error', 'Failed to fetch employee details');
@@ -130,7 +137,8 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
 
               if (response.ok) {
                 Alert.alert('Success', 'Leave approved successfully');
-                fetchEmployeeDetails();
+                setDataChanged(true); // Mark that data changed
+                await fetchEmployeeDetails(); // Refresh employee details
               } else {
                 Alert.alert('Error', 'Failed to approve leave');
               }
@@ -172,7 +180,8 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
         setRejectionModalVisible(false);
         setRejectionReason('');
         setSelectedLeaveId(null);
-        fetchEmployeeDetails();
+        setDataChanged(true); // Mark that data changed
+        await fetchEmployeeDetails(); // Refresh employee details
       } else {
         Alert.alert('Error', 'Failed to reject leave');
       }
@@ -189,6 +198,14 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
   const handleBackFromEditLeaves = () => {
     setShowEditLeaves(false);
     fetchEmployeeDetails(); // Refresh data when coming back
+  };
+
+  const handleBack = () => {
+    // If data changed, notify parent to refresh
+    if (dataChanged && onDataChange) {
+      onDataChange();
+    }
+    onBack();
   };
 
   if (showEditLeaves) {
@@ -247,7 +264,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
       <Header
         title={employee.full_name}
         subtitle={employee.designation}
-        onBack={onBack}
+        onBack={handleBack}
         onRefresh={fetchEmployeeDetails}
         showRefresh={true}
         variant="details"
@@ -256,6 +273,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee: initialEmpl
       <TabNavigation
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        employee={employee}
       />
 
       {renderActiveTab()}

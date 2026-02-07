@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Animated,
   Dimensions, Platform, RefreshControl, Modal, Alert, LayoutAnimation, UIManager,
@@ -82,9 +82,12 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   // Track if we need to save read status (to prevent constant saves)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedNotificationsRef = useRef<Notification[]>([]);
-
+  const previousUnreadCountRef = useRef(0); // FIX: Track previous count
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
+  
+  // FIX: Only load notifications once on mount
+  const hasLoadedRef = useRef(false);
 
   // Load notification setting on mount
   useEffect(() => {
@@ -113,10 +116,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         }
         
         // If notifications are enabled, proceed with normal initialization
-        if (enabled) {
+        if (enabled && !hasLoadedRef.current) {
+          hasLoadedRef.current = true;
           requestNotificationPermissions();
           fetchNotifications();
-        } else {
+        } else if (!enabled) {
           // If disabled, set loading to false but don't fetch notifications
           setLoading(false);
           // Clear any existing badge count
@@ -125,17 +129,23 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         }
       } else {
         // Default to enabled if not set
-        setNotificationsEnabled(true);
-        setShowDisabledMessage(false);
-        requestNotificationPermissions();
-        fetchNotifications();
+        if (!hasLoadedRef.current) {
+          hasLoadedRef.current = true;
+          setNotificationsEnabled(true);
+          setShowDisabledMessage(false);
+          requestNotificationPermissions();
+          fetchNotifications();
+        }
       }
     } catch (error) {
       console.error('Error loading notification setting:', error);
       // Default to enabled on error
-      setNotificationsEnabled(true);
-      requestNotificationPermissions();
-      fetchNotifications();
+      if (!hasLoadedRef.current) {
+        hasLoadedRef.current = true;
+        setNotificationsEnabled(true);
+        requestNotificationPermissions();
+        fetchNotifications();
+      }
     }
     
     Animated.timing(fadeAnim, {
@@ -185,14 +195,29 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     }
   };
 
-  // ✅ OPTIMIZED: Only update badge count and save when necessary
+  // FIX: Optimized badge update - only call parent when count actually changes
   useEffect(() => {
-    if (!notificationsEnabled || notifications.length === 0) return;
+    if (!notificationsEnabled || notifications.length === 0) {
+      // Update badge to 0 if notifications are disabled or empty
+      const currentUnreadCount = 0;
+      if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
+        onBadgeUpdate(currentUnreadCount);
+        previousUnreadCountRef.current = currentUnreadCount;
+      }
+      updateIOSBadgeCount(0);
+      return;
+    }
 
-    const unreadCount = notifications.filter(n => !n.Read).length;
-    onBadgeUpdate?.(unreadCount);
-    updateIOSBadgeCount(unreadCount);
-    console.log(`📱 Total: ${notifications.length}, Unread: ${unreadCount}`);
+    const currentUnreadCount = notifications.filter(n => !n.Read).length;
+    
+    // Only call onBadgeUpdate if count actually changed
+    if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
+      onBadgeUpdate(currentUnreadCount);
+      previousUnreadCountRef.current = currentUnreadCount;
+    }
+    
+    updateIOSBadgeCount(currentUnreadCount);
+    console.log(`📱 Total: ${notifications.length}, Unread: ${currentUnreadCount}`);
 
     // Debounce save operation to prevent constant writes
     if (saveTimeoutRef.current) {
@@ -216,7 +241,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [notifications, notificationsEnabled]);
+  }, [notifications, notificationsEnabled, onBadgeUpdate]);
 
   const saveReadStatusLocally = async () => {
     try {
@@ -267,6 +292,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       const token = await AsyncStorage.getItem('token_2');
       if (!token) {
         console.error('❌ No authentication token found');
+        setLoading(false);
         return;
       }
 
@@ -361,7 +387,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     return {
       id: notif.id.toString(),
       title: notif.title,
-      message: notif.message,
+      message: notif.body,
       time: timeText,
       type: notif.type || 'info',
       Read: isRead,
@@ -433,6 +459,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       if (!token) return;
 
       const originalNotifications = [...notifications];
+
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setNotifications(prev => prev.map(notif => ({ ...notif, Read: true })));
       await updateIOSBadgeCount(0);
@@ -451,12 +478,14 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       }
     } catch (error) {
       console.error('❌ Error marking all notifications as read:', error);
-      fetchNotifications();
+      // Don't reload, just show error
+      Alert.alert('Error', 'Failed to mark all as read. Please try again.');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (deletingIds.has(id)) return;
+
     setDeletingIds(prev => new Set(prev).add(id));
 
     try {
@@ -603,14 +632,26 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     if (!notification.Read) {
       handleMarkAsRead(notification.id);
     }
+
     setSelectedNotification(notification);
     setModalVisible(true);
+
     Animated.spring(modalAnim, {
       toValue: 0,
       useNativeDriver: true,
       tension: 65,
       friction: 11,
     }).start();
+  };
+
+  const handleNotificationLongPress = (notification: Notification) => {
+    if (!notificationsEnabled) return;
+    
+    // Enable selection mode and select the item
+    if (!selectionMode) {
+      setSelectionMode(true);
+    }
+    toggleSelectItem(notification.id);
   };
 
   const closeModal = () => {
@@ -677,8 +718,10 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
           <TouchableOpacity
             style={s.notifContent}
             onPress={() => !isDeleting && handleNotificationPress(notification)}
+            onLongPress={() => !isDeleting && handleNotificationLongPress(notification)}
             activeOpacity={0.6}
             delayPressIn={50}
+            delayLongPress={500}
             disabled={isDeleting || !notificationsEnabled}
           >
             {selectionMode && (
@@ -842,6 +885,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
             </View>
           )}
         </View>
+
         {notifications.length > 0 && (
           <View style={s.hdrStats}>
             <Text style={[s.hdrStatsText, { color: isDark ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.85)" }]}>

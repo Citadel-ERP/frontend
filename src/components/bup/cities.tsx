@@ -117,9 +117,9 @@ const Cities: React.FC<CitiesProps> = ({
           </View>
         </View>
 
-        {/* Popular Cities Label */}
+        {/* Cities Label */}
         <View style={styles.divider}>
-          <Text style={styles.dividerText}>Popular Cities</Text>
+          <Text style={styles.dividerText}>Cities</Text>
         </View>
 
         {/* Cities Grid */}

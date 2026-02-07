@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Alert,
   ActivityIndicator,
   Image,
   Dimensions,
@@ -13,6 +14,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { colors, commonStyles } from '../styles/theme';
+import { BACKEND_URL } from '../config/config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -41,6 +43,7 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -63,6 +66,47 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
     }
     return () => clearInterval(interval);
   }, [timer]);
+
+  const getBackendUrl = () => {
+    const backendUrl = BACKEND_URL;
+    if (!backendUrl) {
+      console.error('BACKEND_URL not found in environment variables');
+      throw new Error('Backend URL not configured. Please check your environment setup.');
+    }
+    return backendUrl;
+  };
+
+  const verifyOTPAPI = async (emailOrPhone: string, otpValue: string) => {
+    try {
+      const backend = getBackendUrl();
+      console.log('Calling verify OTP API...', { email: emailOrPhone, otp: otpValue });
+      
+      const response = await fetch(`${backend}/core/verifyOtp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: emailOrPhone,
+          otp: otpValue 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'OTP verification failed');
+      }
+
+      return {
+        success: true,
+        message: data.message || 'OTP verified successfully',
+      };
+    } catch (error: any) {
+      console.error('Verify OTP API error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
 
   const handleOTPChange = (value: string, index: number) => {
     if (!value || value === '') {
@@ -126,11 +170,31 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
       return;
     }
 
+    setIsVerifying(true);
     try {
+      console.log('Verifying OTP:', otpToVerify);
+      const result = await verifyOTPAPI(email, otpToVerify);
+      
+      // If verification successful, call the parent callback to move to next screen
+      console.log('OTP verified successfully:', result.message);
       onOTPVerified(email, otpToVerify);
-    } catch (error) {
-      setError('Invalid OTP. Please try again.');
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      
+      let errorMessage = 'Invalid OTP. Please try again.';
+      
+      if (error.message.includes('Invalid credentials') || error.message.includes('Verify OTP failed')) {
+        errorMessage = 'Invalid OTP. Please check and try again.';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
       clearOTP();
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -168,6 +232,8 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
       }
     }, 150);
   };
+
+  const isButtonDisabled = isLoading || isVerifying || otp.join('').length !== 6;
 
   const renderContent = () => (
     <View style={styles.contentContainer}>
@@ -210,7 +276,7 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
                   keyboardType="number-pad"
                   maxLength={1}
                   textAlign="center"
-                  editable={!isLoading}
+                  editable={!isLoading && !isVerifying}
                   autoCorrect={false}
                   spellCheck={false}
                   contextMenuHidden={true}
@@ -225,7 +291,7 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
             {canResend ? (
               <TouchableOpacity 
                 onPress={handleResend}
-                disabled={isLoading}
+                disabled={isLoading || isVerifying}
                 activeOpacity={0.7}
               >
                 <Text style={styles.resendText}>
@@ -243,7 +309,7 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
             <TouchableOpacity
               style={[styles.button, styles.secondaryButton]}
               onPress={clearOTP}
-              disabled={isLoading}
+              disabled={isLoading || isVerifying}
               activeOpacity={0.7}
             >
               <Text style={styles.secondaryButtonText}>Clear</Text>
@@ -253,13 +319,13 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
               style={[
                 styles.button,
                 styles.primaryButton,
-                (isLoading || otp.join('').length !== 6) ? styles.primaryButtonDisabled : null,
+                isButtonDisabled ? styles.primaryButtonDisabled : null,
               ]}
               onPress={() => handleVerifyOTP()}
-              disabled={isLoading || otp.join('').length !== 6}
+              disabled={isButtonDisabled}
               activeOpacity={0.8}
             >
-              {isLoading ? (
+              {(isLoading || isVerifying) ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
                 <Text style={styles.primaryButtonText}>Verify OTP</Text>
@@ -270,7 +336,7 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({
           <TouchableOpacity
             style={styles.backButtonContainer}
             onPress={onBack}
-            disabled={isLoading}
+            disabled={isLoading || isVerifying}
             activeOpacity={0.7}
           >
             <Text style={styles.backButtonText}>← Back to Login</Text>

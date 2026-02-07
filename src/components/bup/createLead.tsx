@@ -128,7 +128,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     status: 'active' as const,
     phase: 'initial_phase',
     subphase: 'without_contact_details',
-    vendorName: '',
+    leadPartner: '',
   });
 
   const [editingEmails, setEditingEmails] = useState<string[]>([]);
@@ -489,7 +489,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
-      if (formData.vendorName.trim()) meta.vendor_name = formData.vendorName.trim();
+      if (formData.leadPartner.trim()) meta.vendor_name = formData.leadPartner.trim();
       
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
@@ -571,7 +571,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         status: 'active',
         phase: 'initial_phase',
         subphase: 'without_contact_details',
-        vendorName: '',
+        leadPartner: '',
       });
       setEditingEmails([]);
       setEditingPhones([]);
@@ -664,12 +664,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Vendor Name</Text>
+            <Text style={s.label}>Lead's Partner</Text>
             <TextInput
               style={s.input}
-              value={formData.vendorName}
-              onChangeText={(text) => setFormData({ ...formData, vendorName: text })}
-              placeholder="Enter vendor name (optional)"
+              value={formData.leadPartner}
+              onChangeText={(text) => setFormData({ ...formData, leadPartner: text })}
+              placeholder="Enter lead's partner name (optional)"
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>

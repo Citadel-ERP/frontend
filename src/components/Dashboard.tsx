@@ -161,6 +161,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Refresh state
   const [refreshing, setRefreshing] = useState(false);
 
+  // Notification badge state (FIX: Added for preventing re-renders)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const badgeCountRef = useRef(0);
+
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
@@ -179,6 +183,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     accentBlue: isDark ? '#008069' : '#008069',
     navBg: isDark ? '#0a111f' : '#ffffff',
   };
+
+  // FIX: Memoized callback for badge updates to prevent re-renders
+  const handleBadgeUpdate = useCallback((count: number) => {
+    if (badgeCountRef.current !== count) {
+      badgeCountRef.current = count;
+      setUnreadNotificationCount(count);
+      console.log(`🔔 Badge count updated: ${count}`);
+    }
+  }, []); // Empty dependency array - function never changes
 
   // NEW: Function to refresh user data from backend
   const refreshUserData = useCallback(async () => {
@@ -1191,7 +1204,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     if (showNotifications) {
       return (
-        <Notifications onBack={handleBackFromPage} isDark={isDark} />
+        <Notifications 
+          onBack={handleBackFromPage} 
+          isDark={isDark}
+          onBadgeUpdate={handleBadgeUpdate}  // FIX: Using memoized callback
+        />
       );
     }
 
@@ -1499,6 +1516,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     }
                   ]}>
                     Notifications
+                    {unreadNotificationCount > 0 && (
+                      <View style={styles.badgeContainer}>
+                        <Text style={styles.badgeText}>{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</Text>
+                      </View>
+                    )}
                   </Text>
                 </TouchableOpacity>
 
@@ -1657,6 +1679,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       <Notifications 
                         onBack={() => setActivePage('dashboard')} 
                         isDark={isDark}
+                        onBadgeUpdate={handleBadgeUpdate}  // FIX: Using memoized callback
                       />
                     )}
                     {activePage === 'privacy' && (
@@ -1961,6 +1984,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           currentColors={currentColors}
           bulgeAnim={bulgeAnim}
           screenWidth={screenWidth}
+          unreadNotificationCount={unreadNotificationCount} // Pass badge count
         />
       )}
     </View>
@@ -2134,6 +2158,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     marginVertical: 2,
+    position: 'relative',
   },
   webNavItemActive: {
     backgroundColor: 'rgba(0, 128, 105, 0.1)',
@@ -2432,5 +2457,23 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 10,
     color: '#666',
+  },
+  // Badge styles for notifications
+  badgeContainer: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#F15C6D',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

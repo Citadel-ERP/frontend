@@ -20,7 +20,7 @@ export const styles = StyleSheet.create({
     position: 'relative',
   },
   detailsHeaderBanner: {
-    height: 200,
+    height: 250,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: 'hidden',
@@ -35,6 +35,9 @@ export const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     opacity: 0.8,
+  },
+  infoCardContent: {
+    marginBottom: 8,
   },
   headerOverlay: {
     position: 'absolute',

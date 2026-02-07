@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { Header } from './header';
@@ -21,6 +21,9 @@ import SearchAndDownload from './searchAndDownload';
 import AddEmployeeScreen from './AddEmployeeScreen';
 import HolidayManagement from './holiday';
 import AttendanceDownloadModal from './AttendanceDownloadModal';
+import WorkStatistics from './WorkStatistics';
+import BulkUploadPayslips from './BulkUploadPayslips';
+import BulkUploadEmployees from './BulkUploadEmployees';
 
 interface CityGroup {
   city: string;
@@ -52,6 +55,9 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [showHolidayManagement, setShowHolidayManagement] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showAddEmployeeScreen, setShowAddEmployeeScreen] = useState(false);
+  const [showWorkStatistics, setShowWorkStatistics] = useState(false);
+  const [showBulkPayslips, setShowBulkPayslips] = useState(false);
+  const [showBulkEmployees, setShowBulkEmployees] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,9 +69,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       try {
         console.log('=== Getting token from AsyncStorage ===');
         console.log('Trying TOKEN_KEY:', TOKEN_KEY);
-        
         const foundToken = await AsyncStorage.getItem(TOKEN_KEY);
-        
         if (foundToken) {
           console.log(`✅ Token found with key: ${TOKEN_KEY}`);
           setToken(foundToken);
@@ -73,7 +77,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
           console.log(`❌ No token with key: ${TOKEN_KEY}`);
           setError('Authentication token not found. Please login again.');
         }
-        
         setTokenLoaded(true);
       } catch (error) {
         console.error('Error getting token:', error);
@@ -94,10 +97,8 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   // Filter employees when search query changes
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      // If search query is empty, show all employees
       setFilteredEmployeesByCity(allEmployeesByCity);
     } else {
-      // Filter employees based on search query
       filterEmployees(searchQuery.toLowerCase());
     }
   }, [searchQuery, allEmployeesByCity]);
@@ -107,9 +108,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
     const filtered = allEmployeesByCity
       .map(cityGroup => {
-        // Filter employees in this city
         const filteredEmployees = cityGroup.employees.filter(employee => {
-          // Search in multiple fields
           const searchableFields = [
             employee.full_name?.toLowerCase(),
             employee.employee_id?.toLowerCase(),
@@ -117,14 +116,13 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
             employee.designation?.toLowerCase(),
             employee.city?.toLowerCase(),
             `${employee.first_name} ${employee.last_name}`.toLowerCase(),
-          ].filter(Boolean); // Remove undefined/null values
+          ].filter(Boolean);
 
-          return searchableFields.some(field => 
+          return searchableFields.some(field =>
             field?.includes(query)
           );
         });
 
-        // Return city group only if it has filtered employees
         if (filteredEmployees.length > 0) {
           return {
             ...cityGroup,
@@ -133,7 +131,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         }
         return null;
       })
-      .filter(Boolean) as CityGroup[]; // Remove null entries
+      .filter(Boolean) as CityGroup[];
 
     console.log('Filtered employees:', {
       query,
@@ -164,14 +162,14 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       const requestBody = {
         token,
         page,
-        page_size: 100, // Get a larger page size to reduce requests
+        page_size: 100,
       };
       
       console.log('Request Body:', JSON.stringify(requestBody));
-      
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -185,15 +183,11 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         console.log('✅ SUCCESS - Data received');
         console.log('Total items in pagination:', data.pagination?.total_items);
         console.log('Cities count:', data.employees_by_city?.length);
-        
-        // Store all employees for client-side filtering
+
         setAllEmployeesByCity(data.employees_by_city || []);
-        
-        // Initially show all employees (filtered will be updated by useEffect)
         setFilteredEmployeesByCity(data.employees_by_city || []);
         setCurrentPage(page);
-        
-        // Set pagination info
+
         if (data.pagination) {
           const paginationData = {
             ...data.pagination,
@@ -204,14 +198,12 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       } else {
         const errorText = await response.text();
         console.error('❌ ERROR Response:', errorText);
-        
         let errorData;
         try {
           errorData = JSON.parse(errorText);
         } catch {
           errorData = { message: errorText };
         }
-        
         const errorMessage = errorData.message || `Server error: ${response.status}`;
         setError(errorMessage);
       }
@@ -238,6 +230,12 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     setSelectedEmployee(null);
   };
 
+  // Handle data changes from employee details screen
+  const handleEmployeeDataChange = async () => {
+    console.log('=== Employee data changed, refreshing list ===');
+    await fetchEmployees(currentPage);
+  };
+
   const downloadAttendanceReport = async (month: number, year: number, employeeId?: string) => {
     if (!token) {
       Alert.alert('Error', 'Authentication required');
@@ -246,13 +244,13 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
     try {
       console.log('Downloading attendance report:', { month, year, employeeId });
-
+      
       const response = await fetch(`${BACKEND_URL}/manager/downloadAllAttendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token, 
-          month, 
+        body: JSON.stringify({
+          token,
+          month,
           year
         }),
       });
@@ -262,14 +260,12 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error response:', errorText);
-        
         let errorData;
         try {
           errorData = JSON.parse(errorText);
         } catch {
           errorData = { message: errorText };
         }
-        
         const errorMessage = errorData.message || 'Failed to download attendance report';
         Alert.alert('Error', errorMessage);
         throw new Error(errorMessage);
@@ -307,12 +303,12 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
             onPress: async () => {
               try {
                 setLoading(true);
-                
                 const pdfResponse = await fetch(fileUrl);
+                
                 if (!pdfResponse.ok) {
                   throw new Error('Failed to fetch PDF from server');
                 }
-                
+
                 const blob = await pdfResponse.blob();
                 const reader = new FileReader();
                 
@@ -320,8 +316,8 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
                   try {
                     const base64data = reader.result as string;
                     const base64Content = base64data.split(',')[1];
-                    
                     const fileUri = FileSystem.documentDirectory + filename;
+
                     await FileSystem.writeAsStringAsync(fileUri, base64Content, {
                       encoding: FileSystem.EncodingType.Base64,
                     });
@@ -344,13 +340,13 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
                     setLoading(false);
                   }
                 };
-                
+
                 reader.onerror = () => {
                   console.error('FileReader error');
                   Alert.alert('Error', 'Failed to process PDF');
                   setLoading(false);
                 };
-                
+
                 reader.readAsDataURL(blob);
               } catch (err) {
                 console.error('Download error:', err);
@@ -365,7 +361,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
           },
         ]
       );
-
     } catch (error: any) {
       console.error('Download attendance error:', error);
       throw error;
@@ -384,12 +379,14 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     return allEmployeesByCity.reduce((sum, group) => sum + (group.employees?.length || 0), 0);
   };
 
+  // Route to different screens based on state
   if (selectedEmployee) {
     return (
       <EmployeeDetails
         employee={selectedEmployee}
         onBack={handleBackFromDetails}
         token={token || ''}
+        onDataChange={handleEmployeeDataChange}
       />
     );
   }
@@ -413,38 +410,68 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     );
   }
 
-  // Calculate totals
+  if (showWorkStatistics) {
+    return (
+      <WorkStatistics
+        token={token || ''}
+        onBack={() => setShowWorkStatistics(false)}
+      />
+    );
+  }
+
+  if (showBulkPayslips) {
+    return (
+      <BulkUploadPayslips
+        token={token || ''}
+        onBack={() => setShowBulkPayslips(false)}
+      />
+    );
+  }
+
+  if (showBulkEmployees) {
+    return (
+      <BulkUploadEmployees
+        token={token || ''}
+        onBack={() => setShowBulkEmployees(false)}
+        onEmployeesAdded={handleEmployeeAdded}
+      />
+    );
+  }
+
   const allEmployeesCount = getAllEmployeesCount();
   const displayedCount = getTotalDisplayedEmployees();
   const totalEmployees = pagination?.total_items || allEmployeesCount;
 
   return (
     <View style={styles.container}>
-      <StatusBar 
-        barStyle="light-content" 
-        backgroundColor="#2D3748" 
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#2D3748"
         translucent={false}
       />
       
       <Header
         title="HR Management"
         subtitle={
-          searchQuery 
+          searchQuery
             ? `${displayedCount} employee${displayedCount !== 1 ? 's' : ''} found`
             : `${totalEmployees} employee${totalEmployees !== 1 ? 's' : ''}`
         }
         onBack={onBack}
         showAddEmployee={() => setShowAddEmployeeScreen(true)}
       />
-
+      
       <SearchAndDownload
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onDownloadAttendance={() => setShowAttendanceModal(true)}
         onOpenHolidays={() => setShowHolidayManagement(true)}
+        onOpenWorkStats={() => setShowWorkStatistics(true)}
+        onOpenBulkPayslips={() => setShowBulkPayslips(true)}
+        onOpenBulkEmployees={() => setShowBulkEmployees(true)}
         placeholder="Search by name, ID, city, or designation..."
       />
-
+      
       <EmployeeList
         employeesByCity={filteredEmployeesByCity}
         loading={loading}
@@ -457,7 +484,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         totalEmployees={totalEmployees}
         displayedEmployees={displayedCount}
       />
-
+      
       <AttendanceDownloadModal
         visible={showAttendanceModal}
         onClose={() => setShowAttendanceModal(false)}
