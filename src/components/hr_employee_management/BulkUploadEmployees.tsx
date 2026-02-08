@@ -264,7 +264,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
               <Text style={{ fontSize: 18, marginRight: 8 }}>•</Text>
               <Text style={styles.infoText}>
-                Download the Excel template to see the required format and columns
+                Check the Excel template to see the required format and columns
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -287,7 +287,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
             </View>
           </View>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={[
               styles.secondaryButton,
               {
@@ -317,11 +317,11 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
                 </Text>
               </>
             )}
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Important Notes */}
-        <View style={[styles.warningCard, { marginRight: 16, marginLeft: 16 }]}>
+        <View style={[styles.warningCard, { marginRight: 16, marginLeft: 16, marginBottom: 16 }]}>
           <Ionicons name="warning" size={24} color="#D32F2F" />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 15, fontWeight: '700', color: '#D32F2F', marginBottom: 8 }}>

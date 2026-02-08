@@ -57,47 +57,41 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
   const [downloading, setDownloading] = useState(false);
 
   const handleDownloadSample = async () => {
-    if (!token) {
-      Alert.alert('Error', 'Authentication required');
-      return;
+  if (!token) {
+    Alert.alert('Error', 'Authentication required');
+    return;
+  }
+
+  setDownloading(true);
+  try {
+    const response = await fetch(`${BACKEND_URL}/manager/downloadSamplePayslip`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download sample payslip');
     }
 
-    setDownloading(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/downloadSamplePayslip`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { message: errorText };
-        }
-        throw new Error(errorData.message || 'Failed to download sample payslip');
-      }
-
-      const data = await response.json();
-      
-      if (data.file_url) {
-        await WebBrowser.openBrowserAsync(data.file_url);
-        Alert.alert('Success', 'Sample payslip downloaded successfully');
-      } else {
-        throw new Error('Invalid response from server');
-      }
-    } catch (error: any) {
-      console.error('Download sample error:', error);
-      Alert.alert('Error', error.message || 'Failed to download sample payslip');
-    } finally {
-      setDownloading(false);
-    }
-  };
+    // Get the blob from response
+    const blob = await response.blob();
+    
+    // Create a temporary URL for the blob
+    const fileUrl = URL.createObjectURL(blob);
+    
+    // Open in browser
+    await WebBrowser.openBrowserAsync(fileUrl);
+    Alert.alert('Success', 'Sample payslip downloaded successfully');
+  } catch (error: any) {
+    console.error('Download sample error:', error);
+    Alert.alert('Error', error.message || 'Failed to download sample payslip');
+  } finally {
+    setDownloading(false);
+  }
+};
 
   const handleSelectFiles = async () => {
     try {
@@ -303,7 +297,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
             </View>
           </View>
           
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={[
               styles.secondaryButton, 
               { 
@@ -331,7 +325,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
                 <Text style={[styles.secondaryButtonText, { color: '#FFFFFF' }]}>Download Sample Format</Text>
               </>
             )}
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Period Selection */}

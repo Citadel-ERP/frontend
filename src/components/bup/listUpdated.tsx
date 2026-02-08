@@ -156,12 +156,12 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
         <View style={styles.leadContent}>
           <View style={styles.leadHeader}>
             <Text style={styles.leadName} numberOfLines={1}>
-              {lead.name}
+              {lead.company}
             </Text>
             <Text style={styles.leadTime}>{lastOpened}</Text>
           </View>
           
-          <View style={styles.leadMessage}>
+          {/* <View style={styles.leadMessage}>
             <Text style={styles.leadMessageText} numberOfLines={1}>
               {lead.company || 'No company specified'}
             </Text>
@@ -170,7 +170,7 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
               size={16} 
               color={statusIcon.color} 
             />
-          </View>
+          </View> */}
           
           <View style={styles.leadStatus}>
             <Text style={styles.leadStatusText}>

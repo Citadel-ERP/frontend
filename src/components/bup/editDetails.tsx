@@ -209,7 +209,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
         <View style={s.headerTextContainer}>
           <Text style={s.headerTitle} numberOfLines={1}>Edit Lead</Text>
-          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.name || 'Lead Details'}</Text>
+          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.company || 'Lead Details'}</Text>
         </View>
 
         <View style={s.headerActions}>
@@ -660,17 +660,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Ionicons name="person-outline" size={20} color={THEME_COLORS.primary} />
             </View>
             <Text style={s.cardTitle}>Basic Information</Text>
-          </View>
-
-          <View style={s.field}>
-            <Text style={s.label}>Lead Name</Text>
-            <TextInput
-              style={s.input}
-              value={editedLead.name}
-              onChangeText={(text) => setEditedLead({ ...editedLead, name: text })}
-              placeholder="Enter lead name"
-              placeholderTextColor={THEME_COLORS.textTertiary}
-            />
           </View>
 
           <View style={s.field}>
@@ -1404,7 +1393,10 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    paddingRight: 14,
+    paddingLeft:14,
+    paddingTop:0,
+    paddingBottom:0,
     borderRadius: 10,
     marginBottom: 8,
     backgroundColor: THEME_COLORS.surface,
@@ -1579,13 +1571,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
     borderRadius: 12,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#ef444400',
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 8,
+    marginRight:-10
   },
   deleteBtnDisabled: {
     opacity: 0.6,

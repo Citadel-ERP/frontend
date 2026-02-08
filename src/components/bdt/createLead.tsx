@@ -466,6 +466,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
+            <StatusBar
+                barStyle="light-content"
+                backgroundColor="#075E54"
+                translucent={false}
+            />
             <SafeAreaView style={s.header}>
                 <View style={s.headerContent}>
                     <TouchableOpacity onPress={onBack} style={s.backButton}>

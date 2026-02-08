@@ -27,4 +27,5 @@ export type ViewMode = 'month' | 'agenda';
 
 export interface ReminderProps {
   onBack: () => void;
+  onReminderUpdate?: () => Promise<void>;
 }

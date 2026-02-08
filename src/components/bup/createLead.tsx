@@ -489,7 +489,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
-      if (formData.leadPartner.trim()) meta.vendor_name = formData.leadPartner.trim();
+      if (formData.leadPartner.trim()) meta.lead_partner = formData.leadPartner.trim();
       
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {

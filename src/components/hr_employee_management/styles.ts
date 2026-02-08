@@ -2508,7 +2508,7 @@ export const styles = StyleSheet.create({
   alignItems: 'center',
   paddingVertical: 14,
   paddingHorizontal: 16,
-  backgroundColor: '#25D366', // WhatsApp green
+  backgroundColor: '#075E54', 
   borderRadius: 12,
   marginHorizontal: 12,
   marginBottom: 8,

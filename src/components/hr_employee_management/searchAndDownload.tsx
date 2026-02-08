@@ -142,7 +142,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
                 <Ionicons name="people-outline" size={22} color={WHATSAPP_COLORS.primary} />
               </View>
               <View style={localStyles.optionTextContainer}>
-                <Text style={localStyles.optionText}>Bulk Upload Employees</Text>
+                <Text style={localStyles.optionText}>Bulk Update Employees</Text>
                 <Text style={localStyles.optionSubtext}>Import employee data from Excel</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />

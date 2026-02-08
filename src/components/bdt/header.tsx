@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   Image, 
-  Platform 
+  Platform ,
+  StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,6 +58,11 @@ const Header: React.FC<HeaderProps> = ({
   
   return (
     <View style={styles.headerBanner}>
+      <StatusBar
+                barStyle="light-content"
+                backgroundColor="#075E54"
+                translucent={false}
+            />
       <LinearGradient
         colors={['#4A5568', '#2D3748']}
         start={{ x: 0, y: 0 }}

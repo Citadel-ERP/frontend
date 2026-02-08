@@ -12,6 +12,7 @@ interface ReminderItem {
   id: string;
   title: string;
   reminder_date: string;
+  reminder_time?: string; // Add this field
   description?: string;
   created_by?: any;
   color?: string;
@@ -38,6 +39,25 @@ const UpcomingReminder: React.FC<UpcomingReminderProps> = ({
     }
   };
 
+  // Helper function to combine date and time
+  const getFormattedDateTime = (reminder: ReminderItem) => {
+    const date = new Date(reminder.reminder_date);
+    
+    // If reminder_time exists, combine it with the date
+    if (reminder.reminder_time) {
+      const [hours, minutes] = reminder.reminder_time.split(':');
+      date.setHours(parseInt(hours, 10));
+      date.setMinutes(parseInt(minutes, 10));
+    }
+    
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <TouchableOpacity 
       style={[styles.sectionCard, styles.reminderCard, { backgroundColor: theme.cardBg }]}
@@ -59,12 +79,7 @@ const UpcomingReminder: React.FC<UpcomingReminderProps> = ({
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="time-outline" size={12} />
                   <Text style={[styles.reminderTime, { color: theme.textSub, marginLeft: 2 }]}>
-                    {new Date(reminder.reminder_date).toLocaleString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {getFormattedDateTime(reminder)}
                   </Text>
                 </View>
               </View>
@@ -90,17 +105,17 @@ const UpcomingReminder: React.FC<UpcomingReminderProps> = ({
 
 const styles = StyleSheet.create({
   sectionCard: {
-  marginHorizontal: Platform.OS === 'web' ? 0 : 20,
-  marginBottom: 15,
-  marginTop:10,
-  padding: 16,
-  borderRadius: 16,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.05,
-  shadowRadius: 15,
-  elevation: 3,
-},
+    marginHorizontal: Platform.OS === 'web' ? 0 : 20,
+    marginBottom: 15,
+    marginTop:10,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3,
+  },
   reminderCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -405,7 +405,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                 />
                 <View>
                   <Text style={[styles.cityName, { color: '#FF9800' }]}>Quick Actions</Text>
-                  <Text style={styles.cityEmployeeCount}>
+                  <Text style={[styles.cityEmployeeCount,{ color: '#0000008a' }]}>
                     {employeesWithActions.length} employee{employeesWithActions.length !== 1 ? 's' : ''} require{employeesWithActions.length === 1 ? 's' : ''} attention
                   </Text>
                 </View>

@@ -1,4 +1,4 @@
-// Dashboard.tsx - FIXED VERSION with Proper Notification Navigation
+// Dashboard.tsx - UPDATED VERSION with Real-time Reminder Updates
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -18,6 +18,8 @@ import {
   Alert,
   LayoutAnimation
 } from 'react-native';
+import { ImageStyle } from 'react-native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -95,6 +97,173 @@ NotificationsExpo.setNotificationHandler({
 });
 
 // ============================================================================
+// MODULE CONFIGURATION - Icons, Colors, and Display Names
+// ============================================================================
+interface ModuleConfig {
+  icon: string;
+  iconFamily: 'FontAwesome5' | 'Ionicons' | 'MaterialCommunityIcons';
+  gradientColors: readonly [string, string, ...string[]];  // CHANGE THIS LINE
+  displayName: string;
+}
+
+const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
+  // Attendance
+  'attendance': {
+    icon: 'book-open',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#00d285', '#00b872'],
+    displayName: 'Attendance'
+  },
+  'Attendance': {
+    icon: 'book-open',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#00d285', '#00b872'],
+    displayName: 'Attendance'
+  },
+  
+  // Car/Cab modules
+  'cab': {
+    icon: 'car',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff5e7a', '#ff4168'],
+    displayName: 'Car'
+  },
+  'Cab': {
+    icon: 'car',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff5e7a', '#ff4168'],
+    displayName: 'Car'
+  },
+  'VehicleAdmin': {
+    icon: 'car-side',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff5e7a', '#ff4168'],
+    displayName: 'Vehicle Admin'
+  },
+  
+  // HR modules
+  'hr': {
+    icon: 'users',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ffb157', '#ff9d3f'],
+    displayName: 'HR'
+  },
+  'HR': {
+    icon: 'users',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ffb157', '#ff9d3f'],
+    displayName: 'HR'
+  },
+  'hr_employee_management': {
+    icon: 'user-tie',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff4168', '#ff4168'],
+    displayName: 'Employees'
+  },
+  'hr_manager': {
+    icon: 'user-shield',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff9d3f', '#ff8c2e'],
+    displayName: 'HR Management'
+  },
+  'EmployeesAdmin': {
+    icon: 'users-cog',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ffb157', '#ff9d3f'],
+    displayName: 'Employees'
+  },
+  
+  // Driver modules
+  'driver': {
+    icon: 'steering-wheel',
+    iconFamily: 'MaterialCommunityIcons',
+    gradientColors: ['#6c5ce7', '#5f4fd1'],
+    displayName: 'Driver'
+  },
+  'driver_manager': {
+    icon: 'id-card',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#6c5ce7', '#5f4fd1'],
+    displayName: 'Duty Manager'
+  },
+  
+  // Site Manager
+  'site_manager': {
+    icon: 'hard-hat',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#fd79a8', '#e84393'],
+    displayName: 'Database'
+  },
+  
+  // BUP
+  'bup': {
+    icon: 'chart-line',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#00b894', '#00a680'],
+    displayName: 'BUP'
+  },
+  
+  // BDT
+  'bdt': {
+    icon: 'exchange-alt',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#0984e3', '#0773d1'],
+    displayName: 'Transaction'
+  },
+  
+  // Medical/Mediclaim
+  'medical': {
+    icon: 'medkit',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#d63031', '#c92a2b'],
+    displayName: 'Mediclaim'
+  },
+  'mediclaim': {
+    icon: 'medkit',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#d63031', '#c92a2b'],
+    displayName: 'Mediclaim'
+  },
+  
+  // Scout Boy
+  'scout_boy': {
+    icon: 'user-alt',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#fdcb6e', '#f6b93b'],
+    displayName: 'Scout'
+  },
+  
+  // Reminder
+  'reminder': {
+    icon: 'bell',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#a29bfe', '#6c5ce7'],
+    displayName: 'Reminder'
+  },
+  
+  // Employee Management
+  'employee_management': {
+    icon: 'users',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#74b9ff', '#0984e3'],
+    displayName: 'Employees'
+  },
+  
+  // Default fallback
+  'default': {
+    icon: 'cube',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#636e72', '#546E7A'],
+    displayName: 'Module'
+  }
+};
+
+// Helper function to get module config
+const getModuleConfig = (moduleUniqueName: string): ModuleConfig => {
+  return MODULE_CONFIGURATIONS[moduleUniqueName] || MODULE_CONFIGURATIONS['default'];
+};
+
+// ============================================================================
 // COMPLETE MODULE NAVIGATION MAP
 // Maps backend module_unique_name to ActivePage type
 // ============================================================================
@@ -159,6 +328,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
+
+  // ============================================================================
+  // NEW: Dynamic Tile Configuration State
+  // ============================================================================
+  const [bigTile, setBigTile] = useState<string>('attendance');
+  const [smallTile1, setSmallTile1] = useState<string>('cab');
+  const [smallTile2, setSmallTile2] = useState<string>('hr');
 
   // Page visibility states
   const [showAttendance, setShowAttendance] = useState(false);
@@ -339,6 +515,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [isWeb]);
 
+  // ============================================================================
+  // NEW: Callback for real-time reminder updates
+  // ============================================================================
+  
+
   // Function to refresh user data from backend
   const refreshUserData = useCallback(async () => {
     if (!token) return;
@@ -362,6 +543,22 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
           setUserData(transformedUserData);
           setModules(data.modules || []);
+
+          // ============================================================================
+          // NEW: Extract dynamic tile configuration from backend
+          // ============================================================================
+          if (data.big_tile) {
+            setBigTile(data.big_tile);
+            console.log('🎯 Big tile set to:', data.big_tile);
+          }
+          if (data.small_tile_1) {
+            setSmallTile1(data.small_tile_1);
+            console.log('🎯 Small tile 1 set to:', data.small_tile_1);
+          }
+          if (data.small_tile_2) {
+            setSmallTile2(data.small_tile_2);
+            console.log('🎯 Small tile 2 set to:', data.small_tile_2);
+          }
 
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
@@ -427,6 +624,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setRefreshing(false);
     }
   }, [token]);
+
+  const handleReminderUpdate = useCallback(async () => {
+    console.log('🔄 Refreshing reminders via callback...');
+    await refreshUserData();
+  }, [refreshUserData]);
 
   // ============================================================================
   // EFFECTS
@@ -840,6 +1042,22 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             if (isMounted) {
               setUserData(transformedUserData);
               setModules(data.modules || []);
+
+              // ============================================================================
+              // NEW: Extract dynamic tile configuration from backend
+              // ============================================================================
+              if (data.big_tile) {
+                setBigTile(data.big_tile);
+                console.log('🎯 Big tile set to:', data.big_tile);
+              }
+              if (data.small_tile_1) {
+                setSmallTile1(data.small_tile_1);
+                console.log('🎯 Small tile 1 set to:', data.small_tile_1);
+              }
+              if (data.small_tile_2) {
+                setSmallTile2(data.small_tile_2);
+                console.log('🎯 Small tile 2 set to:', data.small_tile_2);
+              }
             }
 
             try {
@@ -1248,6 +1466,45 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   });
 
   // ============================================================================
+  // NEW: Dynamic Tile Rendering Component
+  // ============================================================================
+  const renderModuleTile = (moduleUniqueName: string, size: 'big' | 'small') => {
+    const config = getModuleConfig(moduleUniqueName);
+    const IconComponent = config.iconFamily === 'Ionicons' ? Ionicons :
+      config.iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons :
+        FontAwesome5;
+
+    const iconSize = size === 'big' ? 22 : 18;
+    const containerStyle = size === 'big' ? styles.moduleAttendance : styles.moduleSmall;
+
+    return (
+      <TouchableOpacity
+        style={containerStyle}
+        onPress={() => handleModulePressWrapper(config.displayName, moduleUniqueName)}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={config.gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.moduleGradient}
+        >
+          <Ionicons
+            name="arrow-up"
+            size={size === 'big' ? 18 : 16}
+            color="white"
+            style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+          />
+          <View style={styles.moduleIconCircle}>
+            <IconComponent name={config.icon as any} size={iconSize} color="white" />
+          </View>
+          <Text style={styles.moduleTitle}>{config.displayName}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  // ============================================================================
   // RENDER STATES
   // ============================================================================
 
@@ -1386,9 +1643,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       );
     }
 
+    // ============================================================================
+    // UPDATED: Reminder component with callback for real-time updates
+    // ============================================================================
     if (showReminder) {
       return (
-        <Reminder onBack={handleBackFromPage} />
+        <Reminder 
+          onBack={handleBackFromPage}
+          onReminderUpdate={handleReminderUpdate}  // Add this prop
+        />
       );
     }
 
@@ -1817,8 +2080,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     {activePage === 'scoutBoy' && (
                       <ScoutBoy onBack={() => setActivePage('dashboard')} />
                     )}
+                    {/* ============================================================================
+                    // UPDATED: Reminder component with callback for real-time updates
+                    // ============================================================================ */}
                     {activePage === 'reminder' && (
-                      <Reminder onBack={() => setActivePage('dashboard')} />
+                      <Reminder 
+                        onBack={() => setActivePage('dashboard')}
+                        onReminderUpdate={handleReminderUpdate}  // Add this prop
+                      />
                     )}
                     {activePage === 'bup' && (
                       <BUP onBack={() => setActivePage('dashboard')} />
@@ -1911,7 +2180,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               style={styles.headerBanner}
             >
               <Image
-                source={require('../assets/bg.jpeg')}
+                source={require('../assets/background_dashboard.jpeg')}
                 style={{
                   position: 'absolute',
                   width: '100%',
@@ -1954,77 +2223,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               onPress={() => handleModulePressWrapper('Reminder')}
             />
 
+            {/* ============================================================================ */}
+            {/* NEW: DYNAMIC MODULE TILES */}
+            {/* ============================================================================ */}
             <View style={styles.moduleGrid}>
-              <TouchableOpacity
-                style={styles.moduleAttendance}
-                onPress={() => handleModulePressWrapper('Attendance', 'attendance')}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={['#00d285', '#00b872']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.moduleGradient}
-                >
-                  <Ionicons
-                    name="arrow-up"
-                    size={18}
-                    color="white"
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                  />
-                  <View style={styles.moduleIconCircle}>
-                    <FontAwesome5 name="book-open" size={22} color="white" />
-                  </View>
-                  <Text style={styles.moduleTitle}>Attendance</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+              {/* Big Tile (from backend) */}
+              {renderModuleTile(bigTile, 'big')}
+
+              {/* Small Tiles Column (from backend) */}
               <View style={styles.moduleColumn}>
-                <TouchableOpacity
-                  style={styles.moduleSmall}
-                  onPress={() => handleModulePressWrapper('Car', 'cab')}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={['#ff5e7a', '#ff4168']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.moduleGradient}
-                  >
-                    <Ionicons
-                      name="arrow-up"
-                      size={16}
-                      color="white"
-                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                    />
-                    <View style={styles.moduleIconCircle}>
-                      <FontAwesome5 name="car" size={18} color="white" />
-                    </View>
-                    <Text style={styles.moduleTitle}>Car</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.moduleSmall}
-                  onPress={() => handleModulePressWrapper('HR', 'hr')}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={['#ffb157', '#ff9d3f']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.moduleGradient}
-                  >
-                    <Ionicons
-                      name="arrow-up"
-                      size={16}
-                      color="white"
-                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                    />
-                    <View style={styles.moduleIconCircle}>
-                      <FontAwesome5 name="users" size={18} color="white" />
-                    </View>
-                    <Text style={styles.moduleTitle}>HR</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                {renderModuleTile(smallTile1, 'small')}
+                {renderModuleTile(smallTile2, 'small')}
               </View>
             </View>
 
@@ -2131,7 +2340,7 @@ const styles = StyleSheet.create({
   dashboardContainer: { flex: 1, backgroundColor: 'transparent', maxWidth: '100%', width: '100%' },
   webEmbeddedPage: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },
   webUserProfile: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
-  webUserAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
+  webUserAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 } as ImageStyle,
   webAvatarPlaceholder: { width: 50, height: 50, borderRadius: 25, marginRight: 12, justifyContent: 'center', alignItems: 'center' },
   webAvatarText: { color: 'white', fontSize: 18, fontWeight: '600' },
   webUserInfo: { flex: 1 },
@@ -2145,7 +2354,7 @@ const styles = StyleSheet.create({
   webCenterContent: { flex: 1, maxHeight: '100vh', overflow: 'auto', backgroundColor: 'transparent' },
   webRightSide: { width: 280, height: '100vh', flexDirection: 'column', borderLeftWidth: 1, borderLeftColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
   webHeader: { height: 220, overflow: 'hidden', position: 'relative' },
-  webHeaderImage: { position: 'absolute', width: '100%', height: '100%', opacity: 1 },
+  webHeaderImage: { position: 'absolute', width: '100%', height: '100%', opacity: 1 }as ImageStyle,
   webHeaderOverlay: { position: 'absolute', width: '100%', height: '100%' },
   webHeaderContent: { padding: 30, position: 'relative', zIndex: 1 },
   webTopNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
@@ -2160,7 +2369,7 @@ const styles = StyleSheet.create({
   modulesGridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16, gap: 12 },
   moduleGridItem: { width: '47%', aspectRatio: 1, marginBottom: 12, padding: 15, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   moduleGridIconContainer: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  moduleGridIcon: { width: 30, height: 30 },
+  moduleGridIcon: { width: 30, height: 30 }as ImageStyle,
   moduleGridTitle: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 16 },
   moduleContainer: { flex: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: 'transparent' },
   privacyText: { fontSize: 16, lineHeight: 24 },

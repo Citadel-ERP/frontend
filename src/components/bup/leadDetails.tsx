@@ -801,16 +801,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               <View style={s.leadAvatarSection}>
                 <View style={s.leadAvatar}>
                   <Text style={s.leadAvatarText}>
-                    {getInitials(lead.name || 'L')}
+                    {getInitials(lead.company || 'L')}
                   </Text>
                 </View>
               </View>
               
               <View style={s.leadHeaderSection}>
-                <Text style={s.leadNameText}>{lead.name || 'Lead'}</Text>
-                {lead.company && (
+                <Text style={s.leadNameText}>{lead.company || 'Lead'}</Text>
+                {/* {lead.company && (
                   <Text style={s.leadCompanyText}>{lead.company}</Text>
-                )}
+                )} */}
               </View>
             </View>
 
@@ -1069,13 +1069,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             <View style={s.avatarContainer}>
               <View style={s.avatarPlaceholder}>
                 <Text style={s.avatarText}>
-                  {getInitials(lead.name)}
+                  {getInitials(lead.company)}
                 </Text>
               </View>
             </View>
             <View style={s.headerTextContainer}>
               <Text style={s.headerTitle} numberOfLines={1}>
-                {lead.name || 'Lead'}
+                {lead.company || 'Lead'}
               </Text>
               <Text style={s.headerSubtitle} numberOfLines={1}>
                 {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
@@ -1343,7 +1343,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <Incentive
             onBack={() => setShowIncentiveModal(false)}
             leadId={lead.id}
-            leadName={lead.name}
+            leadName={lead.company}
             theme={theme}
           />
         </Modal>
@@ -1358,7 +1358,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         >
           <Invoice
             leadId={lead.id}
-            leadName={lead.name}
+            leadName={lead.company}
             token={token}
             theme={theme}
             onBack={() => setShowInvoiceModal(false)}

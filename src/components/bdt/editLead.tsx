@@ -10,7 +10,8 @@ import {
   Alert,
   SafeAreaView,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  StatusBar
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption } from './types';
@@ -681,7 +682,11 @@ const EditLead: React.FC<EditLeadProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ModernHeader />
-      
+      <StatusBar
+                barStyle="light-content"
+                backgroundColor="#075E54"
+                translucent={false}
+            />
       <ScrollView 
         style={s.scrollView}
         showsVerticalScrollIndicator={false}
