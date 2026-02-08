@@ -438,7 +438,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                 <Ionicons 
                   name="location" 
                   size={20} 
-                  color={WHATSAPP_COLORS.accent} 
+                  color="#FFFFFF"
                   style={styles.cityIcon}
                 />
                 <View>
@@ -451,7 +451,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
               <Ionicons
                 name={collapsedCities.has(cityGroup.city) ? "chevron-down" : "chevron-up"}
                 size={24}
-                color={WHATSAPP_COLORS.textSecondary}
+                color="#FFFFFF"
               />
             </TouchableOpacity>
 
