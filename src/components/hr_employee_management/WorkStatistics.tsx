@@ -131,9 +131,6 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
     iconColor: string;
   }) => (
     <View style={[styles.statCard, { backgroundColor: color }]}>
-      {/* <View style={styles.statIconContainer}>
-        <MaterialCommunityIcons name={icon as any} size={32} color={iconColor} />
-      </View> */}
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
     </View>
@@ -245,30 +242,30 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
           </View>
         ) : summary && (
           <>
-            {/* Summary Cards */}
+            {/* Summary Cards - Updated colors to match Attendance component */}
             <View style={styles.summaryContainer}>
               <StatCard
                 title="Total Logged In"
                 value={summary.total_logged_in}
                 icon="account-check"
-                color="#DCFCE7"
-                iconColor="#16A34A"
+                color="#E8F5E9" // Green background matching Attendance's Present
+                iconColor="#2E7D32"
               />
               
               <StatCard
                 title="Late Logins"
                 value={summary.total_late_login}
                 icon="clock-alert"
-                color="#FEF3C7"
-                iconColor="#D97706"
+                color="#E8F4F8" // Light blue background
+                iconColor="#1976D2"
               />
               
               <StatCard
                 title="Not Logged In"
                 value={summary.total_not_logged_in}
                 icon="account-remove"
-                color="#FEE2E2"
-                iconColor="#DC2626"
+                color="#FFEBEE" // Red background matching Attendance's Absent
+                iconColor="#D32F2F"
               />
             </View>
 
@@ -279,8 +276,15 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
               <Text style={styles.tableHeaderText}>Logout Status</Text>
             </View>
 
-            {/* Table Rows */}
-            {userStats.map((user, index) => renderTableRow(user, index))}
+            {/* Table Container with internal scrolling - Shows 5 entries max */}
+            <View style={styles.tableContainer}>
+              <ScrollView 
+                style={styles.internalScrollView}
+                showsVerticalScrollIndicator={true}
+              >
+                {userStats.map((user, index) => renderTableRow(user, index))}
+              </ScrollView>
+            </View>
 
             {/* Download Button */}
             <TouchableOpacity
@@ -307,9 +311,7 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
         onClose={() => setShowDownloadModal(false)}
         onDownload={async (selectedDate) => {
           setShowDownloadModal(false);
-          // Fetch and download for selected date
           await fetchWorkStats(selectedDate);
-          // Trigger download - this will be handled separately
         }}
         token={token}
         currentDate={date}
@@ -371,66 +373,40 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    padding: 20,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    minHeight: 140,
-  },
-  statIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+    minHeight: 100,
   },
   statValue: {
-    fontSize: 40,
+    fontSize: 32,
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 4,
-    letterSpacing: -0.5,
   },
   statTitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#6B7280',
     textAlign: 'center',
-    fontWeight: '500',
-    lineHeight: 14,
-    paddingHorizontal: 4,
-  },
-  additionalStatsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  additionalStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  additionalStatLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: '#4B5563',
-    marginLeft: 12,
-  },
-  additionalStatValue: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    lineHeight: 14,
+  },
+  tableContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    maxHeight: 350, // Fixed height to show only 5 entries
+    marginBottom: 16,
+  },
+  internalScrollView: {
+    flex: 1,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -455,6 +431,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    minHeight: 70,
   },
   tableRowEven: {
     backgroundColor: '#FFFFFF',
@@ -525,13 +502,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 8,
     marginBottom: 16,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   downloadButtonText: {
     color: '#FFFFFF',
@@ -541,7 +513,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 8,
   },
   footerText: {
     fontSize: 12,
