@@ -12,39 +12,33 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-
 const BackIcon = () => (
   <View style={styles.backIcon}>
     <View style={styles.backArrow} />
     <Text style={styles.backText}>Back</Text>
   </View>
 );
-
 interface CitySelectionProps {
   onCitySelect: (city: string) => void;
   onBack: () => void;
 }
-
 const CITIES = [
-  { value: 'Mumbai', label: 'Mumbai', image: require('../../assets/mumbai.png') },
-  { value: 'Delhi', label: 'Delhi', image: require('../../assets/delhi.png') },
   { value: 'Bangalore', label: 'Bangalore', image: require('../../assets/bangalore.png') },
   { value: 'Chennai', label: 'Chennai', image: require('../../assets/chennai.png') },
-  // { value: 'Kolkata', label: 'Kolkata', image: require('../../assets/kolkata.png') },
-  { value: 'Hyderabad', label: 'Hyderabad', image: require('../../assets/hyderabad.png') },
-  { value: 'Pune', label: 'Pune', image: require('../../assets/pune.png') },
+  { value: 'Delhi', label: 'Delhi', image: require('../../assets/delhi.png') },
   { value: 'Gurgaon', label: 'Gurgaon', image: require('../../assets/gurgaon.png') },
-  { value: 'Noida', label: 'Noida', image: require('../../assets/noida.png') },
+  { value: 'Hyderabad', label: 'Hyderabad', image: require('../../assets/hyderabad.png') },
   // { value: 'Jaipur', label: 'Jaipur', image: require('../../assets/jaipur.png') },
+  // { value: 'Kolkata', label: 'Kolkata', image: require('../../assets/kolkata.png') },
+  { value: 'Mumbai', label: 'Mumbai', image: require('../../assets/mumbai.png') },
+  { value: 'Noida', label: 'Noida', image: require('../../assets/noida.png') },
+  { value: 'Pune', label: 'Pune', image: require('../../assets/pune.png') },
 ];
-
 const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) => {
   const [searchQuery, setSearchQuery] = useState('');
-
   const filteredCities = CITIES.filter(city =>
     city.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
   return (
     <View style={styles.screenContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#075E54" />
@@ -88,7 +82,6 @@ const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) =
             </View>
           </LinearGradient>
         </View>
-
         {/* Search Box */}
         <View style={styles.searchBox}>
           <View style={styles.searchInputWrapper}>
@@ -102,7 +95,6 @@ const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) =
             />
           </View>
         </View>
-
         {/* Cities Grid */}
         <View style={styles.citiesGrid}>
           {filteredCities.map((city, index) => (
@@ -123,13 +115,11 @@ const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) =
             </TouchableOpacity>
           ))}
         </View>
-
         <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
   );
 };
-
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
@@ -296,5 +286,4 @@ const styles = StyleSheet.create({
     height: 40,
   },
 });
-
 export default CitySelection;
