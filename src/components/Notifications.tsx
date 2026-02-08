@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Animated,
   Dimensions, Platform, RefreshControl, Modal, Alert, LayoutAnimation, UIManager,
@@ -52,6 +52,7 @@ interface Notification {
   icon: string;
   category: 'today' | 'week' | 'earlier';
   page?: string;
+  go_to?: string | null;
   created_at?: string;
 }
 
@@ -59,126 +60,141 @@ interface NotificationsProps {
   onBack: () => void;
   isDark?: boolean;
   onBadgeUpdate?: (count: number) => void;
+  onNavigateToModule?: (moduleName: string, extraData?: any) => void;
 }
 
-const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, onBadgeUpdate }) => {
+const Notifications: React.FC<NotificationsProps> = ({ 
+  onBack, 
+  isDark = false, 
+  onBadgeUpdate,
+  onNavigateToModule 
+}) => {
   const insets = useSafeAreaInsets();
-  const currentColors = isDark ? whatsappColors.dark : whatsappColors.light;
+  const currentColors = useMemo(() => isDark ? whatsappColors.dark : whatsappColors.light, [isDark]);
   const scrollViewRef = useRef<ScrollView>(null);
   
+  // Core state
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  
+  // UI state
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showDisabledMessage, setShowDisabledMessage] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
-  // Track if we need to save read status (to prevent constant saves)
+  // Refs
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedNotificationsRef = useRef<Notification[]>([]);
-  const previousUnreadCountRef = useRef(0); // FIX: Track previous count
+  const previousUnreadCountRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+  const isMountedRef = useRef(true);
+  
+  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
-  
-  // FIX: Only load notifications once on mount
-  const hasLoadedRef = useRef(false);
 
-  // Load notification setting on mount
+  // ============================================================================
+  // SIMPLIFIED NAVIGATION HANDLER
+  // ============================================================================
+  const handleNavigateToModule = useCallback((go_to: string | null | undefined) => {
+    if (!go_to) {
+      console.log('📍 [NOTIF] No navigation target specified');
+      return;
+    }
+
+    console.log(`📍 [NOTIF] Navigation requested to: "${go_to}"`);
+
+    if (onNavigateToModule) {
+      // Simply pass the go_to value to the Dashboard's handler
+      // Dashboard will handle all the mapping logic
+      onNavigateToModule(go_to);
+      console.log(`✅ [NOTIF] Navigation delegated to Dashboard for: "${go_to}"`);
+    } else {
+      console.warn(`⚠️ [NOTIF] onNavigateToModule prop not provided`);
+    }
+  }, [onNavigateToModule]);
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
   useEffect(() => {
-    loadNotificationSetting();
+    isMountedRef.current = true;
+    
+    const initialize = async () => {
+      await loadNotificationSetting();
+      
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    initialize();
+
+    return () => {
+      isMountedRef.current = false;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const loadNotificationSetting = async () => {
+  // ============================================================================
+  // NOTIFICATION SETTINGS
+  // ============================================================================
+  const loadNotificationSetting = useCallback(async () => {
     try {
       const storedSetting = await AsyncStorage.getItem('notifications_enabled');
-      if (storedSetting !== null) {
-        const enabled = storedSetting === 'true';
-        setNotificationsEnabled(enabled);
-        setShowDisabledMessage(!enabled);
-        
-        // Update notification handler based on setting
-        if (Platform.OS !== 'web') {
-          ExpoNotifications.setNotificationHandler({
-            handleNotification: async () => ({
-              shouldShowAlert: enabled,
-              shouldPlaySound: enabled,
-              shouldSetBadge: enabled,
-              shouldShowBanner: enabled,
-              shouldShowList: enabled,
-            }),
-          });
-        }
-        
-        // If notifications are enabled, proceed with normal initialization
-        if (enabled && !hasLoadedRef.current) {
-          hasLoadedRef.current = true;
-          requestNotificationPermissions();
-          fetchNotifications();
-        } else if (!enabled) {
-          // If disabled, set loading to false but don't fetch notifications
-          setLoading(false);
-          // Clear any existing badge count
-          updateIOSBadgeCount(0);
-          if (onBadgeUpdate) onBadgeUpdate(0);
-        }
-      } else {
-        // Default to enabled if not set
-        if (!hasLoadedRef.current) {
-          hasLoadedRef.current = true;
-          setNotificationsEnabled(true);
-          setShowDisabledMessage(false);
-          requestNotificationPermissions();
-          fetchNotifications();
-        }
+      const enabled = storedSetting !== null ? storedSetting === 'true' : true;
+      
+      if (!isMountedRef.current) return;
+      
+      setNotificationsEnabled(enabled);
+      setShowDisabledMessage(!enabled);
+      
+      if (Platform.OS !== 'web') {
+        ExpoNotifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: enabled,
+            shouldPlaySound: enabled,
+            shouldSetBadge: enabled,
+            shouldShowBanner: enabled,
+            shouldShowList: enabled,
+          }),
+        });
+      }
+      
+      if (enabled && !hasLoadedRef.current) {
+        hasLoadedRef.current = true;
+        await requestNotificationPermissions();
+        await fetchNotifications();
+      } else if (!enabled) {
+        setLoading(false);
+        await updateIOSBadgeCount(0);
+        if (onBadgeUpdate) onBadgeUpdate(0);
       }
     } catch (error) {
       console.error('Error loading notification setting:', error);
-      // Default to enabled on error
-      if (!hasLoadedRef.current) {
+      if (!hasLoadedRef.current && isMountedRef.current) {
         hasLoadedRef.current = true;
         setNotificationsEnabled(true);
-        requestNotificationPermissions();
-        fetchNotifications();
+        await requestNotificationPermissions();
+        await fetchNotifications();
       }
     }
-    
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  };
+  }, [onBadgeUpdate]);
 
-  const updateIOSBadgeCount = async (count: number) => {
-    if (Platform.OS === 'ios' && notificationsEnabled) {
-      try {
-        await ExpoNotifications.setBadgeCountAsync(count);
-        console.log(`✅ iOS badge count updated to: ${count}`);
-        if (count === 0) {
-          await ExpoNotifications.dismissAllNotificationsAsync();
-          console.log('✅ Cleared all notifications from tray');
-        }
-      } catch (error) {
-        console.error('❌ Error updating iOS badge count:', error);
-      }
-    } else if (Platform.OS === 'ios' && !notificationsEnabled) {
-      // Clear badge if notifications are disabled
-      try {
-        await ExpoNotifications.setBadgeCountAsync(0);
-        await ExpoNotifications.dismissAllNotificationsAsync();
-      } catch (error) {
-        console.error('Error clearing iOS badge:', error);
-      }
-    }
-  };
-
-  const requestNotificationPermissions = async () => {
+  // ============================================================================
+  // PERMISSIONS
+  // ============================================================================
+  const requestNotificationPermissions = useCallback(async () => {
     if (Platform.OS === 'ios' && notificationsEnabled) {
       try {
         const { status } = await ExpoNotifications.requestPermissionsAsync({
@@ -186,19 +202,43 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         });
         if (status !== 'granted') {
           console.warn('⚠️ Notification permissions not granted');
-        } else {
-          console.log('✅ Notification permissions granted');
         }
       } catch (error) {
         console.error('❌ Error requesting notification permissions:', error);
       }
     }
-  };
+  }, [notificationsEnabled]);
 
-  // FIX: Optimized badge update - only call parent when count actually changes
+  // ============================================================================
+  // BADGE COUNT
+  // ============================================================================
+  const updateIOSBadgeCount = useCallback(async (count: number) => {
+    if (Platform.OS === 'ios' && notificationsEnabled) {
+      try {
+        await ExpoNotifications.setBadgeCountAsync(count);
+        if (count === 0) {
+          await ExpoNotifications.dismissAllNotificationsAsync();
+        }
+      } catch (error) {
+        console.error('❌ Error updating iOS badge count:', error);
+      }
+    } else if (Platform.OS === 'ios' && !notificationsEnabled) {
+      try {
+        await ExpoNotifications.setBadgeCountAsync(0);
+        await ExpoNotifications.dismissAllNotificationsAsync();
+      } catch (error) {
+        console.error('Error clearing iOS badge:', error);
+      }
+    }
+  }, [notificationsEnabled]);
+
+  // ============================================================================
+  // BADGE UPDATE EFFECT
+  // ============================================================================
   useEffect(() => {
+    if (!isMountedRef.current) return;
+
     if (!notificationsEnabled || notifications.length === 0) {
-      // Update badge to 0 if notifications are disabled or empty
       const currentUnreadCount = 0;
       if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
         onBadgeUpdate(currentUnreadCount);
@@ -210,22 +250,20 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
 
     const currentUnreadCount = notifications.filter(n => !n.Read).length;
     
-    // Only call onBadgeUpdate if count actually changed
     if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
       onBadgeUpdate(currentUnreadCount);
       previousUnreadCountRef.current = currentUnreadCount;
     }
     
     updateIOSBadgeCount(currentUnreadCount);
-    console.log(`📱 Total: ${notifications.length}, Unread: ${currentUnreadCount}`);
 
-    // Debounce save operation to prevent constant writes
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      // Only save if read status actually changed
+      if (!isMountedRef.current) return;
+      
       const currentReadStatus = notifications.map(n => ({ id: n.id, read: n.Read }));
       const lastReadStatus = lastSavedNotificationsRef.current.map(n => ({ id: n.id, read: n.Read }));
       
@@ -234,16 +272,14 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         saveReadStatusLocally();
         lastSavedNotificationsRef.current = [...notifications];
       }
-    }, 300); // Wait 300ms after change before saving
+    }, 300);
 
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
   }, [notifications, notificationsEnabled, onBadgeUpdate]);
 
-  const saveReadStatusLocally = async () => {
+  // ============================================================================
+  // LOCAL STORAGE OPERATIONS
+  // ============================================================================
+  const saveReadStatusLocally = useCallback(async () => {
     try {
       const readStatusMap: { [key: string]: boolean } = {};
       notifications.forEach(notif => {
@@ -253,9 +289,9 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     } catch (error) {
       console.error('❌ Error saving read status locally:', error);
     }
-  };
+  }, [notifications]);
 
-  const loadLocalReadStatus = async () => {
+  const loadLocalReadStatus = useCallback(async () => {
     try {
       const savedStatus = await AsyncStorage.getItem('notification_read_status');
       if (savedStatus) return JSON.parse(savedStatus);
@@ -263,17 +299,17 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       console.error('❌ Error loading local read status:', error);
     }
     return {};
-  };
+  }, []);
 
-  const saveDeletedIds = async (ids: Set<string>) => {
+  const saveDeletedIds = useCallback(async (ids: Set<string>) => {
     try {
       await AsyncStorage.setItem('deleted_notification_ids', JSON.stringify([...ids]));
     } catch (error) {
       console.error('❌ Error saving deleted IDs:', error);
     }
-  };
+  }, []);
 
-  const loadDeletedIds = async () => {
+  const loadDeletedIds = useCallback(async () => {
     try {
       const saved = await AsyncStorage.getItem('deleted_notification_ids');
       if (saved) {
@@ -284,9 +320,12 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       console.error('❌ Error loading deleted IDs:', error);
     }
     return new Set<string>();
-  };
+  }, []);
 
-  const fetchNotifications = async () => {
+  // ============================================================================
+  // FETCH NOTIFICATIONS
+  // ============================================================================
+  const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('token_2');
@@ -302,6 +341,8 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         body: JSON.stringify({ token }),
       });
 
+      if (!isMountedRef.current) return;
+
       if (response.ok) {
         const data = await response.json();
         console.log(`📥 Fetched ${data.notifications?.length || 0} notifications from backend`);
@@ -309,20 +350,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         const localReadStatus = await loadLocalReadStatus();
         const localDeletedIds = await loadDeletedIds();
         
-        if (data.notifications && data.notifications.length > 0) {
-          console.log('📝 Sample notification from backend:', {
-            id: data.notifications[0].id,
-            title: data.notifications[0].title,
-            Read: data.notifications[0].Read,
-          });
-        }
-        
         const formattedNotifications = data.notifications
           .filter((notif: any) => !localDeletedIds.has(notif.id.toString()))
           .map((notif: any) => {
             const formatted = formatNotification(notif);
             if (!formatted.Read && localReadStatus[formatted.id] === true) {
-              console.log(`✅ Notification ${formatted.id} marked as read from local storage`);
               return { ...formatted, Read: true };
             }
             return formatted;
@@ -336,22 +368,27 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
           return 0;
         });
         
-        setNotifications(formattedNotifications);
-        lastSavedNotificationsRef.current = [...formattedNotifications];
-        setDeletedIds(localDeletedIds);
-        
-        console.log(`📊 Final - Total: ${formattedNotifications.length}, Unread: ${formattedNotifications.filter((n: Notification) => !n.Read).length}`);
+        if (isMountedRef.current) {
+          setNotifications(formattedNotifications);
+          lastSavedNotificationsRef.current = [...formattedNotifications];
+          setDeletedIds(localDeletedIds);
+        }
       } else {
         console.error(`❌ Failed to fetch notifications, status: ${response.status}`);
       }
     } catch (error) {
       console.error('❌ Error fetching notifications:', error);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
-  const formatNotification = (notif: any): Notification => {
+  // ============================================================================
+  // FORMAT NOTIFICATION
+  // ============================================================================
+  const formatNotification = useCallback((notif: any): Notification => {
     const now = new Date();
     const createdAt = new Date(notif.created_at);
     const diffMs = now.getTime() - createdAt.getTime();
@@ -394,37 +431,45 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       icon: getIconForType(notif.type),
       category,
       page: notif.page,
+      go_to: notif.go_to || null,
       created_at: notif.created_at,
     };
-  };
+  }, []);
 
-  const getIconForType = (type: string): string => {
+  // ============================================================================
+  // ICON MAPPING
+  // ============================================================================
+  const getIconForType = useCallback((type: string): string => {
     const iconMap: { [key: string]: string } = {
       attendance: 'checkmark-circle', hr: 'people', cab: 'car', leave: 'calendar',
       reminder: 'time', success: 'checkmark-circle', warning: 'warning',
       error: 'alert-circle', info: 'information-circle', system: 'settings',
     };
     return iconMap[type] || 'notifications';
-  };
+  }, []);
 
-  const getNotificationColor = (type: string) => {
+  const getNotificationColor = useCallback((type: string) => {
     const colorMap: { [key: string]: string } = {
       attendance: '#00A884', hr: '#8B5CF6', cab: '#F59E0B', leave: '#3B82F6',
       reminder: '#A855F7', success: '#10B981', warning: '#F59E0B', error: '#EF4444',
       info: '#3B82F6', system: '#6B7280',
     };
     return colorMap[type] || currentColors.primary;
-  };
+  }, [currentColors.primary]);
 
-  const handleMarkAsRead = async (id: string) => {
+  // ============================================================================
+  // MARK AS READ
+  // ============================================================================
+  const handleMarkAsRead = useCallback(async (id: string) => {
     if (!notificationsEnabled) return;
     
     try {
       const token = await AsyncStorage.getItem('token_2');
       if (!token) return;
 
-      // Update UI optimistically
-      setNotifications(prev => prev.map(notif => notif.id === id ? { ...notif, Read: true } : notif));
+      setNotifications(prev => prev.map(notif => 
+        notif.id === id ? { ...notif, Read: true } : notif
+      ));
 
       const response = await fetch(`${BACKEND_URL}/core/markNotificationAsRead`, {
         method: 'POST',
@@ -432,25 +477,30 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         body: JSON.stringify({ token, notification_id: id }),
       });
 
-      if (!response.ok) {
+      if (!response.ok && isMountedRef.current) {
         console.error('❌ Failed to mark notification as read on backend');
-        // Only revert if backend fails
-        setNotifications(prev => prev.map(notif => notif.id === id ? { ...notif, Read: false } : notif));
-      } else {
-        console.log(`✅ Notification ${id} marked as read`);
+        setNotifications(prev => prev.map(notif => 
+          notif.id === id ? { ...notif, Read: false } : notif
+        ));
       }
     } catch (error) {
       console.error('❌ Error marking notification as read:', error);
-      setNotifications(prev => prev.map(notif => notif.id === id ? { ...notif, Read: false } : notif));
+      if (isMountedRef.current) {
+        setNotifications(prev => prev.map(notif => 
+          notif.id === id ? { ...notif, Read: false } : notif
+        ));
+      }
     }
-  };
+  }, [notificationsEnabled]);
 
-  const markAllNotificationsAsRead = async () => {
+  // ============================================================================
+  // MARK ALL AS READ
+  // ============================================================================
+  const markAllNotificationsAsRead = useCallback(async () => {
     if (!notificationsEnabled) return;
     
     const unreadNotifications = notifications.filter(n => !n.Read);
     if (unreadNotifications.length === 0) {
-      console.log('✅ No unread notifications to mark');
       return;
     }
 
@@ -459,7 +509,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       if (!token) return;
 
       const originalNotifications = [...notifications];
-
+      
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setNotifications(prev => prev.map(notif => ({ ...notif, Read: true })));
       await updateIOSBadgeCount(0);
@@ -470,20 +520,20 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         body: JSON.stringify({ token }),
       });
 
-      if (!response.ok) {
+      if (!response.ok && isMountedRef.current) {
         console.error('❌ Failed to mark all as read on backend');
         setNotifications(originalNotifications);
-      } else {
-        console.log(`✅ Marked all ${unreadNotifications.length} notifications as read`);
       }
     } catch (error) {
       console.error('❌ Error marking all notifications as read:', error);
-      // Don't reload, just show error
       Alert.alert('Error', 'Failed to mark all as read. Please try again.');
     }
-  };
+  }, [notificationsEnabled, notifications, updateIOSBadgeCount]);
 
-  const handleDelete = async (id: string) => {
+  // ============================================================================
+  // DELETE OPERATIONS
+  // ============================================================================
+  const handleDelete = useCallback(async (id: string) => {
     if (deletingIds.has(id)) return;
 
     setDeletingIds(prev => new Set(prev).add(id));
@@ -499,7 +549,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         return;
       }
 
-      // Optimistically update UI first
       const newDeletedIds = new Set(deletedIds).add(id);
       setDeletedIds(newDeletedIds);
       await saveDeletedIds(newDeletedIds);
@@ -513,15 +562,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         body: JSON.stringify({ token, notification_id: id }),
       });
 
-      if (response.ok) {
-        console.log(`✅ Notification ${id} deleted successfully`);
-      } else {
+      if (!response.ok) {
         console.error('❌ Failed to delete notification on backend');
-        Alert.alert('Error', 'Failed to delete notification on server. It may reappear on refresh.');
       }
     } catch (error) {
       console.error('❌ Error deleting notification:', error);
-      Alert.alert('Error', 'Failed to delete notification. Please try again.');
     } finally {
       setDeletingIds(prev => {
         const newSet = new Set(prev);
@@ -529,9 +574,9 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         return newSet;
       });
     }
-  };
+  }, [deletingIds, deletedIds, saveDeletedIds]);
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = useCallback(async () => {
     if (selectedIds.size === 0) return;
 
     Alert.alert(
@@ -549,7 +594,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
               const token = await AsyncStorage.getItem('token_2');
               if (!token) return;
 
-              // Optimistically update UI first
               const newDeletedIds = new Set(deletedIds);
               idsToDelete.forEach(id => newDeletedIds.add(id));
               setDeletedIds(newDeletedIds);
@@ -560,45 +604,40 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
               setSelectedIds(new Set());
               setSelectionMode(false);
 
-              // Delete on backend in background
               for (const id of idsToDelete) {
-                const response = await fetch(`${BACKEND_URL}/core/deleteNotification`, {
+                fetch(`${BACKEND_URL}/core/deleteNotification`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ token, notification_id: id }),
-                });
-
-                if (response.ok) {
-                  console.log(`✅ Notification ${id} deleted successfully`);
-                } else {
-                  console.error(`❌ Failed to delete notification ${id} on backend`);
-                }
+                }).catch(err => console.error(`❌ Failed to delete ${id}:`, err));
               }
-              
             } catch (error) {
               console.error('❌ Error deleting selected notifications:', error);
-              Alert.alert('Error', 'Some notifications may not have been deleted on the server.');
             }
           }
         }
       ]
     );
-  };
+  }, [selectedIds, deletedIds, saveDeletedIds]);
 
-  const toggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
+  // ============================================================================
+  // SELECTION MODE
+  // ============================================================================
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => !prev);
     setSelectedIds(new Set());
-  };
+  }, []);
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === notifications.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(notifications.map(n => n.id)));
-    }
-  };
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      if (prev.size === notifications.length) {
+        return new Set();
+      }
+      return new Set(notifications.map(n => n.id));
+    });
+  }, [notifications]);
 
-  const toggleSelectItem = (id: string) => {
+  const toggleSelectItem = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -608,9 +647,12 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const onRefresh = async () => {
+  // ============================================================================
+  // REFRESH
+  // ============================================================================
+  const onRefresh = useCallback(async () => {
     if (!notificationsEnabled) {
       setRefreshing(false);
       return;
@@ -619,9 +661,12 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
     setRefreshing(true);
     await fetchNotifications();
     setRefreshing(false);
-  };
+  }, [notificationsEnabled, fetchNotifications]);
 
-  const handleNotificationPress = (notification: Notification) => {
+  // ============================================================================
+  // NOTIFICATION PRESS - WITH SIMPLIFIED NAVIGATION
+  // ============================================================================
+  const handleNotificationPress = useCallback((notification: Notification) => {
     if (!notificationsEnabled) return;
     
     if (selectionMode) {
@@ -629,32 +674,54 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       return;
     }
     
+    // Mark as read
     if (!notification.Read) {
       handleMarkAsRead(notification.id);
     }
 
+    // Handle navigation if go_to is present
+    // Handle navigation if go_to is present
+if (notification.go_to) {
+  console.log(`🎯 [NOTIF] Notification tapped with go_to: "${notification.go_to}"`);
+  
+  // Close any open modals first
+  setModalVisible(false);
+  
+  // Close the Notifications screen FIRST
+  onBack();
+  
+  // Then navigate to the module after screen closes
+  setTimeout(() => {
+    handleNavigateToModule(notification.go_to);
+  }, 150);
+  
+  return;
+}
+
+    // If no go_to, show modal
     setSelectedNotification(notification);
     setModalVisible(true);
-
     Animated.spring(modalAnim, {
       toValue: 0,
       useNativeDriver: true,
       tension: 65,
       friction: 11,
     }).start();
-  };
+  }, [notificationsEnabled, selectionMode, toggleSelectItem, handleMarkAsRead, handleNavigateToModule, modalAnim]);
 
-  const handleNotificationLongPress = (notification: Notification) => {
+  const handleNotificationLongPress = useCallback((notification: Notification) => {
     if (!notificationsEnabled) return;
     
-    // Enable selection mode and select the item
     if (!selectionMode) {
       setSelectionMode(true);
     }
     toggleSelectItem(notification.id);
-  };
+  }, [notificationsEnabled, selectionMode, toggleSelectItem]);
 
-  const closeModal = () => {
+  // ============================================================================
+  // MODAL OPERATIONS
+  // ============================================================================
+  const closeModal = useCallback(() => {
     Animated.timing(modalAnim, {
       toValue: height,
       duration: 250,
@@ -664,9 +731,42 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       setSelectedNotification(null);
       modalAnim.setValue(height);
     });
-  };
+  }, [modalAnim]);
 
-  const NotificationItem = ({ notification, index }: { notification: Notification; index: number }) => {
+  const handleModalActionPress = useCallback(() => {
+  if (selectedNotification?.go_to) {
+    closeModal();
+    
+    // Close Notifications screen first, then navigate
+    setTimeout(() => {
+      onBack();
+      setTimeout(() => {
+        handleNavigateToModule(selectedNotification.go_to);
+      }, 150);
+    }, 300);
+  } else {
+    closeModal();
+  }
+}, [selectedNotification, closeModal, handleNavigateToModule, onBack]);
+
+  // ============================================================================
+  // GROUPED NOTIFICATIONS
+  // ============================================================================
+  const groupedNotifications = useMemo(() => ({
+    today: notifications.filter(n => n.category === 'today'),
+    week: notifications.filter(n => n.category === 'week'),
+    earlier: notifications.filter(n => n.category === 'earlier'),
+  }), [notifications]);
+
+  const unreadCount = useMemo(() => 
+    notifications.filter(n => !n.Read).length, 
+    [notifications]
+  );
+
+  // ============================================================================
+  // NOTIFICATION ITEM COMPONENT
+  // ============================================================================
+  const NotificationItem = React.memo(({ notification, index }: { notification: Notification; index: number }) => {
     const itemOpacity = useRef(new Animated.Value(0)).current;
     const itemScale = useRef(new Animated.Value(0.95)).current;
     const notificationColor = getNotificationColor(notification.type);
@@ -691,7 +791,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       ]).start();
     }, []);
 
-    const onDeletePress = () => {
+    const onDeletePress = useCallback(() => {
       setIsDeleting(true);
       Animated.parallel([
         Animated.timing(itemOpacity, {
@@ -707,7 +807,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
       ]).start(() => {
         handleDelete(notification.id);
       });
-    };
+    }, [notification.id]);
 
     return (
       <Animated.View style={[s.notifContainer, { opacity: itemOpacity, transform: [{ scale: itemScale }] }]}>
@@ -743,7 +843,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                 </View>
               </TouchableOpacity>
             )}
-
             <View style={[s.iconBox, { 
               backgroundColor: selectionMode ? currentColors.primary : `${notificationColor}20` 
             }]}>
@@ -753,7 +852,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                 color={selectionMode ? "#FFFFFF" : notificationColor} 
               />
             </View>
-
             <View style={s.notifText}>
               <View style={s.titleRow}>
                 <Text style={[s.title, { 
@@ -775,13 +873,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                 </Text>
               )}
             </View>
-
             {!selectionMode && (
               <TouchableOpacity style={s.delBtn} onPress={onDeletePress} disabled={isDeleting} activeOpacity={0.6}>
                 <Ionicons name="trash-outline" size={20} color={currentColors.textTertiary} />
               </TouchableOpacity>
             )}
-
             {!notification.Read && notificationsEnabled && !selectionMode && (
               <View style={s.unreadBox}>
                 <View style={[s.dot, { backgroundColor: currentColors.primary }]} />
@@ -791,28 +887,27 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         </View>
       </Animated.View>
     );
-  };
+  });
 
-  const SectionHeader = ({ title, count }: { title: string; count: number }) => (
+  // ============================================================================
+  // SECTION HEADER COMPONENT
+  // ============================================================================
+  const SectionHeader = React.memo(({ title, count }: { title: string; count: number }) => (
     count > 0 ? (
       <View style={s.sectionHdr}>
         <Text style={[s.sectionTitle, { color: currentColors.textSecondary }]}>{title}</Text>
       </View>
     ) : null
-  );
+  ));
 
-  const groupedNotifications = {
-    today: notifications.filter(n => n.category === 'today'),
-    week: notifications.filter(n => n.category === 'week'),
-    earlier: notifications.filter(n => n.category === 'earlier'),
-  };
-
-  const unreadCount = notifications.filter(n => !n.Read).length;
-
+  // ============================================================================
+  // RENDER
+  // ============================================================================
   return (
     <View style={[s.container, { backgroundColor: currentColors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={currentColors.header} />
       
+      {/* Header */}
       <View style={[s.header, { 
         backgroundColor: currentColors.header,
         paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
@@ -885,7 +980,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
             </View>
           )}
         </View>
-
         {notifications.length > 0 && (
           <View style={s.hdrStats}>
             <Text style={[s.hdrStatsText, { color: isDark ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.85)" }]}>
@@ -898,6 +992,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         )}
       </View>
       
+      {/* Content */}
       <SafeAreaView style={s.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView
           ref={scrollViewRef}
@@ -905,7 +1000,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
-          scrollEnabled={scrollEnabled}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1000,6 +1094,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
         </ScrollView>
       </SafeAreaView>
 
+      {/* Modal */}
       <Modal animationType="none" transparent={true} visible={modalVisible} onRequestClose={closeModal} 
         statusBarTranslucent hardwareAccelerated>
         <View style={[s.modalOverlay, { backgroundColor: currentColors.overlay }]}>
@@ -1012,7 +1107,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                 <View style={s.modalDrag}>
                   <View style={[s.dragHandle, { backgroundColor: currentColors.textTertiary }]} />
                 </View>
-
                 {selectedNotification && (
                   <ScrollView style={s.modalContent} showsVerticalScrollIndicator={false} bounces={false}>
                     <View style={s.modalHdr}>
@@ -1023,7 +1117,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                           color={getNotificationColor(selectedNotification.type)} />
                       </View>
                     </View>
-
                     <View style={s.modalTitleSec}>
                       <Text style={[s.modalTitle, { color: currentColors.text }]}>
                         {selectedNotification.title}
@@ -1050,9 +1143,7 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                         </View>
                       </View>
                     </View>
-
                     <View style={[s.modalDivider, { backgroundColor: currentColors.divider }]} />
-
                     <View style={[s.modalMsgCard, { 
                       backgroundColor: isDark ? currentColors.card : currentColors.unreadBg 
                     }]}>
@@ -1060,7 +1151,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                         {selectedNotification.message}
                       </Text>
                     </View>
-
                     {selectedNotification.created_at && (
                       <View style={s.modalInfoSec}>
                         <View style={s.modalInfoItem}>
@@ -1074,12 +1164,11 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                         </View>
                       </View>
                     )}
-
                     <View style={s.modalActions}>
-                      {selectedNotification.page && (
+                      {selectedNotification.go_to && (
                         <TouchableOpacity
                           style={[s.modalActionBtn, { backgroundColor: currentColors.primary }]}
-                          onPress={closeModal}
+                          onPress={handleModalActionPress}
                           activeOpacity={0.8}
                         >
                           <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
@@ -1098,7 +1187,6 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
                         <Text style={[s.modalActionBtn2Text, { color: currentColors.text }]}>Dismiss</Text>
                       </TouchableOpacity>
                     </View>
-
                     <View style={{ height: 32 }} />
                   </ScrollView>
                 )}
@@ -1111,29 +1199,22 @@ const Notifications: React.FC<NotificationsProps> = ({ onBack, isDark = false, o
   );
 };
 
+// Styles (same as before - truncated for brevity)
 const s = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 12, elevation: 2, shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
-  hdrContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 12, paddingBottom: 4 },
+  header: { paddingHorizontal: 16, paddingBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
+  hdrContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, paddingBottom: 4 },
   backBtn: { width: 85, height: 40, alignItems: 'flex-start', justifyContent: 'center', zIndex: 1 },
   backBtnContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
   backBtnText: { fontSize: 16, fontWeight: '500', marginLeft: 4 },
-  hdrTitleBox: { position: 'absolute', left: 0, right: 0, alignItems: 'center',
-    justifyContent: 'center', zIndex: 0 },
+  hdrTitleBox: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', zIndex: 0 },
   hdrTitle: { fontSize: 18, fontWeight: '600' },
   normalActions: { flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1 },
   selectionModeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   markAllBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   selectionActions: { flexDirection: 'row', alignItems: 'center', gap: 2, zIndex: 1 },
-  selectAllBtn: { 
-    paddingHorizontal: 8, 
-    paddingVertical: 5, 
-    borderRadius: 5, 
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
+  selectAllBtn: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.15)' },
   selectAllText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   deleteSelectedBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   cancelBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
@@ -1141,24 +1222,15 @@ const s = StyleSheet.create({
   hdrStatsText: { fontSize: 13, fontWeight: '400' },
   scroll: { flex: 1 },
   scrollContent: { paddingTop: 8 },
-  sectionHdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
+  sectionHdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
   sectionTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
   notifContainer: { position: 'relative', marginBottom: 1, height: 90 },
   notifCard: { position: 'relative', zIndex: 1 },
   notifContent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
   checkboxContainer: { marginRight: 10, justifyContent: 'center', alignItems: 'center' },
-  checkbox: { 
-    width: 22, 
-    height: 22, 
-    borderRadius: 11, 
-    borderWidth: 2, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
+  checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   delBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginTop: 2 },
-  iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
-    marginRight: 14, marginTop: 2 },
+  iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 14, marginTop: 2 },
   notifText: { flex: 1 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
   title: { fontSize: 16, flex: 1, marginRight: 8, letterSpacing: 0.2 },
@@ -1177,21 +1249,18 @@ const s = StyleSheet.create({
   enableButtonText: { fontSize: 16, fontWeight: '600' },
   modalOverlay: { flex: 1 },
   modalOverlayTouch: { flex: 1, justifyContent: 'flex-end' },
-  modalBox: { maxHeight: height * 0.75, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 24 },
+  modalBox: { maxHeight: height * 0.75, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 24 },
   modalDrag: { alignItems: 'center', paddingVertical: 14 },
   dragHandle: { width: 40, height: 4, borderRadius: 2, opacity: 0.3 },
   modalContent: { paddingHorizontal: 24 },
   modalHdr: { alignItems: 'center', marginTop: 8, marginBottom: 20 },
   modalIconBox: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
   modalTitleSec: { marginBottom: 20 },
-  modalTitle: { fontSize: 24, fontWeight: '700', marginBottom: 14, letterSpacing: 0.3,
-    textAlign: 'center', lineHeight: 32 },
+  modalTitle: { fontSize: 24, fontWeight: '700', marginBottom: 14, letterSpacing: 0.3, textAlign: 'center', lineHeight: 32 },
   modalMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   modalMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   modalMetaText: { fontSize: 14, fontWeight: '500' },
-  typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 8, gap: 6 },
+  typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 6 },
   typeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   modalDivider: { height: 1, marginVertical: 24 },
   modalMsgCard: { padding: 20, borderRadius: 16, marginBottom: 24 },
@@ -1200,8 +1269,7 @@ const s = StyleSheet.create({
   modalInfoItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8 },
   modalInfoText: { fontSize: 14, fontWeight: '500' },
   modalActions: { flexDirection: 'column', gap: 12 },
-  modalActionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14,
-    paddingVertical: 16, paddingHorizontal: 24, gap: 10 },
+  modalActionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 24, gap: 10 },
   modalActionBtnText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF', letterSpacing: 0.3 },
   modalActionBtn2: { alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 24 },
   modalActionBtn2Text: { fontSize: 17, fontWeight: '600', letterSpacing: 0.3 },
