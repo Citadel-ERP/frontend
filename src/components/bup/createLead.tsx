@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -58,15 +60,35 @@ interface CreateLeadProps {
   onBack: () => void;
   onCreate: () => void;
   selectedCity: string;
+  selectedBDT: BDT | null;
   token: string | null;
   theme: ThemeColors;
   fetchSubphases: (phase: string) => Promise<void>;
+}
+
+interface BDT {
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  profile_picture: string | null;
 }
 
 interface CustomField {
   id: string;
   key: string;
   value: string;
+}
+
+interface Collaborator {
+  id?: string;
+  user: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+  };
 }
 
 const useDebounce = (value: string, delay: number): string => {
@@ -96,25 +118,26 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   onBack,
   onCreate,
   selectedCity,
+  selectedBDT,
   token,
   theme,
   fetchSubphases,
 }) => {
   const [formData, setFormData] = useState({
-    name: '',
     company: '',
     status: 'active' as const,
     phase: 'initial_phase',
     subphase: 'without_contact_details',
-    assigned_to: null as AssignedTo | null,
+    leadPartner: '',
   });
 
   const [editingEmails, setEditingEmails] = useState<string[]>([]);
   const [editingPhones, setEditingPhones] = useState<string[]>([]);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'assigned' | 'officeType' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'collaborator' | 'officeType' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -124,11 +147,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   const [location, setLocation] = useState('');
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customFieldErrors, setCustomFieldErrors] = useState<{[key: string]: string}>({});
-  const [assignedToSearch, setAssignedToSearch] = useState('');
-  const [assignedToResults, setAssignedToResults] = useState<AssignedTo[]>([]);
-  const [assignedToLoading, setAssignedToLoading] = useState(false);
+  const [collaboratorSearch, setCollaboratorSearch] = useState('');
+  const [collaboratorResults, setCollaboratorResults] = useState<AssignedTo[]>([]);
+  const [collaboratorLoading, setCollaboratorLoading] = useState(false);
 
-  const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
+  const debouncedCollaboratorSearch = useDebounce(collaboratorSearch, 300);
 
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
@@ -154,12 +177,10 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   }, []);
 
   useEffect(() => {
-    if (activeDropdown === 'assigned') {
-      searchAssignedToUsers(debouncedAssignedSearch);
+    if (activeDropdown === 'collaborator') {
+      searchCollaborators(debouncedCollaboratorSearch);
     }
-  }, [debouncedAssignedSearch, activeDropdown]);
-
-  
+  }, [debouncedCollaboratorSearch, activeDropdown]);
 
   const fetchPhases = async (): Promise<void> => {
     try {
@@ -223,14 +244,14 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     }
   };
 
-  const searchAssignedToUsers = async (query: string): Promise<void> => {
+  const searchCollaborators = async (query: string): Promise<void> => {
     try {
       if (!token) {
-        setAssignedToResults([]);
+        setCollaboratorResults([]);
         return;
       }
 
-      setAssignedToLoading(true);
+      setCollaboratorLoading(true);
 
       if (query.length === 0) {
         const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
@@ -246,7 +267,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         }
 
         const data = await response.json();
-        setAssignedToResults(data.users || []);
+        setCollaboratorResults(data.users || []);
         return;
       }
 
@@ -266,23 +287,41 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         }
 
         const data = await response.json();
-        setAssignedToResults(data.potential_collaborators);
+        setCollaboratorResults(data.potential_collaborators || []);
       } else {
-        setAssignedToResults([]);
+        setCollaboratorResults([]);
       }
     } catch (error) {
-      console.error('Error searching assignable users:', error);
-      setAssignedToResults([]);
+      console.error('Error searching collaborators:', error);
+      setCollaboratorResults([]);
     } finally {
-      setAssignedToLoading(false);
+      setCollaboratorLoading(false);
     }
   };
 
-  const handleAssignToUser = (user: AssignedTo): void => {
-    setFormData({ ...formData, assigned_to: user });
-    setActiveDropdown(null);
-    setAssignedToSearch('');
-    setAssignedToResults([]);
+  const handleAddCollaborator = (user: AssignedTo): void => {
+    // Check if collaborator already exists
+    if (collaborators.some(collab => collab.user.email === user.email)) {
+      Alert.alert('Info', 'This collaborator is already added.');
+      return;
+    }
+
+    const newCollaborator: Collaborator = {
+      user: {
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        full_name: user.full_name || `${user.first_name} ${user.last_name}`
+      }
+    };
+
+    setCollaborators([...collaborators, newCollaborator]);
+    setCollaboratorSearch('');
+    setCollaboratorResults([]);
+  };
+
+  const handleRemoveCollaborator = (index: number): void => {
+    setCollaborators(collaborators.filter((_, i) => i !== index));
   };
 
   const beautifyName = (name: string): string => {
@@ -421,12 +460,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     return option ? option.label : beautifyName(value);
   };
 
-  const getAssignedToLabel = (): string => {
-    if (!formData.assigned_to) return 'Unassigned';
-    return formData.assigned_to.full_name || 
-           `${formData.assigned_to.first_name} ${formData.assigned_to.last_name}`;
-  };
-
   const getOfficeTypeLabel = (): string => {
     const option = OFFICE_TYPE_CHOICES.find(choice => choice.value === officeType);
     return option ? option.label : 'Select office type...';
@@ -434,13 +467,13 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
   const handleCreate = async (): Promise<void> => {
     try {
-      if (!token || !selectedCity) {
-        Alert.alert('Error', 'Token or city not found');
+      if (!token || !selectedCity || !selectedBDT) {
+        Alert.alert('Error', 'Required information missing');
         return;
       }
       
-      if (!formData.name.trim()) {
-        Alert.alert('Error', 'Lead name is required');
+      if (!formData.company.trim()) {
+        Alert.alert('Error', 'Company name is required');
         return;
       }
 
@@ -456,6 +489,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
+      if (formData.leadPartner.trim()) meta.lead_partner = formData.leadPartner.trim();
       
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
@@ -463,18 +497,17 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         }
       });
 
+      // Create lead payload
       const createPayload: any = {
         token: token,
-        name: formData.name.trim(),
+        name: formData.company.trim(), // Use company name as lead name
         city: selectedCity,
         status: formData.status,
         phase: formData.phase,
-        subphase: formData.subphase
+        subphase: formData.subphase,
+        assigned_to: selectedBDT.email, // Use selected BDT as assigned_to
+        company: formData.company.trim()
       };
-
-      if (formData.company.trim()) {
-        createPayload.company = formData.company.trim();
-      }
 
       if (editingEmails.length > 0) {
         createPayload.emails = editingEmails;
@@ -484,15 +517,12 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         createPayload.phone_numbers = editingPhones;
       }
 
-      if (formData.assigned_to) {
-        createPayload.assigned_to = formData.assigned_to.email;
-      }
-
       if (Object.keys(meta).length > 0) {
         createPayload.meta = meta;
       }
 
-      const response = await fetch(`${BACKEND_URL}/manager/createLead`, {
+      // Step 1: Create the lead
+      const createResponse = await fetch(`${BACKEND_URL}/manager/createLead`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -500,25 +530,52 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         body: JSON.stringify(createPayload)
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        throw new Error(errorData.message || `HTTP error! status: ${createResponse.status}`);
       }
 
-      const data = await response.json();
+      const createData = await createResponse.json();
+      const leadId = createData.lead.id;
+
+      // Step 2: Add collaborators if any
+      if (collaborators.length > 0) {
+        const collaboratorPromises = collaborators.map(async (collaborator) => {
+          const collaboratorPayload = {
+            token: token,
+            lead_id: leadId,
+            email: collaborator.user.email
+          };
+
+          const response = await fetch(`${BACKEND_URL}/manager/addCollaborator`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(collaboratorPayload)
+          });
+
+          if (!response.ok) {
+            console.warn(`Failed to add collaborator ${collaborator.user.email}`);
+          }
+        });
+
+        await Promise.all(collaboratorPromises);
+      }
       
       Alert.alert('Success', 'Lead created successfully!');
       
+      // Reset form
       setFormData({
-        name: '',
         company: '',
         status: 'active',
         phase: 'initial_phase',
         subphase: 'without_contact_details',
-        assigned_to: null,
+        leadPartner: '',
       });
       setEditingEmails([]);
       setEditingPhones([]);
+      setCollaborators([]);
       setAreaRequirements('');
       setOfficeType('');
       setLocation('');
@@ -541,7 +598,28 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      
+      <SafeAreaView style={s.header}>
+        <View style={s.headerContent}>
+          <TouchableOpacity onPress={onBack} style={s.backButton}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <View style={s.headerTextContainer}>
+            <Text style={s.headerTitle} numberOfLines={1}>Create New Lead</Text>
+            <Text style={s.headerSubtitle} numberOfLines={1}>For {selectedBDT?.full_name || 'BDT'}</Text>
+          </View>
+
+          <View style={s.headerActions}>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <TouchableOpacity onPress={handleCreate} style={s.saveHeaderButton} disabled={loading}>
+                <Text style={s.saveHeaderText}>Create</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </SafeAreaView>
 
       <ScrollView 
         style={s.scrollView} 
@@ -551,31 +629,30 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.primary + '15' }]}>
-              <Ionicons name="person-outline" size={20} color={THEME_COLORS.primary} />
+              <Ionicons name="business-outline" size={20} color={THEME_COLORS.primary} />
             </View>
             <Text style={s.cardTitle}>Basic Information</Text>
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Lead Name *</Text>
+            <Text style={s.label}>Company Name *</Text>
             <TextInput
               style={s.input}
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              placeholder="Enter lead name"
+              value={formData.company}
+              onChangeText={(text) => setFormData({ ...formData, company: text })}
+              placeholder="Enter company name"
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Company</Text>
-            <TextInput
-              style={s.input}
-              value={formData.company}
-              onChangeText={(text) => setFormData({ ...formData, company: text })}
-              placeholder="Enter company name (optional)"
-              placeholderTextColor={THEME_COLORS.textTertiary}
-            />
+            <Text style={s.label}>Assigned To</Text>
+            <View style={s.readOnlyField}>
+              <Ionicons name="person" size={16} color={THEME_COLORS.primary} style={s.fieldIcon} />
+              <Text style={s.readOnlyText}>
+                {selectedBDT ? `${selectedBDT.full_name} (${selectedBDT.employee_id})` : 'Not selected'}
+              </Text>
+            </View>
           </View>
 
           <View style={s.field}>
@@ -587,23 +664,52 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Assigned To</Text>
+            <Text style={s.label}>Lead's Partner</Text>
+            <TextInput
+              style={s.input}
+              value={formData.leadPartner}
+              onChangeText={(text) => setFormData({ ...formData, leadPartner: text })}
+              placeholder="Enter lead's partner name (optional)"
+              placeholderTextColor={THEME_COLORS.textTertiary}
+            />
+          </View>
+        </View>
+
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.collabBg }]}>
+              <Ionicons name="people-outline" size={20} color={THEME_COLORS.collabBorder} />
+            </View>
+            <Text style={s.cardTitle}>Colleagues ({collaborators.length})</Text>
+          </View>
+
+          {collaborators.map((collab, idx) => (
+            <View key={idx} style={s.listItem}>
+              <View style={s.listItemContent}>
+                <Ionicons name="person" size={16} color={THEME_COLORS.collabBorder} />
+                <Text style={s.listItemText}>{collab.user.full_name}</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => handleRemoveCollaborator(idx)} 
+                style={s.deleteBtn}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          <View style={s.addRow}>
             <TouchableOpacity 
-              style={s.selector} 
-              onPress={() => setActiveDropdown('assigned')}
+              style={[s.selector, { flex: 1 }]} 
+              onPress={() => setActiveDropdown('collaborator')}
               activeOpacity={0.7}
             >
               <View style={s.selectorContent}>
-                {formData.assigned_to ? (
-                  <>
-                    <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.accent }]}>
-                      <Ionicons name="person" size={14} color={THEME_COLORS.primary} />
-                    </View>
-                    <Text style={s.selectorText} numberOfLines={1}>{getAssignedToLabel()}</Text>
-                  </>
-                ) : (
-                  <Text style={s.selectorPlaceholder}>Select assignee (optional)</Text>
-                )}
+                <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.collabBg }]}>
+                  <Ionicons name="person-add" size={14} color={THEME_COLORS.collabBorder} />
+                </View>
+                <Text style={s.selectorPlaceholder}>Add colleagues (optional)</Text>
               </View>
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
@@ -947,11 +1053,11 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         }}
       />
 
-      {activeDropdown === 'assigned' && (
+      {activeDropdown === 'collaborator' && (
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Assign Lead To</Text>
+              <Text style={s.modalTitle}>Add Colleagues</Text>
               <TouchableOpacity 
                 onPress={() => setActiveDropdown(null)}
                 activeOpacity={0.7}
@@ -963,32 +1069,29 @@ const CreateLead: React.FC<CreateLeadProps> = ({
             <View style={s.searchContainer}>
               <TextInput
                 style={s.searchInput}
-                value={assignedToSearch}
-                onChangeText={setAssignedToSearch}
-                placeholder="Search employees..."
+                value={collaboratorSearch}
+                onChangeText={setCollaboratorSearch}
+                placeholder="Search colleagues..."
                 placeholderTextColor={THEME_COLORS.textTertiary}
                 autoCapitalize="none"
               />
-              {assignedToLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
+              {collaboratorLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
             </View>
             
             <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>              
-              {assignedToResults.length > 0 ? (
-                assignedToResults.map((user) => (
+              {collaboratorResults.length > 0 ? (
+                collaboratorResults.map((user) => (
                   <TouchableOpacity
                     key={user.email}
-                    style={[s.modalItem, formData.assigned_to?.email === user.email && s.modalItemSelected]}
-                    onPress={() => handleAssignToUser(user)}
+                    style={s.modalItem}
+                    onPress={() => handleAddCollaborator(user)}
                     activeOpacity={0.7}
                   >
                     <View style={s.modalItemContent}>
                       <Ionicons 
                         name="person" 
                         size={18} 
-                        color={formData.assigned_to?.email === user.email 
-                          ? THEME_COLORS.primary 
-                          : THEME_COLORS.textSecondary
-                        } 
+                        color={THEME_COLORS.textSecondary}
                       />
                       <View style={s.modalItemInfo}>
                         <Text style={s.modalItemName} numberOfLines={1}>
@@ -999,19 +1102,15 @@ const CreateLead: React.FC<CreateLeadProps> = ({
                         </Text>
                       </View>
                     </View>
-                    {formData.assigned_to?.email === user.email && (
-                      <Ionicons 
-                        name="checkmark-circle" 
-                        size={20} 
-                        color={THEME_COLORS.primary} 
-                      />
-                    )}
+                    <Ionicons name="add-circle" size={20} color={THEME_COLORS.primary} />
                   </TouchableOpacity>
                 ))
               ) : (
-                !assignedToLoading && assignedToResults.length === 0 && (
+                !collaboratorLoading && collaboratorResults.length === 0 && (
                   <View style={s.emptyState}>
-                    <Text style={s.emptyText}>No users found</Text>
+                    <Text style={s.emptyText}>
+                      {collaboratorSearch ? 'No users found' : 'Start typing to search'}
+                    </Text>
                   </View>
                 )
               )}
@@ -1029,17 +1128,17 @@ const s = StyleSheet.create({
     backgroundColor: THEME_COLORS.background,
   },
   
-  // header: { 
-  //   backgroundColor: '#075E54', 
-  //   borderBottomWidth: 1, 
-  //   borderBottomColor: '#128C7E', 
-  //   shadowColor: '#000', 
-  //   shadowOffset: { width: 0, height: 2 }, 
-  //   shadowOpacity: 0.1, 
-  //   shadowRadius: 3, 
-  //   elevation: 3, 
-  //   paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
-  // },
+  header: { 
+    backgroundColor: '#075E54', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#128C7E', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 3, 
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   headerContent: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -1416,12 +1515,6 @@ const s = StyleSheet.create({
     backgroundColor: THEME_COLORS.surface,
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
-  },
-  modalItemSelected: {
-    backgroundColor: THEME_COLORS.accent,
-    borderLeftWidth: 4,
-    borderLeftColor: THEME_COLORS.primary,
-    borderColor: THEME_COLORS.primary,
   },
   modalItemContent: {
     flex: 1,

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -131,16 +132,17 @@ const UpcomingEvents: React.FC<UpcomingEventsProps> = ({
 
 const styles = StyleSheet.create({
   sectionCard: {
-    marginHorizontal: 20,
-    marginBottom: 15,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
-  },
+  marginHorizontal: Platform.OS === 'web' ? 0 : 20,
+  marginBottom: 15,
+  marginTop:10,
+  padding: 16,
+  borderRadius: 16,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.05,
+  shadowRadius: 15,
+  elevation: 3,
+},
   labelSmall: {
     fontSize: 10,
     textTransform: 'uppercase',

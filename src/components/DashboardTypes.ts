@@ -146,6 +146,9 @@ export interface ApiResponse {
   overtime_hours: any[];
   upcoming_reminder: any[];
   city?: string;
+  big_tile?: string;           // ADD THIS
+  small_tile_1?: string;        // ADD THIS
+  small_tile_2?: string; 
 }
 
 export type ActivePage = 

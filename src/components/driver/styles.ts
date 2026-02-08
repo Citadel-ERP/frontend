@@ -252,7 +252,7 @@ export const styles = StyleSheet.create({
     },
     backText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 16,
         marginLeft: 2,
         fontWeight: '500',
     },

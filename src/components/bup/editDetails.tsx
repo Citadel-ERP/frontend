@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   ActivityIndicator, Alert, SafeAreaView, StatusBar, Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView, Modal 
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption, AssignedTo } from './types';
@@ -69,6 +69,7 @@ interface EditLeadProps {
   lead: Lead;
   onBack: () => void;
   onSave: (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => void;
+  onDelete: () => void;
   token: string | null;
   theme: ThemeColors;
   fetchSubphases: (phase: string) => Promise<void>;
@@ -109,7 +110,7 @@ const useDebounce = (value: string, delay: number) => {
 };
 
 const EditLead: React.FC<EditLeadProps> = ({
-  lead, onBack, onSave, token, theme, fetchSubphases, selectedCity,
+  lead, onBack, onSave, onDelete, token, theme, fetchSubphases, selectedCity,
 }) => {
   const [editedLead, setEditedLead] = useState<Lead>(lead);
   const [editingEmails, setEditingEmails] = useState<string[]>(lead.emails.map(e => e.email));
@@ -131,6 +132,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [assignedToSearch, setAssignedToSearch] = useState('');
   const [assignedToResults, setAssignedToResults] = useState<AssignedTo[]>([]);
   const [assignedToLoading, setAssignedToLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Lead Specific Information States
   const [areaRequirements, setAreaRequirements] = useState<string>(
@@ -198,7 +200,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     if (activeDropdown === 'assigned') searchAssignedToUsers(debouncedAssignedSearch);
   }, [debouncedAssignedSearch, activeDropdown]);
 
-  // Keep your exact header as requested
   const ModernHeader = () => (
     <SafeAreaView style={s.header}>
       <View style={s.headerContent}>
@@ -208,10 +209,22 @@ const EditLead: React.FC<EditLeadProps> = ({
 
         <View style={s.headerTextContainer}>
           <Text style={s.headerTitle} numberOfLines={1}>Edit Lead</Text>
-          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.name || 'Lead Details'}</Text>
+          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.company || 'Lead Details'}</Text>
         </View>
 
         <View style={s.headerActions}>
+          <TouchableOpacity 
+            onPress={handleDelete} 
+            style={[s.deleteHeaderButton, { marginRight: 12 }]}
+            disabled={deleteLoading || loading}
+          >
+            {deleteLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+          
           {loading ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
@@ -223,6 +236,29 @@ const EditLead: React.FC<EditLeadProps> = ({
       </View>
     </SafeAreaView>
   );
+
+  const handleDelete = async () => {
+    try {
+      setDeleteLoading(true);
+      Alert.alert(
+        'Delete Lead',
+        'Are you sure you want to delete this lead? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setDeleteLoading(false) },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              await onDelete();
+              setDeleteLoading(false);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      setDeleteLoading(false);
+    }
+  };
 
   const fetchPhases = async () => {
     try {
@@ -627,17 +663,6 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Lead Name</Text>
-            <TextInput
-              style={s.input}
-              value={editedLead.name}
-              onChangeText={(text) => setEditedLead({ ...editedLead, name: text })}
-              placeholder="Enter lead name"
-              placeholderTextColor={THEME_COLORS.textTertiary}
-            />
-          </View>
-
-          <View style={s.field}>
             <Text style={s.label}>Company</Text>
             <TextInput
               style={s.input}
@@ -994,6 +1019,23 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
         </View>
 
+        {/* Delete Button */}
+        <TouchableOpacity 
+          style={[s.deleteBtn, (deleteLoading || loading) && s.deleteBtnDisabled]} 
+          onPress={handleDelete}
+          disabled={deleteLoading || loading}
+          activeOpacity={0.8}
+        >
+          {deleteLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+              <Text style={s.deleteBtnText}>Delete Lead</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         {/* Save Button */}
         <TouchableOpacity 
           style={[s.saveBtn, loading && s.saveBtnDisabled]} 
@@ -1049,69 +1091,107 @@ const EditLead: React.FC<EditLeadProps> = ({
       />
 
       {/* Assigned To Modal */}
-      {activeDropdown === 'assigned' && (
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Assign Lead To</Text>
-              <TouchableOpacity 
-                onPress={() => setActiveDropdown(null)}
+      // Replace the Assigned To Modal section (around line 850-920) with this:
+
+{/* Assigned To Modal */}
+{/* Assigned To Modal */}
+{activeDropdown === 'assigned' && (
+  <Modal
+    visible={true}
+    transparent={true}
+    animationType="fade"
+    onRequestClose={() => setActiveDropdown(null)}
+  >
+    <TouchableOpacity 
+      style={s.modalOverlay}
+      activeOpacity={1} 
+      onPress={() => setActiveDropdown(null)}
+    >
+      <TouchableOpacity 
+        activeOpacity={1} 
+        onPress={(e) => e.stopPropagation()}
+        style={s.modalContent}
+      >
+        <View style={s.modalHeader}>
+          <Text style={s.modalTitle}>Assign Lead To</Text>
+          <TouchableOpacity 
+            onPress={() => setActiveDropdown(null)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={s.searchContainer}>
+          <TextInput
+            style={s.searchInput}
+            value={assignedToSearch}
+            onChangeText={setAssignedToSearch}
+            placeholder="Search employees..."
+            placeholderTextColor={THEME_COLORS.textTertiary}
+            autoCapitalize="none"
+          />
+          {assignedToLoading && (
+            <ActivityIndicator 
+              size="small" 
+              color={THEME_COLORS.primary} 
+              style={s.searchLoader} 
+            />
+          )}
+        </View>
+
+        <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+          {assignedToResults.length > 0 ? (
+            assignedToResults.map((user) => (
+              <TouchableOpacity
+                key={user.email}
+                style={[
+                  s.modalItem, 
+                  editedLead.assigned_to?.email === user.email && s.modalItemSelected
+                ]}
+                onPress={() => handleAssignToUser(user)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.searchContainer}>
-              <TextInput
-                style={s.searchInput}
-                value={assignedToSearch}
-                onChangeText={setAssignedToSearch}
-                placeholder="Search employees..."
-                placeholderTextColor={THEME_COLORS.textTertiary}
-                autoCapitalize="none"
-              />
-              {assignedToLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
-            </View>
-
-            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-              {assignedToResults.length > 0 ? (
-                assignedToResults.map((user) => (
-                  <TouchableOpacity
-                    key={user.email}
-                    style={[s.modalItem, editedLead.assigned_to?.email === user.email && s.modalItemSelected]}
-                    onPress={() => handleAssignToUser(user)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={s.modalItemContent}>
-                      <Ionicons 
-                        name="person" 
-                        size={18} 
-                        color={editedLead.assigned_to?.email === user.email ? THEME_COLORS.primary : THEME_COLORS.textSecondary} 
-                      />
-                      <View style={s.modalItemInfo}>
-                        <Text style={s.modalItemName} numberOfLines={1}>
-                          {user.full_name || `${user.first_name} ${user.last_name}`}
-                        </Text>
-                        <Text style={s.modalItemEmail} numberOfLines={1}>{user.email}</Text>
-                      </View>
-                    </View>
-                    {editedLead.assigned_to?.email === user.email && (
-                      <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))
-              ) : (
-                !assignedToLoading && (
-                  <View style={s.emptyState}>
-                    <Text style={s.emptyText}>No users found</Text>
+                <View style={s.modalItemContent}>
+                  <Ionicons 
+                    name="person" 
+                    size={18} 
+                    color={
+                      editedLead.assigned_to?.email === user.email 
+                        ? THEME_COLORS.primary 
+                        : THEME_COLORS.textSecondary
+                    } 
+                  />
+                  <View style={s.modalItemInfo}>
+                    <Text style={s.modalItemName} numberOfLines={1}>
+                      {user.full_name || `${user.first_name} ${user.last_name}`}
+                    </Text>
+                    <Text style={s.modalItemEmail} numberOfLines={1}>
+                      {user.email}
+                    </Text>
                   </View>
-                )
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      )}
+                </View>
+                {editedLead.assigned_to?.email === user.email && (
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={20} 
+                    color={THEME_COLORS.primary} 
+                  />
+                )}
+              </TouchableOpacity>
+            ))
+          ) : (
+            !assignedToLoading && (
+              <View style={s.emptyState}>
+                <Text style={s.emptyText}>No users found</Text>
+              </View>
+            )
+          )}
+        </ScrollView>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  </Modal>
+)}
     </KeyboardAvoidingView>
   );
 };
@@ -1161,6 +1241,15 @@ const s = StyleSheet.create({
   headerActions: { 
     flexDirection: 'row', 
     alignItems: 'center' 
+  },
+  deleteHeaderButton: {
+    padding: 8,
+    backgroundColor: '#EF4444',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveHeaderButton: { 
     paddingHorizontal: 16, 
@@ -1304,7 +1393,10 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    paddingRight: 14,
+    paddingLeft:14,
+    paddingTop:0,
+    paddingBottom:0,
     borderRadius: 10,
     marginBottom: 8,
     backgroundColor: THEME_COLORS.surface,
@@ -1323,10 +1415,7 @@ const s = StyleSheet.create({
     color: THEME_COLORS.textPrimary,
     flex: 1,
   },
-  deleteBtn: {
-    padding: 4,
-    marginLeft: 8,
-  },
+  
   
   // Add Rows
   addRow: {
@@ -1362,6 +1451,7 @@ const s = StyleSheet.create({
     position: 'relative',
   },
   searchInput: {
+    marginBottom: 70,
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
     borderRadius: 10,
@@ -1473,6 +1563,31 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: THEME_COLORS.primary,
+  },
+  
+  // Delete Button
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: '#ef444400',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    marginRight:-10
+  },
+  deleteBtnDisabled: {
+    opacity: 0.6,
+  },
+  deleteBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   
   // Save Button

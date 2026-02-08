@@ -52,7 +52,7 @@
     "android": {
       "package": "com.citadelnetinc.app",
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/android.png",
+        "foregroundImage": "./assets/images/adaptive_icon_android.png",
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
@@ -108,7 +108,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./src/assets/app-icon-ios.png",
+          "icon": "./assets/images/App-icon.png",
           "color": "#2D3748",
           "useNextNotificationsApi": true
         }

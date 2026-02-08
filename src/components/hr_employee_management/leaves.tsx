@@ -32,7 +32,7 @@ export const Leaves: React.FC<LeavesProps> = ({
     if (processingLeaveId) {
       const currentLeave = leaves.find(leave => leave.id === processingLeaveId);
       if (!currentLeave || 
-          (actionType === 'approve' && currentLeave.status === 'approved_by_manager') ||
+          (actionType === 'approve' && currentLeave.status === 'pending') ||
           (actionType === 'reject' && currentLeave.status === 'rejected')) {
         setProcessingLeaveId(null);
         setActionType(null);
@@ -69,7 +69,6 @@ export const Leaves: React.FC<LeavesProps> = ({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
-      case 'approved_by_manager':
         return '#2E7D32';
       case 'rejected':
         return '#D32F2F';
@@ -83,7 +82,6 @@ export const Leaves: React.FC<LeavesProps> = ({
   const getStatusBackgroundColor = (status: string) => {
     switch (status) {
       case 'approved':
-      case 'approved_by_manager':
         return '#E8F5E9';
       case 'rejected':
         return '#FFEBEE';
@@ -142,7 +140,7 @@ export const Leaves: React.FC<LeavesProps> = ({
                 ]}>
                   {processing && actionType === 'approve' ? 'Approving...' :
                    processing && actionType === 'reject' ? 'Rejecting...' :
-                   leave.status === 'approved_by_manager' ? 'Approved by Manager' : 
+                  //  leave.status === 'approved_by_manager' ? 'Approved by Manager' : 
                    leave.status === 'rejected' ? 'Rejected' : 
                    leave.status === 'approved' ? 'Approved' : 'Pending'}
                 </Text>
@@ -156,7 +154,7 @@ export const Leaves: React.FC<LeavesProps> = ({
               </Text>
             )}
             
-            {leave.status === 'approved_by_manager' && (
+            {leave.status === 'pending' && (
               <View style={styles.leaveActions}>
                 <TouchableOpacity
                   style={[

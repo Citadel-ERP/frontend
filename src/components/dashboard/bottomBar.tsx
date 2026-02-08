@@ -18,6 +18,7 @@ interface BottomBarProps {
   currentColors: any;
   bulgeAnim: Animated.Value;
   screenWidth: number;
+  unreadNotificationCount: number;
 }
 
 const BottomBar: React.FC<BottomBarProps> = ({

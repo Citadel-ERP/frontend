@@ -18,6 +18,119 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
         },
+attachedFilesPreview: {
+    position: 'absolute',  // Add this
+    bottom: 68,            // Add this (height of chatInputContainer + padding)
+    left: 0,               // Add this
+    right: 0,              // Add this
+    backgroundColor: WHATSAPP_COLORS.white,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E8E8E8',
+    maxHeight: 200,
+},
+
+previewImageWrapper: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+    marginRight: 8,
+    marginBottom: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+},
+
+previewImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+},
+
+removeFileButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    padding: 2,
+},
+
+previewDocumentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+},
+
+previewDocumentInfo: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 10,
+},
+
+previewDocumentName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.darkGray,
+    marginBottom: 2,
+},
+
+previewDocumentSize: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.gray,
+},
+
+imageCounterBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.white,
+},
+
+imageCounterText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.white,
+    paddingHorizontal: 4,
+},
+
+// Attachment Modal (update if exists or add)
+attachmentModalContent: {
+    backgroundColor: WHATSAPP_COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+},
+
+attachmentIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+},
+
+attachmentOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: WHATSAPP_COLORS.darkGray,
+    textAlign: 'center',
+},
         headerAddButtonDisabled: {
         backgroundColor: 'rgba(0, 210, 133, 0.5)',
         opacity: 0.6,
@@ -67,7 +180,7 @@ export const styles = StyleSheet.create({
     },
     backText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 16,
         marginLeft: 2,
     },
     headerTitleContainer: {
@@ -155,10 +268,11 @@ export const styles = StyleSheet.create({
     },
 
     // Content Area
-    content: {
-        flex: 1,
-        backgroundColor: WHATSAPP_COLORS.background
-    },
+   content: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
+    position: 'relative', // ADD THIS
+},
     scrollView: {
         flex: 1
     },
@@ -397,15 +511,17 @@ export const styles = StyleSheet.create({
 
     // Chat/Info Styles (reuse from HR module with adjustments)
     chatContainer: {
-        flex: 1,
-        backgroundColor: WHATSAPP_COLORS.chatBackground
-    },
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.chatBackground,
+},
+
     chatScrollView: {
-        flex: 1,
-    },
+    flex: 1,
+},
     chatScrollContent: {
-        paddingVertical: 8,
-    },
+    paddingVertical: 8,
+    paddingBottom: 100, // Increase this from 80 to 100
+},
     infoCardCompact: {
         backgroundColor: WHATSAPP_COLORS.white,
         margin: 12,
@@ -611,18 +727,22 @@ export const styles = StyleSheet.create({
         marginRight: 4
     },
     chatInputContainer: {
-        backgroundColor: WHATSAPP_COLORS.inputBackground,
-        paddingHorizontal: 8,
-        paddingVertical: 8,
-        paddingBottom: Platform.OS === 'ios' ? 8 : 8,
-        borderTopWidth: 0.5,
-        borderTopColor: WHATSAPP_COLORS.inputBorder,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
-    },
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: WHATSAPP_COLORS.inputBackground,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8, // Add extra padding for iOS
+    borderTopWidth: 0.5,
+    borderTopColor: WHATSAPP_COLORS.inputBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+},
     chatInputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Dashboard.tsx - UPDATED VERSION with Real-time Reminder Updates
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,8 +15,11 @@ import {
   Platform,
   useWindowDimensions,
   TextInput,
-  Alert
+  Alert,
+  LayoutAnimation
 } from 'react-native';
+import { ImageStyle } from 'react-native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,7 +29,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-// Import all the pages
+// Import all pages
 import Profile from './Profile';
 import HR from './hr/HR';
 import Cab from './cab/Cab';
@@ -92,12 +96,221 @@ NotificationsExpo.setNotificationHandler({
   }),
 });
 
+// ============================================================================
+// MODULE CONFIGURATION - Icons, Colors, and Display Names
+// ============================================================================
+interface ModuleConfig {
+  icon: string;
+  iconFamily: 'FontAwesome5' | 'Ionicons' | 'MaterialCommunityIcons';
+  gradientColors: readonly [string, string, ...string[]];  // CHANGE THIS LINE
+  displayName: string;
+}
+
+const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
+  // Attendance
+  'attendance': {
+    icon: 'book-open',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#00d285', '#00b872'],
+    displayName: 'Attendance'
+  },
+  'Attendance': {
+    icon: 'book-open',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#00d285', '#00b872'],
+    displayName: 'Attendance'
+  },
+  
+  // Car/Cab modules
+  'cab': {
+    icon: 'car',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff5e7a', '#ff4168'],
+    displayName: 'Car'
+  },
+  'Cab': {
+    icon: 'car',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff5e7a', '#ff4168'],
+    displayName: 'Car'
+  },
+  'VehicleAdmin': {
+    icon: 'car-side',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff5e7a', '#ff4168'],
+    displayName: 'Vehicle Admin'
+  },
+  
+  // HR modules
+  'hr': {
+    icon: 'users',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ffb157', '#ff9d3f'],
+    displayName: 'HR'
+  },
+  'HR': {
+    icon: 'users',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ffb157', '#ff9d3f'],
+    displayName: 'HR'
+  },
+  'hr_employee_management': {
+    icon: 'user-tie',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff4168', '#ff4168'],
+    displayName: 'Employees'
+  },
+  'hr_manager': {
+    icon: 'user-shield',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ff9d3f', '#ff8c2e'],
+    displayName: 'HR Management'
+  },
+  'EmployeesAdmin': {
+    icon: 'users-cog',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#ffb157', '#ff9d3f'],
+    displayName: 'Employees'
+  },
+  
+  // Driver modules
+  'driver': {
+    icon: 'steering-wheel',
+    iconFamily: 'MaterialCommunityIcons',
+    gradientColors: ['#6c5ce7', '#5f4fd1'],
+    displayName: 'Driver'
+  },
+  'driver_manager': {
+    icon: 'id-card',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#6c5ce7', '#5f4fd1'],
+    displayName: 'Duty Manager'
+  },
+  
+  // Site Manager
+  'site_manager': {
+    icon: 'hard-hat',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#fd79a8', '#e84393'],
+    displayName: 'Database'
+  },
+  
+  // BUP
+  'bup': {
+    icon: 'chart-line',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#00b894', '#00a680'],
+    displayName: 'BUP'
+  },
+  
+  // BDT
+  'bdt': {
+    icon: 'exchange-alt',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#0984e3', '#0773d1'],
+    displayName: 'Transaction'
+  },
+  
+  // Medical/Mediclaim
+  'medical': {
+    icon: 'medkit',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#d63031', '#c92a2b'],
+    displayName: 'Mediclaim'
+  },
+  'mediclaim': {
+    icon: 'medkit',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#d63031', '#c92a2b'],
+    displayName: 'Mediclaim'
+  },
+  
+  // Scout Boy
+  'scout_boy': {
+    icon: 'user-alt',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#fdcb6e', '#f6b93b'],
+    displayName: 'Scout'
+  },
+  
+  // Reminder
+  'reminder': {
+    icon: 'bell',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#a29bfe', '#6c5ce7'],
+    displayName: 'Reminder'
+  },
+  
+  // Employee Management
+  'employee_management': {
+    icon: 'users',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#74b9ff', '#0984e3'],
+    displayName: 'Employees'
+  },
+  
+  // Default fallback
+  'default': {
+    icon: 'cube',
+    iconFamily: 'FontAwesome5',
+    gradientColors: ['#636e72', '#546E7A'],
+    displayName: 'Module'
+  }
+};
+
+// Helper function to get module config
+const getModuleConfig = (moduleUniqueName: string): ModuleConfig => {
+  return MODULE_CONFIGURATIONS[moduleUniqueName] || MODULE_CONFIGURATIONS['default'];
+};
+
+// ============================================================================
+// COMPLETE MODULE NAVIGATION MAP
+// Maps backend module_unique_name to ActivePage type
+// ============================================================================
+const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
+  // Core modules
+  'attendance': 'attendance',
+  'Attendance': 'attendance',
+
+  // HR modules
+  'hr': 'hr',
+  'HR': 'hr',
+  'hr_employee_management': 'hrEmployeeManager',
+  'hr_manager': 'hrManager',
+
+  // Transport modules
+  'cab': 'cab',
+  'Cab': 'cab',
+  'driver': 'driver',
+  'driver_manager': 'driverManager',
+
+  // Other modules
+  'bdt': 'bdt',
+  'medical': 'medical',
+  'mediclaim': 'medical',
+  'scout_boy': 'scoutBoy',
+  'scoutboy': 'scoutBoy',
+  'reminder': 'reminder',
+  'bup': 'bup',
+  'business update': 'bup',
+  'site_manager': 'siteManager',
+  'employee_management': 'employeeManagement',
+
+  // Special cases - Profile with modals
+  'profile': 'profile',
+  'profile-assets': 'profile',
+  'profile-payslips': 'profile',
+  'profile-documents': 'profile',
+};
+
 // Main Dashboard Component
 function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
 
-  // State
+  // ============================================================================
+  // STATE MANAGEMENT
+  // ============================================================================
   const [token, setToken] = useState<string | null>(null);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
   const [notification, setNotification] = useState<NotificationsExpo.Notification | undefined>(undefined);
@@ -116,7 +329,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
 
-  // Page visibility states - keep for mobile
+  // ============================================================================
+  // NEW: Dynamic Tile Configuration State
+  // ============================================================================
+  const [bigTile, setBigTile] = useState<string>('attendance');
+  const [smallTile1, setSmallTile1] = useState<string>('cab');
+  const [smallTile2, setSmallTile2] = useState<string>('hr');
+
+  // Page visibility states
   const [showAttendance, setShowAttendance] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHR, setShowHR] = useState(false);
@@ -160,29 +380,150 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Refresh state
   const [refreshing, setRefreshing] = useState(false);
 
+  // Notification badge state
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const badgeCountRef = useRef(0);
+
+  // Special navigation state for Profile assets modal
+  const [profileModalToOpen, setProfileModalToOpen] = useState<string | null>(null);
+
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(isWeb ? 0 : -300)).current;
   const bulgeAnim = useRef(new Animated.Value(0)).current;
 
-  // Current theme colors
-  const currentColors = isDark ? darkColors : lightColors;
+  // Current theme colors - memoized
+  const currentColors = useMemo(() =>
+    isDark ? darkColors : lightColors,
+    [isDark]
+  );
 
-  // New dashboard theme mapping
-  const theme = {
+  // Dashboard theme - memoized
+  const theme = useMemo(() => ({
     bgColor: isDark ? '#050b18' : '#ece5dd',
     cardBg: isDark ? '#111a2d' : '#f6f6f6',
     textMain: isDark ? '#ffffff' : '#333333',
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: isDark ? '#008069' : '#008069',
     navBg: isDark ? '#0a111f' : '#ffffff',
-  };
+  }), [isDark]);
 
-  // NEW: Function to refresh user data from backend
+  // ============================================================================
+  // MEMOIZED CALLBACKS & HANDLERS
+  // ============================================================================
+
+  // Badge update callback
+  const handleBadgeUpdate = useCallback((count: number) => {
+    if (badgeCountRef.current !== count) {
+      badgeCountRef.current = count;
+      setUnreadNotificationCount(count);
+      console.log(`🔔 Badge count updated: ${count}`);
+    }
+  }, []);
+
+  // ============================================================================
+  // FIXED NAVIGATION HANDLER FOR NOTIFICATIONS
+  // ============================================================================
+  const handleNavigateFromNotification = useCallback((
+    moduleIdentifier: string,
+    extraData?: { openModal?: string }
+  ) => {
+    console.log(`📍 [NAVIGATION] Starting navigation to: "${moduleIdentifier}"`, extraData);
+
+    // Normalize the identifier
+    const normalized = moduleIdentifier.toLowerCase().trim();
+    console.log(`📍 [NAVIGATION] Normalized: "${normalized}"`);
+
+    // Special cases: Profile with specific modals
+    const profileModalMap: Record<string, string> = {
+      'profile-assets': 'assets',
+      'profile-payslips': 'payslips',
+      'profile-documents': 'documents',
+    };
+
+    if (profileModalMap[normalized] || (normalized === 'profile' && extraData?.openModal)) {
+      const modalToOpen = profileModalMap[normalized] || extraData?.openModal;
+      console.log(`📍 [NAVIGATION] Special case: Profile with ${modalToOpen} modal`);
+
+      if (isWeb) {
+        setActivePage('profile');
+        setProfileModalToOpen(modalToOpen || null);
+      } else {
+        setProfileModalToOpen(modalToOpen || null);
+        setShowProfile(true);
+      }
+      return;
+    }
+
+    // Look up the target page from our complete map
+    const targetPage = COMPLETE_MODULE_MAP[normalized];
+
+    if (!targetPage) {
+      console.warn(`⚠️ [NAVIGATION] No mapping found for: "${normalized}"`);
+      console.log(`📋 [NAVIGATION] Available mappings:`, Object.keys(COMPLETE_MODULE_MAP));
+      Alert.alert('Navigation Error', `Cannot navigate to "${moduleIdentifier}". Module not found.`);
+      return;
+    }
+
+    console.log(`✅ [NAVIGATION] Found mapping: "${normalized}" → "${targetPage}"`);
+
+    // Navigate based on platform
+    if (isWeb) {
+      console.log(`📍 [WEB] Setting active page to: ${targetPage}`);
+      setActivePage(targetPage);
+    } else {
+      console.log(`📱 [MOBILE] Opening screen: ${targetPage}`);
+
+      // Mobile navigation - comprehensive mapping
+      const navigationActions: Record<ActivePage, () => void> = {
+        'dashboard': () => { /* Already on dashboard */ },
+        'attendance': () => {
+          setAttendanceKey(prev => prev + 1);
+          setShowAttendance(true);
+        },
+        'hr': () => setShowHR(true),
+        'cab': () => setShowCab(true),
+        'driver': () => setShowDriver(true),
+        'bdt': () => setShowBDT(true),
+        'medical': () => setShowMedical(true),
+        'scoutBoy': () => setShowScoutBoy(true),
+        'reminder': () => setShowReminder(true),
+        'bup': () => setShowBUP(true),
+        'siteManager': () => setShowSiteManager(true),
+        'employeeManagement': () => setShowEmployeeManagement(true),
+        'hrEmployeeManager': () => setShowHREmployeeManagement(true),
+        'driverManager': () => setShowDriverManager(true),
+        'hrManager': () => setShowHrManager(true),
+        'profile': () => setShowProfile(true),
+        'settings': () => setShowSettings(true),
+        'notifications': () => setShowNotifications(true),
+        'validation': () => setShowValidation(true),
+        'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy'),
+        'messages': () => Alert.alert('Coming Soon', 'Messages'),
+        'chat': () => setShowChat(true),
+        'chatRoom': () => { /* Needs chat room data */ },
+      };
+
+      const action = navigationActions[targetPage];
+      if (action) {
+        action();
+        console.log(`✅ [MOBILE] Navigation complete: ${targetPage}`);
+      } else {
+        console.error(`❌ [MOBILE] No action defined for: ${targetPage}`);
+      }
+    }
+  }, [isWeb]);
+
+  // ============================================================================
+  // NEW: Callback for real-time reminder updates
+  // ============================================================================
+  
+
+  // Function to refresh user data from backend
   const refreshUserData = useCallback(async () => {
     if (!token) return;
-    
+
     try {
       console.log('🔄 Refreshing user data...');
       setRefreshing(true);
@@ -199,19 +540,35 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             ...data.user,
             profile_picture: data.user.profile_picture || undefined
           };
-          
+
           setUserData(transformedUserData);
           setModules(data.modules || []);
-          
+
+          // ============================================================================
+          // NEW: Extract dynamic tile configuration from backend
+          // ============================================================================
+          if (data.big_tile) {
+            setBigTile(data.big_tile);
+            console.log('🎯 Big tile set to:', data.big_tile);
+          }
+          if (data.small_tile_1) {
+            setSmallTile1(data.small_tile_1);
+            console.log('🎯 Small tile 1 set to:', data.small_tile_1);
+          }
+          if (data.small_tile_2) {
+            setSmallTile2(data.small_tile_2);
+            console.log('🎯 Small tile 2 set to:', data.small_tile_2);
+          }
+
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
           if (data.city) {
             await AsyncStorage.setItem('city', data.city);
           }
-          
+
           setUpcomingBirthdays(data.upcoming_birthdays || []);
           setUpcomingAnniversaries(data.upcoming_anniversary || []);
-          
+
           if (Array.isArray(data.upcoming_reminder)) {
             setReminders(data.upcoming_reminder);
           } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
@@ -257,7 +614,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               setLastOpenedModules(modulesArray);
             }
           }
-          
+
           console.log('✅ User data refreshed successfully');
         }
       }
@@ -268,15 +625,26 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [token]);
 
-  // AUTO-REFRESH when returning from Profile screen
+  const handleReminderUpdate = useCallback(async () => {
+    console.log('🔄 Refreshing reminders via callback...');
+    await refreshUserData();
+  }, [refreshUserData]);
+
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
+  // Auto-refresh when returning from Profile screen
   useEffect(() => {
-    if (!showProfile && userData) {
+    if (!showProfile && userData && token) {
       refreshUserData();
+      // Reset profile modal state
+      setProfileModalToOpen(null);
     }
-  }, [showProfile, refreshUserData, userData]);
+  }, [showProfile]);
 
   // Debug logging function
-  const debugLog = async (message: string, data?: any) => {
+  const debugLog = useCallback(async (message: string, data?: any) => {
     console.log(message, data);
     try {
       const logs = await AsyncStorage.getItem('debug_logs') || '[]';
@@ -291,52 +659,242 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } catch (error) {
       console.error('Error storing debug log:', error);
     }
-  };
+  }, []);
+
+  // Error logging function for push token errors
+  const logPushTokenError = useCallback(async (error: string, details?: any) => {
+    console.error('[Push Token Error]', error, details);
+    try {
+      const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+      if (!userToken) {
+        console.error('Cannot log error: No user token available');
+        return;
+      }
+
+      const errorPayload = {
+        token: userToken,
+        error: `[Push Token] ${error}`,
+        details: details ? JSON.stringify(details) : null,
+        timestamp: new Date().toISOString(),
+        platform: Platform.OS,
+        deviceInfo: {
+          isDevice: Device.isDevice,
+          modelName: Device.modelName,
+          osVersion: Device.osVersion,
+        }
+      };
+
+      const response = await fetch(`${BACKEND_URL}/core/logError`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(errorPayload),
+      });
+
+      if (response.ok) {
+        console.log('✅ Error logged to backend successfully');
+      } else {
+        console.error('❌ Failed to log error to backend:', response.status);
+      }
+    } catch (logError) {
+      console.error('❌ Failed to send error log to backend:', logError);
+    }
+  }, []);
+
+  // Setup push notifications
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupNotifications = async () => {
+      if (!token) {
+        await debugLog('Setup aborted: No user token');
+        return;
+      }
+
+      try {
+        await debugLog('Starting notification setup', { token: !!token });
+
+        const pushToken = await registerForPushNotificationsAsync();
+        await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
+
+        if (pushToken && isMounted) {
+          setExpoPushToken(pushToken);
+          await debugLog('Calling sendTokenToBackend');
+          await sendTokenToBackend(pushToken, token);
+        } else if (!pushToken) {
+          await logPushTokenError('Push token registration returned undefined', {
+            isMounted,
+            hasToken: !!token
+          });
+        }
+
+        try {
+          notificationListener.current = NotificationsExpo.addNotificationReceivedListener(notification => {
+            debugLog('📱 Notification received in foreground', notification);
+            setNotification(notification);
+
+            const data = notification.request.content.data;
+            if (data?.page === 'autoMarkAttendance') {
+              debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
+              AttendanceUtils.executeAttendanceFlow('manual', true);
+            }
+          });
+
+          responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(response => {
+            debugLog('👆 Notification tapped', response);
+            const data = response.notification.request.content.data;
+
+            if (data?.page === 'autoMarkAttendance') {
+              AttendanceUtils.executeAttendanceFlow('manual', true);
+            } else if (data?.go_to) {
+              // Use go_to for navigation
+              handleNavigateFromNotification(data.go_to as string);
+            } else if (data?.page) {
+              // Fallback to page
+              handleNavigateFromNotification(data.page as string);
+            }
+          });
+        } catch (listenerError: any) {
+          await logPushTokenError('Failed to setup notification listeners', {
+            error: listenerError.message,
+            stack: listenerError.stack
+          });
+        }
+
+        try {
+          const lastNotificationResponse = await NotificationsExpo.getLastNotificationResponseAsync();
+          if (lastNotificationResponse) {
+            debugLog('📬 App opened from notification', lastNotificationResponse);
+            const data = lastNotificationResponse.notification.request.content.data;
+
+            if (data?.page === 'autoMarkAttendance') {
+              setTimeout(() => {
+                AttendanceUtils.executeAttendanceFlow('manual', true);
+              }, 1000);
+            } else if (data?.go_to) {
+              setTimeout(() => {
+                handleNavigateFromNotification(data.go_to as string);
+              }, 500);
+            } else if (data?.page) {
+              setTimeout(() => {
+                handleNavigateFromNotification(data.page as string);
+              }, 500);
+            }
+          }
+        } catch (lastNotifError: any) {
+          await logPushTokenError('Failed to get last notification response', {
+            error: lastNotifError.message,
+            stack: lastNotifError.stack
+          });
+        }
+      } catch (error: any) {
+        await debugLog('Error in setupNotifications', error.message);
+        await logPushTokenError('Unhandled error in setupNotifications', {
+          error: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      }
+    };
+
+    if (!isWeb) {
+      setupNotifications().catch(async (error: any) => {
+        await logPushTokenError('setupNotifications promise rejected', {
+          error: error.message,
+          stack: error.stack
+        });
+      });
+    }
+
+    return () => {
+      isMounted = false;
+
+      try {
+        notificationListener.current?.remove();
+        responseListener.current?.remove();
+      } catch (cleanupError: any) {
+        console.error('Error cleaning up notification listeners:', cleanupError);
+        logPushTokenError('Error during notification listener cleanup', {
+          error: cleanupError.message,
+          stack: cleanupError.stack
+        });
+      }
+    };
+  }, [token, handleNavigateFromNotification]);
 
   // Function to register for push notifications
-  async function registerForPushNotificationsAsync() {
+  const registerForPushNotificationsAsync = useCallback(async () => {
     let token;
     try {
       await debugLog('[Push Token] Starting registration...');
+
       if (!Device.isDevice) {
+        const errorMsg = 'Not a physical device - push notifications unavailable';
         await debugLog('[Push Token] Not a physical device');
-        Alert.alert('Debug', 'Not a physical device');
+        await logPushTokenError(errorMsg, { isDevice: Device.isDevice });
+        Alert.alert('Debug', errorMsg);
         return undefined;
       }
+
       await debugLog('[Push Token] Device check passed');
 
       if (Platform.OS === 'android') {
-        await NotificationsExpo.setNotificationChannelAsync('default', {
-          name: 'default',
-          importance: NotificationsExpo.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#2D3748',
+        try {
+          await NotificationsExpo.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: NotificationsExpo.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#2D3748',
+          });
+          await debugLog('[Push Token] Notification channel created');
+        } catch (channelError: any) {
+          await logPushTokenError('Failed to create notification channel', {
+            error: channelError.message,
+            stack: channelError.stack
+          });
+          throw channelError;
+        }
+      }
+
+      try {
+        const { status: existingStatus } = await NotificationsExpo.getPermissionsAsync();
+        await debugLog('[Push Token] Existing permission status', existingStatus);
+
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await NotificationsExpo.requestPermissionsAsync();
+          finalStatus = status;
+          await debugLog('[Push Token] New permission status', status);
+        }
+
+        if (finalStatus !== 'granted') {
+          const errorMsg = 'Permission denied for notifications';
+          await debugLog('[Push Token] Permission denied');
+          await logPushTokenError(errorMsg, { status: finalStatus });
+          Alert.alert('Permission Denied', 'Please enable notifications in settings');
+          return undefined;
+        }
+      } catch (permissionError: any) {
+        await logPushTokenError('Failed to get/request notification permissions', {
+          error: permissionError.message,
+          stack: permissionError.stack
         });
-        await debugLog('[Push Token] Notification channel created');
-      }
-
-      const { status: existingStatus } = await NotificationsExpo.getPermissionsAsync();
-      await debugLog('[Push Token] Existing permission status', existingStatus);
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await NotificationsExpo.requestPermissionsAsync();
-        finalStatus = status;
-        await debugLog('[Push Token] New permission status', status);
-      }
-
-      if (finalStatus !== 'granted') {
-        await debugLog('[Push Token] Permission denied');
-        Alert.alert('Permission Denied', 'Please enable notifications in settings');
-        return undefined;
+        throw permissionError;
       }
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId
         || Constants.easConfig?.projectId;
+
       await debugLog('[Push Token] Project ID', projectId);
 
       if (!projectId) {
+        const errorMsg = 'No project ID found in configuration';
         await debugLog('[Push Token] ERROR: No project ID found');
+        await logPushTokenError(errorMsg, {
+          expoConfig: Constants.expoConfig?.extra,
+          easConfig: Constants.easConfig
+        });
         Alert.alert(
           'Configuration Error',
           'Project ID missing. Please contact support.'
@@ -344,27 +902,46 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         return undefined;
       }
 
-      await debugLog('[Push Token] Getting token for project', projectId);
-      const tokenData = await NotificationsExpo.getExpoPushTokenAsync({
-        projectId
-      });
-      token = tokenData.data;
-      await debugLog('[Push Token] Success', token);
-      return token;
+      try {
+        await debugLog('[Push Token] Getting token for project', projectId);
+        const tokenData = await NotificationsExpo.getExpoPushTokenAsync({
+          projectId
+        });
+        token = tokenData.data;
+        await debugLog('[Push Token] Success', token);
+        return token;
+      } catch (tokenError: any) {
+        await logPushTokenError('Failed to get Expo push token', {
+          error: tokenError.message,
+          stack: tokenError.stack,
+          projectId: projectId
+        });
+        throw tokenError;
+      }
     } catch (error: any) {
       await debugLog('[Push Token Error]', error.message);
+      await logPushTokenError('Unhandled error in registerForPushNotificationsAsync', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return undefined;
     }
-  }
+  }, [debugLog, logPushTokenError]);
 
   // Function to send token to backend
-  const sendTokenToBackend = async (expoToken: string, userToken: string) => {
+  const sendTokenToBackend = useCallback(async (expoToken: string, userToken: string) => {
     await debugLog('=== SENDING TOKEN TO BACKEND ===');
     await debugLog('Expo Token', expoToken);
     await debugLog('User Token exists', !!userToken);
 
     if (!expoToken || !userToken) {
+      const errorMsg = 'Missing tokens for backend submission';
       await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
+      await logPushTokenError(errorMsg, {
+        hasExpoToken: !!expoToken,
+        hasUserToken: !!userToken
+      });
       return;
     }
 
@@ -374,8 +951,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         token: userToken,
         expo_token: expoToken,
       };
-
       await debugLog('Request body', requestBody);
+
       const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
         method: 'POST',
         headers: {
@@ -385,6 +962,16 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       });
 
       await debugLog('Response status', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        await logPushTokenError('Backend rejected token registration', {
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: errorText
+        });
+      }
+
       const data = await response.json();
       await debugLog('Backend response', data);
 
@@ -393,156 +980,33 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         await AsyncStorage.setItem('expo_push_token', expoToken);
       } else {
         await debugLog('❌ Failed to register push token', data.message);
+        await logPushTokenError('Failed to register push token with backend', {
+          message: data.message,
+          response: data
+        });
       }
     } catch (error: any) {
       await debugLog('❌ Network error', error.message);
+      await logPushTokenError('Network error while sending token to backend', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
     }
-  };
+  }, [debugLog, logPushTokenError]);
 
-  // Setup push notifications
+  // ============================================================================
+  // FETCH USER DATA - Only runs once on mount
+  // ============================================================================
   useEffect(() => {
     let isMounted = true;
-    const setupNotifications = async () => {
-      if (!token) {
-        await debugLog('Setup aborted: No user token');
-        return;
-      }
-      try {
-        await debugLog('Starting notification setup', { token: !!token });
-        const pushToken = await registerForPushNotificationsAsync();
-        await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
 
-        if (pushToken && isMounted) {
-          setExpoPushToken(pushToken);
-          await debugLog('Calling sendTokenToBackend');
-          await sendTokenToBackend(pushToken, token);
-        }
-
-        notificationListener.current = NotificationsExpo.addNotificationReceivedListener(notification => {
-          debugLog('📱 Notification received in foreground', notification);
-          setNotification(notification);
-          const data = notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
-            AttendanceUtils.executeAttendanceFlow('manual', true);
-          }
-        });
-
-        responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(response => {
-          debugLog('👆 Notification tapped', response);
-          const data = response.notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            AttendanceUtils.executeAttendanceFlow('manual', true);
-          } else if (data?.page) {
-            handleNotificationNavigation(data.page as string);
-          }
-        });
-
-        const lastNotificationResponse = await NotificationsExpo.getLastNotificationResponseAsync();
-        if (lastNotificationResponse) {
-          debugLog('📬 App opened from notification', lastNotificationResponse);
-          const data = lastNotificationResponse.notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') {
-            setTimeout(() => {
-              AttendanceUtils.executeAttendanceFlow('manual', true);
-            }, 1000);
-          } else if (data?.page) {
-            setTimeout(() => {
-              handleNotificationNavigation(data.page as string);
-            }, 500);
-          }
-        }
-      } catch (error: any) {
-        await debugLog('Error in setupNotifications', error.message);
-      }
-    };
-
-    if (!isWeb) {
-      setupNotifications();
-    }
-
-    return () => {
-      isMounted = false;
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
-    };
-  }, [token]);
-
-  // Function to handle notification navigation
-  const handleNotificationNavigation = (page: string) => {
-    console.log('Handling notification navigation for page:', page);
-    if (page === 'autoMarkAttendance') {
-      console.log('🎯 SPECIAL CODE: Auto-marking attendance...');
-      return;
-    }
-
-    const pageMap: Record<string, ActivePage> = {
-      'attendance': 'attendance',
-      'hr': 'hr',
-      'cab': 'cab',
-      'profile': 'profile',
-      'driver': 'driver',
-      'bdt': 'bdt',
-      'medical': 'medical',
-      'mediclaim': 'medical',
-      'scoutboy': 'scoutBoy',
-      'scout_boy': 'scoutBoy',
-      'reminder': 'reminder',
-      'bup': 'bup',
-      'site_manager': 'siteManager',
-      'employee_management': 'employeeManagement',
-      'driver_manager': 'driverManager',
-      'hr_manager': 'hrManager',
-      'hr_employee_management': 'hrEmployeeManager'
-    };
-
-    const targetPage = pageMap[page.toLowerCase()];
-    if (targetPage) {
-      if (isWeb) {
-        setActivePage(targetPage);
-      } else {
-        // Mobile handlers
-        const mobileHandlers: Record<ActivePage, () => void> = {
-          'attendance': () => {
-            setAttendanceKey(prev => prev + 1);
-            setShowAttendance(true);
-          },
-          'hr': () => setShowHR(true),
-          'cab': () => setShowCab(true),
-          'profile': () => setShowProfile(true),
-          'driver': () => setShowDriver(true),
-          'bdt': () => setShowBDT(true),
-          'medical': () => setShowMedical(true),
-          'scoutBoy': () => setShowScoutBoy(true),
-          'reminder': () => setShowReminder(true),
-          'bup': () => setShowBUP(true),
-          'siteManager': () => setShowSiteManager(true),
-          'employeeManagement': () => setShowEmployeeManagement(true),
-          'driverManager': () => setShowDriverManager(true),
-          'hrManager': () => setShowHrManager(true),
-          'hrEmployeeManager': () => setShowHREmployeeManagement(true),
-          'dashboard': () => {},
-          'settings': () => setShowSettings(true),
-          'notifications': () => setShowNotifications(true),
-          'privacy': () => {},
-          'messages': () => {},
-          'chat': () => setShowChat(true),
-          'chatRoom': () => {},
-          'validation': () => setShowValidation(true)
-        };
-        mobileHandlers[targetPage]();
-      }
-    } else {
-      console.log('Unknown page:', page);
-    }
-  };
-
-  // Fetch user data from backend
-  useEffect(() => {
     const fetchToken = async () => {
       try {
         const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-        setToken(storedToken);
+        if (isMounted) {
+          setToken(storedToken);
+        }
         return storedToken;
       } catch (error) {
         console.error('Error getting token:', error);
@@ -555,12 +1019,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         const token = await AsyncStorage.getItem(TOKEN_2_KEY);
         if (!token) return;
 
-        setLoading(true);
+        if (isMounted) {
+          setLoading(true);
+        }
+
         const response = await fetch(`${BACKEND_URL}/core/getUser`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
+
+        if (!isMounted) return;
 
         if (response.ok) {
           const data: ApiResponse = await response.json();
@@ -569,8 +1038,28 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               ...data.user,
               profile_picture: data.user.profile_picture || undefined
             };
-            setUserData(transformedUserData);
-            setModules(data.modules || []);
+
+            if (isMounted) {
+              setUserData(transformedUserData);
+              setModules(data.modules || []);
+
+              // ============================================================================
+              // NEW: Extract dynamic tile configuration from backend
+              // ============================================================================
+              if (data.big_tile) {
+                setBigTile(data.big_tile);
+                console.log('🎯 Big tile set to:', data.big_tile);
+              }
+              if (data.small_tile_1) {
+                setSmallTile1(data.small_tile_1);
+                console.log('🎯 Small tile 1 set to:', data.small_tile_1);
+              }
+              if (data.small_tile_2) {
+                setSmallTile2(data.small_tile_2);
+                console.log('🎯 Small tile 2 set to:', data.small_tile_2);
+              }
+            }
+
             try {
               await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
               await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
@@ -582,72 +1071,84 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               console.error('❌ Error saving to AsyncStorage:', storageError);
             }
 
-            setUpcomingBirthdays(data.upcoming_birthdays || []);
-            setUpcomingAnniversaries(data.upcoming_anniversary || []);
+            if (isMounted) {
+              setUpcomingBirthdays(data.upcoming_birthdays || []);
+              setUpcomingAnniversaries(data.upcoming_anniversary || []);
 
-            if (Array.isArray(data.upcoming_reminder)) {
-              setReminders(data.upcoming_reminder);
-            } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
-              setReminders([data.upcoming_reminder]);
-            } else {
-              setReminders([]);
-            }
+              if (Array.isArray(data.upcoming_reminder)) {
+                setReminders(data.upcoming_reminder);
+              } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
+                setReminders([data.upcoming_reminder]);
+              } else {
+                setReminders([]);
+              }
 
-            setHoursWorked(data.hours_worked_last_7_attendance || []);
-            setOvertimeHours(data.overtime_hours || []);
+              setHoursWorked(data.hours_worked_last_7_attendance || []);
+              setOvertimeHours(data.overtime_hours || []);
 
-            const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
-            console.log('Upcoming events:', events);
-            setUpcomingEvents(events);
+              const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
+              console.log('Upcoming events:', events);
+              setUpcomingEvents(events);
 
-            const storedModules = await AsyncStorage.getItem('last_opened_modules');
-            if (storedModules) {
-              let modulesArray = JSON.parse(storedModules);
-              if (data.modules && data.modules.length > 0) {
-                modulesArray = modulesArray.map((storedModule: any) => {
-                  const backendModule = data.modules.find(
-                    (m: any) => m.module_unique_name === storedModule.module_unique_name
-                  );
-                  if (backendModule) {
-                    return {
-                      ...storedModule,
-                      iconUrl: backendModule.module_icon,
-                      title: backendModule.module_name.charAt(0).toUpperCase() +
-                        backendModule.module_name.slice(1).replace('_', ' ')
-                    };
+              const storedModules = await AsyncStorage.getItem('last_opened_modules');
+              if (storedModules) {
+                let modulesArray = JSON.parse(storedModules);
+                if (data.modules && data.modules.length > 0) {
+                  modulesArray = modulesArray.map((storedModule: any) => {
+                    const backendModule = data.modules.find(
+                      (m: any) => m.module_unique_name === storedModule.module_unique_name
+                    );
+                    if (backendModule) {
+                      return {
+                        ...storedModule,
+                        iconUrl: backendModule.module_icon,
+                        title: backendModule.module_name.charAt(0).toUpperCase() +
+                          backendModule.module_name.slice(1).replace('_', ' ')
+                      };
+                    }
+                    return storedModule;
+                  });
+                  const uniqueModules: any[] = [];
+                  const seen = new Set();
+                  for (const module of modulesArray) {
+                    if (!seen.has(module.module_unique_name)) {
+                      seen.add(module.module_unique_name);
+                      uniqueModules.push(module);
+                    }
                   }
-                  return storedModule;
-                });
-                const uniqueModules: any[] = [];
-                const seen = new Set();
-                for (const module of modulesArray) {
-                  if (!seen.has(module.module_unique_name)) {
-                    seen.add(module.module_unique_name);
-                    uniqueModules.push(module);
-                  }
+                  modulesArray = uniqueModules.slice(0, 4);
+                  await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+                  setLastOpenedModules(modulesArray);
                 }
-                modulesArray = uniqueModules.slice(0, 4);
-                await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
-                setLastOpenedModules(modulesArray);
               }
             }
           }
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch user data');
+        if (isMounted) {
+          setError(error instanceof Error ? error.message : 'Failed to fetch user data');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchToken();
     fetchUserData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Initialize background services
   useEffect(() => {
     if (!token || !userData || isWeb) return;
+
+    let isMounted = true;
 
     const initializeBackgroundServices = async () => {
       try {
@@ -690,10 +1191,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     };
 
     initializeBackgroundServices();
-  }, [token, userData]);
 
-  // Function to get upcoming events
-  const getUpcomingEvents = (birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
+    return () => {
+      isMounted = false;
+    };
+  }, [token, userData, isWeb]);
+
+  // ============================================================================
+  // HELPER FUNCTIONS
+  // ============================================================================
+
+  const getUpcomingEvents = useCallback((birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
     console.log('🎉 Getting upcoming events...', birthdays, anniversaries);
     const events: UpcomingEvent[] = [];
     const today = new Date();
@@ -749,10 +1257,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     console.log(`Found ${events.length} upcoming events within next 3 months`);
     return events.slice(0, 3);
-  };
+  }, []);
 
-  // Handle theme toggle with animation
-  const handleThemeToggle = () => {
+  // ============================================================================
+  // UI HANDLERS
+  // ============================================================================
+
+  const handleThemeToggle = useCallback(() => {
     if (isAnimating) return;
     setIsAnimating(true);
     Animated.timing(switchToggle, {
@@ -769,10 +1280,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       circleScale.setValue(0);
       setIsAnimating(false);
     });
-  };
+  }, [isAnimating, isDark, circleScale, switchToggle]);
 
-  // Handle module press
-  const handleModulePressWrapper = (moduleName: string, moduleUniqueName?: string) => {
+  const handleModulePressWrapper = useCallback((moduleName: string, moduleUniqueName?: string) => {
     handleModulePress({
       moduleName,
       moduleUniqueName,
@@ -797,10 +1307,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowHrManager,
       Alert
     });
-  };
+  }, [modules, isWeb]);
 
-  // Handle back from pages
-  const handleBackFromPage = () => {
+  const handleBackFromPage = useCallback(() => {
     if (isWeb) {
       setActivePage('dashboard');
     } else {
@@ -826,10 +1335,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowHrManager(false);
       setActiveMenuItem('Dashboard');
     }
-  };
+    // Reset profile modal state
+    setProfileModalToOpen(null);
+  }, [isWeb]);
 
-  // Handle logout
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -845,26 +1355,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         }
       },
     ]);
-  };
+  }, [isWeb, onLogout]);
 
-  // Open menu - Only for mobile
-  const openMenu = () => {
+  const openMenu = useCallback(() => {
     if (isWeb) return;
     setIsMenuVisible(true);
     Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-  };
+  }, [isWeb, slideAnim]);
 
-  // Close menu
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     if (!isWeb) {
       Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
     } else {
       setIsMenuVisible(false);
     }
-  };
+  }, [isWeb, slideAnim]);
 
-  // Handle nav item press
-  const handleNavItemPress = (navItem: string) => {
+  const handleNavItemPress = useCallback((navItem: string) => {
     setActiveNavItem(navItem);
     if (navItem === 'message') {
       Alert.alert('Support', 'Citadel Hub will be available soon!');
@@ -879,26 +1386,29 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
     }
-  };
+  }, [isWeb]);
 
-  // Get display modules
-  const displayModules = getDisplayModules(modules);
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
 
-  // Filter modules based on search query
-  const filteredModules = displayModules.filter(module =>
-    module.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const displayModules = useMemo(() => getDisplayModules(modules), [modules]);
+
+  const filteredModules = useMemo(() =>
+    displayModules.filter(module =>
+      module.title.toLowerCase().includes(searchQuery.toLowerCase())
+    ), [displayModules, searchQuery]
   );
 
-  // Menu items
-  const drawerMenuItems = [
+  const drawerMenuItems = useMemo(() => [
     { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
     { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
     { id: 'notifications', title: 'Notifications', icon: 'notification', color: '#F59E0B' },
     { id: 'privacy', title: 'Privacy Policy', icon: 'shield', color: '#1E40AF' },
     { id: 'messages', title: 'Messages', icon: 'chatbubbles', color: '#10B981' },
-  ];
+  ], []);
 
-  const handleMenuItemPress = (item: any) => {
+  const handleMenuItemPress = useCallback((item: any) => {
     setActiveMenuItem(item.title);
     closeMenu();
     const pageMap: Record<string, ActivePage> = {
@@ -919,32 +1429,31 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           'settings': () => setShowSettings(true),
           'notifications': () => setShowNotifications(true),
           'validation': () => setShowValidation(true),
-          'dashboard': () => {},
-          'attendance': () => {},
-          'hr': () => {},
-          'cab': () => {},
-          'driver': () => {},
-          'bdt': () => {},
-          'medical': () => {},
-          'scoutBoy': () => {},
-          'reminder': () => {},
-          'bup': () => {},
-          'siteManager': () => {},
-          'employeeManagement': () => {},
-          'driverManager': () => {},
-          'hrManager': () => {},
-          'hrEmployeeManager': () => {},
+          'dashboard': () => { },
+          'attendance': () => { },
+          'hr': () => { },
+          'cab': () => { },
+          'driver': () => { },
+          'bdt': () => { },
+          'medical': () => { },
+          'scoutBoy': () => { },
+          'reminder': () => { },
+          'bup': () => { },
+          'siteManager': () => { },
+          'employeeManagement': () => { },
+          'driverManager': () => { },
+          'hrManager': () => { },
+          'hrEmployeeManager': () => { },
           'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy feature will be available soon!'),
           'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
-          'chat': () => {},
-          'chatRoom': () => {}
+          'chat': () => { },
+          'chatRoom': () => { }
         };
         mobileHandlers[targetPage]();
       }
     }
-  };
+  }, [isWeb, closeMenu]);
 
-  // Animation values
   const maxRadius = Math.sqrt(screenWidth * screenWidth + screenHeight * screenHeight);
   const circleSize = circleScale.interpolate({
     inputRange: [0, 1],
@@ -956,7 +1465,49 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     outputRange: [4, screenWidth * 0.43 - 54],
   });
 
-  // Loading state
+  // ============================================================================
+  // NEW: Dynamic Tile Rendering Component
+  // ============================================================================
+  const renderModuleTile = (moduleUniqueName: string, size: 'big' | 'small') => {
+    const config = getModuleConfig(moduleUniqueName);
+    const IconComponent = config.iconFamily === 'Ionicons' ? Ionicons :
+      config.iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons :
+        FontAwesome5;
+
+    const iconSize = size === 'big' ? 22 : 18;
+    const containerStyle = size === 'big' ? styles.moduleAttendance : styles.moduleSmall;
+
+    return (
+      <TouchableOpacity
+        style={containerStyle}
+        onPress={() => handleModulePressWrapper(config.displayName, moduleUniqueName)}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={config.gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.moduleGradient}
+        >
+          <Ionicons
+            name="arrow-up"
+            size={size === 'big' ? 18 : 16}
+            color="white"
+            style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
+          />
+          <View style={styles.moduleIconCircle}>
+            <IconComponent name={config.icon as any} size={iconSize} color="white" />
+          </View>
+          <Text style={styles.moduleTitle}>{config.displayName}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  // ============================================================================
+  // RENDER STATES
+  // ============================================================================
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.bgColor }, isWeb && styles.loadingContainerWeb]}>
@@ -966,7 +1517,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  // Error state
   if (error || !userData) {
     return (
       <View style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }, isWeb && styles.containerWeb]}>
@@ -985,7 +1535,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  // Render different pages - Mobile only
+  // ============================================================================
+  // MOBILE PAGE RENDERS
+  // ============================================================================
+
   if (!isWeb) {
     if (showChatRoom && selectedChatRoom) {
       return (
@@ -1009,7 +1562,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     if (showNotifications) {
       return (
-        <Notifications onBack={handleBackFromPage} isDark={isDark} />
+        <Notifications
+          onBack={handleBackFromPage}
+          isDark={isDark}
+          onBadgeUpdate={handleBadgeUpdate}
+          onNavigateToModule={handleNavigateFromNotification}
+        />
       );
     }
 
@@ -1033,9 +1591,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     if (showProfile) {
       return (
-        <Profile 
-          onBack={handleBackFromPage} 
-          userData={userData} 
+        <Profile
+          onBack={handleBackFromPage}
+          userData={userData}
           onProfileUpdate={(updatedData: UserData) => {
             const completeData: UserData = {
               ...userData!,
@@ -1044,6 +1602,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setUserData(completeData);
             refreshUserData();
           }}
+          initialModalToOpen={profileModalToOpen}
         />
       );
     }
@@ -1084,9 +1643,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       );
     }
 
+    // ============================================================================
+    // UPDATED: Reminder component with callback for real-time updates
+    // ============================================================================
     if (showReminder) {
       return (
-        <Reminder onBack={handleBackFromPage} />
+        <Reminder 
+          onBack={handleBackFromPage}
+          onReminderUpdate={handleReminderUpdate}  // Add this prop
+        />
       );
     }
 
@@ -1121,7 +1686,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }
 
-  // Main dashboard render
+  // ============================================================================
+  // MAIN DASHBOARD RENDER
+  // ============================================================================
+
   return (
     <View style={[styles.safeContainer, { backgroundColor: theme.bgColor }, isWeb && styles.safeContainerWeb]}>
       <StatusBar
@@ -1130,7 +1698,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         translucent={false}
       />
 
-      {/* WhatsApp-style Hamburger Menu - Only for mobile */}
       <HamburgerMenu
         isVisible={isMenuVisible}
         onClose={closeMenu}
@@ -1145,7 +1712,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         currentColors={currentColors}
       />
 
-      {/* All Modules Modal */}
       <AllModulesModal
         isVisible={allModulesVisible}
         onClose={() => setAllModulesVisible(false)}
@@ -1158,7 +1724,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       />
 
       <View style={[styles.mainContent, isWeb && styles.mainContentWeb]}>
-        {/* Animated Circle Overlay */}
         {isAnimating && (
           <Animated.View
             pointerEvents="none"
@@ -1174,7 +1739,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         )}
 
         {isWeb ? (
-          // Web Layout - Three Column
+          // WEB LAYOUT
           <View style={[styles.webContainer, { backgroundColor: theme.bgColor }]}>
             {/* Left Side - User Profile & Navigation */}
             <View style={[styles.webLeftSide, { backgroundColor: theme.navBg }]}>
@@ -1199,7 +1764,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     {userData?.designation || 'Employee'}
                   </Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.webSettingsButton, { backgroundColor: theme.navBg }]}
                   onPress={() => setActivePage('settings')}
                 >
@@ -1208,10 +1773,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               </View>
 
               <View style={styles.webNavigation}>
-                {/* Home */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.webNavItem, 
+                    styles.webNavItem,
                     { backgroundColor: theme.navBg },
                     activePage === 'dashboard' && styles.webNavItemActive
                   ]}
@@ -1220,14 +1784,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     setActivePage('dashboard');
                   }}
                 >
-                  <Ionicons 
-                    name="home" 
-                    size={24} 
-                    color={activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub} 
+                  <Ionicons
+                    name="home"
+                    size={24}
+                    color={activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub}
                   />
                   <Text style={[
-                    styles.webNavText, 
-                    { 
+                    styles.webNavText,
+                    {
                       color: activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub,
                       fontWeight: activePage === 'dashboard' ? '600' : '400'
                     }
@@ -1236,10 +1800,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Profile */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.webNavItem, 
+                    styles.webNavItem,
                     { backgroundColor: theme.navBg },
                     activePage === 'profile' && styles.webNavItemActive
                   ]}
@@ -1248,14 +1811,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     setActivePage('profile');
                   }}
                 >
-                  <Ionicons 
-                    name="person-circle-outline" 
-                    size={24} 
-                    color={activePage === 'profile' ? currentColors.primaryBlue : theme.textSub} 
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={24}
+                    color={activePage === 'profile' ? currentColors.primaryBlue : theme.textSub}
                   />
                   <Text style={[
-                    styles.webNavText, 
-                    { 
+                    styles.webNavText,
+                    {
                       color: activePage === 'profile' ? currentColors.primaryBlue : theme.textSub,
                       fontWeight: activePage === 'profile' ? '600' : '400'
                     }
@@ -1264,10 +1827,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Settings */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.webNavItem, 
+                    styles.webNavItem,
                     { backgroundColor: theme.navBg },
                     activePage === 'settings' && styles.webNavItemActive
                   ]}
@@ -1276,14 +1838,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     setActivePage('settings');
                   }}
                 >
-                  <Ionicons 
-                    name="settings-outline" 
-                    size={24} 
-                    color={activePage === 'settings' ? currentColors.primaryBlue : theme.textSub} 
+                  <Ionicons
+                    name="settings-outline"
+                    size={24}
+                    color={activePage === 'settings' ? currentColors.primaryBlue : theme.textSub}
                   />
                   <Text style={[
-                    styles.webNavText, 
-                    { 
+                    styles.webNavText,
+                    {
                       color: activePage === 'settings' ? currentColors.primaryBlue : theme.textSub,
                       fontWeight: activePage === 'settings' ? '600' : '400'
                     }
@@ -1292,10 +1854,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Notifications */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.webNavItem, 
+                    styles.webNavItem,
                     { backgroundColor: theme.navBg },
                     activePage === 'notifications' && styles.webNavItemActive
                   ]}
@@ -1304,26 +1865,30 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     setActivePage('notifications');
                   }}
                 >
-                  <Ionicons 
-                    name="notifications-outline" 
-                    size={24} 
-                    color={activePage === 'notifications' ? currentColors.warning : theme.textSub} 
+                  <Ionicons
+                    name="notifications-outline"
+                    size={24}
+                    color={activePage === 'notifications' ? currentColors.warning : theme.textSub}
                   />
                   <Text style={[
-                    styles.webNavText, 
-                    { 
+                    styles.webNavText,
+                    {
                       color: activePage === 'notifications' ? currentColors.warning : theme.textSub,
                       fontWeight: activePage === 'notifications' ? '600' : '400'
                     }
                   ]}>
                     Notifications
+                    {unreadNotificationCount > 0 && (
+                      <View style={styles.badgeContainer}>
+                        <Text style={styles.badgeText}>{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</Text>
+                      </View>
+                    )}
                   </Text>
                 </TouchableOpacity>
 
-                {/* Privacy Policy */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.webNavItem, 
+                    styles.webNavItem,
                     { backgroundColor: theme.navBg },
                     activePage === 'privacy' && styles.webNavItemActive
                   ]}
@@ -1332,14 +1897,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     setActivePage('privacy');
                   }}
                 >
-                  <Ionicons 
-                    name="shield-checkmark-outline" 
-                    size={24} 
-                    color={activePage === 'privacy' ? '#1E40AF' : theme.textSub} 
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={24}
+                    color={activePage === 'privacy' ? '#1E40AF' : theme.textSub}
                   />
                   <Text style={[
-                    styles.webNavText, 
-                    { 
+                    styles.webNavText,
+                    {
                       color: activePage === 'privacy' ? '#1E40AF' : theme.textSub,
                       fontWeight: activePage === 'privacy' ? '600' : '400'
                     }
@@ -1348,10 +1913,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Messages */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.webNavItem, 
+                    styles.webNavItem,
                     { backgroundColor: theme.navBg },
                     activePage === 'messages' && styles.webNavItemActive
                   ]}
@@ -1360,14 +1924,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     setActivePage('messages');
                   }}
                 >
-                  <Ionicons 
-                    name="chatbubbles-outline" 
-                    size={24} 
-                    color={activePage === 'messages' ? currentColors.success : theme.textSub} 
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={24}
+                    color={activePage === 'messages' ? currentColors.success : theme.textSub}
                   />
                   <Text style={[
-                    styles.webNavText, 
-                    { 
+                    styles.webNavText,
+                    {
                       color: activePage === 'messages' ? currentColors.success : theme.textSub,
                       fontWeight: activePage === 'messages' ? '600' : '400'
                     }
@@ -1378,13 +1942,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               </View>
             </View>
 
-            {/* Center Content - Dynamic based on activePage */}
-            <ScrollView 
+            {/* Center Content */}
+            <ScrollView
               style={[styles.webCenterContent, { backgroundColor: theme.bgColor }]}
               showsVerticalScrollIndicator={false}
             >
               {activePage === 'dashboard' ? (
-                // Dashboard Content
                 <View style={styles.dashboardContainer}>
                   <LinearGradient
                     colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
@@ -1415,29 +1978,35 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     </View>
                   </LinearGradient>
 
-                  <QuickActions
-                    lastOpenedModules={lastOpenedModules}
-                    modules={modules}
-                    theme={theme}
-                    handleModulePress={handleModulePressWrapper}
-                  />
+                  <View style={{ paddingHorizontal: 20 }}>
+                    <QuickActions
+                      lastOpenedModules={lastOpenedModules}
+                      modules={modules}
+                      theme={theme}
+                      handleModulePress={handleModulePressWrapper}
+                    />
+                  </View>
 
-                  <UpcomingReminder
-                    reminders={reminders}
-                    theme={theme}
-                    currentColors={currentColors}
-                    onPress={() => handleModulePressWrapper('Reminder')}
-                  />
+                  <View style={{ paddingHorizontal: 20 }}>
+                    <UpcomingReminder
+                      reminders={reminders}
+                      theme={theme}
+                      currentColors={currentColors}
+                      onPress={() => handleModulePressWrapper('Reminder')}
+                    />
+                  </View>
 
-                  <WorkStatistics
-                    hoursWorked={hoursWorked}
-                    overtimeHours={overtimeHours}
-                    userData={userData}
-                    theme={theme}
-                    currentColors={currentColors}
-                  />
+                  <View style={{ paddingHorizontal: 20 }}>
+                    <WorkStatistics
+                      hoursWorked={hoursWorked}
+                      overtimeHours={overtimeHours}
+                      userData={userData}
+                      theme={theme}
+                      currentColors={currentColors}
+                    />
+                  </View>
 
-                  <View style={styles.upcomingEventsWrapper}>
+                  <View style={{ paddingHorizontal: 20 }}>
                     <UpcomingEvents
                       upcomingEvents={upcomingEvents}
                       theme={theme}
@@ -1449,26 +2018,28 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                   </View>
                 </View>
               ) : (
-                // ALL OTHER PAGES
                 <View style={styles.embeddedPageWrapper}>
                   <View style={styles.webEmbeddedPage}>
                     {activePage === 'profile' && (
-                      <Profile 
-                        onBack={() => setActivePage('dashboard')} 
+                      <Profile
+                        onBack={() => setActivePage('dashboard')}
                         userData={userData}
                         onProfileUpdate={(updatedData) => {
                           setUserData(updatedData);
                           refreshUserData();
                         }}
+                        initialModalToOpen={profileModalToOpen}
                       />
                     )}
                     {activePage === 'settings' && (
                       <Settings onBack={() => setActivePage('dashboard')} isDark={isDark} />
                     )}
                     {activePage === 'notifications' && (
-                      <Notifications 
-                        onBack={() => setActivePage('dashboard')} 
+                      <Notifications
+                        onBack={() => setActivePage('dashboard')}
                         isDark={isDark}
+                        onBadgeUpdate={handleBadgeUpdate}
+                        onNavigateToModule={handleNavigateFromNotification}
                       />
                     )}
                     {activePage === 'privacy' && (
@@ -1486,9 +2057,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       </View>
                     )}
                     {activePage === 'attendance' && (
-                      <AttendanceWrapper 
-                        onBack={() => setActivePage('dashboard')} 
-                        attendanceKey={attendanceKey} 
+                      <AttendanceWrapper
+                        onBack={() => setActivePage('dashboard')}
+                        attendanceKey={attendanceKey}
                       />
                     )}
                     {activePage === 'hr' && (
@@ -1509,8 +2080,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     {activePage === 'scoutBoy' && (
                       <ScoutBoy onBack={() => setActivePage('dashboard')} />
                     )}
+                    {/* ============================================================================
+                    // UPDATED: Reminder component with callback for real-time updates
+                    // ============================================================================ */}
                     {activePage === 'reminder' && (
-                      <Reminder onBack={() => setActivePage('dashboard')} />
+                      <Reminder 
+                        onBack={() => setActivePage('dashboard')}
+                        onReminderUpdate={handleReminderUpdate}  // Add this prop
+                      />
                     )}
                     {activePage === 'bup' && (
                       <BUP onBack={() => setActivePage('dashboard')} />
@@ -1544,19 +2121,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
                   All Modules
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.refreshButton}
                   onPress={refreshUserData}
                   disabled={refreshing}
                 >
-                  <Ionicons 
-                    name="refresh" 
-                    size={20} 
-                    color={refreshing ? theme.textSub : theme.accentBlue} 
+                  <Ionicons
+                    name="refresh"
+                    size={20}
+                    color={refreshing ? theme.textSub : theme.accentBlue}
                   />
                 </TouchableOpacity>
               </View>
-              <ScrollView 
+              <ScrollView
                 style={styles.modulesGridScroll}
                 showsVerticalScrollIndicator={false}
               >
@@ -1569,7 +2146,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       activeOpacity={0.7}
                     >
                       <View style={[
-                        styles.moduleGridIconContainer, 
+                        styles.moduleGridIconContainer,
                         { backgroundColor: theme.cardBg === '#111a2d' ? 'rgba(255, 255, 255, 0.05)' : '#f8f9fa' }
                       ]}>
                         <Image
@@ -1578,7 +2155,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                           resizeMode="contain"
                         />
                       </View>
-                      <Text 
+                      <Text
                         style={[styles.moduleGridTitle, { color: theme.textMain }]}
                         numberOfLines={2}
                       >
@@ -1591,7 +2168,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
           </View>
         ) : (
-          // Mobile Layout
+          // MOBILE LAYOUT
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
@@ -1603,7 +2180,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               style={styles.headerBanner}
             >
               <Image
-                source={require('../assets/bg.jpeg')}
+                source={require('../assets/background_dashboard.jpeg')}
                 style={{
                   position: 'absolute',
                   width: '100%',
@@ -1646,77 +2223,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               onPress={() => handleModulePressWrapper('Reminder')}
             />
 
+            {/* ============================================================================ */}
+            {/* NEW: DYNAMIC MODULE TILES */}
+            {/* ============================================================================ */}
             <View style={styles.moduleGrid}>
-              <TouchableOpacity
-                style={styles.moduleAttendance}
-                onPress={() => handleModulePressWrapper('Attendance', 'attendance')}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={['#00d285', '#00b872']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.moduleGradient}
-                >
-                  <Ionicons
-                    name="arrow-up"
-                    size={18}
-                    color="white"
-                    style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                  />
-                  <View style={styles.moduleIconCircle}>
-                    <FontAwesome5 name="book-open" size={22} color="white" />
-                  </View>
-                  <Text style={styles.moduleTitle}>Attendance</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+              {/* Big Tile (from backend) */}
+              {renderModuleTile(bigTile, 'big')}
+
+              {/* Small Tiles Column (from backend) */}
               <View style={styles.moduleColumn}>
-                <TouchableOpacity
-                  style={styles.moduleSmall}
-                  onPress={() => handleModulePressWrapper('Car', 'cab')}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={['#ff5e7a', '#ff4168']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.moduleGradient}
-                  >
-                    <Ionicons
-                      name="arrow-up"
-                      size={16}
-                      color="white"
-                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                    />
-                    <View style={styles.moduleIconCircle}>
-                      <FontAwesome5 name="car" size={18} color="white" />
-                    </View>
-                    <Text style={styles.moduleTitle}>Car</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.moduleSmall}
-                  onPress={() => handleModulePressWrapper('HR', 'hr')}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={['#ffb157', '#ff9d3f']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.moduleGradient}
-                  >
-                    <Ionicons
-                      name="arrow-up"
-                      size={16}
-                      color="white"
-                      style={[styles.moduleArrow, { transform: [{ rotate: '45deg' }] }]}
-                    />
-                    <View style={styles.moduleIconCircle}>
-                      <FontAwesome5 name="users" size={18} color="white" />
-                    </View>
-                    <Text style={styles.moduleTitle}>HR</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                {renderModuleTile(smallTile1, 'small')}
+                {renderModuleTile(smallTile2, 'small')}
               </View>
             </View>
 
@@ -1773,6 +2290,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           currentColors={currentColors}
           bulgeAnim={bulgeAnim}
           screenWidth={screenWidth}
+          unreadNotificationCount={unreadNotificationCount}
         />
       )}
     </View>
@@ -1787,71 +2305,27 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
   );
 }
 
+// ============================================================================
+// STYLES (unchanged)
+// ============================================================================
 const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: '#000D24',
-  },
-  safeContainerWeb: {
-    maxWidth: 1400,
-    marginHorizontal: 'auto',
-    width: '100%',
-  },
-  container: {
-    flex: 1,
-  },
-  containerWeb: {
-    maxWidth: 1200,
-    marginHorizontal: 'auto',
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainerWeb: {
-    minHeight: Dimensions.get('window').height,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-  },
-  loadingTextWeb: {
-    fontSize: 18,
-  },
-  errorText: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 24
-  },
-  errorTextWeb: {
-    fontSize: 20,
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8
-  },
-  retryButtonText: {
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  mainContent: {
-    flex: 1,
-  },
-  mainContentWeb: {
-    maxWidth: 1400,
-    marginHorizontal: 'auto',
-    width: '100%',
-  },
+  safeContainer: { flex: 1, backgroundColor: '#000D24' },
+  safeContainerWeb: { maxWidth: 1400, marginHorizontal: 'auto', width: '100%' },
+  container: { flex: 1 },
+  containerWeb: { maxWidth: 1200, marginHorizontal: 'auto' },
+  centerContent: { justifyContent: 'center', alignItems: 'center' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingContainerWeb: { minHeight: Dimensions.get('window').height },
+  loadingText: { marginTop: 16, fontSize: 16 },
+  loadingTextWeb: { fontSize: 18 },
+  errorText: { fontSize: 18, textAlign: 'center', marginBottom: 24 },
+  errorTextWeb: { fontSize: 20 },
+  retryButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  retryButtonText: { fontSize: 16, fontWeight: '600' },
+  mainContent: { flex: 1 },
+  mainContentWeb: { maxWidth: 1400, marginHorizontal: 'auto', width: '100%' },
   circleOverlay: {
-    position: 'absolute',
-    top: height / 2,
-    left: width / 2,
+    position: 'absolute', top: height / 2, left: width / 2,
     width: Math.sqrt(width * width + height * height) * 2.5,
     height: Math.sqrt(width * width + height * height) * 2.5,
     borderRadius: Math.sqrt(width * width + height * height) * 1.25,
@@ -1859,390 +2333,71 @@ const styles = StyleSheet.create({
     marginTop: -Math.sqrt(width * width + height * height) * 1.25,
     zIndex: 1000,
   },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  webContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    minHeight: '100vh' as any,
-    backgroundColor: 'transparent',
-  },
-  webLeftSide: {
-    width: 280,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-  },
-  embeddedPageWrapper: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-    maxWidth: '100%',
-    width: '100%',
-  },
-  dashboardContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    maxWidth: '100%',
-    width: '100%',
-  },
-  webEmbeddedPage: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-    maxWidth: '100%',
-    width: '100%',
-  },
-  webUserProfile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  webUserAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-  },
-  webAvatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  webAvatarText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  webUserInfo: {
-    flex: 1,
-  },
-  webUserName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  webUserDesignation: {
-    fontSize: 12,
-    opacity: 0.7,
-  },
-  webSettingsButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  webNavigation: {
-    paddingVertical: 16,
-  },
-  webNavItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginVertical: 2,
-  },
-  webNavItemActive: {
-    backgroundColor: 'rgba(0, 128, 105, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#008069',
-  },
-  webNavText: {
-    marginLeft: 12,
-    fontSize: 14,
-    flex: 1,
-  },
-  webCenterContent: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: '100%',
-    overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
-  webHeader: {
-    height: 220,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  webHeaderImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    opacity: 1,
-  },
-  webHeaderOverlay: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  webHeaderContent: {
-    padding: 30,
-    position: 'relative',
-    zIndex: 1,
-  },
-  webTopNav: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  webLogoContainer: {
-    alignItems: 'center',
-  },
-  webLogoText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  webWelcomeText: {
-    color: 'white',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  webEmployeeText: {
-    color: 'white',
-    fontSize: 18,
-    opacity: 0.8,
-    marginTop: 4,
-  },
-  webRightSide: {
-    width: 280,
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-  },
-  upcomingEventsWrapper: {
-    maxWidth: '100%',
-    overflow: 'hidden',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  modulesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  modulesGridTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  refreshButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  modulesGridScroll: {
-    flex: 1,
-  },
-  modulesGridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    padding: 16,
-    gap: 12,
-  },
-  moduleGridItem: {
-    width: '47%',
-    aspectRatio: 1,
-    marginBottom: 12,
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  moduleGridIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  moduleGridIcon: {
-    width: 30,
-    height: 30,
-  },
-  moduleGridTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  moduleContainer: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
-  privacyText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  headerBanner: {
-    height: 250,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  headerOverlay: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  headerContent: {
-    padding: 20,
-    position: 'relative',
-    zIndex: 1,
-  },
-  topNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  menuButton: {
-    padding: 8,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuLine: {
-    width: 24,
-    height: 2,
-    marginVertical: 3,
-    borderRadius: 1,
-  },
-  logoText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  welcomeText: {
-    color: 'white',
-    fontSize: 30,
-    fontWeight: '700',
-  },
-  employeeText: {
-    color: 'white',
-    fontSize: 18,
-    opacity: 0.8,
-    marginTop: 2,
-  },
-  moduleGrid: {
-    marginHorizontal: 20,
-    marginBottom: 15,
-    flexDirection: 'row',
-    height: 220,
-    gap: 12,
-  },
-  moduleAttendance: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  moduleColumn: {
-    flex: 1,
-    gap: 12,
-  },
-  moduleSmall: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  moduleGradient: {
-    flex: 1,
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  moduleArrow: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-  },
-  moduleIconCircle: {
-    width: 45,
-    height: 45,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 22.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moduleTitle: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  viewAllContainer: {
-    marginBottom: 15,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    shadowColor: '#008069',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  viewAllText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'white',
-    marginRight: 8,
-  },
-  chevronGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  footer: {
-    alignItems: 'center',
-    paddingBottom: 30,
-    paddingTop: 15,
-  },
-  footerLogo: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: 5,
-    color: '#a9a9a9b6',
-    marginBottom: 5,
-  },
-  footerText: {
-    fontSize: 10,
-    color: '#666',
-  },
+  scrollContent: { paddingBottom: 100 },
+  webContainer: { flex: 1, flexDirection: 'row', alignItems: 'stretch', minHeight: '100vh' as any, backgroundColor: 'transparent' },
+  webLeftSide: { width: 280, height: '100vh', flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
+  embeddedPageWrapper: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },
+  dashboardContainer: { flex: 1, backgroundColor: 'transparent', maxWidth: '100%', width: '100%' },
+  webEmbeddedPage: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },
+  webUserProfile: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
+  webUserAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 } as ImageStyle,
+  webAvatarPlaceholder: { width: 50, height: 50, borderRadius: 25, marginRight: 12, justifyContent: 'center', alignItems: 'center' },
+  webAvatarText: { color: 'white', fontSize: 18, fontWeight: '600' },
+  webUserInfo: { flex: 1 },
+  webUserName: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
+  webUserDesignation: { fontSize: 12, opacity: 0.7 },
+  webSettingsButton: { padding: 8, borderRadius: 8 },
+  webNavigation: { flex: 1, overflow: 'auto', paddingVertical: 16 },
+  webNavItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, marginVertical: 2, position: 'relative' },
+  webNavItemActive: { backgroundColor: 'rgba(0, 128, 105, 0.1)', borderLeftWidth: 3, borderLeftColor: '#008069' },
+  webNavText: { marginLeft: 12, fontSize: 14, flex: 1 },
+  webCenterContent: { flex: 1, maxHeight: '100vh', overflow: 'auto', backgroundColor: 'transparent' },
+  webRightSide: { width: 280, height: '100vh', flexDirection: 'column', borderLeftWidth: 1, borderLeftColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
+  webHeader: { height: 220, overflow: 'hidden', position: 'relative' },
+  webHeaderImage: { position: 'absolute', width: '100%', height: '100%', opacity: 1 }as ImageStyle,
+  webHeaderOverlay: { position: 'absolute', width: '100%', height: '100%' },
+  webHeaderContent: { padding: 30, position: 'relative', zIndex: 1 },
+  webTopNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  webLogoContainer: { alignItems: 'center' },
+  webLogoText: { color: 'white', fontSize: 24, fontWeight: '800', letterSpacing: 2 },
+  webWelcomeText: { color: 'white', fontSize: 28, fontWeight: '700' },
+  webEmployeeText: { color: 'white', fontSize: 18, opacity: 0.8, marginTop: 4 },
+  modulesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
+  modulesGridTitle: { fontSize: 18, fontWeight: '700' },
+  refreshButton: { padding: 8, borderRadius: 8 },
+  modulesGridScroll: { flex: 1 },
+  modulesGridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16, gap: 12 },
+  moduleGridItem: { width: '47%', aspectRatio: 1, marginBottom: 12, padding: 15, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  moduleGridIconContainer: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  moduleGridIcon: { width: 30, height: 30 }as ImageStyle,
+  moduleGridTitle: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 16 },
+  moduleContainer: { flex: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: 'transparent' },
+  privacyText: { fontSize: 16, lineHeight: 24 },
+  headerBanner: { height: 250, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, overflow: 'hidden', position: 'relative' },
+  headerOverlay: { position: 'absolute', width: '100%', height: '100%' },
+  headerContent: { padding: 20, position: 'relative', zIndex: 1 },
+  topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  menuButton: { padding: 8, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  menuLine: { width: 24, height: 2, marginVertical: 3, borderRadius: 1 },
+  logoText: { color: 'white', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  headerSpacer: { width: 40 },
+  welcomeText: { color: 'white', fontSize: 30, fontWeight: '700' },
+  employeeText: { color: 'white', fontSize: 18, opacity: 0.8, marginTop: 2 },
+  moduleGrid: { marginHorizontal: 20, marginBottom: 15, flexDirection: 'row', height: 220, gap: 12 },
+  moduleAttendance: { flex: 1, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  moduleColumn: { flex: 1, gap: 12 },
+  moduleSmall: { flex: 1, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  moduleGradient: { flex: 1, padding: 16, justifyContent: 'space-between' },
+  moduleArrow: { position: 'absolute', top: 12, right: 12 },
+  moduleIconCircle: { width: 45, height: 45, backgroundColor: 'rgba(255, 255, 255, 0.25)', borderRadius: 22.5, alignItems: 'center', justifyContent: 'center' },
+  moduleTitle: { color: 'white', fontSize: 16, fontWeight: '600', textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
+  viewAllContainer: { marginBottom: 15 },
+  viewAllButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, shadowColor: '#008069', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  viewAllText: { fontSize: 14, fontWeight: '600', color: 'white', marginRight: 8 },
+  chevronGroup: { flexDirection: 'row', alignItems: 'center' },
+  footer: { alignItems: 'center', paddingBottom: 30, paddingTop: 15 },
+  footerLogo: { fontSize: 28, fontWeight: '700', letterSpacing: 5, color: '#a9a9a9b6', marginBottom: 5 },
+  footerText: { fontSize: 10, color: '#666' },
+  badgeContainer: { position: 'absolute', top: -8, right: -8, backgroundColor: '#F15C6D', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 });

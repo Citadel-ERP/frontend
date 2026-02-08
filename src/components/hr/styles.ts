@@ -48,7 +48,7 @@ export const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 2,
   },
   headerTitleContainer: { 
@@ -128,7 +128,15 @@ export const styles = StyleSheet.create({
   },
   content: { 
     flex: 1, 
-    backgroundColor: WHATSAPP_COLORS.background 
+    backgroundColor: WHATSAPP_COLORS.background,
+    ...(Platform.OS === 'web' ? {
+      height: '100vh',
+      width: '100%',
+      overflow: 'hidden',
+      position: 'relative',
+    } : {
+      flexDirection: 'column',
+    }),
   },
   scrollView: { 
     flex: 1 
@@ -525,7 +533,16 @@ export const styles = StyleSheet.create({
   },
   chatContainer: { 
     flex: 1, 
-    backgroundColor: WHATSAPP_COLORS.chatBackground
+    backgroundColor: WHATSAPP_COLORS.chatBackground,
+    ...(Platform.OS === 'web' ? {
+      position: 'fixed',
+      top: 120,  // adjust based on your header height
+      bottom: 68, // adjust based on your input height
+      left: 0,
+      right: 0,
+      overflowY: 'auto',
+      overflowX: 'hidden',
+    } : {}),
   },
   chatScrollView: {
     flex: 1,
@@ -774,7 +791,19 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 2
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      position: 'fixed',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 10,
+    } : {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    }),
   },
   chatInputWrapper: { 
     flexDirection: 'row', 
@@ -1100,9 +1129,18 @@ export const styles = StyleSheet.create({
   attachedFilesPreview: {
     backgroundColor: '#F0F2F5',
     padding: 12,
-    // marginHorizontal: 16,
     marginTop: 8,
     borderRadius: 12,
+    ...(Platform.OS === 'web' ? {
+      position: 'fixed',
+      bottom: 68,
+      left: 0,
+      right: 0,
+      zIndex: 9,
+      maxHeight: 100,
+    } : {
+      maxHeight: 100,
+    }),
   },
   attachedFilesTitle: {
     fontSize: 13,
@@ -1185,25 +1223,4 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-  
-  // Image wrapper with overlay
-//   imageWrapper: {
-//     position: 'relative',
-//     marginBottom: 6,
-//     borderRadius: 8,
-//     overflow: 'hidden',
-//   },
-//   commentImage: {
-//     width: 200,
-//     height: 200,
-//     borderRadius: 8,
-//   },
-//   imageOverlay: {
-//     position: 'absolute',
-//     bottom: 8,
-//     right: 8,
-//     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-//     borderRadius: 12,
-//     padding: 4,
-//   },
 });

@@ -478,7 +478,8 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         <StatusBar barStyle="light-content" backgroundColor="#075E54" />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="chevron-back" size={28} color="white" />
+            <Ionicons name="chevron-back" size={24} color="white" />
+            <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <View style={[styles.avatar, { backgroundColor: '#25D366' }]}>
@@ -506,7 +507,8 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         <StatusBar barStyle="light-content" backgroundColor="#075E54" />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="chevron-back" size={28} color="white" />
+             <Ionicons name="chevron-back" size={24} color="white" />
+            <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <View style={[styles.avatar, { backgroundColor: '#25D366' }]}>
@@ -540,7 +542,8 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
       {/* Header */}
 <View style={styles.header}>
   <TouchableOpacity style={styles.backButton} onPress={onBack}>
-    <Ionicons name="chevron-back" size={28} color="white" />
+     <Ionicons name="chevron-back" size={24} color="white" />
+            <Text style={styles.backText}>Back</Text>
   </TouchableOpacity>
   <View style={styles.headerContent}>
     <View style={[styles.avatar, { backgroundColor: policyColor }]}>
@@ -1083,9 +1086,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#128C7E',
   },
   backButton: {
-    padding: 4,
-    marginRight: 12,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+backText: {
+  color: 'white',
+  fontSize: 16,
+  fontWeight: '500',
+},
   headerContent: {
     flex: 1,
     flexDirection: 'row',
@@ -1097,7 +1106,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
+    marginLeft: 10,
   },
   headerText: {
     flex: 1,

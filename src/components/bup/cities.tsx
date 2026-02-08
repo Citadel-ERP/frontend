@@ -22,18 +22,18 @@ interface CitiesProps {
   theme: ThemeColors;
 }
 
-// City configuration matching CAB exactly
+// City configuration in alphabetical order
 const CITIES = [
-  { value: 'Mumbai', label: 'Mumbai', image: require('../../assets/mumbai.png') },
-  { value: 'Delhi', label: 'Delhi', image: require('../../assets/delhi.png') },
   { value: 'Bangalore', label: 'Bangalore', image: require('../../assets/bangalore.png') },
   { value: 'Chennai', label: 'Chennai', image: require('../../assets/chennai.png') },
-  { value: 'Kolkata', label: 'Kolkata', image: require('../../assets/kolkata.png') },
-  { value: 'Hyderabad', label: 'Hyderabad', image: require('../../assets/hyderabad.png') },
-  { value: 'Pune', label: 'Pune', image: require('../../assets/pune.png') },
+  { value: 'Delhi', label: 'Delhi', image: require('../../assets/delhi.png') },
   { value: 'Gurgaon', label: 'Gurgaon', image: require('../../assets/gurgaon.png') },
+  { value: 'Hyderabad', label: 'Hyderabad', image: require('../../assets/hyderabad.png') },
+  // { value: 'Jaipur', label: 'Jaipur', image: require('../../assets/jaipur.png') },
+  // { value: 'Kolkata', label: 'Kolkata', image: require('../../assets/kolkata.png') },
+  { value: 'Mumbai', label: 'Mumbai', image: require('../../assets/mumbai.png') },
   { value: 'Noida', label: 'Noida', image: require('../../assets/noida.png') },
-  { value: 'Jaipur', label: 'Jaipur', image: require('../../assets/jaipur.png') },
+  { value: 'Pune', label: 'Pune', image: require('../../assets/pune.png') },
 ];
 
 const BackIcon = () => (
@@ -117,9 +117,9 @@ const Cities: React.FC<CitiesProps> = ({
           </View>
         </View>
 
-        {/* Popular Cities Label */}
+        {/* Cities Label */}
         <View style={styles.divider}>
-          <Text style={styles.dividerText}>Popular Cities</Text>
+          <Text style={styles.dividerText}>Cities</Text>
         </View>
 
         {/* Cities Grid */}
@@ -141,6 +141,12 @@ const Cities: React.FC<CitiesProps> = ({
               <Text style={styles.cityName}>{city.label}</Text>
             </TouchableOpacity>
           ))}
+          {/* Add empty placeholders to maintain alignment */}
+          {filteredCities.length % 3 !== 0 && (
+            Array.from({ length: 3 - (filteredCities.length % 3) }).map((_, index) => (
+              <View key={`placeholder-${index}`} style={styles.cityCard} />
+            ))
+          )}
         </View>
 
         {/* Bottom Spacing */}
@@ -226,7 +232,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 2,
   },
   logoText: {
@@ -285,12 +291,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   cityCard: {
     width: '30%',
     alignItems: 'center',
     marginBottom: 25,
+    marginRight: '3.33%',
   },
   cityIconContainer: {
     width: 70,

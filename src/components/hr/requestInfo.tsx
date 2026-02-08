@@ -542,88 +542,91 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             <Text style={styles.loadingText}>Loading details...</Text>
           </View>
         ) : item ? (
-          <View style={styles.chatContainer}>
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.chatScrollView}
-              contentContainerStyle={styles.chatScrollContent}
-              showsVerticalScrollIndicator={false}
-              onScrollBeginDrag={handleScrollBeginDrag}
-            >
-              <View style={styles.infoCardCompact}>
-                <View style={styles.infoHeaderCompact}>
-                  <View style={styles.infoTitleRowCompact}>
-                    <View style={styles.infoIconContainerCompact}>
-                      <Ionicons 
-                        name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
-                        size={20} 
-                        color={WHATSAPP_COLORS.white} 
-                      />
-                    </View>
-                    <View style={styles.infoTitleContentCompact}>
-                      <Text style={styles.infoTitleCompact} numberOfLines={1}>
-                        {item.nature}
-                      </Text>
-                      <Text style={styles.infoStatusCompact}>
-                        <Text style={{ fontWeight: '600' }}>Status: </Text>
-                        <Text style={{ color: getStatusConfig(item.status).color }}>
-                          {getStatusConfig(item.status).label}
+          <>
+            <View style={styles.chatContainer}>
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.chatScrollView}
+                contentContainerStyle={styles.chatScrollContent}
+                showsVerticalScrollIndicator={false}
+                onScrollBeginDrag={handleScrollBeginDrag}
+              >
+                <View style={styles.infoCardCompact}>
+                  <View style={styles.infoHeaderCompact}>
+                    <View style={styles.infoTitleRowCompact}>
+                      <View style={styles.infoIconContainerCompact}>
+                        <Ionicons 
+                          name={activeTab === 'requests' ? 'document-text' : 'alert-circle'} 
+                          size={20} 
+                          color={WHATSAPP_COLORS.white} 
+                        />
+                      </View>
+                      <View style={styles.infoTitleContentCompact}>
+                        <Text style={styles.infoTitleCompact} numberOfLines={1}>
+                          {item.nature}
                         </Text>
+                        <Text style={styles.infoStatusCompact}>
+                          <Text style={{ fontWeight: '600' }}>Status: </Text>
+                          <Text style={{ color: getStatusConfig(item.status).color }}>
+                            {getStatusConfig(item.status).label}
+                          </Text>
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.infoDateCompact}>
+                      <Ionicons name="calendar-outline" size={12} color={WHATSAPP_COLORS.gray} />
+                      <Text style={styles.infoDateTextCompact}>
+                        Submitted {new Date(item.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
                       </Text>
                     </View>
                   </View>
-                  <View style={styles.infoDateCompact}>
-                    <Ionicons name="calendar-outline" size={12} color={WHATSAPP_COLORS.gray} />
-                    <Text style={styles.infoDateTextCompact}>
-                      Submitted {new Date(item.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                  <View style={styles.descriptionContainerCompact}>
+                    <Text style={styles.descriptionLabelCompact}>Description</Text>
+                    <Text style={styles.descriptionTextCompact}>
+                      {item.description || item.issue}
                     </Text>
                   </View>
-                </View>
-                <View style={styles.descriptionContainerCompact}>
-                  <Text style={styles.descriptionLabelCompact}>Description</Text>
-                  <Text style={styles.descriptionTextCompact}>
-                    {item.description || item.issue}
-                  </Text>
-                </View>
-                <View style={styles.infoFooterCompact}>
-                  <View style={styles.updateInfoCompact}>
-                    <Ionicons name="time-outline" size={12} color={WHATSAPP_COLORS.gray} />
-                    <Text style={styles.infoFooterTextCompact}>
-                      Last updated: {new Date(item.updated_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.chatMessagesContainer}>
-                <FlatList
-                  data={getProcessedComments()}
-                  renderItem={renderCommentItem}
-                  keyExtractor={(item) => item.id}
-                  style={styles.messagesList}
-                  contentContainerStyle={styles.messagesListContent}
-                  showsVerticalScrollIndicator={false}
-                  scrollEnabled={false}
-                  ListEmptyComponent={() => (
-                    <View style={styles.noMessages}>
-                      <Ionicons name="chatbubble-ellipses-outline" size={48} color={WHATSAPP_COLORS.gray} />
-                      <Text style={styles.noMessagesTitle}>No messages yet</Text>
-                      <Text style={styles.noMessagesText}>
-                        Start the conversation by sending a message
+                  <View style={styles.infoFooterCompact}>
+                    <View style={styles.updateInfoCompact}>
+                      <Ionicons name="time-outline" size={12} color={WHATSAPP_COLORS.gray} />
+                      <Text style={styles.infoFooterTextCompact}>
+                        Last updated: {new Date(item.updated_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </Text>
                     </View>
-                  )}
-                />
-              </View>
-            </ScrollView>
+                  </View>
+                </View>
+                <View style={styles.chatMessagesContainer}>
+                  <FlatList
+                    data={getProcessedComments()}
+                    renderItem={renderCommentItem}
+                    keyExtractor={(item) => item.id}
+                    style={styles.messagesList}
+                    contentContainerStyle={styles.messagesListContent}
+                    showsVerticalScrollIndicator={false}
+                    scrollEnabled={false}
+                    ListEmptyComponent={() => (
+                      <View style={styles.noMessages}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={48} color={WHATSAPP_COLORS.gray} />
+                        <Text style={styles.noMessagesTitle}>No messages yet</Text>
+                        <Text style={styles.noMessagesText}>
+                          Start the conversation by sending a message
+                        </Text>
+                      </View>
+                    )}
+                  />
+                </View>
+              </ScrollView>
+            </View>
+            
             {attachedFiles.length > 0 && (
               <View style={styles.attachedFilesPreview}>
                 <Text style={styles.attachedFilesTitle}>Attached Files ({attachedFiles.length}):</Text>
@@ -665,6 +668,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 })}
               </View>
             )}
+            
             <View style={styles.chatInputContainer}>
               <View style={styles.chatInputWrapper}>
                 <TouchableOpacity 
@@ -717,7 +721,7 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </>
         ) : null}
       </View>
       <Modal

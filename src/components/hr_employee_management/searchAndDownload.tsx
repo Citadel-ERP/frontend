@@ -18,6 +18,9 @@ interface SearchAndDownloadProps {
   onSearchChange: (query: string) => void;
   onDownloadAttendance: () => void;
   onOpenHolidays: () => void;
+  onOpenWorkStats: () => void;
+  onOpenBulkPayslips: () => void;
+  onOpenBulkEmployees: () => void;
   placeholder: string;
 }
 
@@ -26,6 +29,9 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
   onSearchChange,
   onDownloadAttendance,
   onOpenHolidays,
+  onOpenWorkStats,
+  onOpenBulkPayslips,
+  onOpenBulkEmployees,
   placeholder,
 }) => {
   const [searchFocused, setSearchFocused] = React.useState(false);
@@ -90,6 +96,61 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
         >
           <View style={localStyles.modalContent}>
             
+            {/* Work Statistics Option */}
+            <TouchableOpacity
+              style={localStyles.optionItem}
+              onPress={() => handleOptionPress(onOpenWorkStats)}
+              activeOpacity={0.7}
+            >
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="stats-chart" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Work Statistics</Text>
+                <Text style={localStyles.optionSubtext}>View daily attendance stats</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={localStyles.optionDivider} />
+
+            {/* Bulk Upload Payslips Option - NEW */}
+            <TouchableOpacity
+              style={localStyles.optionItem}
+              onPress={() => handleOptionPress(onOpenBulkPayslips)}
+              activeOpacity={0.7}
+            >
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="cloud-upload-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Bulk Upload Payslips</Text>
+                <Text style={localStyles.optionSubtext}>Upload multiple payslips at once</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={localStyles.optionDivider} />
+
+            {/* Bulk Upload Employees Option - NEW */}
+            <TouchableOpacity
+              style={localStyles.optionItem}
+              onPress={() => handleOptionPress(onOpenBulkEmployees)}
+              activeOpacity={0.7}
+            >
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="people-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Bulk Update Employees</Text>
+                <Text style={localStyles.optionSubtext}>Import employee data from Excel</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={localStyles.optionDivider} />
+
+            {/* Manage Holidays Option */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onOpenHolidays)}
@@ -107,6 +168,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
 
             <View style={localStyles.optionDivider} />
 
+            {/* Download Attendance Option */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onDownloadAttendance)}

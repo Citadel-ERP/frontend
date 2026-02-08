@@ -26,7 +26,8 @@ const logoSize = isTablet ? 140 : isSmallDevice ? 100 : 120;
 
 interface ResetPasswordProps {
   email: string;
-  oldPassword: string;
+  oldPassword?: string; // Optional - only for first login flow
+  otp?: string; // Optional - only for forgot password flow
   onPasswordReset: (email: string, oldPassword: string, newPassword: string) => Promise<void>;
   onBack: () => void;
   isLoading?: boolean;
@@ -39,6 +40,7 @@ interface ResetPasswordResponse {
 const ResetPassword: React.FC<ResetPasswordProps> = ({
   email,
   oldPassword,
+  otp,
   onPasswordReset,
   onBack,
   isLoading,
@@ -54,6 +56,10 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
   const scrollViewRef = useRef<ScrollView>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
 
+  // Determine which flow we're in
+  const isForgotPasswordFlow = !!otp;
+  const isFirstLoginFlow = !!oldPassword && !otp;
+
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
     const backendUrl = BACKEND_URL;
@@ -66,13 +72,14 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
     return backendUrl;
   };
 
+  // API call for first-time login password reset
   const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
     try {
-      const BACKEND_URL = getBackendUrl();
+      const backend = getBackendUrl();
       
-      console.log('Reset Password API Call:', { email, old_password: oldPassword, new_password: newPassword });
+      console.log('Reset Password API Call (First Login):', { email, old_password: oldPassword, new_password: newPassword });
       
-      const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
+      const response = await fetch(`${backend}/core/resetPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,6 +88,44 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
           email,
           old_password: oldPassword,
           new_password: newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || errorData?.detail || `Reset password failed with status ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      return {
+        message: data.message || 'Password reset successful',
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Network error occurred during password reset');
+    }
+  };
+
+  // API call for forgot password OTP-based reset
+  const resetPasswordWithOtpAPI = async (email: string, otp: string, newPassword: string): Promise<ResetPasswordResponse> => {
+    try {
+      const backend = getBackendUrl();
+      
+      console.log('Reset Password with OTP API Call:', { email, otp, password: newPassword });
+      
+      const response = await fetch(`${backend}/core/resetPasswordOtp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          otp,
+          password: newPassword,
         }),
       });
 
@@ -132,7 +177,17 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
     setIsSubmitting(true);
     try {
-      const response = await resetPasswordAPI(email, oldPassword, newPassword);
+      let response: ResetPasswordResponse;
+
+      if (isForgotPasswordFlow && otp) {
+        // Forgot password flow - use OTP endpoint
+        response = await resetPasswordWithOtpAPI(email, otp, newPassword);
+      } else if (isFirstLoginFlow && oldPassword) {
+        // First login flow - use old password endpoint
+        response = await resetPasswordAPI(email, oldPassword, newPassword);
+      } else {
+        throw new Error('Invalid reset password flow');
+      }
 
       Alert.alert(
         'Success',
@@ -140,7 +195,8 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
         [{
           text: 'OK',
           onPress: () => {
-            onPasswordReset(email, oldPassword, newPassword);
+            // For both flows, pass the data back to parent
+            onPasswordReset(email, oldPassword || otp || '', newPassword);
           }
         }]
       );
@@ -151,8 +207,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
       if (error instanceof Error) {
         if (error.message.includes('Backend URL not configured')) {
           errorMessage = 'Configuration error. Please contact support.';
-        } else if (error.message.includes('401') || error.message.includes('Invalid')) {
-          errorMessage = 'Invalid current password. Please check and try again.';
+        } else if (error.message.includes('401') || error.message.includes('Invalid credentials') || error.message.includes('Invalid')) {
+          if (isForgotPasswordFlow) {
+            errorMessage = 'Invalid or expired OTP. Please request a new one.';
+          } else {
+            errorMessage = 'Invalid current password. Please check and try again.';
+          }
         } else if (error.message.includes('Network')) {
           errorMessage = 'Network error. Please check your internet connection and try again.';
         } else {
@@ -193,7 +253,9 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
       <View style={styles.titleContainer}>
         <Text style={styles.title}>Reset Password</Text>
         <Text style={styles.subtitle}>
-          Please change your default password to secure your account
+          {isForgotPasswordFlow 
+            ? 'Create a new password for your account'
+            : 'Please change your default password to secure your account'}
         </Text>
       </View>
 
@@ -292,7 +354,9 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({
 
       <View style={styles.infoContainer}>
         <Text style={styles.infoText}>
-          🔒 After resetting your password, you will create your MPIN for quick access
+          {isForgotPasswordFlow 
+            ? '🔒 After resetting your password, you can login with your new credentials'
+            : '🔒 After resetting your password, you will create your MPIN for quick access'}
         </Text>
       </View>
     </View>

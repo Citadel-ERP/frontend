@@ -22,6 +22,8 @@ export interface Employee {
   login_time?: string;
   logout_time?: string;
   city?: string;
+  any_action?: boolean;
+  action_type?: string;
 }
 
 export interface AttendanceRecord {

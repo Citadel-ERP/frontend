@@ -43,38 +43,32 @@ export interface AssignedEmployee {
 }
 
 export interface Vehicle {
-  id: number;
-  make: string;
-  model: string;
-  year: number;
-  license_plate: string;
-  color: string;
-  seating_capacity: number;
-  fuel_type: string;
-  status: string;
-  current_location: {
-    city: string;
-    state: string;
-  };
-  image_url?: string;
-  images?: Array<{
     id: number;
-    url: string;
-    is_primary: boolean;
-  }>;
-  vehicle_photos?: Array<{
-    id: number;
-    photo: string;
-    created_at: string;
-    updated_at: string;
-  }>;
-  // Add these certificate fields
-  pollution_certificate?: string | null;
-  insurance_certificate?: string | null;
-  registration_certificate?: string | null;
-  insurance_certificate_expiry_date?: string | null;
-  pollution_certificate_expiry_date?: string | null;
-  registration_certificate_expiry_date?: string | null;
+    make: string;
+    model: string;
+    license_plate: string;
+    color: string;
+    fuel_type: string;
+    seating_capacity: number;
+    year: number;
+    status: string;
+    current_location?: {
+        city: string;
+        state: string;
+    };
+    vehicle_photos?: Array<{
+        id: number;
+        photo: string;
+    }>;
+    pollution_certificate?: string;
+    insurance_certificate?: string;
+    registration_certificate?: string;
+    pollution_certificate_expiry_date?: string;
+    insurance_certificate_expiry_date?: string;
+    registration_certificate_expiry_date?: string;
+    // NEW: Booking-related fields
+    booked_for?: string | null;  // Name of person booked for
+    booking_id?: number | null;   // ID of active booking
 }
 
 export interface Booking {
@@ -95,25 +89,33 @@ export interface Booking {
 }
 
 export interface MaintenanceRecord {
-  id: number;
-  vehicle: Vehicle;
-  maintenance_date: string;
-  cost: string;
-  description: string;
-  logged_by: AssignedEmployee;
-  start_date: string;
-  end_date: string;
-  document?: string | null;
+    id: number;
+    vehicle: number;
+    maintenance_date: string;
+    description: string;
+    document?: string;
+    start_date?: string;
+    end_date?: string;
+    cost?: string;
+    logged_by?: {
+        full_name: string;
+    };
+    created_at: string;
+    updated_at: string;
 }
 
 export interface FuelLog {
-  id: number;
-  vehicle: Vehicle;
-  fuel_date: string;
-  quantity: string;
-  cost: string;
-  logged_by: AssignedEmployee;
-  odometer_reading: string;
+    id: number;
+    vehicle: number;
+    fuel_date: string;
+    quantity: string;
+    cost: string;
+    logged_by?: {
+        full_name: string;
+    };
+    odometer_reading?: string;
+    created_at: string;
+    updated_at: string;
 }
 
 export interface MaintenanceModalProps {

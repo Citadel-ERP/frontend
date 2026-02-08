@@ -49,6 +49,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   // State for BDT selection
   const [bdts, setBdts] = useState<BDT[]>([]);
   const [selectedBDT, setSelectedBDT] = useState<BDT | null>(null);
+  const [isUnassignedMode, setIsUnassignedMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingBDTs, setLoadingBDTs] = useState(false);
 
@@ -104,7 +105,6 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   // Filter BDTs based on search query
   const filteredBDTs = useMemo(() => {
     if (!searchQuery.trim()) return bdts;
-
     const query = searchQuery.toLowerCase();
     return bdts.filter(bdt =>
       bdt.full_name.toLowerCase().includes(query) ||
@@ -149,6 +149,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       'hardwareBackPress',
       handleBackPress
     );
+
     return () => backHandler.remove();
   }, [viewMode, isEditMode, onBack, showLeadInfo]);
 
@@ -177,20 +178,22 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (token && selectedBDT && viewMode === 'list') {
+    if (token && (selectedBDT || isUnassignedMode) && viewMode === 'list') {
       fetchLeads(1);
       fetchPhases();
       fetchAssignedToOptions();
-      fetchStatusCounts();
+      if (!isUnassignedMode) {
+        fetchStatusCounts();
+      }
     }
-  }, [token, selectedBDT, viewMode]);
+  }, [token, selectedBDT, isUnassignedMode, viewMode]);
 
   // Fetch BDTs for selected city
   const fetchBDTs = async (city: string): Promise<void> => {
     try {
       if (!token) return;
-
       setLoadingBDTs(true);
+
       const response = await fetch(`${BACKEND_URL}/manager/getBDT`, {
         method: 'POST',
         headers: {
@@ -250,9 +253,60 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     await AsyncStorage.setItem('dark_mode', newDarkMode.toString());
   };
 
+  // Fetch unassigned leads
+  const fetchUnassignedLeads = async (): Promise<void> => {
+    try {
+      if (!token) return;
+      setLoading(true);
+
+      const response = await fetch(`${BACKEND_URL}/manager/getUnassignedLeads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          city: selectedCity
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      const transformedLeads = data.leads.map((lead: any) => ({
+        ...lead,
+        createdAt: lead.created_at,
+        collaborators: [],
+        comments: []
+      }));
+
+      setLeads(transformedLeads);
+      setPagination(null); // No pagination for unassigned leads
+      setIsSearchMode(false);
+      setStatusCounts({}); // No status counts for unassigned
+    } catch (error) {
+      console.error('Error fetching unassigned leads:', error);
+      Alert.alert('Error', 'Failed to fetch unassigned leads. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   const fetchLeads = async (page: number = 1, append: boolean = false): Promise<void> => {
     try {
-      if (!token || !selectedBDT) return;
+      if (!token) return;
+
+      // If in unassigned mode, fetch unassigned leads
+      if (isUnassignedMode) {
+        fetchUnassignedLeads();
+        return;
+      }
+
+      if (!selectedBDT) return;
 
       if (!append) {
         setLoading(true);
@@ -451,10 +505,13 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   };
 
   const handleLoadMore = useCallback(() => {
+    // Don't load more for unassigned leads (no pagination)
+    if (isUnassignedMode) return;
+    
     if (pagination && pagination.has_next && !loadingMore && !isSearchMode) {
       fetchLeads(pagination.current_page + 1, true);
     }
-  }, [pagination, loadingMore, isSearchMode]);
+  }, [pagination, loadingMore, isSearchMode, isUnassignedMode]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -462,9 +519,11 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       searchLeads(searchQuery);
     } else {
       fetchLeads(1);
-      fetchStatusCounts();
+      if (!isUnassignedMode) {
+        fetchStatusCounts();
+      }
     }
-  }, [isSearchMode, searchQuery]);
+  }, [isSearchMode, searchQuery, isUnassignedMode]);
 
   const handleCitySelection = async (city: string) => {
     setSelectedCity(city);
@@ -474,6 +533,13 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const handleBDTSelection = (bdt: BDT) => {
     setSelectedBDT(bdt);
+    setIsUnassignedMode(false);
+    setViewMode('list');
+  };
+
+  const handleUnassignedSelection = () => {
+    setSelectedBDT(null);
+    setIsUnassignedMode(true);
     setViewMode('list');
   };
 
@@ -490,12 +556,15 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setIsEditMode(false);
     setShowLeadInfo(false);
     fetchLeads(1);
-    fetchStatusCounts();
-  }, []);
+    if (!isUnassignedMode) {
+      fetchStatusCounts();
+    }
+  }, [isUnassignedMode]);
 
   const handleBackToBDTSelection = useCallback(() => {
     setViewMode('bdt-selection');
     setSelectedBDT(null);
+    setIsUnassignedMode(false);
     setLeads([]);
     setSearchQuery('');
     setFilterBy('');
@@ -510,6 +579,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     setSelectedCity('');
     setBdts([]);
     setSelectedBDT(null);
+    setIsUnassignedMode(false);
     setLeads([]);
     setSearchQuery('');
     setFilterBy('');
@@ -539,6 +609,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
   const updateLead = async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
     try {
       if (!token || !selectedLead) return false;
+
       setLoading(true);
 
       const updatePayload: any = {
@@ -554,12 +625,11 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
       if (leadData.city !== undefined) updatePayload.city = leadData.city;
-
       if (leadData.assigned_to !== undefined) {
         updatePayload.assigned_to = leadData.assigned_to?.employee_id || leadData.assigned_to?.email;
       }
 
-      // ADD THIS: Include meta field if it exists
+      // Include meta field if it exists
       if (leadData.meta !== undefined && leadData.meta !== null) {
         updatePayload.meta = leadData.meta;
       }
@@ -578,6 +648,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
       }
 
       const data = await response.json();
+
       const updatedLead = {
         ...data.lead,
         createdAt: data.lead.created_at,
@@ -607,7 +678,9 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     const success = await updateLead(updatedLead, editingEmails, editingPhones);
     if (success) {
       setIsEditMode(false);
-      fetchStatusCounts();
+      if (!isUnassignedMode) {
+        fetchStatusCounts();
+      }
     }
   };
 
@@ -617,12 +690,15 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     if (viewMode === 'create') return 'Create New Lead';
     if (viewMode === 'detail') return 'Lead Details';
     if (showLeadInfo) return 'Lead Information';
+    if (isUnassignedMode) return 'Unassigned Leads';
     return selectedBDT ? `${selectedBDT.full_name} - Leads` : 'Leads';
   };
 
   const getInitials = (name: string): string => {
     if (!name || name.trim().length === 0) return '?';
+
     const nameParts = name.trim().split(/\s+/);
+
     if (nameParts.length === 1) {
       return nameParts[0].charAt(0).toUpperCase();
     } else {
@@ -671,14 +747,14 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             <ActivityIndicator size="large" color={theme.primary} />
             <Text style={[styles.loadingText, { color: theme.text }]}>Loading BDTs...</Text>
           </View>
-        ) : filteredBDTs.length === 0 ? (
+        ) : filteredBDTs.length === 0 && searchQuery ? (
           <View style={styles.emptyState}>
             <Ionicons name="people" size={64} color={theme.border} />
             <Text style={[styles.emptyStateText, { color: theme.text }]}>
-              {searchQuery ? 'No BDTs match your search' : 'No BDTs found'}
+              No BDTs match your search
             </Text>
             <Text style={[styles.emptyStateSubtext, { color: theme.textSecondary }]}>
-              {searchQuery ? 'Try adjusting your search' : 'No BDTs available for this city'}
+              Try adjusting your search
             </Text>
           </View>
         ) : (
@@ -703,20 +779,17 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                     </Text>
                   )}
                 </View>
-
                 <View style={styles.bdtContent}>
                   <View style={styles.bdtHeader}>
                     <Text style={[styles.bdtName, { color: theme.text }]} numberOfLines={1}>
                       {item.full_name}
                     </Text>
                   </View>
-
                   <View style={styles.bdtInfo}>
                     <Text style={[styles.bdtId, { color: theme.textSecondary }]} numberOfLines={1}>
                       ID: {item.employee_id}
                     </Text>
                   </View>
-
                   <View style={styles.bdtContact}>
                     <Ionicons name="mail" size={12} color={theme.textTertiary} />
                     <Text style={[styles.bdtEmail, { color: theme.textSecondary }]} numberOfLines={1}>
@@ -724,9 +797,34 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                     </Text>
                   </View>
                 </View>
-
                 <View style={styles.bdtArrow}>
                   <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+                </View>
+              </TouchableOpacity>
+            )}
+            ListFooterComponent={() => (
+              <TouchableOpacity
+                style={[styles.unassignedItem, { backgroundColor: theme.surface, borderColor: theme.primary }]}
+                onPress={handleUnassignedSelection}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.unassignedAvatar, { backgroundColor: theme.primary + '20' }]}>
+                  <Ionicons name="person-outline" size={28} color={theme.primary} />
+                </View>
+                <View style={styles.bdtContent}>
+                  <View style={styles.bdtHeader}>
+                    <Text style={[styles.bdtName, { color: theme.primary }]} numberOfLines={1}>
+                      Unassigned Leads
+                    </Text>
+                  </View>
+                  <View style={styles.bdtInfo}>
+                    <Text style={[styles.bdtId, { color: theme.textSecondary }]} numberOfLines={1}>
+                      View all leads without BDT assignment
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.bdtArrow}>
+                  <Ionicons name="chevron-forward" size={20} color={theme.primary} />
                 </View>
               </TouchableOpacity>
             )}
@@ -758,31 +856,49 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             theme={theme}
           />
         );
+
       case 'bdt-selection':
         return renderBDTSelection();
+
       case 'create':
         return (
           <CreateLead
             onBack={handleBackToList}
             onCreate={() => {
               fetchLeads(1);
-              fetchStatusCounts();
+              if (!isUnassignedMode) {
+                fetchStatusCounts();
+              }
               setViewMode('list');
             }}
             selectedCity={selectedCity}
+            selectedBDT={selectedBDT}
             token={token}
             theme={theme}
             fetchSubphases={fetchSubphases}
           />
         );
+
       case 'detail':
         if (!selectedLead) return null;
+
         if (isEditMode) {
           return (
             <EditLead
               lead={selectedLead}
               onBack={() => setIsEditMode(false)}
               onSave={handleSaveLead}
+              onDelete={async () => {
+                try {
+                  const success = await handleDeleteLead(selectedLead.id);
+                  if (success) {
+                    setIsEditMode(false);
+                    handleBackToList();
+                  }
+                } catch (error) {
+                  console.error('Error deleting lead:', error);
+                }
+              }}
               token={token}
               theme={theme}
               fetchSubphases={fetchSubphases}
@@ -790,6 +906,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             />
           );
         }
+
         return (
           <LeadDetails
             lead={selectedLead}
@@ -800,39 +917,42 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
             onOpenLeadDetails={handleOpenLeadInfo}
           />
         );
+
       case 'list':
       default:
         return (
-          <ScrollView
-            style={styles.scrollContainer}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={true}
-          >
-            <Header
-              title={getHeaderTitle()}
-              {...getHeaderActions()}
-              onThemeToggle={toggleDarkMode}
-              isDarkMode={isDarkMode}
-              theme={theme}
-              loading={loading}
-            />
-
-            <SearchAndFilter
-              token={token}
-              onSearch={handleSearch}
-              onFilter={handleFilter}
-              theme={theme}
-              allPhases={allPhases}
-              allSubphases={allSubphases}
-              allAssignedTo={allAssignedTo}
-              fetchSubphases={fetchSubphases}
-              selectedCity={selectedCity}
-              onCreateLead={handleCreateLead}
-              onBack={handleBackToBDTSelection}
-              totalLeads={totalLeads}
-              statusCounts={statusCounts}
-            />
-
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              style={styles.scrollContainer}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              <Header
+                title={getHeaderTitle()}
+                {...getHeaderActions()}
+                onThemeToggle={toggleDarkMode}
+                isDarkMode={isDarkMode}
+                theme={theme}
+                loading={loading}
+              />
+              <SearchAndFilter
+                token={token}
+                onSearch={handleSearch}
+                onFilter={handleFilter}
+                theme={theme}
+                allPhases={allPhases}
+                allSubphases={allSubphases}
+                allAssignedTo={allAssignedTo}
+                fetchSubphases={fetchSubphases}
+                selectedCity={selectedCity}
+                onCreateLead={handleCreateLead}
+                onBack={handleBackToBDTSelection}
+                totalLeads={totalLeads}
+                statusCounts={statusCounts}
+              />
+            </ScrollView>
+            
             <View style={{ flex: 1 }}>
               <LeadsListUpdated
                 leads={filteredLeads}
@@ -850,7 +970,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                 isDarkMode={isDarkMode}
               />
             </View>
-          </ScrollView>
+          </View>
         );
     }
   };
@@ -863,6 +983,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true
       };
     }
+
     if (viewMode === 'city-selection') {
       return {
         showBackButton: true,
@@ -870,6 +991,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true
       };
     }
+
     if (viewMode === 'bdt-selection') {
       return {
         showBackButton: true,
@@ -877,6 +999,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true,
       };
     }
+
     if (viewMode === 'list') {
       return {
         showBackButton: true,
@@ -887,6 +1010,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true,
       };
     }
+
     if (viewMode === 'detail') {
       if (isEditMode) {
         return {
@@ -897,6 +1021,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           showThemeToggle: true,
         };
       }
+
       return {
         showBackButton: true,
         onBack: handleBackToList,
@@ -905,6 +1030,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true,
       };
     }
+
     if (viewMode === 'create') {
       return {
         showBackButton: true,
@@ -914,6 +1040,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         showThemeToggle: true,
       };
     }
+
     return {
       showBackButton: true,
       onBack: onBack,
@@ -923,6 +1050,81 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const headerActions = getHeaderActions();
 
+  // Handle delete lead
+  const handleDeleteLead = async (leadId: number): Promise<boolean> => {
+    try {
+      if (!token) {
+        Alert.alert('Error', 'Authentication token not found');
+        return false;
+      }
+
+      Alert.alert(
+        'Delete Lead',
+        'Are you sure you want to delete this lead? This action cannot be undone.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setLoading(true);
+
+              try {
+                const response = await fetch(`${BACKEND_URL}/manager/deleteLead`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    token,
+                    lead_id: leadId
+                  })
+                });
+
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Remove lead from local state
+                setLeads(prevLeads => prevLeads.filter(lead => lead.id !== leadId));
+
+                if (selectedLead && selectedLead.id === leadId) {
+                  setSelectedLead(null);
+                }
+
+                Alert.alert('Success', data.message || 'Lead deleted successfully!');
+
+                // Refresh status counts
+                if (!isUnassignedMode) {
+                  fetchStatusCounts();
+                }
+
+                return true;
+              } catch (error: any) {
+                console.error('Error deleting lead:', error);
+                Alert.alert('Error', error.message || 'Failed to delete lead. Please try again.');
+                return false;
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+
+      return false;
+    } catch (error) {
+      console.error('Error in delete lead:', error);
+      return false;
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: 'transparent' }]}>
       <StatusBar
@@ -930,7 +1132,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         backgroundColor="transparent"
         translucent
       />
-      {viewMode !== 'city-selection' && viewMode !== 'detail' && viewMode !== 'list' && !showLeadInfo && (
+
+      {viewMode !== 'city-selection' && viewMode !== 'detail' && viewMode !== 'create' && viewMode !== 'list' && !showLeadInfo && (
         <Header
           title={getHeaderTitle()}
           {...headerActions}
@@ -940,6 +1143,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           loading={loading}
         />
       )}
+
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         {renderContent()}
       </View>
@@ -953,10 +1157,10 @@ const styles = StyleSheet.create({
     paddingTop: 0
   },
   scrollContainer: {
-    flex: 1,
+    flexGrow: 0,
   },
   scrollContent: {
-    flexGrow: 1,
+    flexGrow: 0,
   },
   bdtContainer: {
     flex: 1,
@@ -1029,6 +1233,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  unassignedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   bdtAvatar: {
     width: 56,
     height: 56,
@@ -1037,6 +1256,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
     overflow: 'hidden',
+  },
+  unassignedAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   bdtProfileImage: {
     width: '100%',

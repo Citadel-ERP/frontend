@@ -1,19 +1,33 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar,TouchableOpacity, ActivityIndicator, Image, Platform } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  Image, 
+  Platform ,
+  StatusBar
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors } from './types';
 
 interface HeaderProps {
   title: string;
-  onBack: () => void;
+  onBack?: () => void;
   onThemeToggle?: () => void;
   isDarkMode: boolean;
   theme: ThemeColors;
-  showThemeToggle?: boolean;
+  showBackButton?: boolean;
   showEditButton?: boolean;
   showSaveButton?: boolean;
+  showAddButton?: boolean;
+  showThemeToggle?: boolean;
   onEdit?: () => void;
   onSave?: () => void;
+  onAddPress?: () => void;
+  addButtonText?: string;
   loading?: boolean;
 }
 
@@ -30,21 +44,25 @@ const Header: React.FC<HeaderProps> = ({
   onThemeToggle,
   isDarkMode,
   theme,
-  showThemeToggle = false,
+  showBackButton = false,
   showEditButton = false,
   showSaveButton = false,
+  showAddButton = false,
+  showThemeToggle = false,
   onEdit,
   onSave,
+  onAddPress,
+  addButtonText = 'Add',
   loading = false,
 }) => {
+  
   return (
-    <><StatusBar 
-        translucent 
-        backgroundColor="transparent" 
-        barStyle="light-content" 
-      />
     <View style={styles.headerBanner}>
-       
+      <StatusBar
+                barStyle="light-content"
+                backgroundColor="#075E54"
+                translucent={false}
+            />
       <LinearGradient
         colors={['#4A5568', '#2D3748']}
         start={{ x: 0, y: 0 }}
@@ -65,38 +83,70 @@ const Header: React.FC<HeaderProps> = ({
         <View style={[styles.headerContent, { 
           paddingTop: Platform.OS === 'ios' ? 50 : 40 
         }]}>
-          {/* Top row with back button and logo */}
+          {/* Top row with back button, logo, and actions */}
           <View style={styles.headerTopRow}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack}>
-              <BackIcon />
-            </TouchableOpacity>
-            
-            <Text style={styles.logoText}>CITADEL</Text>
-            
-            <View style={styles.headerActions}>
-              {showEditButton && onEdit && (
+            {/* Left side - Back button */}
+            <View style={styles.leftSection}>
+              {showBackButton && onBack && (
                 <TouchableOpacity 
-                  style={styles.editButton} 
-                  onPress={onEdit}
+                  style={styles.backButton} 
+                  onPress={onBack}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={[styles.editButtonText]}>Edit</Text>
+                  <BackIcon />
                 </TouchableOpacity>
               )}
-              {/* {showSaveButton && onSave && (
+            </View>
+            
+            {/* Center - Logo */}
+            <View style={styles.centerSection}>
+              <Text style={styles.logoText}>CITADEL</Text>
+            </View>
+            
+            {/* Right side - Action buttons */}
+            <View style={styles.rightSection}>
+              {showEditButton && onEdit && (
                 <TouchableOpacity 
-                  style={[styles.saveButton, loading && styles.buttonDisabled]} 
+                  style={styles.actionButton} 
+                  onPress={onEdit}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.actionButtonText}>Edit</Text>
+                </TouchableOpacity>
+              )}
+              
+              {showSaveButton && onSave && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.saveButton, loading && styles.buttonDisabled]} 
                   onPress={onSave}
                   disabled={loading}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   {loading ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
+                    <Text style={[styles.actionButtonText, styles.saveButtonText]}>Save</Text>
                   )}
                 </TouchableOpacity>
-              )} */}
+              )}
+              
+              {showAddButton && onAddPress && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.addButton]} 
+                  onPress={onAddPress}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="add" size={18} color="#FFFFFF" style={styles.addIcon} />
+                  <Text style={[styles.actionButtonText, styles.addButtonText]}>{addButtonText}</Text>
+                </TouchableOpacity>
+              )}
+              
               {/* {showThemeToggle && onThemeToggle && (
-                <TouchableOpacity onPress={onThemeToggle} style={styles.themeToggleButton}>
+                <TouchableOpacity 
+                  onPress={onThemeToggle} 
+                  style={[styles.actionButton, styles.themeToggleButton]}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Text style={styles.themeIcon}>
                     {isDarkMode ? '☀️' : '🌙'}
                   </Text>
@@ -112,7 +162,6 @@ const Header: React.FC<HeaderProps> = ({
         </View>
       </LinearGradient>
     </View>
-    </>
   );
 };
 
@@ -132,7 +181,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
-    opacity: 1,
+    opacity: 0.8,
   },
   headerOverlay: {
     position: 'absolute',
@@ -140,22 +189,41 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: '100%',
-    height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   headerContent: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingVertical: 20,
     position: 'relative',
     zIndex: 1,
   },
   headerTopRow: {
     flexDirection: 'row',
-    justifyContent: 'center', // Changed to center
+    justifyContent: 'space-between',
     alignItems: 'center',
-    position: 'relative', // Added
+    height: 44, // Fixed height for consistent spacing
+  },
+  leftSection: {
+    width: 80,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rightSection: {
+    width: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   logoText: {
     color: 'white',
@@ -164,11 +232,76 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
-  backButton: {
-    padding: 8,
-    position: 'absolute', // Added
-    left: 0, // Added
-    zIndex: 2, // Added
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e9e9e959', // Green color for Add button
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 6,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  addIcon: {
+    marginRight: 4,
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  saveButton: {
+    backgroundColor: '#1DA1F2', // Blue color for Save button
+  },
+  saveButtonText: {
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  themeToggleButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  themeIcon: {
+    fontSize: 20,
+  },
+  titleSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 25,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  sectionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   backIcon: {
     height: 24,
@@ -188,58 +321,8 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 2,
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 25,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    position: 'absolute', // Added
-    right: 0, // Added
-    zIndex: 2, // Added
-  },
-  editButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  saveButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  saveButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  themeToggleButton: {
-    padding: 8,
-  },
-  themeIcon: {
-    fontSize: 20,
   },
 });
 

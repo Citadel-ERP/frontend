@@ -182,7 +182,13 @@ export const Overview: React.FC<OverviewProps> = ({
     onRefresh();
   };
 
-  const actionMenuItems = [
+  const actionMenuItems: Array<{
+    label: string;
+    icon: string;
+    action: () => void;
+    color?: string;
+    hidden?: boolean;
+  }> = [
     {
       label: 'Payslip',
       icon: 'document-text-outline',
@@ -478,35 +484,38 @@ export const Overview: React.FC<OverviewProps> = ({
       </ScrollView>
 
       {/* Action Menu Modal - This appears on top */}
-      <Modal
-        visible={showActionMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowActionMenu(false)}
-      >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
-          }}
-          activeOpacity={1}
-          onPress={() => setShowActionMenu(false)}
-        >
-          <View
-            style={{
-              position: 'absolute',
-              top: 295,
-              right: 16,
-              backgroundColor: WHATSAPP_COLORS.surface,
-              borderRadius: 8,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-              minWidth: 220,
-            }}
-          >
+     <Modal
+  visible={showActionMenu}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowActionMenu(false)}
+>
+  <TouchableOpacity
+    style={{
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      justifyContent: Platform.OS === 'web' ? 'center' : 'flex-start',
+      alignItems: Platform.OS === 'web' ? 'center' : 'flex-end',
+    }}
+    activeOpacity={1}
+    onPress={() => setShowActionMenu(false)}
+  >
+    <View
+      style={{
+        position: Platform.OS === 'web' ? 'relative' : 'absolute',
+        top: Platform.OS === 'web' ? 0 : 295,
+        right: Platform.OS === 'web' ? 0 : 16,
+        backgroundColor: WHATSAPP_COLORS.surface,
+        borderRadius: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+        minWidth: 220,
+        maxWidth: 280,
+      }}
+    >
             {actionMenuItems.filter(item => !item.hidden).map((item, index) => (
               <TouchableOpacity
                 key={index}
@@ -543,7 +552,6 @@ export const Overview: React.FC<OverviewProps> = ({
         onClose={() => setShowMediclaimModal(false)}
         employee={employee}
         token={token}
-        mediclaimData={employeeDetails?.mediclaim}
       />
 
       <AssetsModal

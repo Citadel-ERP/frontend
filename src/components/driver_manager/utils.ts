@@ -42,6 +42,7 @@ export const getStatusColor = (status: string): string => {
             return '#25D366';
         case 'maintenance':
         case 'in_maintenance':
+            return '#8E8E93';
         case 'in-progress':
             return '#FF9500';
         case 'inactive':
@@ -51,7 +52,7 @@ export const getStatusColor = (status: string): string => {
         case 'assigned':
             return '#007AFF';
         default:
-            return '#8E8E93';
+            return '#FF9500';
     }
 };
 export const getStatusIconBooking = (status: string) => {

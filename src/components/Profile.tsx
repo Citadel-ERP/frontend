@@ -96,7 +96,8 @@ interface ModalContent {
 interface ProfileProps {
   onBack: () => void;
   userData?: UserData;
-  onProfileUpdate?: (updatedData: UserData) => void; // NEW: Callback to notify parent
+  onProfileUpdate?: (updatedData: UserData) => void;
+  initialModalToOpen?: string | null; // Modal to open on mount (assets/payslips/documents)
 }
 
 interface MenuItemProps {
@@ -400,7 +401,7 @@ const EditProfileSection: React.FC<EditProfileSectionProps> = React.memo(({
   );
 });
 
-const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onProfileUpdate }) => {
+const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onProfileUpdate, initialModalToOpen })=> {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(!propUserData);
   const [userData, setUserData] = useState<UserData | null>(propUserData || null);
@@ -476,7 +477,45 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
     initializeData();
     return () => { };
   }, []);
+  useEffect(() => {
+    if (initialModalToOpen && !loading) {
+      console.log(`📱 [PROFILE] Opening modal: ${initialModalToOpen}`);
 
+      // Small delay to ensure data is loaded
+      const timer = setTimeout(() => {
+        switch (initialModalToOpen) {
+          case 'assets':
+            setModalContent({
+              title: 'My Assets',
+              type: 'assets',
+              content: assets
+            });
+            setModalVisible(true);
+            break;
+          case 'payslips':
+            setModalContent({
+              title: 'Payslips',
+              type: 'payslips',
+              content: payslips
+            });
+            setModalVisible(true);
+            break;
+          case 'documents':
+            setModalContent({
+              title: 'My Documents',
+              type: 'documents',
+              content: documents
+            });
+            setModalVisible(true);
+            break;
+          default:
+            console.warn(`Unknown modal type: ${initialModalToOpen}`);
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [initialModalToOpen, loading, assets, payslips, documents]);
   // NEW: Function to refresh user data from backend
   const refreshUserData = async () => {
     try {
@@ -495,18 +534,18 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
       if (data.message === "Get modules successful" && data.user) {
         const updatedUser = data.user;
         setUserData(updatedUser);
-        
+
         // Update AsyncStorage with fresh data
         await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
-        
+
         // Notify parent component (Dashboard) about the update
         if (onProfileUpdate) {
           onProfileUpdate(updatedUser);
         }
-        
+
         // Also update the form data
         populateFormData(updatedUser);
-        
+
         return updatedUser;
       }
     } catch (error) {
@@ -680,10 +719,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
       if (response.ok) {
         Alert.alert('Success', 'Profile updated successfully!');
         setIsEditing(false);
-        
+
         // NEW: Refresh user data from backend after successful update
         await refreshUserData();
-        
+
       } else {
         throw new Error(result.message || 'Update failed');
       }
@@ -756,7 +795,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
     try {
       // Request camera permissions
       const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (cameraStatus !== 'granted') {
         Alert.alert('Permission Required', 'Camera permission is required to take photos');
         return;
@@ -783,7 +822,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
     try {
       // Request media library permissions
       const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (mediaLibraryStatus !== 'granted') {
         Alert.alert('Permission Required', 'Media library permission is required to select photos');
         return;
@@ -814,10 +853,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
 
     try {
       setUploadingImage(true);
-      
+
       // Extract filename from URI
       const filename = imageUri.split('/').pop() || `profile_${Date.now()}.jpg`;
-      
+
       // Determine file type
       let fileType = 'image/jpeg';
       if (filename.endsWith('.png')) fileType = 'image/png';
@@ -848,10 +887,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
 
       if (uploadResponse.ok) {
         Alert.alert('Success', 'Profile picture updated successfully!');
-        
+
         // NEW: Refresh user data after image upload
         await refreshUserData();
-        
+
       } else {
         throw new Error(result.message || result.error || 'Upload failed');
       }
@@ -1803,7 +1842,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 2,
   },
 });
