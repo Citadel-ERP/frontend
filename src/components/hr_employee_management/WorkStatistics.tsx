@@ -64,19 +64,20 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getWorkStats`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           token,
-          date: targetDate || date 
+          date: targetDate || date
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
         setSummary(data.summary);
+        console.log('Fetched user stats:', data.users);
         setUserStats(data.users);
         setDate(data.date);
       } else {
@@ -117,16 +118,16 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
     });
   };
 
-  const StatCard = ({ 
-    title, 
-    value, 
-    icon, 
+  const StatCard = ({
+    title,
+    value,
+    icon,
     color,
-    iconColor 
-  }: { 
-    title: string; 
-    value: number; 
-    icon: string; 
+    iconColor
+  }: {
+    title: string;
+    value: number;
+    icon: string;
     color: string;
     iconColor: string;
   }) => (
@@ -136,60 +137,65 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
     </View>
   );
 
-  const renderTableRow = (user: UserStat, index: number) => (
-    <View 
-      key={user.employee_id} 
-      style={[
-        styles.tableRow,
-        index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd
-      ]}
-    >
-      <View style={[styles.tableCell, styles.nameCell]}>
-        <View>
-          <Text style={styles.nameText}>{user.name}</Text>
-          <Text style={styles.designationText}>{user.designation}</Text>
+  // Fix the renderTableRow function - remove the console.log comma syntax
+  const renderTableRow = (user: UserStat, index: number) => {
+    console.log('Rendering row for user:', user);
+
+    return (
+      <View
+        key={user.employee_id}
+        style={[
+          styles.tableRow,
+          index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd
+        ]}
+      >
+        <View style={[styles.tableCell, styles.nameCell]}>
+          <View>
+            <Text style={styles.nameText}>{user.name}</Text>
+            <Text style={styles.designationText}>{user.designation}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.tableCell, styles.centerCell]}>
+          {user.has_logged_in ? (
+            <View style={styles.statusContainer}>
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              <Text style={styles.timeText}>{user.login_time || 'N/A'}</Text>
+            </View>
+          ) : (
+            <View style={styles.statusContainer}>
+              <Ionicons name="close-circle" size={20} color="#EF4444" />
+              <Text style={styles.absentText}>Absent</Text>
+            </View>
+          )}
+          {user.is_late_login && (
+            <View style={styles.lateBadge}>
+              <Text style={styles.lateBadgeText}>Late</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.tableCell, styles.centerCell]}>
+          {user.has_logged_out ? (
+            <View style={styles.statusContainer}>
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              <Text style={styles.timeText}>{user.logout_time || 'N/A'}</Text>
+            </View>
+          ) : user.has_logged_in ? (
+            <View style={styles.statusContainer}>
+              <Ionicons name="close-circle" size={20} color="#F59E0B" />
+              <Text style={styles.activeText}>Active</Text>
+            </View>
+          ) : (
+            <View style={styles.statusContainer}>
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
+              <Text style={styles.absentText}>-</Text>
+            </View>
+          )}
         </View>
       </View>
-      
-      <View style={[styles.tableCell, styles.centerCell]}>
-        {user.has_logged_in ? (
-          <View style={styles.statusContainer}>
-            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={styles.timeText}>{user.login_time || 'N/A'}</Text>
-          </View>
-        ) : (
-          <View style={styles.statusContainer}>
-            <Ionicons name="close-circle" size={20} color="#EF4444" />
-            <Text style={styles.absentText}>Absent</Text>
-          </View>
-        )}
-        {user.is_late_login && (
-          <View style={styles.lateBadge}>
-            <Text style={styles.lateBadgeText}>Late</Text>
-          </View>
-        )}
-      </View>
-      
-      <View style={[styles.tableCell, styles.centerCell]}>
-        {user.has_logged_out ? (
-          <View style={styles.statusContainer}>
-            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={styles.timeText}>{user.logout_time || 'N/A'}</Text>
-          </View>
-        ) : user.has_logged_in ? (
-          <View style={styles.statusContainer}>
-            <Ionicons name="close-circle" size={20} color="#F59E0B" />
-            <Text style={styles.activeText}>Active</Text>
-          </View>
-        ) : (
-          <View style={styles.statusContainer}>
-            <Ionicons name="close-circle" size={20} color="#6B7280" />
-            <Text style={styles.absentText}>-</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+    );
+  };
 
   if (loading && !refreshing && !summary) {
     return (
@@ -251,7 +257,7 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
                 color="#E8F5E9" // Green background matching Attendance's Present
                 iconColor="#2E7D32"
               />
-              
+
               <StatCard
                 title="Late Logins"
                 value={summary.total_late_login}
@@ -259,7 +265,7 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
                 color="#E8F4F8" // Light blue background
                 iconColor="#1976D2"
               />
-              
+
               <StatCard
                 title="Not Logged In"
                 value={summary.total_not_logged_in}
@@ -269,18 +275,18 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
               />
             </View>
 
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, styles.nameHeader]}>Employee</Text>
-              <Text style={styles.tableHeaderText}>Login Status</Text>
-              <Text style={styles.tableHeaderText}>Logout Status</Text>
-            </View>
-
             {/* Table Container with internal scrolling - Shows 5 entries max */}
-            <View style={styles.tableContainer}>
-              <ScrollView 
-                style={styles.internalScrollView}
+            <View style={styles.tableWrapper}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, styles.nameHeader]}>Employee</Text>
+                <Text style={styles.tableHeaderText}>Login Status</Text>
+                <Text style={styles.tableHeaderText}>Logout Status</Text>
+              </View>
+
+              <ScrollView
+                style={styles.tableScrollView}
                 showsVerticalScrollIndicator={true}
+                nestedScrollEnabled={true}
               >
                 {userStats.map((user, index) => renderTableRow(user, index))}
               </ScrollView>
@@ -407,23 +413,40 @@ const styles = StyleSheet.create({
   },
   internalScrollView: {
     flex: 1,
+    height: 350,
   },
+  tableWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 16,
+    overflow: 'hidden', // Important for border radius
+  },
+  
+  tableScrollView: {
+    maxHeight: 350, // Only max height here
+  },
+  
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#075E54',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    // Remove border radius - it's on wrapper now
   },
+  
   tableHeaderText: {
     flex: 1,
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
+    textAlign: 'center', // Add this
   },
+  
   nameHeader: {
     flex: 2,
+    textAlign: 'left', // Override center for name column
   },
   tableRow: {
     flexDirection: 'row',
