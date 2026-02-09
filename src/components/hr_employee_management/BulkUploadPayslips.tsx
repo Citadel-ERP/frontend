@@ -57,41 +57,41 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
   const [downloading, setDownloading] = useState(false);
 
   const handleDownloadSample = async () => {
-  if (!token) {
-    Alert.alert('Error', 'Authentication required');
-    return;
-  }
-
-  setDownloading(true);
-  try {
-    const response = await fetch(`${BACKEND_URL}/manager/downloadSamplePayslip`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ token }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to download sample payslip');
+    if (!token) {
+      Alert.alert('Error', 'Authentication required');
+      return;
     }
 
-    // Get the blob from response
-    const blob = await response.blob();
-    
-    // Create a temporary URL for the blob
-    const fileUrl = URL.createObjectURL(blob);
-    
-    // Open in browser
-    await WebBrowser.openBrowserAsync(fileUrl);
-    Alert.alert('Success', 'Sample payslip downloaded successfully');
-  } catch (error: any) {
-    console.error('Download sample error:', error);
-    Alert.alert('Error', error.message || 'Failed to download sample payslip');
-  } finally {
-    setDownloading(false);
-  }
-};
+    setDownloading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/downloadSamplePayslip`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download sample payslip');
+      }
+
+      // Get the blob from response
+      const blob = await response.blob();
+
+      // Create a temporary URL for the blob
+      const fileUrl = URL.createObjectURL(blob);
+
+      // Open in browser
+      await WebBrowser.openBrowserAsync(fileUrl);
+      Alert.alert('Success', 'Sample payslip downloaded successfully');
+    } catch (error: any) {
+      console.error('Download sample error:', error);
+      Alert.alert('Error', error.message || 'Failed to download sample payslip');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handleSelectFiles = async () => {
     try {
@@ -148,7 +148,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
   const validateFileName = (fileName: string): { valid: boolean; employeeId: string } => {
     const nameWithoutExt = fileName.replace(/\.(pdf|docx)$/i, '');
     const isValid = /^[a-zA-Z0-9_-]+$/.test(nameWithoutExt);
-    
+
     return {
       valid: isValid,
       employeeId: nameWithoutExt,
@@ -182,17 +182,15 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       formData.append('month', selectedMonth.toString());
       formData.append('year', selectedYear.toString());
 
-      // Handle file upload differently for web vs mobile
-      if (Platform.OS === 'web') {
-        // For web, fetch the file and append it as a Blob
-        for (const file of selectedFiles) {
+      // Handle file upload for both web and mobile
+      for (const file of selectedFiles) {
+        if (Platform.OS === 'web') {
+          // For web, fetch the file and append it as a Blob
           const response = await fetch(file.uri);
           const blob = await response.blob();
           formData.append('payslips', blob, file.name);
-        }
-      } else {
-        // For mobile (iOS/Android)
-        for (const file of selectedFiles) {
+        } else {
+          // For mobile (iOS/Android)
           formData.append('payslips', {
             uri: file.uri,
             name: file.name,
@@ -204,10 +202,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       const response = await fetch(`${BACKEND_URL}/manager/bulkUploadPayslip`, {
         method: 'POST',
         body: formData,
-        // Don't set Content-Type header for FormData on web - let browser set it with boundary
-        headers: Platform.OS === 'web' ? {} : {
-          'Content-Type': 'multipart/form-data',
-        },
+        // Don't set Content-Type header - let browser/system handle it
       });
 
       if (!response.ok) {
@@ -222,17 +217,17 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       }
 
       const data = await response.json();
-      
-      const successMsg = `Successfully uploaded ${data.successful || 0} payslips${
-        data.failed > 0 ? `\n${data.failed} files failed to upload` : ''
-      }`;
-      
+
+      const successMsg = `Successfully uploaded ${data.successful || 0} payslips${data.failed > 0 ? `\n${data.failed} files failed to upload` : ''
+        }`;
+
       Alert.alert('Upload Complete', successMsg, [
         {
           text: 'OK',
           onPress: () => {
             setSelectedFiles([]);
             // Reset to current month and year
+            const currentDate = new Date();
             setSelectedMonth(currentDate.getMonth() + 1);
             setSelectedYear(currentDate.getFullYear());
           },
@@ -264,7 +259,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
         onBack={onBack}
         showBack={true}
       />
-      
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 }]}
@@ -296,7 +291,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
               </Text>
             </View>
           </View>
-          
+
           {/* <TouchableOpacity
             style={[
               styles.secondaryButton, 
@@ -341,8 +336,8 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ 
-                gap: 8, 
+              contentContainerStyle={{
+                gap: 8,
                 paddingVertical: 8,
                 paddingHorizontal: 2,
               }}
@@ -376,8 +371,8 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ 
-                gap: 8, 
+              contentContainerStyle={{
+                gap: 8,
                 paddingVertical: 8,
                 paddingHorizontal: 2,
               }}
@@ -435,21 +430,21 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
 
           {/* Selected Files Summary */}
           {selectedFiles.length > 0 && (
-            <View style={{ 
-              flexDirection: 'row', 
+            <View style={{
+              flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
               marginTop: 16,
               marginBottom: 8,
-              paddingHorizontal: 4 
+              paddingHorizontal: 4
             }}>
               <Text style={[styles.label, { marginBottom: 0 }]}>
                 Selected Files ({selectedFiles.length})
               </Text>
-              <Text style={{ 
-                fontSize: 12, 
+              <Text style={{
+                fontSize: 12,
                 color: WHATSAPP_COLORS.textSecondary,
-                fontWeight: '500' 
+                fontWeight: '500'
               }}>
                 Total: {formatFileSize(totalFileSize)}
               </Text>
@@ -459,7 +454,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
           {/* Selected Files List */}
           {selectedFiles.length > 0 && (
             <ScrollView
-              style={{ 
+              style={{
                 maxHeight: 300,
                 marginTop: 8,
               }}
@@ -492,11 +487,11 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
                       >
                         {file.name}
                       </Text>
-                      <View style={{ 
-                        flexDirection: 'row', 
-                        alignItems: 'center', 
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
                         gap: 8,
-                        flexWrap: 'wrap' 
+                        flexWrap: 'wrap'
                       }}>
                         <Text style={styles.documentDate}>
                           {formatFileSize(file.size)}
@@ -504,20 +499,20 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
                         {validation.valid ? (
                           <>
                             <Text style={styles.documentDate}>•</Text>
-                            <Text style={{ 
-                              fontSize: 12, 
-                              color: WHATSAPP_COLORS.primary, 
-                              fontWeight: '500' 
+                            <Text style={{
+                              fontSize: 12,
+                              color: WHATSAPP_COLORS.primary,
+                              fontWeight: '500'
                             }}>
                               ID: {validation.employeeId}
                             </Text>
                           </>
                         ) : (
-                          <Text style={{ 
-                            fontSize: 12, 
-                            color: '#D32F2F', 
+                          <Text style={{
+                            fontSize: 12,
+                            color: '#D32F2F',
                             fontWeight: '500',
-                            flex: 1 
+                            flex: 1
                           }}>
                             Invalid file name format
                           </Text>
@@ -539,15 +534,15 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
         </View>
 
         {/* Submit Button */}
-        <View style={{ 
-          marginTop: 24, 
+        <View style={{
+          marginTop: 24,
           marginBottom: 30,
-          paddingHorizontal: 16 
+          paddingHorizontal: 16
         }}>
           <TouchableOpacity
             style={[
               styles.primaryButton,
-              { 
+              {
                 height: 50,
                 borderRadius: 25,
                 flexDirection: 'row',

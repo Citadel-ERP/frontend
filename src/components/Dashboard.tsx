@@ -40,8 +40,8 @@ import ScoutBoy from './scout_boy/ScoutBoy';
 import SiteManager from './site_manager/SiteManager';
 import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
-import ChatScreen from './chat/ChatScreen';
-import ChatRoomScreen from './chat/ChatRoomScreen';
+import { CitadelHub } from './citadel_hub/CitadelHub';
+// import {CitadelHubMobile} from './citadel_hub/CitadelHubMobile';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './employee_management/EmployeeManagement';
@@ -62,7 +62,7 @@ import BottomBar from './dashboard/bottomBar';
 import { BackgroundAttendanceService } from '../services/backgroundAttendance';
 import { GeofencingService } from '../services/geofencing';
 import { AttendanceUtils } from '../services/attendanceUtils';
-import { BACKEND_URL } from '../config/config';
+import { BACKEND_URL, BACKEND_URL_WEBSOCKET } from '../config/config';
 
 const { width, height } = Dimensions.get('window');
 const TOKEN_2_KEY = 'token_2';
@@ -120,7 +120,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#00d285', '#00b872'],
     displayName: 'Attendance'
   },
-  
+
   // Car/Cab modules
   'cab': {
     icon: 'car',
@@ -140,7 +140,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#ff5e7a', '#ff4168'],
     displayName: 'Vehicle Admin'
   },
-  
+
   // HR modules
   'hr': {
     icon: 'users',
@@ -172,7 +172,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#ffb157', '#ff9d3f'],
     displayName: 'Employees'
   },
-  
+
   // Driver modules
   'driver': {
     icon: 'steering-wheel',
@@ -186,7 +186,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#6c5ce7', '#5f4fd1'],
     displayName: 'Duty Manager'
   },
-  
+
   // Site Manager
   'site_manager': {
     icon: 'hard-hat',
@@ -194,7 +194,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#fd79a8', '#e84393'],
     displayName: 'Database'
   },
-  
+
   // BUP
   'bup': {
     icon: 'chart-line',
@@ -202,7 +202,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#00b894', '#00a680'],
     displayName: 'BUP'
   },
-  
+
   // BDT
   'bdt': {
     icon: 'exchange-alt',
@@ -210,7 +210,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#0984e3', '#0773d1'],
     displayName: 'Transaction'
   },
-  
+
   // Medical/Mediclaim
   'medical': {
     icon: 'medkit',
@@ -224,7 +224,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#d63031', '#c92a2b'],
     displayName: 'Mediclaim'
   },
-  
+
   // Scout Boy
   'scout_boy': {
     icon: 'user-alt',
@@ -232,7 +232,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#fdcb6e', '#f6b93b'],
     displayName: 'Scout'
   },
-  
+
   // Reminder
   'reminder': {
     icon: 'bell',
@@ -240,7 +240,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#a29bfe', '#6c5ce7'],
     displayName: 'Reminder'
   },
-  
+
   // Employee Management
   'employee_management': {
     icon: 'users',
@@ -248,7 +248,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#74b9ff', '#0984e3'],
     displayName: 'Employees'
   },
-  
+
   // Default fallback
   'default': {
     icon: 'cube',
@@ -518,7 +518,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // ============================================================================
   // NEW: Callback for real-time reminder updates
   // ============================================================================
-  
+
 
   // Function to refresh user data from backend
   const refreshUserData = useCallback(async () => {
@@ -1373,9 +1373,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   const handleNavItemPress = useCallback((navItem: string) => {
     setActiveNavItem(navItem);
+    setActiveNavItem(navItem);
     if (navItem === 'message') {
-      Alert.alert('Support', 'Citadel Hub will be available soon!');
+      if (isWeb) {
+        setActivePage('messages');
+      } else {
+        setShowChat(true);  // This opens CitadelHub on mobile
+      }
     } else if (navItem === 'hr') {
+
       if (isWeb) {
         setActivePage('hr');
       } else {
@@ -1542,20 +1548,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   if (!isWeb) {
     if (showChatRoom && selectedChatRoom) {
       return (
-        <ChatRoomScreen
-          chatRoom={selectedChatRoom}
-          onBack={handleBackFromPage}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+        <CitadelHub
+          apiBaseUrl={BACKEND_URL}
+          wsBaseUrl={BACKEND_URL_WEBSOCKET}
+          token={token}
+          currentUser={userData}
         />
       );
     }
 
     if (showChat) {
       return (
-        <ChatScreen
+        <CitadelHub
+          apiBaseUrl={BACKEND_URL}
+          wsBaseUrl={BACKEND_URL_WEBSOCKET}
+          token={token}
           onBack={handleBackFromPage}
-          onOpenChatRoom={setSelectedChatRoom}
-          currentUserId={userData?.employee_id ? parseInt(userData.employee_id) : 1}
+          currentUser={userData}
         />
       );
     }
@@ -1648,7 +1657,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     // ============================================================================
     if (showReminder) {
       return (
-        <Reminder 
+        <Reminder
           onBack={handleBackFromPage}
           onReminderUpdate={handleReminderUpdate}  // Add this prop
         />
@@ -2050,12 +2059,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       </View>
                     )}
                     {activePage === 'messages' && (
-                      <View style={[styles.moduleContainer, { backgroundColor: theme.cardBg }]}>
-                        <Text style={[styles.privacyText, { color: theme.textMain }]}>
-                          Messages Content
-                        </Text>
-                      </View>
+                      <CitadelHub
+                        apiBaseUrl={BACKEND_URL}
+                        wsBaseUrl={BACKEND_URL_WEBSOCKET}
+                        token={token}
+                        currentUser={userData}
+                      />
                     )}
+
                     {activePage === 'attendance' && (
                       <AttendanceWrapper
                         onBack={() => setActivePage('dashboard')}
@@ -2084,7 +2095,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     // UPDATED: Reminder component with callback for real-time updates
                     // ============================================================================ */}
                     {activePage === 'reminder' && (
-                      <Reminder 
+                      <Reminder
                         onBack={() => setActivePage('dashboard')}
                         onReminderUpdate={handleReminderUpdate}  // Add this prop
                       />
@@ -2354,7 +2365,7 @@ const styles = StyleSheet.create({
   webCenterContent: { flex: 1, maxHeight: '100vh', overflow: 'auto', backgroundColor: 'transparent' },
   webRightSide: { width: 280, height: '100vh', flexDirection: 'column', borderLeftWidth: 1, borderLeftColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
   webHeader: { height: 220, overflow: 'hidden', position: 'relative' },
-  webHeaderImage: { position: 'absolute', width: '100%', height: '100%', opacity: 1 }as ImageStyle,
+  webHeaderImage: { position: 'absolute', width: '100%', height: '100%', opacity: 1 } as ImageStyle,
   webHeaderOverlay: { position: 'absolute', width: '100%', height: '100%' },
   webHeaderContent: { padding: 30, position: 'relative', zIndex: 1 },
   webTopNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
@@ -2369,7 +2380,7 @@ const styles = StyleSheet.create({
   modulesGridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16, gap: 12 },
   moduleGridItem: { width: '47%', aspectRatio: 1, marginBottom: 12, padding: 15, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   moduleGridIconContainer: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  moduleGridIcon: { width: 30, height: 30 }as ImageStyle,
+  moduleGridIcon: { width: 30, height: 30 } as ImageStyle,
   moduleGridTitle: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 16 },
   moduleContainer: { flex: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: 'transparent' },
   privacyText: { fontSize: 16, lineHeight: 24 },
