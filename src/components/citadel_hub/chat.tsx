@@ -10,7 +10,9 @@ import {
   Platform,
   StyleSheet,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EmojiPicker } from './emojiPicker';
@@ -19,10 +21,19 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
 interface User {
-  id: number;
+  id?: number;
+  employee_id?: string;
   first_name: string;
   last_name: string;
   profile_picture?: string;
+  email?: string;
+}
+
+interface ChatRoomMember {
+  id?: number;
+  user?: User;
+  is_muted?: boolean;
+  is_pinned?: boolean;
 }
 
 interface Message {
@@ -43,7 +54,7 @@ interface ChatRoom {
   name?: string;
   room_type: 'direct' | 'group';
   profile_picture?: string;
-  members: User[];
+  members: (User | ChatRoomMember)[];
 }
 
 interface ChatProps {
@@ -82,16 +93,45 @@ export const Chat: React.FC<ChatProps> = ({
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<number | null>(null);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [searchText, setSearchText] = useState('');
   
   const flatListRef = useRef<FlatList>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper function to extract user from member object
+  const getUserFromMember = (member: User | ChatRoomMember): User | null => {
+    if (!member) return null;
+    
+    // If it's already a User object
+    if ('first_name' in member && 'last_name' in member) {
+      return member as User;
+    }
+    
+    // If it's a ChatRoomMember with nested user
+    if ('user' in member && member.user) {
+      return member.user;
+    }
+    
+    return null;
+  };
 
   const getChatName = () => {
     if (chatRoom.room_type === 'group') {
       return chatRoom.name || 'Unnamed Group';
     }
-    const otherUser = chatRoom.members.find(m => m.id !== currentUser.id);
-    return otherUser ? `${otherUser.user.first_name || 'Unknown'} ${otherUser.last_name || ''}` : 'Unknown';
+    
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    const otherMember = chatRoom.members.find(m => {
+      const user = getUserFromMember(m);
+      return user && (user.id || user.employee_id) !== currentUserId;
+    });
+    
+    if (otherMember) {
+      const user = getUserFromMember(otherMember);
+      return user ? `${user.first_name || 'Unknown'} ${user.last_name || ''}` : 'Unknown';
+    }
+    return 'Unknown';
   };
 
   const getChatAvatar = () => {
@@ -110,7 +150,15 @@ export const Chat: React.FC<ChatProps> = ({
         </View>
       );
     }
-    const otherUser = chatRoom.members.find(m => m.id !== currentUser.id);
+    
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    const otherMember = chatRoom.members.find(m => {
+      const user = getUserFromMember(m);
+      return user && (user.id || user.employee_id) !== currentUserId;
+    });
+    
+    const otherUser = otherMember ? getUserFromMember(otherMember) : null;
+    
     if (otherUser?.profile_picture) {
       return (
         <Image
@@ -119,14 +167,23 @@ export const Chat: React.FC<ChatProps> = ({
         />
       );
     }
+    
     return (
       <View style={[styles.avatar, styles.avatarPlaceholder]}>
         <Text style={styles.avatarText}>
-          {otherUser ? `${otherUser.user.first_name?.[0] || '?'}${otherUser.user.last_name?.[0] || ''}` : '?'}
+          {otherUser 
+            ? `${otherUser.first_name?.[0] || '?'}${otherUser.last_name?.[0] || ''}` 
+            : '?'}
         </Text>
       </View>
     );
   };
+
+  useEffect(() => {
+    if (messages.length > 0 && flatListRef.current) {
+      flatListRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages]);
 
   const handleInputChange = (text: string) => {
     setInputText(text);
@@ -198,14 +255,19 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleFileSelect = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      copyToCacheDirectory: true,
-    });
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
 
-    if (result.type === 'success') {
-      onSendMessage(result.name, 'file', result, replyingTo?.id);
-      setReplyingTo(null);
+      if (result.type === 'success') {
+        const fileName = result.name || 'document';
+        onSendMessage(fileName, 'file', result, replyingTo?.id);
+        setReplyingTo(null);
+      }
+    } catch (error) {
+      console.error('Error selecting file:', error);
     }
   };
 
@@ -245,8 +307,41 @@ export const Chat: React.FC<ChatProps> = ({
     return grouped;
   };
 
+  const handleClearChat = () => {
+    Alert.alert(
+      'Clear Chat',
+      'Are you sure you want to clear all messages? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => {},
+          style: 'cancel',
+        },
+        {
+          text: 'Clear',
+          onPress: () => {
+            // Call API to clear chat
+            Alert.alert('Success', 'Chat cleared successfully');
+            setShowOptionsModal(false);
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
+  const handleMuteChat = () => {
+    Alert.alert('Mute Chat', 'You will not receive notifications from this chat');
+    setShowOptionsModal(false);
+  };
+
+  const handleExportChat = () => {
+    Alert.alert('Export Chat', 'Chat exported as PDF');
+    setShowOptionsModal(false);
+  };
+
   const renderMessage = ({ item: message, index }: { item: Message; index: number }) => {
-    const isOwnMessage = message.sender.id === currentUser.id;
+    const isOwnMessage = (message.sender.id || message.sender.employee_id) === (currentUser.id || currentUser.employee_id);
     const showDate = shouldShowDateSeparator(index);
     const reactions = groupedReactions(message.reactions || []);
 
@@ -291,7 +386,7 @@ export const Chat: React.FC<ChatProps> = ({
                 <View style={styles.replyBar} />
                 <View style={styles.replyInfo}>
                   <Text style={styles.replySender}>
-                    {message.parent_message.sender.id === currentUser.id
+                    {(message.parent_message.sender.id || message.parent_message.sender.employee_id) === (currentUser.id || currentUser.employee_id)
                       ? 'You'
                       : message.parent_message.sender.first_name}
                   </Text>
@@ -312,7 +407,7 @@ export const Chat: React.FC<ChatProps> = ({
                 <Text
                   style={[
                     styles.messageSenderName,
-                    { color: `hsl(${message.sender.id * 137.5 % 360}, 70%, 50%)` },
+                    { color: `hsl(${(message.sender.id || 0) * 137.5 % 360}, 70%, 50%)` },
                   ]}
                 >
                   {message.sender.first_name}
@@ -399,12 +494,16 @@ export const Chat: React.FC<ChatProps> = ({
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#111b21" />
+          <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
 
         <View style={styles.headerInfo}>
           {getChatAvatar()}
-          <View style={styles.headerText}>
+          <TouchableOpacity 
+            style={styles.headerText}
+            onPress={onHeaderClick}
+            activeOpacity={0.7}
+          >
             <Text style={styles.headerName} numberOfLines={1}>
               {getChatName()}
             </Text>
@@ -418,15 +517,19 @@ export const Chat: React.FC<ChatProps> = ({
               ) : chatRoom.room_type === 'group' ? (
                 `${chatRoom.members.length} members`
               ) : (
-                'Tap for info'
+                'Online'
               )}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
-            <Ionicons name="ellipsis-vertical" size={24} color="#8696a0" />
+          <TouchableOpacity 
+            style={styles.headerIconBtn} 
+            onPress={() => setShowOptionsModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -460,7 +563,7 @@ export const Chat: React.FC<ChatProps> = ({
               <View>
                 <Text style={styles.replyToText}>
                   Replying to{' '}
-                  {replyingTo.sender.id === currentUser.id
+                  {(replyingTo.sender.id || replyingTo.sender.employee_id) === (currentUser.id || currentUser.employee_id)
                     ? 'yourself'
                     : replyingTo.sender.first_name}
                 </Text>
@@ -541,6 +644,70 @@ export const Chat: React.FC<ChatProps> = ({
         onAudioSelect={() => {}}
         onClose={() => setShowAttachmentMenu(false)}
       />
+
+      {/* WhatsApp-style Options Modal - Positioned Near Three Dots */}
+      <Modal
+        visible={showOptionsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={styles.modalContent}>
+            {/* Search Option */}
+            <TouchableOpacity
+              style={styles.modalMenuItem}
+              onPress={() => setShowOptionsModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalMenuText}>Search</Text>
+            </TouchableOpacity>
+
+            {/* Media, Links, and Docs */}
+            <TouchableOpacity
+              style={styles.modalMenuItem}
+              onPress={() => setShowOptionsModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalMenuText}>Clear Chat</Text>
+            </TouchableOpacity>
+
+            {/* Disappearing Messages */}
+            <TouchableOpacity
+              style={styles.modalMenuItem}
+              onPress={() => setShowOptionsModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalMenuText}>Mute</Text>
+            </TouchableOpacity>
+
+            {/* Chat Theme */}
+            <TouchableOpacity
+              style={styles.modalMenuItem}
+              onPress={() => setShowOptionsModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalMenuText}>Export</Text>
+            </TouchableOpacity>
+
+            {/* More */}
+            {/* <TouchableOpacity
+              style={styles.modalMenuItem}
+              onPress={() => setShowOptionsModal(false)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.modalMenuItemContent}>
+                <Text style={styles.modalMenuText}>More</Text>
+                <Ionicons name="chevron-forward" size={20} color="#bbb" />
+              </View>
+            </TouchableOpacity> */}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -553,13 +720,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f2f5',
-    paddingTop: 40,
+    backgroundColor: '#008069',
+    paddingTop: 90,
     paddingBottom: 10,
     paddingHorizontal: 16,
     gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9edef',
+    borderBottomWidth: 0,
+    marginTop: -80,
   },
   backButton: {
     padding: 8,
@@ -593,11 +760,11 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#111b21',
+    color: '#ffffff',
   },
   headerStatus: {
     fontSize: 13,
-    color: '#667781',
+    color: '#ffffff',
     marginTop: 2,
   },
   typingIndicator: {
@@ -870,5 +1037,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#00a884',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // WhatsApp-style Modal Styles - Positioned at Top Right near three dots
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingRight: 8,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    minWidth: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalMenuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f2f5',
+  },
+  modalMenuItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalMenuText: {
+    fontSize: 15,
+    color: '#111b21',
+    fontWeight: '400',
   },
 });

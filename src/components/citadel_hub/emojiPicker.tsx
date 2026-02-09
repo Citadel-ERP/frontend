@@ -65,7 +65,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.container}>
           <View style={styles.header}>
-            <View style={styles.searchContainer}>
+            {/* <View style={styles.searchContainer}>
               <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
@@ -74,14 +74,14 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
-            </View>
-            <TouchableOpacity
+            </View> */}
+            {/* <TouchableOpacity
               style={styles.closeButton}
               onPress={onClose}
               activeOpacity={0.7}
             >
               <Ionicons name="close" size={24} color="#8696a0" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           <FlatList

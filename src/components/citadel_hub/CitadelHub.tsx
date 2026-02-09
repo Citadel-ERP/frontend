@@ -8,70 +8,16 @@ import { ChatDetails } from './chatDetails';
 import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
-import { UserData } from '../DashboardTypes';
-
-interface User {
-  employee_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  profile_picture?: string;
-}
-
-interface ChatRoom {
-  id: number;
-  name?: string;
-  description?: string;
-  room_type: 'direct' | 'group';
-  profile_picture?: string;
-  admin?: User;
-  members: User[];
-  last_message_at: string;
-  created_at: string;
-  is_muted?: boolean;
-  is_pinned?: boolean;
-  unread_count?: number;
-  last_message?: Message;
-}
-
-interface Message {
-  id: number;
-  chat_room: number;
-  sender: User;
-  content: string;
-  message_type: 'text' | 'image' | 'file' | 'audio' | 'video';
-  created_at: string;
-  is_edited: boolean;
-  is_deleted: boolean;
-  parent_message?: Message;
-  reactions?: MessageReaction[];
-  read_receipts?: MessageRead[];
-  file_url?: string;
-  file_name?: string;
-}
-
-interface MessageReaction {
-  id: number;
-  user: User;
-  emoji: string;
-}
-
-interface MessageRead {
-  id: number;
-  user: User;
-  read_at: string;
-}
-
-interface Notification {
-  id: number;
-  notification_type: string;
-  content: string;
-  is_read: boolean;
-  created_at: string;
-  chat_room?: ChatRoom;
-  message?: Message;
-  sender?: User;
-}
+import {
+  User,
+  ChatRoom,
+  ChatRoomMember,
+  Message,
+  MessageReaction,
+  MessageRead,
+  Notification,
+  ViewMode,
+} from './citadelTypes';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -80,8 +26,6 @@ interface CitadelHubProps {
   onBack?: () => void;
   currentUser: User;
 }
-
-type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit';
 
 export const CitadelHub: React.FC<CitadelHubProps> = ({
   apiBaseUrl,
@@ -104,7 +48,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
   // WebSocket
   const ws = useRef<WebSocket | null>(null);
-  const reconnectTimeout = useRef<NodeJS.Timeout>();
+  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   // Pagination
@@ -188,14 +132,15 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   // WebSocket Connection
   const connectWebSocket = useCallback(() => {
     if (ws.current?.readyState === WebSocket.OPEN) return;
-    console.log(currentUser)
-    const websocket = new WebSocket(`${wsBaseUrl}/ws/chat/?token=${currentUser.token}`);
+    console.log(currentUser);
+    const websocket = new WebSocket(`${wsBaseUrl}/ws/chat/?token=${token}`);
 
     websocket.onopen = () => {
       console.log('WebSocket Connected');
       setIsConnected(true);
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
       }
     };
 
@@ -243,7 +188,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     };
 
     ws.current = websocket;
-  }, [wsBaseUrl]);
+  }, [wsBaseUrl, token]);
 
   // WebSocket Handlers
   const handleNewMessage = (message: Message) => {
@@ -264,7 +209,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   };
 
   const handleTyping = (roomId: number, userId: number, userName: string) => {
-    const user = {
+    const user: User = {
       id: userId,
       employee_id: userId.toString(),
       first_name: userName.split(' ')[0],
@@ -297,7 +242,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   };
 
   const handleReaction = (messageId: number, userId: number, userName: string, emoji: string) => {
-    const user = {
+    const user: User = {
       id: userId,
       employee_id: userId.toString(),
       first_name: userName.split(' ')[0],
@@ -476,10 +421,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         if (room.room_type === 'group') {
           return room.name?.toLowerCase().includes(searchQuery.toLowerCase());
         } else {
-          const otherUser = room.members.find(m => m.employee_id !== currentUser.employee_id);
-          return otherUser
-            ? `${otherUser.first_name} ${otherUser.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
-            : false;
+          const otherMember = room.members.find(m => {
+            const member = m as ChatRoomMember;
+            return member.user && member.user.employee_id !== currentUser.employee_id;
+          });
+          
+          if (otherMember) {
+            const member = otherMember as ChatRoomMember;
+            if (member.user) {
+              return `${member.user.first_name} ${member.user.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
+            }
+          }
+          return false;
         }
       });
     }
@@ -525,7 +478,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             }}
             onBack={() => {
               if (onBack) {
-                onBack();  // Call the parent's onBack function
+                onBack();
               }
             }}
           />

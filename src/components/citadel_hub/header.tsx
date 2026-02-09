@@ -112,9 +112,10 @@ export const Header: React.FC<HeaderProps> = ({
 const styles = StyleSheet.create({
   chatHeader: {
     backgroundColor: '#008069',
-    paddingTop: 40,
+    paddingTop: 90,
     paddingBottom: 10,
     paddingHorizontal: 16,
+    marginTop:-80,
   },
   headerContent: {
     flexDirection: 'row',
@@ -127,12 +128,11 @@ const styles = StyleSheet.create({
   },
   // Add back button styles
   backIcon: {
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    alignContent: 'center',
-  },
+  width: 24,
+  height: 24,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
   backArrow: {
     width: 12,
     height: 12,

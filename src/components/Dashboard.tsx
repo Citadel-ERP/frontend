@@ -199,7 +199,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
   'bup': {
     icon: 'chart-line',
     iconFamily: 'FontAwesome5',
-    gradientColors: ['#00b894', '#00a680'],
+    gradientColors: ['#ffb157', '#ff9d3f'],
     displayName: 'BUP'
   },
 
