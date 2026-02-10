@@ -51,6 +51,7 @@
     },
     "android": {
       "package": "com.citadelnetinc.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive_icon_android.png",
         "backgroundColor": "#FFFFFF"
