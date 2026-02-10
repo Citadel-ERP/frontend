@@ -98,7 +98,7 @@ export const NewGroup: React.FC<NewGroupProps> = ({
             onPress={() => setStep('selectMembers')}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            <Ionicons name="chevron-back" size={24} color="#ffffff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>New group</Text>
         </View>
@@ -243,7 +243,7 @@ export const NewGroup: React.FC<NewGroupProps> = ({
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <Ionicons name="chevron-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Add group members</Text>
@@ -320,7 +320,7 @@ export const NewGroup: React.FC<NewGroupProps> = ({
           onPress={handleNext}
           activeOpacity={0.8}
         >
-          <Ionicons name="arrow-forward" size={24} color="#ffffff" />
+          <Ionicons name="chevron-back" size={24} color="#ffffff" />
         </TouchableOpacity>
       )}
     </View>
@@ -336,10 +336,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#008069',
-    paddingTop: 40,
+    paddingTop: 90,
     paddingBottom: 16,
     paddingHorizontal: 16,
     gap: 16,
+    marginTop:-80,
   },
   backButton: {
     padding: 8,

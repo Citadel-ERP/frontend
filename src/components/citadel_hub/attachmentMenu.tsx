@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Animated,
   Pressable,
 } from 'react-native';
 
@@ -14,7 +13,6 @@ interface AttachmentMenuProps {
   onFileSelect: () => void;
   onCameraSelect: () => void;
   onGallerySelect: () => void;
-  onAudioSelect: () => void;
   onClose: () => void;
 }
 
@@ -23,17 +21,23 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
   onFileSelect,
   onCameraSelect,
   onGallerySelect,
-  onAudioSelect,
   onClose,
 }) => {
   const options = [
-    { icon: '📄', label: 'Document', color: '#5157AE', onPress: onFileSelect },
-    { icon: '📷', label: 'Camera', color: '#D3396D', onPress: onCameraSelect },
-    { icon: '🖼️', label: 'Gallery', color: '#BF59CF', onPress: onGallerySelect },
-    { icon: '🎤', label: 'Audio', color: '#F3601A', onPress: onAudioSelect },
-    { icon: '📍', label: 'Location', color: '#1FA855', onPress: () => {} },
-    { icon: '👤', label: 'Contact', color: '#009DE2', onPress: () => {} },
+    { icon: '🖼️', label: 'Photos', color: '#0984e3', onPress: onGallerySelect },
+    { icon: '📷', label: 'Camera', color: '#fd79a8', onPress: onCameraSelect },
+    { icon: '📄', label: 'Document', color: '#ffb157', onPress: onFileSelect },
   ];
+
+  const handleOptionPress = (onPress: () => void) => {
+    try {
+      onPress();
+      // Menu will close when the picker opens or through onClose
+    } catch (error) {
+      console.error('Error in attachment menu:', error);
+      onClose();
+    }
+  };
 
   return (
     <Modal
@@ -43,25 +47,23 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       onRequestClose={onClose}
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <View style={styles.optionsContainer}>
-          {options.map((option, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.option}
-              onPress={() => {
-                option.onPress();
-                onClose();
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: option.color }]}>
-                <Text style={styles.icon}>{option.icon}</Text>
+        <View style={styles.menuContainer}>
+          <View style={styles.optionsGrid}>
+            {options.map((option, index) => (
+              <View key={index} style={styles.optionWrapper}>
+                <TouchableOpacity
+                  style={styles.option}
+                  onPress={() => handleOptionPress(option.onPress)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.iconContainer, { backgroundColor: option.color }]}>
+                    <Text style={styles.icon}>{option.icon}</Text>
+                  </View>
+                  <Text style={styles.label}>{option.label}</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>{option.label}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+            ))}
+          </View>
         </View>
       </Pressable>
     </Modal>
@@ -74,45 +76,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  optionsContainer: {
-    padding: 16,
-    paddingBottom: 32,
-    gap: 12,
+  menuContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    paddingTop: 20,
+  },
+  optionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    justifyContent: 'flex-start',
+  },
+  optionWrapper: {
+    width: '33.33%',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   option: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   icon: {
-    fontSize: 24,
-  },
-  labelContainer: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    fontSize: 30,
   },
   label: {
     fontSize: 14,
-    color: '#111b21',
+    color: '#000000',
+    textAlign: 'center',
     fontWeight: '500',
   },
 });

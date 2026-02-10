@@ -13,12 +13,14 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EmojiPicker } from './emojiPicker';
 import { AttachmentMenu } from './attachmentMenu';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+
 
 interface User {
   id?: number;
@@ -96,6 +98,8 @@ export const Chat: React.FC<ChatProps> = ({
   const [selectedMessage, setSelectedMessage] = useState<number | null>(null);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [isPickingMedia, setIsPickingMedia] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -104,12 +108,10 @@ export const Chat: React.FC<ChatProps> = ({
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
     if (!member) return null;
     
-    // If it's already a User object
     if ('first_name' in member && 'last_name' in member) {
       return member as User;
     }
     
-    // If it's a ChatRoomMember with nested user
     if ('user' in member && member.user) {
       return member.user;
     }
@@ -213,62 +215,103 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleCameraPress = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (isPickingMedia) return;
     
-    if (permissionResult.granted === false) {
-      Alert.alert('Camera permission is required!');
-      return;
-    }
+    try {
+      setIsPickingMedia(true);
+      setShowAttachmentMenu(false);
+      
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'Camera permission is required to take photos!');
+        setIsPickingMedia(false);
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 1,
-    });
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        quality: 1,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      onSendMessage(asset.fileName || 'image', 'image', asset, replyingTo?.id);
-      setReplyingTo(null);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const messageType = asset.type === 'video' ? 'video' : 'image';
+        const fileName = asset.fileName || `${messageType}_${Date.now()}`;
+        
+        onSendMessage(fileName, messageType, asset, replyingTo?.id);
+        setReplyingTo(null);
+      }
+      setIsPickingMedia(false);
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      setIsPickingMedia(false);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
     }
   };
 
   const handleGalleryPress = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (isPickingMedia) return;
     
-    if (permissionResult.granted === false) {
-      Alert.alert('Gallery permission is required!');
-      return;
-    }
+    try {
+      setIsPickingMedia(true);
+      setShowAttachmentMenu(false);
+      
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'Gallery permission is required to select photos!');
+        setIsPickingMedia(false);
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 1,
-    });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        quality: 1,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const type = asset.type === 'video' ? 'video' : 'image';
-      onSendMessage(asset.fileName || type, type, asset, replyingTo?.id);
-      setReplyingTo(null);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const messageType = asset.type === 'video' ? 'video' : 'image';
+        const fileName = asset.fileName || `${messageType}_${Date.now()}`;
+        
+        onSendMessage(fileName, messageType, asset, replyingTo?.id);
+        setReplyingTo(null);
+      }
+      setIsPickingMedia(false);
+    } catch (error) {
+      console.error('Error selecting from gallery:', error);
+      setIsPickingMedia(false);
+      Alert.alert('Error', 'Failed to select media. Please try again.');
     }
   };
 
   const handleFileSelect = async () => {
+    if (isPickingMedia) return;
+    
     try {
+      setIsPickingMedia(true);
+      setShowAttachmentMenu(false);
+      
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: true,
       });
 
-      if (result.type === 'success') {
-        const fileName = result.name || 'document';
-        onSendMessage(fileName, 'file', result, replyingTo?.id);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const fileName = asset.name || `document_${Date.now()}`;
+        
+        onSendMessage(fileName, 'file', asset, replyingTo?.id);
         setReplyingTo(null);
       }
+      setIsPickingMedia(false);
     } catch (error) {
       console.error('Error selecting file:', error);
+      setIsPickingMedia(false);
+      Alert.alert('Error', 'Failed to select file. Please try again.');
     }
   };
 
@@ -321,7 +364,6 @@ export const Chat: React.FC<ChatProps> = ({
         {
           text: 'Clear',
           onPress: () => {
-            // Call API to clear chat
             Alert.alert('Success', 'Chat cleared successfully');
             setShowOptionsModal(false);
           },
@@ -339,6 +381,19 @@ export const Chat: React.FC<ChatProps> = ({
   const handleExportChat = () => {
     Alert.alert('Export Chat', 'Chat exported as PDF');
     setShowOptionsModal(false);
+  };
+
+  const handleDownloadFile = (fileUrl: string, fileName: string) => {
+    if (fileUrl) {
+      Linking.openURL(fileUrl).catch(() => {
+        Alert.alert('Error', 'Unable to open file. Please try again.');
+      });
+    }
+  };
+
+  const getFileExtension = (fileName: string) => {
+    const parts = fileName.split('.');
+    return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : 'FILE';
   };
 
   const renderMessage = ({ item: message, index }: { item: Message; index: number }) => {
@@ -416,25 +471,60 @@ export const Chat: React.FC<ChatProps> = ({
               )}
 
               {message.message_type === 'image' && message.file_url && (
-                <View style={styles.messageImage}>
+                <TouchableOpacity
+                  style={styles.messageImage}
+                  onPress={() => setSelectedImageUrl(message.file_url || null)}
+                  activeOpacity={0.8}
+                >
                   <Image
                     source={{ uri: message.file_url }}
                     style={styles.messageImageContent}
                     resizeMode="cover"
                   />
-                </View>
+                  <View style={styles.imageOverlay}>
+                    <Ionicons name="expand" size={24} color="#ffffff" />
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {message.message_type === 'video' && message.file_url && (
+                <TouchableOpacity
+                  style={styles.messageVideo}
+                  onPress={() => handleDownloadFile(message.file_url || '', message.file_name || 'video')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.videoPlayButton}>
+                    <Ionicons name="play" size={32} color="#ffffff" />
+                  </View>
+                  <Image
+                    source={{ uri: message.file_url }}
+                    style={styles.messageVideoThumbnail}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
               )}
 
               {message.message_type === 'file' && (
-                <View style={styles.messageFile}>
-                  <Text style={styles.fileIcon}>📄</Text>
+                <TouchableOpacity
+                  style={styles.messageFile}
+                  onPress={() => handleDownloadFile(message.file_url || '', message.file_name || 'file')}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.fileIconContainer}>
+                    <Text style={styles.fileIcon}>📄</Text>
+                  </View>
                   <View style={styles.fileInfo}>
                     <Text style={styles.fileName} numberOfLines={1}>
-                      {message.file_name}
+                      {message.file_name || 'Document'}
                     </Text>
-                    <Text style={styles.fileSize}>Document</Text>
+                    <Text style={styles.fileExtension}>
+                      {getFileExtension(message.file_name || 'file')}
+                    </Text>
                   </View>
-                </View>
+                  <View style={styles.downloadButton}>
+                    <Ionicons name="download" size={16} color="#00a884" />
+                  </View>
+                </TouchableOpacity>
               )}
 
               {message.message_type === 'text' && (
@@ -609,8 +699,9 @@ export const Chat: React.FC<ChatProps> = ({
             style={styles.inputIconBtn}
             onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
             activeOpacity={0.7}
+            disabled={isPickingMedia}
           >
-            <Ionicons name="attach" size={24} color="#8696a0" />
+            <Ionicons name="attach" size={24} color={isPickingMedia ? '#ccc' : '#8696a0'} />
           </TouchableOpacity>
 
           {inputText.trim() ? (
@@ -618,12 +709,13 @@ export const Chat: React.FC<ChatProps> = ({
               style={styles.sendButton}
               onPress={handleSend}
               activeOpacity={0.8}
+              disabled={isPickingMedia}
             >
               <Ionicons name="send" size={20} color="#ffffff" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.inputIconBtn} activeOpacity={0.7}>
-              <Ionicons name="mic" size={24} color="#8696a0" />
+            <TouchableOpacity style={styles.inputIconBtn} activeOpacity={0.7} disabled={isPickingMedia}>
+              <Ionicons name="mic" size={24} color={isPickingMedia ? '#ccc' : '#8696a0'} />
             </TouchableOpacity>
           )}
         </View>
@@ -638,15 +730,39 @@ export const Chat: React.FC<ChatProps> = ({
 
       {/* Attachment Menu */}
       <AttachmentMenu
-        visible={showAttachmentMenu}
+        visible={showAttachmentMenu && !isPickingMedia}
         onFileSelect={handleFileSelect}
         onCameraSelect={handleCameraPress}
         onGallerySelect={handleGalleryPress}
-        onAudioSelect={() => {}}
         onClose={() => setShowAttachmentMenu(false)}
       />
 
-      {/* WhatsApp-style Options Modal - Positioned Near Three Dots */}
+      {/* Full Screen Image Viewer Modal */}
+      <Modal
+        visible={selectedImageUrl !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedImageUrl(null)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setSelectedImageUrl(null)}
+          >
+            <Ionicons name="close" size={32} color="#ffffff" />
+          </TouchableOpacity>
+          
+          {selectedImageUrl && (
+            <Image
+              source={{ uri: selectedImageUrl }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* Options Modal */}
       <Modal
         visible={showOptionsModal}
         transparent={true}
@@ -659,7 +775,6 @@ export const Chat: React.FC<ChatProps> = ({
           onPress={() => setShowOptionsModal(false)}
         >
           <View style={styles.modalContent}>
-            {/* Search Option */}
             <TouchableOpacity
               style={styles.modalMenuItem}
               onPress={() => setShowOptionsModal(false)}
@@ -668,44 +783,29 @@ export const Chat: React.FC<ChatProps> = ({
               <Text style={styles.modalMenuText}>Search</Text>
             </TouchableOpacity>
 
-            {/* Media, Links, and Docs */}
             <TouchableOpacity
               style={styles.modalMenuItem}
-              onPress={() => setShowOptionsModal(false)}
+              onPress={handleClearChat}
               activeOpacity={0.7}
             >
               <Text style={styles.modalMenuText}>Clear Chat</Text>
             </TouchableOpacity>
 
-            {/* Disappearing Messages */}
             <TouchableOpacity
               style={styles.modalMenuItem}
-              onPress={() => setShowOptionsModal(false)}
+              onPress={handleMuteChat}
               activeOpacity={0.7}
             >
               <Text style={styles.modalMenuText}>Mute</Text>
             </TouchableOpacity>
 
-            {/* Chat Theme */}
             <TouchableOpacity
               style={styles.modalMenuItem}
-              onPress={() => setShowOptionsModal(false)}
+              onPress={handleExportChat}
               activeOpacity={0.7}
             >
               <Text style={styles.modalMenuText}>Export</Text>
             </TouchableOpacity>
-
-            {/* More */}
-            {/* <TouchableOpacity
-              style={styles.modalMenuItem}
-              onPress={() => setShowOptionsModal(false)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.modalMenuItemContent}>
-                <Text style={styles.modalMenuText}>More</Text>
-                <Ionicons name="chevron-forward" size={20} color="#bbb" />
-              </View>
-            </TouchableOpacity> */}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -897,19 +997,59 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 4,
+    position: 'relative',
   },
   messageImageContent: {
     width: 250,
     height: 250,
   },
+  imageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageVideo: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 4,
+    position: 'relative',
+    width: 250,
+    height: 250,
+  },
+  messageVideoThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  videoPlayButton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
   messageFile: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    padding: 12,
+    backgroundColor: '#f0f2f5',
     borderRadius: 8,
     marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#e9edef',
+  },
+  fileIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fileIcon: {
     fontSize: 32,
@@ -923,9 +1063,15 @@ const styles = StyleSheet.create({
     color: '#111b21',
     marginBottom: 2,
   },
-  fileSize: {
-    fontSize: 13,
+  fileExtension: {
+    fontSize: 12,
     color: '#667781',
+    fontWeight: '500',
+  },
+  downloadButton: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messageText: {
     fontSize: 14.2,
@@ -1039,7 +1185,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // WhatsApp-style Modal Styles - Positioned at Top Right near three dots
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '100%',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'transparent',

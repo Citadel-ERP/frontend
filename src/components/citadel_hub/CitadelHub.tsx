@@ -335,6 +335,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             return;
           }
 
+          // Handle room_joined acknowledgment
+          if (data.type === 'room_joined') {
+            console.log('Successfully joined room:', data.room_id);
+            return;
+          }
+
           switch (data.type) {
             case 'message':
               handleNewMessage(data.message);
@@ -587,18 +593,32 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         formData.append('content', content);
         formData.append('message_type', messageType);
         
-        // Handle different file types
-        const fileToUpload: any = {
-          uri: file.uri,
-          type: file.mimeType || file.type || 'application/octet-stream',
-          name: file.name || file.fileName || 'file',
-        };
+        // Handle different file types properly
+        let fileToUpload: any;
         
-        formData.append('file', fileToUpload);
+        // Check if it's from ImagePicker (has assets array) or DocumentPicker
+        if (file.uri) {
+          fileToUpload = {
+            uri: file.uri,
+            type: file.mimeType || file.type || 'application/octet-stream',
+            name: file.name || file.fileName || `file_${Date.now()}.${messageType === 'image' ? 'jpg' : messageType === 'video' ? 'mp4' : 'file'}`,
+          };
+        } else {
+          // Fallback for other file structures
+          fileToUpload = {
+            uri: file.uri || file.url,
+            type: file.mimeType || file.type || 'application/octet-stream',
+            name: file.name || file.fileName || `file_${Date.now()}`,
+          };
+        }
+        
+        formData.append('file', fileToUpload as any);
         
         if (parentMessageId) {
           formData.append('parent_message_id', parentMessageId.toString());
         }
+
+        console.log('Uploading file:', fileToUpload.name, 'Type:', messageType);
 
         const response = await fetch(`${apiBaseUrl}/citadel_hub/sendMessage`, {
           method: 'POST',
@@ -606,6 +626,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         });
         
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('File upload failed:', response.status, errorText);
           throw new Error(`File upload failed: ${response.status}`);
         }
         
@@ -620,6 +642,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             }
             return prev;
           });
+          
+          // Reload chat rooms to update last message
+          loadChatRooms();
         }
       } else {
         // Optimistic UI update for text messages
