@@ -10,6 +10,7 @@ import {
   Alert,
   Pressable,
   Animated,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -702,7 +703,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 16,
     gap: 16,
-    marginTop: -80,
+    marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
   backButton: {
     padding: 8,

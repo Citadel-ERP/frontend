@@ -8,6 +8,7 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -24,6 +25,7 @@ interface NewChatProps {
   currentUser: User;
   onBack: () => void;
   onCreate: (employeeId: string) => void;
+  onCreateGroup: () => void; // NEW: Navigation to group creation
   apiCall: (endpoint: string, data: any) => Promise<any>;
 }
 
@@ -31,6 +33,7 @@ export const NewChat: React.FC<NewChatProps> = ({
   currentUser,
   onBack,
   onCreate,
+  onCreateGroup, // NEW
   apiCall,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +60,10 @@ export const NewChat: React.FC<NewChatProps> = ({
 
   const handleUserSelect = (user: User) => {
     onCreate(user.employee_id);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
   };
 
   const renderUser = ({ item: user }: { item: User }) => (
@@ -106,45 +113,71 @@ export const NewChat: React.FC<NewChatProps> = ({
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search contacts"
-            placeholderTextColor="#8696a0"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+      {/* Scrollable content */}
+      <ScrollView 
+        style={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search contacts"
+              placeholderTextColor="#8696a0"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={clearSearch}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={20} color="#8696a0" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.actionsSection}>
-        <TouchableOpacity style={styles.actionItem} activeOpacity={0.7}>
-          <View style={[styles.actionIcon, { backgroundColor: '#00a884' }]}>
-            <Ionicons name="people" size={24} color="#ffffff" />
-          </View>
-          <Text style={styles.actionTitle}>New group</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.actionsSection}>
+          <TouchableOpacity 
+            style={styles.actionItem} 
+            activeOpacity={0.7}
+            onPress={onCreateGroup} // NEW: Navigate to group creation
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#00a884' }]}>
+              <Ionicons name="people" size={24} color="#ffffff" />
+            </View>
+            <Text style={styles.actionTitle}>New group</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.contactsSection}>
-        <Text style={styles.sectionTitle}>Contacts on Citadel</Text>
-        
-        {isSearching ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color="#00a884" />
-            <Text style={styles.loadingText}>Searching...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={users}
-            renderItem={renderUser}
-            keyExtractor={(item) => item.employee_id}
-            style={styles.contactsList}
-          />
-        )}
-      </View>
+        <View style={styles.contactsSection}>
+          <Text style={styles.sectionTitle}>Contacts on Citadel</Text>
+          
+          {isSearching ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color="#00a884" />
+              <Text style={styles.loadingText}>Searching...</Text>
+            </View>
+          ) : users.length > 0 ? (
+            <View>
+              {users.map((user) => (
+                <View key={user.employee_id}>
+                  {renderUser({ item: user })}
+                </View>
+              ))}
+            </View>
+          ) : searchQuery ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="search" size={48} color="#e9edef" />
+              <Text style={styles.emptyText}>No contacts found</Text>
+            </View>
+          ) : null}
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -176,10 +209,14 @@ const styles = StyleSheet.create({
   headerIconBtn: {
     padding: 8,
   },
+  scrollContent: {
+    flex: 1,
+  },
   searchContainer: {
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e9edef',
+    backgroundColor: '#ffffff',
   },
   searchBox: {
     flexDirection: 'row',
@@ -187,7 +224,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f2f5',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 2,
+    paddingVertical: 8,
   },
   searchIcon: {
     marginRight: 8,
@@ -196,12 +233,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#111b21',
-    // height: 23
+    paddingVertical: 2,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 4,
   },
   actionsSection: {
     paddingVertical: 8,
     borderBottomWidth: 8,
     borderBottomColor: '#f0f2f5',
+    backgroundColor: '#ffffff',
   },
   actionItem: {
     flexDirection: 'row',
@@ -223,7 +265,7 @@ const styles = StyleSheet.create({
     color: '#111b21',
   },
   contactsSection: {
-    flex: 1,
+    paddingBottom: 20,
   },
   sectionTitle: {
     paddingHorizontal: 16,
@@ -234,12 +276,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f2f5',
   },
   loadingState: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 32,
   },
   loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#667781',
+  },
+  emptyState: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyText: {
     marginTop: 12,
     fontSize: 14,
     color: '#667781',
@@ -253,6 +304,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
+    backgroundColor: '#ffffff',
   },
   contactAvatar: {
     width: 48,

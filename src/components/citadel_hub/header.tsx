@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     paddingTop: 90,
     paddingBottom: 10,
     paddingHorizontal: 16,
-    marginTop:-80,
+    marginTop:Platform.OS === 'ios' ? -80 : -50,
   },
   headerContent: {
     flexDirection: 'row',

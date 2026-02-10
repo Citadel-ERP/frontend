@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  Platform,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from './header';
 import { SearchAndFilter } from './searchAndFilter';
 import { List } from './list';
@@ -8,6 +16,7 @@ import { ChatDetails } from './chatDetails';
 import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
+import ShareScreen from './share';
 
 // ============= TYPE DEFINITIONS =============
 export interface User {
@@ -49,11 +58,14 @@ export interface Message {
   message_type: 'text' | 'image' | 'file' | 'audio' | 'video';
   created_at: string;
   is_edited: boolean;
+  is_deleted?: boolean;
+  deleted_for_me?: boolean;
   parent_message?: Message;
   reactions?: MessageReaction[];
   file_url?: string;
   file_name?: string;
   chat_room?: number;
+  is_forwarded?: boolean;  
 }
 
 export interface ChatRoom {
@@ -87,7 +99,7 @@ export interface Notification {
   is_read: boolean;
 }
 
-export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit';
+export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -96,6 +108,23 @@ interface CitadelHubProps {
   onBack?: () => void;
   currentUser: User;
 }
+
+interface PendingAction {
+  id: string;
+  type: 'delete_for_me' | 'delete_for_everyone' | 'react' | 'clear_chat';
+  roomId: number;
+  messageId?: number;
+  data: any;
+  timestamp: number;
+  status: 'pending' | 'completed' | 'failed';
+}
+
+// ============= CACHE KEYS =============
+const CACHE_KEYS = {
+  MESSAGES: (roomId: number) => `message_cache_${roomId}`,
+  CHAT_ROOMS: 'chat_rooms_cache',
+  PENDING_ACTIONS: 'pending_actions_cache',
+};
 
 // ============= MAIN COMPONENT =============
 export const CitadelHub: React.FC<CitadelHubProps> = ({
@@ -117,6 +146,11 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [typingUsers, setTypingUsers] = useState<{ [roomId: number]: User[] }>({});
   const [onlineUsers, setOnlineUsers] = useState<Set<number>>(new Set());
 
+  // Cache & Optimistic Updates
+  const [messageCache, setMessageCache] = useState<{ [roomId: number]: Message[] }>({});
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  const [isInitialCacheLoaded, setIsInitialCacheLoaded] = useState(false);
+
   // WebSocket State
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -131,6 +165,120 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [shareData, setShareData] = useState<{
+    messageIds: number[];
+    messages: Message[];
+    chatRoomId?: number;
+  } | null>(null);
+
+  const handleShare = useCallback((messageIds: number[], messages: Message[], chatRoomId?: number) => {
+    setShareData({ messageIds, messages, chatRoomId });
+    setViewMode('share');
+  }, []);
+
+  const handleBackFromShare = useCallback(() => {
+    setShareData(null);
+    setViewMode('chat');
+  }, []);
+
+  // ============= CACHE MANAGEMENT =============
+  const loadCache = useCallback(async () => {
+    try {
+      if (Platform.OS === 'web') return;
+
+      // Load message cache
+      const cacheKeys = await AsyncStorage.getAllKeys();
+      const messageCacheKeys = cacheKeys.filter(key => key.startsWith('message_cache_'));
+
+      const newCache: { [roomId: number]: Message[] } = {};
+
+      for (const key of messageCacheKeys) {
+        const roomId = parseInt(key.replace('message_cache_', ''));
+        const cachedData = await AsyncStorage.getItem(key);
+        if (cachedData) {
+          newCache[roomId] = JSON.parse(cachedData);
+        }
+      }
+
+      setMessageCache(newCache);
+
+      // Load pending actions
+      const pendingActionsData = await AsyncStorage.getItem(CACHE_KEYS.PENDING_ACTIONS);
+      if (pendingActionsData) {
+        setPendingActions(JSON.parse(pendingActionsData));
+      }
+
+      setIsInitialCacheLoaded(true);
+    } catch (error) {
+      console.error('Error loading cache:', error);
+    }
+  }, []);
+
+  const saveMessageCache = useCallback(async (roomId: number, messages: Message[]) => {
+    try {
+      // Update in-memory cache
+      setMessageCache(prev => ({
+        ...prev,
+        [roomId]: messages
+      }));
+
+      // Save to persistent storage
+      if (Platform.OS !== 'web') {
+        await AsyncStorage.setItem(
+          CACHE_KEYS.MESSAGES(roomId),
+          JSON.stringify(messages.slice(-200)) // Keep last 200 messages
+        );
+      }
+    } catch (error) {
+      console.error('Error saving message cache:', error);
+    }
+  }, []);
+
+  const savePendingActions = useCallback(async (actions: PendingAction[]) => {
+    try {
+      if (Platform.OS !== 'web') {
+        await AsyncStorage.setItem(
+          CACHE_KEYS.PENDING_ACTIONS,
+          JSON.stringify(actions.slice(-50)) // Keep last 50 pending actions
+        );
+      }
+    } catch (error) {
+      console.error('Error saving pending actions:', error);
+    }
+  }, []);
+
+  const addPendingAction = useCallback((action: Omit<PendingAction, 'id' | 'timestamp' | 'status'>) => {
+    const newAction: PendingAction = {
+      ...action,
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      status: 'pending',
+    };
+
+    setPendingActions(prev => {
+      const updated = [newAction, ...prev].slice(0, 50); // Keep only recent 50
+      savePendingActions(updated);
+      return updated;
+    });
+
+    return newAction.id;
+  }, [savePendingActions]);
+
+  const updatePendingActionStatus = useCallback((actionId: string, status: 'completed' | 'failed') => {
+    setPendingActions(prev => {
+      const updated = prev.map(action =>
+        action.id === actionId ? { ...action, status } : action
+      ).filter(action =>
+        !(action.status === 'completed' && Date.now() - action.timestamp > 30000) // Remove completed after 30s
+      );
+      savePendingActions(updated);
+      return updated;
+    });
+  }, [savePendingActions]);
+
   // ============= API FUNCTIONS =============
   const apiCall = async (endpoint: string, data: any): Promise<any> => {
     try {
@@ -141,11 +289,11 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         },
         body: JSON.stringify({ token, ...data }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`API call failed: ${response.status}`);
       }
-      
+
       return response.json();
     } catch (error) {
       console.error(`API call error (${endpoint}):`, error);
@@ -158,7 +306,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     try {
       const result = await apiCall('getChatRooms', {});
       if (result.chat_rooms) {
-        // Ensure all chat rooms have created_at
         const roomsWithCreatedAt = result.chat_rooms.map((room: any) => ({
           ...room,
           created_at: room.created_at || new Date().toISOString(),
@@ -170,11 +317,17 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [apiBaseUrl, token]);
 
-  const loadMessages = useCallback(async (roomId: number, page: number = 1) => {
+  const loadMessages = useCallback(async (roomId: number, page: number = 1, useCache: boolean = true) => {
     if (isLoadingMessages) return;
 
     setIsLoadingMessages(true);
+
     try {
+      // Show cached messages immediately for instant loading
+      if (useCache && page === 1 && messageCache[roomId] && messageCache[roomId].length > 0) {
+        setMessages(messageCache[roomId]);
+      }
+
       const result = await apiCall('getMessages', {
         chat_room_id: roomId,
         page,
@@ -182,19 +335,47 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       });
 
       if (result.messages) {
+        const newMessages = result.messages.reverse();
+
         if (page === 1) {
-          setMessages(result.messages.reverse());
+          // Merge with cache, preferring fresh messages
+          const cachedMessages = messageCache[roomId] || [];
+          const mergedMessages = mergeMessages(newMessages, cachedMessages);
+          setMessages(mergedMessages);
+          saveMessageCache(roomId, mergedMessages);
         } else {
-          setMessages(prev => [...result.messages.reverse(), ...prev]);
+          const mergedMessages = mergeMessages(newMessages, messages);
+          setMessages(mergedMessages);
+          saveMessageCache(roomId, mergedMessages);
         }
+
         setHasMoreMessages(result.messages.length === 50);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
+      // If API fails and no cache, show error
+      if (page === 1 && (!messageCache[roomId] || messageCache[roomId].length === 0)) {
+        Alert.alert('Error', 'Failed to load messages. Please check your connection.');
+      }
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, messageCache, saveMessageCache]);
+
+  // Helper function to merge messages (new messages override cached ones)
+  const mergeMessages = (newMessages: Message[], cachedMessages: Message[]): Message[] => {
+    const messageMap = new Map<number, Message>();
+
+    // Add cached messages first
+    cachedMessages.forEach(msg => messageMap.set(msg.id, msg));
+
+    // Override with new messages (these are fresher)
+    newMessages.forEach(msg => messageMap.set(msg.id, msg));
+
+    return Array.from(messageMap.values()).sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  };
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -212,41 +393,141 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [apiBaseUrl, token]);
 
+  // ============= OPTIMISTIC UPDATE FUNCTIONS =============
+  const performOptimisticUpdate = useCallback((action: {
+    type: 'delete_for_me' | 'delete_for_everyone' | 'react' | 'clear_chat';
+    roomId: number;
+    messageId?: number;
+    data: any;
+  }) => {
+    const { type, roomId, messageId, data } = action;
+
+    // Generate pending action ID
+    const actionId = addPendingAction({
+      type,
+      roomId,
+      messageId,
+      data,
+    });
+
+    // Perform optimistic update on UI
+    switch (type) {
+      case 'delete_for_me':
+        setMessages(prev => {
+          const updated = prev.filter(m => m.id !== messageId);
+          saveMessageCache(roomId, updated);
+          return updated;
+        });
+        break;
+
+      case 'delete_for_everyone':
+        setMessages(prev => {
+          const updated = prev.map(m => {
+            if (m.id === messageId) {
+              return {
+                ...m,
+                content: 'This message was deleted',
+                is_deleted: true,
+                message_type: 'text',
+                file_url: undefined,
+                file_name: undefined,
+                reactions: [],
+              };
+            }
+            return m;
+          });
+          saveMessageCache(roomId, updated);
+          return updated;
+        });
+        break;
+
+      case 'react':
+        setMessages(prev => {
+          const updated = prev.map(m => {
+            if (m.id === messageId) {
+              const existingReactions = m.reactions || [];
+              const userReactionIndex = existingReactions.findIndex(r =>
+                (r.user.id || r.user.employee_id) ===
+                (currentUser.id || currentUser.employee_id)
+              );
+
+              let newReactions;
+              if (userReactionIndex > -1) {
+                // Update existing reaction
+                newReactions = [...existingReactions];
+                newReactions[userReactionIndex] = {
+                  ...newReactions[userReactionIndex],
+                  emoji: data.emoji,
+                };
+              } else {
+                // Add new reaction
+                newReactions = [...existingReactions, {
+                  id: Date.now(),
+                  user: currentUser,
+                  emoji: data.emoji,
+                }];
+              }
+
+              return {
+                ...m,
+                reactions: newReactions
+              };
+            }
+            return m;
+          });
+          saveMessageCache(roomId, updated);
+          return updated;
+        });
+        break;
+
+      case 'clear_chat':
+        setMessages([]);
+        saveMessageCache(roomId, []);
+
+        // Also update chat rooms list
+        setChatRooms(prev => prev.map(room =>
+          room.id === roomId
+            ? { ...room, last_message_at: undefined, unread_count: 0 }
+            : room
+        ));
+        break;
+    }
+
+    return actionId;
+  }, [currentUser, saveMessageCache, addPendingAction]);
+
   // ============= WEBSOCKET FUNCTIONS =============
   const cleanupWebSocket = useCallback(() => {
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
       pingInterval.current = null;
     }
-    
+
     if (reconnectTimeout.current) {
       clearTimeout(reconnectTimeout.current);
       reconnectTimeout.current = null;
     }
-    
+
     if (ws.current) {
-      // Remove all event listeners before closing
       ws.current.onopen = null;
       ws.current.onmessage = null;
       ws.current.onclose = null;
       ws.current.onerror = null;
-      
-      if (ws.current.readyState === WebSocket.OPEN || 
-          ws.current.readyState === WebSocket.CONNECTING) {
+
+      if (ws.current.readyState === WebSocket.OPEN ||
+        ws.current.readyState === WebSocket.CONNECTING) {
         ws.current.close(1000, 'Cleanup');
       }
-      
+
       ws.current = null;
     }
   }, []);
 
   const startPingInterval = useCallback(() => {
-    // Clear existing interval
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
     }
-    
-    // Send ping every 30 seconds to keep connection alive
+
     pingInterval.current = setInterval(() => {
       if (ws.current?.readyState === WebSocket.OPEN) {
         try {
@@ -259,37 +540,33 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, []);
 
   const connectWebSocket = useCallback(() => {
-    // Prevent multiple simultaneous connection attempts
     if (isReconnecting.current) {
       console.log('Already attempting to reconnect...');
       return;
     }
 
-    // Check if already connected
     if (ws.current?.readyState === WebSocket.OPEN) {
       console.log('WebSocket already connected');
       return;
     }
 
-    // Check if currently connecting
     if (ws.current?.readyState === WebSocket.CONNECTING) {
       console.log('WebSocket is already connecting...');
       return;
     }
 
-    // Check reconnection attempts
     if (reconnectAttempts.current >= maxReconnectAttempts) {
       console.error('Max reconnection attempts reached');
       Alert.alert(
         'Connection Error',
         'Unable to connect to chat server. Please check your internet connection and restart the app.',
         [
-          { 
-            text: 'Retry', 
-            onPress: () => { 
+          {
+            text: 'Retry',
+            onPress: () => {
               reconnectAttempts.current = 0;
               connectWebSocket();
-            } 
+            }
           },
           { text: 'Cancel', style: 'cancel' }
         ]
@@ -301,10 +578,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
     try {
       console.log(`Connecting to WebSocket... (Attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
-      
-      // Clean up any existing connection
+
       cleanupWebSocket();
-      
+
       const websocketUrl = `${wsBaseUrl}/ws/chat/?token=${token}`;
       const websocket = new WebSocket(websocketUrl);
 
@@ -313,10 +589,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         setIsConnected(true);
         reconnectAttempts.current = 0;
         isReconnecting.current = false;
-        
-        // Start ping interval
+
         startPingInterval();
-        
+
+        // Retry pending actions
+        retryPendingActions();
+
         // Rejoin current room if in chat
         if (selectedChatRoom) {
           setTimeout(() => {
@@ -330,14 +608,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         try {
           const data = JSON.parse(event.data);
 
-          // Handle pong response
-          if (data.type === 'pong') {
-            return;
-          }
-
-          // Handle room_joined acknowledgment
-          if (data.type === 'room_joined') {
-            console.log('Successfully joined room:', data.room_id);
+          if (data.type === 'pong' || data.type === 'room_joined') {
             return;
           }
 
@@ -349,7 +620,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               handleMessageEdited(data.message);
               break;
             case 'message_deleted':
-              handleMessageDeleted(data.message_id);
+              handleMessageDeleted(data);
+              break;
+            case 'message_deleted_for_me':
+              handleMessageDeletedForMe(data);
               break;
             case 'typing':
               handleTyping(data.room_id, data.user_id, data.user_name);
@@ -361,10 +635,19 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               handleMessagesRead(data.room_id, data.user_id);
               break;
             case 'reaction':
-              handleReaction(data.message_id, data.user_id, data.user_name, data.emoji);
+              handleReactionUpdate(data);
+              break;
+            case 'message_reaction':
+              handleReactionUpdate(data);
               break;
             case 'status_update':
               handleStatusUpdate(data.user_status);
+              break;
+            case 'search_results':
+              handleSearchResults(data);
+              break;
+            case 'chat_cleared':
+              handleChatCleared(data);
               break;
             default:
               console.log('Unknown message type:', data.type);
@@ -378,18 +661,15 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         console.log(`WebSocket Disconnected: ${event.code} - ${event.reason || 'No reason provided'}`);
         setIsConnected(false);
         isReconnecting.current = false;
-        
-        // Clear ping interval
+
         if (pingInterval.current) {
           clearInterval(pingInterval.current);
           pingInterval.current = null;
         }
-        
-        // Only attempt reconnection if not a normal closure
+
         if (event.code !== 1000) {
           reconnectAttempts.current += 1;
-          
-          // Exponential backoff with jitter
+
           const baseDelay = 1000;
           const maxDelay = 30000;
           const exponentialDelay = Math.min(
@@ -398,12 +678,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           );
           const jitter = Math.random() * 1000;
           const delay = exponentialDelay + jitter;
-          
+
           console.log(
             `Reconnecting in ${Math.round(delay / 1000)}s... ` +
             `(Attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`
           );
-          
+
           reconnectTimeout.current = setTimeout(() => {
             connectWebSocket();
           }, delay);
@@ -417,18 +697,16 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           message: error.message || 'Unknown error',
           type: error.type,
         });
-        // Don't set isReconnecting to false here, onclose will handle it
       };
 
       ws.current = websocket;
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
       isReconnecting.current = false;
-      
-      // Attempt reconnection after delay
+
       reconnectAttempts.current += 1;
       const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-      
+
       reconnectTimeout.current = setTimeout(() => {
         connectWebSocket();
       }, delay);
@@ -439,45 +717,194 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const handleNewMessage = useCallback((message: Message) => {
     if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
       setMessages(prev => {
-        // Check if message already exists
         const exists = prev.some(m => m.id === message.id);
         if (exists) {
-          // Replace existing message
-          return prev.map(m => m.id === message.id ? message : m);
+          const updated = prev.map(m => m.id === message.id ? message : m);
+          saveMessageCache(selectedChatRoom.id, updated);
+          return updated;
         }
-        
-        // Remove temp messages with same content sent recently
+
         const filtered = prev.filter(m => {
-          const isSameUser = (m.sender.id || m.sender.employee_id) === 
-                            (currentUser.id || currentUser.employee_id);
+          const isSameUser = (m.sender.id || m.sender.employee_id) ===
+            (currentUser.id || currentUser.employee_id);
           const isSameContent = m.content === message.content;
-          
+
           if (isSameUser && isSameContent) {
             const timeDiff = new Date().getTime() - new Date(m.created_at).getTime();
             return timeDiff > 2000;
           }
           return true;
         });
-        
-        return [...filtered, message];
+
+        const updated = [...filtered, message];
+        saveMessageCache(selectedChatRoom.id, updated);
+        return updated;
       });
-      
+
       // Mark as read
       if (isConnected && ws.current?.readyState === WebSocket.OPEN) {
         sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
       }
     }
-    
+
     loadChatRooms();
     loadNotifications();
-  }, [selectedChatRoom, currentUser, isConnected]);
+  }, [selectedChatRoom, currentUser, isConnected, saveMessageCache, loadChatRooms, loadNotifications]);
+
+  const handleMessageDeletedForMe = useCallback((data: any) => {
+    const { message_id, room_id } = data;
+
+    if (selectedChatRoom && selectedChatRoom.id === room_id) {
+      setMessages(prev => {
+        const updated = prev.filter(m => m.id !== parseInt(message_id));
+        saveMessageCache(room_id, updated);
+        return updated;
+      });
+
+      // Mark pending action as completed
+      const pendingAction = pendingActions.find(action =>
+        action.type === 'delete_for_me' &&
+        action.messageId === parseInt(message_id) &&
+        action.status === 'pending'
+      );
+
+      if (pendingAction) {
+        updatePendingActionStatus(pendingAction.id, 'completed');
+      }
+    }
+  }, [selectedChatRoom, pendingActions, updatePendingActionStatus, saveMessageCache]);
+
+  const handleMessageDeleted = useCallback((data: any) => {
+    const { message_id, deleted_for, room_id } = data;
+
+    if (selectedChatRoom && selectedChatRoom.id === room_id && deleted_for === 'everyone') {
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (m.id === parseInt(message_id)) {
+            return {
+              ...m,
+              content: 'This message was deleted',
+              is_deleted: true,
+              message_type: 'text',
+              file_url: undefined,
+              file_name: undefined,
+              reactions: [],
+            };
+          }
+          return m;
+        });
+        saveMessageCache(room_id, updated);
+        return updated;
+      });
+
+      // Mark pending action as completed
+      const pendingAction = pendingActions.find(action =>
+        action.type === 'delete_for_everyone' &&
+        action.messageId === parseInt(message_id) &&
+        action.status === 'pending'
+      );
+
+      if (pendingAction) {
+        updatePendingActionStatus(pendingAction.id, 'completed');
+      }
+    }
+  }, [selectedChatRoom, pendingActions, updatePendingActionStatus, saveMessageCache]);
+
+  const handleReactionUpdate = useCallback((data: any) => {
+    const { message_id, reaction, room_id } = data;
+
+    if (selectedChatRoom && selectedChatRoom.id === room_id) {
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (m.id === parseInt(message_id)) {
+            const existingReactions = m.reactions || [];
+            const userReactionIndex = existingReactions.findIndex(r =>
+              (r.user.id || r.user.employee_id) ===
+              (reaction.user.id || reaction.user.employee_id)
+            );
+
+            let newReactions;
+            if (userReactionIndex > -1) {
+              newReactions = [...existingReactions];
+              newReactions[userReactionIndex] = reaction;
+            } else {
+              newReactions = [...existingReactions, reaction];
+            }
+
+            return {
+              ...m,
+              reactions: newReactions
+            };
+          }
+          return m;
+        });
+        saveMessageCache(room_id, updated);
+        return updated;
+      });
+
+      // Mark pending action as completed
+      const pendingAction = pendingActions.find(action =>
+        action.type === 'react' &&
+        action.messageId === parseInt(message_id) &&
+        action.data.emoji === reaction.emoji &&
+        action.status === 'pending'
+      );
+
+      if (pendingAction) {
+        updatePendingActionStatus(pendingAction.id, 'completed');
+      }
+    }
+  }, [selectedChatRoom, pendingActions, updatePendingActionStatus, saveMessageCache]);
+
+  const handleChatCleared = useCallback((data: any) => {
+    const { room_id } = data;
+
+    if (selectedChatRoom && selectedChatRoom.id === room_id) {
+      setMessages([]);
+      saveMessageCache(room_id, []);
+
+      // Update chat rooms list
+      setChatRooms(prev => prev.map(room =>
+        room.id === room_id
+          ? { ...room, last_message_at: undefined, unread_count: 0 }
+          : room
+      ));
+
+      // Mark pending action as completed
+      const pendingAction = pendingActions.find(action =>
+        action.type === 'clear_chat' &&
+        action.roomId === room_id &&
+        action.status === 'pending'
+      );
+
+      if (pendingAction) {
+        updatePendingActionStatus(pendingAction.id, 'completed');
+      }
+    }
+  }, [selectedChatRoom, pendingActions, updatePendingActionStatus, saveMessageCache]);
 
   const handleMessageEdited = useCallback((message: Message) => {
-    setMessages(prev => prev.map(m => m.id === message.id ? message : m));
-  }, []);
+    setMessages(prev => {
+      const updated = prev.map(m => m.id === message.id ? message : m);
+      if (message.chat_room) {
+        saveMessageCache(message.chat_room, updated);
+      }
+      return updated;
+    });
+  }, [saveMessageCache]);
 
-  const handleMessageDeleted = useCallback((messageId: number) => {
-    setMessages(prev => prev.filter(m => m.id !== messageId));
+  const handleSearchResults = useCallback((data: any) => {
+    const { query, messages: results, offset, has_more } = data;
+
+    setSearchResults(prev => {
+      if (offset === 0) {
+        return results;
+      }
+      return [...prev, ...results];
+    });
+
+    setHasMoreSearchResults(has_more);
+    setIsSearching(false);
   }, []);
 
   const handleTyping = useCallback((roomId: number, userId: number, userName: string) => {
@@ -491,19 +918,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
     setTypingUsers(prev => {
       const existingUsers = prev[roomId] || [];
-      const alreadyTyping = existingUsers.some(u => 
+      const alreadyTyping = existingUsers.some(u =>
         (u.id || parseInt(u.employee_id || '0')) === userId
       );
-      
+
       if (alreadyTyping) return prev;
-      
+
       return {
         ...prev,
         [roomId]: [...existingUsers, user],
       };
     });
 
-    // Auto-remove after 3 seconds
     setTimeout(() => {
       handleStopTyping(roomId, userId);
     }, 3000);
@@ -512,7 +938,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const handleStopTyping = useCallback((roomId: number, userId: number) => {
     setTypingUsers(prev => ({
       ...prev,
-      [roomId]: (prev[roomId] || []).filter(u => 
+      [roomId]: (prev[roomId] || []).filter(u =>
         (u.id || parseInt(u.employee_id || '0')) !== userId
       ),
     }));
@@ -521,32 +947,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const handleMessagesRead = useCallback((roomId: number, userId: number) => {
     loadChatRooms();
   }, [loadChatRooms]);
-
-  const handleReaction = useCallback((
-    messageId: number, 
-    userId: number, 
-    userName: string, 
-    emoji: string
-  ) => {
-    const user: User = {
-      id: userId,
-      employee_id: userId.toString(),
-      first_name: userName.split(' ')[0] || userName,
-      last_name: userName.split(' ')[1] || '',
-      email: '',
-    };
-
-    setMessages(prev => prev.map(m => {
-      if (m.id === messageId) {
-        const reactions = m.reactions || [];
-        return {
-          ...m,
-          reactions: [...reactions, { id: Date.now(), user, emoji }],
-        };
-      }
-      return m;
-    }));
-  }, []);
 
   const handleStatusUpdate = useCallback((userStatus: any) => {
     if (userStatus?.status === 'online' && userStatus?.user?.id) {
@@ -560,6 +960,164 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, []);
 
+  // ============= ACTION HANDLERS WITH OPTIMISTIC UPDATES =============
+  const handleDeleteForMe = useCallback((messageId: number) => {
+    if (!selectedChatRoom) return;
+
+    // Perform optimistic update
+    const actionId = performOptimisticUpdate({
+      type: 'delete_for_me',
+      roomId: selectedChatRoom.id,
+      messageId,
+      data: {},
+    });
+
+    // Send WebSocket message
+    const sent = sendWebSocketMessage('delete_message_for_me', {
+      message_id: messageId,
+    });
+
+    if (!sent) {
+      // Mark as failed if WebSocket not connected
+      setTimeout(() => {
+        updatePendingActionStatus(actionId, 'failed');
+      }, 1000);
+    }
+  }, [selectedChatRoom, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
+
+  const handleDeleteForEveryone = useCallback((messageId: number) => {
+    if (!selectedChatRoom) return;
+
+    // Check if message is within 30 minutes
+    const message = messages.find(m => m.id === messageId);
+    if (message) {
+      const messageTime = new Date(message.created_at).getTime();
+      const currentTime = new Date().getTime();
+      const timeDiff = currentTime - messageTime;
+      const thirtyMinutes = 30 * 60 * 1000;
+
+      if (timeDiff > thirtyMinutes) {
+        Alert.alert('Cannot Delete', 'You can only delete messages within 30 minutes of sending.');
+        return;
+      }
+    }
+
+    // Perform optimistic update
+    const actionId = performOptimisticUpdate({
+      type: 'delete_for_everyone',
+      roomId: selectedChatRoom.id,
+      messageId,
+      data: {},
+    });
+
+    // Send WebSocket message
+    const sent = sendWebSocketMessage('delete_message', {
+      message_id: messageId,
+    });
+
+    if (!sent) {
+      setTimeout(() => {
+        updatePendingActionStatus(actionId, 'failed');
+      }, 1000);
+    }
+  }, [selectedChatRoom, messages, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
+
+  const handleReact = useCallback((messageId: number, emoji: string) => {
+    if (!selectedChatRoom) return;
+
+    // Perform optimistic update
+    const actionId = performOptimisticUpdate({
+      type: 'react',
+      roomId: selectedChatRoom.id,
+      messageId,
+      data: { emoji },
+    });
+
+    // Send WebSocket message
+    const sent = sendWebSocketMessage('react_message', {
+      message_id: messageId,
+      emoji,
+    });
+
+    if (!sent) {
+      setTimeout(() => {
+        updatePendingActionStatus(actionId, 'failed');
+      }, 1000);
+    }
+  }, [selectedChatRoom, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
+
+  const handleClearChat = useCallback(() => {
+    if (!selectedChatRoom) return;
+
+    Alert.alert(
+      'Clear Chat',
+      'Are you sure you want to clear this chat? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            // Perform optimistic update
+            const actionId = performOptimisticUpdate({
+              type: 'clear_chat',
+              roomId: selectedChatRoom.id,
+              data: {},
+            });
+
+            // Send WebSocket message
+            const sent = sendWebSocketMessage('clear_chat', {
+              room_id: selectedChatRoom.id,
+            });
+
+            if (!sent) {
+              setTimeout(() => {
+                updatePendingActionStatus(actionId, 'failed');
+              }, 1000);
+            }
+          }
+        }
+      ]
+    );
+  }, [selectedChatRoom, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
+
+  const retryPendingActions = useCallback(() => {
+    pendingActions.forEach(action => {
+      if (action.status === 'pending' || action.status === 'failed') {
+        switch (action.type) {
+          case 'delete_for_me':
+            if (action.messageId) {
+              sendWebSocketMessage('delete_message_for_me', {
+                message_id: action.messageId,
+              });
+            }
+            break;
+          case 'delete_for_everyone':
+            if (action.messageId) {
+              sendWebSocketMessage('delete_message', {
+                message_id: action.messageId,
+              });
+            }
+            break;
+          case 'react':
+            if (action.messageId) {
+              sendWebSocketMessage('react_message', {
+                message_id: action.messageId,
+                emoji: action.data.emoji,
+              });
+            }
+            break;
+          case 'clear_chat':
+            sendWebSocketMessage('clear_chat', {
+              room_id: action.roomId,
+            });
+            break;
+        }
+      }
+    });
+  }, [pendingActions, sendWebSocketMessage]);
+
+  // ============= WEBSOCKET UTILITIES =============
   const sendWebSocketMessage = useCallback((action: string, data: any) => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       console.warn(`WebSocket is not connected (state: ${ws.current?.readyState}). Message not sent:`, action);
@@ -574,115 +1132,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       return false;
     }
   }, []);
-
-  // ============= MESSAGE SENDING FUNCTIONS =============
-  const sendMessage = async (
-    content: string, 
-    messageType: string = 'text', 
-    file?: any, 
-    parentMessageId?: number
-  ) => {
-    if (!selectedChatRoom) return;
-
-    try {
-      if (file) {
-        // Handle file upload
-        const formData = new FormData();
-        formData.append('token', token || '');
-        formData.append('chat_room_id', selectedChatRoom.id.toString());
-        formData.append('content', content);
-        formData.append('message_type', messageType);
-        
-        // Handle different file types properly
-        let fileToUpload: any;
-        
-        // Check if it's from ImagePicker (has assets array) or DocumentPicker
-        if (file.uri) {
-          fileToUpload = {
-            uri: file.uri,
-            type: file.mimeType || file.type || 'application/octet-stream',
-            name: file.name || file.fileName || `file_${Date.now()}.${messageType === 'image' ? 'jpg' : messageType === 'video' ? 'mp4' : 'file'}`,
-          };
-        } else {
-          // Fallback for other file structures
-          fileToUpload = {
-            uri: file.uri || file.url,
-            type: file.mimeType || file.type || 'application/octet-stream',
-            name: file.name || file.fileName || `file_${Date.now()}`,
-          };
-        }
-        
-        formData.append('file', fileToUpload as any);
-        
-        if (parentMessageId) {
-          formData.append('parent_message_id', parentMessageId.toString());
-        }
-
-        console.log('Uploading file:', fileToUpload.name, 'Type:', messageType);
-
-        const response = await fetch(`${apiBaseUrl}/citadel_hub/sendMessage`, {
-          method: 'POST',
-          body: formData,
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('File upload failed:', response.status, errorText);
-          throw new Error(`File upload failed: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        // Add the returned message immediately
-        if (result.message) {
-          setMessages(prev => {
-            const exists = prev.some(m => m.id === result.message.id);
-            if (!exists) {
-              return [...prev, result.message];
-            }
-            return prev;
-          });
-          
-          // Reload chat rooms to update last message
-          loadChatRooms();
-        }
-      } else {
-        // Optimistic UI update for text messages
-        const tempMessage: Message = {
-          id: Date.now(), // temporary ID
-          sender: currentUser,
-          content,
-          message_type: messageType as any,
-          created_at: new Date().toISOString(),
-          is_edited: false,
-          parent_message: parentMessageId 
-            ? messages.find(m => m.id === parentMessageId) 
-            : undefined,
-          chat_room: selectedChatRoom.id,
-        };
-        
-        // Add temp message immediately for instant feedback
-        setMessages(prev => [...prev, tempMessage]);
-        
-        // Send via WebSocket
-        const sent = sendWebSocketMessage('send_message', {
-          room_id: selectedChatRoom.id,
-          content,
-          message_type: messageType,
-          parent_message_id: parentMessageId,
-        });
-
-        // If WebSocket send failed, remove temp message and show error
-        if (!sent) {
-          setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
-          Alert.alert('Error', 'Failed to send message. Please check your connection.');
-        }
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-    }
-  };
 
   // ============= CHAT MANAGEMENT FUNCTIONS =============
   const createDirectChat = async (employeeId: string) => {
@@ -742,26 +1191,133 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   };
 
   const pinChat = useCallback((roomId: number) => {
-    setChatRooms(prev => prev.map(room => 
+    setChatRooms(prev => prev.map(room =>
       room.id === roomId ? { ...room, is_pinned: true } : room
     ));
   }, []);
 
   const unpinChat = useCallback((roomId: number) => {
-    setChatRooms(prev => prev.map(room => 
+    setChatRooms(prev => prev.map(room =>
       room.id === roomId ? { ...room, is_pinned: false } : room
     ));
   }, []);
 
   const markAsUnread = useCallback((roomId: number) => {
-    setChatRooms(prev => prev.map(room => 
-      room.id === roomId 
-        ? { ...room, unread_count: (room.unread_count || 0) + 1 } 
+    setChatRooms(prev => prev.map(room =>
+      room.id === roomId
+        ? { ...room, unread_count: (room.unread_count || 0) + 1 }
         : room
     ));
   }, []);
 
-  // ============= FILTERING FUNCTION =============
+  // ============= MESSAGE SENDING =============
+  const sendMessage = async (
+    content: string,
+    messageType: string = 'text',
+    file?: any,
+    parentMessageId?: number
+  ) => {
+    if (!selectedChatRoom) return;
+
+    try {
+      if (file) {
+        const formData = new FormData();
+        formData.append('token', token || '');
+        formData.append('chat_room_id', selectedChatRoom.id.toString());
+        formData.append('content', content);
+        formData.append('message_type', messageType);
+
+        let fileToUpload: any;
+
+        if (file.uri) {
+          fileToUpload = {
+            uri: file.uri,
+            type: file.mimeType || file.type || 'application/octet-stream',
+            name: file.name || file.fileName || `file_${Date.now()}.${messageType === 'image' ? 'jpg' : messageType === 'video' ? 'mp4' : 'file'}`,
+          };
+        } else {
+          fileToUpload = {
+            uri: file.uri || file.url,
+            type: file.mimeType || file.type || 'application/octet-stream',
+            name: file.name || file.fileName || `file_${Date.now()}`,
+          };
+        }
+
+        formData.append('file', fileToUpload as any);
+
+        if (parentMessageId) {
+          formData.append('parent_message_id', parentMessageId.toString());
+        }
+
+        const response = await fetch(`${apiBaseUrl}/citadel_hub/sendMessage`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`File upload failed: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.message) {
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === result.message.id);
+            if (!exists) {
+              const updated = [...prev, result.message];
+              saveMessageCache(selectedChatRoom.id, updated);
+              return updated;
+            }
+            return prev;
+          });
+
+          loadChatRooms();
+        }
+      } else {
+        // Optimistic update for text messages
+        const tempMessage: Message = {
+          id: Date.now(),
+          sender: currentUser,
+          content,
+          message_type: messageType as any,
+          created_at: new Date().toISOString(),
+          is_edited: false,
+          parent_message: parentMessageId
+            ? messages.find(m => m.id === parentMessageId)
+            : undefined,
+          chat_room: selectedChatRoom.id,
+        };
+
+        setMessages(prev => {
+          const updated = [...prev, tempMessage];
+          saveMessageCache(selectedChatRoom.id, updated);
+          return updated;
+        });
+
+        const sent = sendWebSocketMessage('send_message', {
+          room_id: selectedChatRoom.id,
+          content,
+          message_type: messageType,
+          parent_message_id: parentMessageId,
+        });
+
+        if (!sent) {
+          setMessages(prev => {
+            const updated = prev.filter(m => m.id !== tempMessage.id);
+            saveMessageCache(selectedChatRoom.id, updated);
+            return updated;
+          });
+          Alert.alert('Error', 'Failed to send message. Please check your connection.');
+        }
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
+    }
+  };
+
+  // ============= FILTERING =============
   const getFilteredChatRooms = useCallback(() => {
     let filtered = [...chatRooms];
 
@@ -777,7 +1333,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             const currentUserId = currentUser.id || currentUser.employee_id;
             return user && userId !== currentUserId;
           });
-          
+
           if (otherMember) {
             const member = otherMember as ChatRoomMember;
             const user = member.user || otherMember as User;
@@ -800,14 +1356,15 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     return filtered.sort((a, b) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
-      
+
       const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
       const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      
+
       return bTime - aTime;
     });
   }, [chatRooms, searchQuery, filterType, currentUser]);
 
+  // ============= EVENT HANDLERS =============
   const handleChatSelect = useCallback((room: ChatRoom) => {
     setSelectedChatRoom(room);
     setViewMode('chat');
@@ -817,13 +1374,24 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     if (selectedChatRoom && hasMoreMessages && !isLoadingMessages) {
       const nextPage = messagesPage + 1;
       setMessagesPage(nextPage);
-      loadMessages(selectedChatRoom.id, nextPage);
+      loadMessages(selectedChatRoom.id, nextPage, false);
     }
   }, [selectedChatRoom, hasMoreMessages, isLoadingMessages, messagesPage, loadMessages]);
 
+  const handleSearch = useCallback((query: string, offset: number) => {
+    if (!selectedChatRoom) return;
+
+    sendWebSocketMessage('search_messages', {
+      room_id: selectedChatRoom.id,
+      query,
+      offset,
+      limit: 100,
+    });
+  }, [selectedChatRoom, sendWebSocketMessage]);
+
   // ============= EFFECTS =============
-  // Initial setup
   useEffect(() => {
+    loadCache();
     loadChatRooms();
     loadNotifications();
     connectWebSocket();
@@ -833,13 +1401,14 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     };
   }, []);
 
-  // Handle selected chat room changes
   useEffect(() => {
-    if (selectedChatRoom) {
+    if (selectedChatRoom && isInitialCacheLoaded) {
       setMessagesPage(1);
       setHasMoreMessages(true);
-      loadMessages(selectedChatRoom.id, 1);
-      
+
+      // Load messages with cache
+      loadMessages(selectedChatRoom.id, 1, true);
+
       // Join room and mark as read if connected
       if (isConnected && ws.current?.readyState === WebSocket.OPEN) {
         setTimeout(() => {
@@ -848,7 +1417,14 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         }, 300);
       }
     }
-  }, [selectedChatRoom?.id]);
+  }, [selectedChatRoom?.id, isInitialCacheLoaded]);
+
+  // Retry pending actions when connected
+  useEffect(() => {
+    if (isConnected && pendingActions.length > 0) {
+      retryPendingActions();
+    }
+  }, [isConnected, pendingActions, retryPendingActions]);
 
   // ============= RENDER =============
   return (
@@ -898,15 +1474,30 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onSendMessage={sendMessage}
           onTyping={() => sendWebSocketMessage('typing', { room_id: selectedChatRoom.id })}
           onStopTyping={() => sendWebSocketMessage('stop_typing', { room_id: selectedChatRoom.id })}
-          onReact={(messageId, emoji) => 
-            sendWebSocketMessage('react_message', { message_id: messageId, emoji })
-          }
+          onReact={handleReact}
           onLoadMore={loadMoreMessages}
           hasMore={hasMoreMessages}
           isLoading={isLoadingMessages}
+          onSearch={handleSearch}
+          onClearChat={handleClearChat}
+          onDeleteForMe={handleDeleteForMe}
+          onDeleteForEveryone={handleDeleteForEveryone}
+          onShare={handleShare} // Add this prop
         />
       )}
-
+      {viewMode === 'share' && shareData && (
+        <ShareScreen
+          messageIds={shareData.messageIds}
+          messages={shareData.messages}
+          chatRoomId={shareData.chatRoomId}
+          apiBaseUrl={apiBaseUrl}
+          token={token || ''}
+          currentUser={currentUser}
+          onBack={handleBackFromShare}
+          onShareComplete={handleBackFromShare}
+          apiCall={apiCall}
+        />
+      )}
       {viewMode === 'chatDetails' && selectedChatRoom && (
         <ChatDetails
           chatRoom={selectedChatRoom}
@@ -932,6 +1523,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           currentUser={currentUser}
           onBack={() => setViewMode('list')}
           onCreate={createDirectChat}
+          onCreateGroup={() => setViewMode('newGroup')}
           apiCall={apiCall}
         />
       )}
