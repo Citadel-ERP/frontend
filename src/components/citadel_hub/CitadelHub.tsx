@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { Header } from './header';
 import { SearchAndFilter } from './searchAndFilter';
 import { List } from './list';
@@ -8,16 +8,86 @@ import { ChatDetails } from './chatDetails';
 import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
-import {
-  User,
-  ChatRoom,
-  ChatRoomMember,
-  Message,
-  MessageReaction,
-  MessageRead,
-  Notification,
-  ViewMode,
-} from './citadelTypes';
+
+// ============= TYPE DEFINITIONS =============
+export interface User {
+  id?: number;
+  employee_id?: string;
+  first_name: string;
+  last_name: string;
+  profile_picture?: string;
+  email?: string;
+  bio?: string;
+  designation?: string;
+  full_name?: string;
+  is_approved_by_admin?: boolean;
+  is_approved_by_hr?: boolean;
+  is_archived?: boolean;
+  role?: string;
+}
+
+export interface ChatRoomMember {
+  id?: number;
+  user?: User;
+  is_muted?: boolean;
+  is_pinned?: boolean;
+  joined_at?: string;
+  last_read_at?: string;
+  role?: string;
+}
+
+export interface MessageReaction {
+  id?: number;
+  user: User;
+  emoji: string;
+}
+
+export interface Message {
+  id: number;
+  sender: User;
+  content: string;
+  message_type: 'text' | 'image' | 'file' | 'audio' | 'video';
+  created_at: string;
+  is_edited: boolean;
+  parent_message?: Message;
+  reactions?: MessageReaction[];
+  file_url?: string;
+  file_name?: string;
+  chat_room?: number;
+}
+
+export interface ChatRoom {
+  id: number;
+  name?: string;
+  room_type: 'direct' | 'group';
+  profile_picture?: string;
+  members: (User | ChatRoomMember)[];
+  last_message_at?: string;
+  unread_count?: number;
+  is_pinned?: boolean;
+  is_muted?: boolean;
+  description?: string;
+  created_at: string;
+  updated_at?: string;
+  admin?: User;
+  is_blocked?: boolean;
+  media_count?: number;
+}
+
+export interface MessageRead {
+  user: User;
+  read_at: string;
+}
+
+export interface Notification {
+  id: number;
+  type: string;
+  message: string;
+  created_at: string;
+  is_read: boolean;
+}
+
+export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -27,6 +97,7 @@ interface CitadelHubProps {
   currentUser: User;
 }
 
+// ============= MAIN COMPONENT =============
 export const CitadelHub: React.FC<CitadelHubProps> = ({
   apiBaseUrl,
   wsBaseUrl,
@@ -46,18 +117,22 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [typingUsers, setTypingUsers] = useState<{ [roomId: number]: User[] }>({});
   const [onlineUsers, setOnlineUsers] = useState<Set<number>>(new Set());
 
-  // WebSocket
+  // WebSocket State
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
   const [isConnected, setIsConnected] = useState(false);
+  const pingInterval = useRef<NodeJS.Timeout | null>(null);
+  const maxReconnectAttempts = 10;
+  const isReconnecting = useRef(false);
 
   // Pagination
   const [messagesPage, setMessagesPage] = useState(1);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
-  // API Calls
-  const apiCall = async (endpoint: string, data: any) => {
+  // ============= API FUNCTIONS =============
+  const apiCall = async (endpoint: string, data: any): Promise<any> => {
     try {
       const response = await fetch(`${apiBaseUrl}/citadel_hub/${endpoint}`, {
         method: 'POST',
@@ -66,26 +141,35 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         },
         body: JSON.stringify({ token, ...data }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.status}`);
+      }
+      
       return response.json();
     } catch (error) {
-      console.error('API call error:', error);
+      console.error(`API call error (${endpoint}):`, error);
       throw error;
     }
   };
 
-  // Load Chat Rooms
+  // ============= DATA LOADING FUNCTIONS =============
   const loadChatRooms = useCallback(async () => {
     try {
       const result = await apiCall('getChatRooms', {});
       if (result.chat_rooms) {
-        setChatRooms(result.chat_rooms);
+        // Ensure all chat rooms have created_at
+        const roomsWithCreatedAt = result.chat_rooms.map((room: any) => ({
+          ...room,
+          created_at: room.created_at || new Date().toISOString(),
+        }));
+        setChatRooms(roomsWithCreatedAt);
       }
     } catch (error) {
       console.error('Error loading chat rooms:', error);
     }
   }, [apiBaseUrl, token]);
 
-  // Load Messages
   const loadMessages = useCallback(async (roomId: number, page: number = 1) => {
     if (isLoadingMessages) return;
 
@@ -110,9 +194,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [apiBaseUrl, token, isLoadingMessages]);
+  }, [apiBaseUrl, token]);
 
-  // Load Notifications
   const loadNotifications = useCallback(async () => {
     try {
       const result = await apiCall('getNotifications', { page: 1, page_size: 100 });
@@ -129,123 +212,320 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [apiBaseUrl, token]);
 
-  // WebSocket Connection
+  // ============= WEBSOCKET FUNCTIONS =============
+  const cleanupWebSocket = useCallback(() => {
+    if (pingInterval.current) {
+      clearInterval(pingInterval.current);
+      pingInterval.current = null;
+    }
+    
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+    
+    if (ws.current) {
+      // Remove all event listeners before closing
+      ws.current.onopen = null;
+      ws.current.onmessage = null;
+      ws.current.onclose = null;
+      ws.current.onerror = null;
+      
+      if (ws.current.readyState === WebSocket.OPEN || 
+          ws.current.readyState === WebSocket.CONNECTING) {
+        ws.current.close(1000, 'Cleanup');
+      }
+      
+      ws.current = null;
+    }
+  }, []);
+
+  const startPingInterval = useCallback(() => {
+    // Clear existing interval
+    if (pingInterval.current) {
+      clearInterval(pingInterval.current);
+    }
+    
+    // Send ping every 30 seconds to keep connection alive
+    pingInterval.current = setInterval(() => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        try {
+          ws.current.send(JSON.stringify({ action: 'ping' }));
+        } catch (error) {
+          console.error('Error sending ping:', error);
+        }
+      }
+    }, 30000);
+  }, []);
+
   const connectWebSocket = useCallback(() => {
-    if (ws.current?.readyState === WebSocket.OPEN) return;
-    console.log(currentUser);
-    const websocket = new WebSocket(`${wsBaseUrl}/ws/chat/?token=${token}`);
+    // Prevent multiple simultaneous connection attempts
+    if (isReconnecting.current) {
+      console.log('Already attempting to reconnect...');
+      return;
+    }
 
-    websocket.onopen = () => {
-      console.log('WebSocket Connected');
-      setIsConnected(true);
-      if (reconnectTimeout.current) {
-        clearTimeout(reconnectTimeout.current);
-        reconnectTimeout.current = null;
-      }
-    };
+    // Check if already connected
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket already connected');
+      return;
+    }
 
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    // Check if currently connecting
+    if (ws.current?.readyState === WebSocket.CONNECTING) {
+      console.log('WebSocket is already connecting...');
+      return;
+    }
 
-      switch (data.type) {
-        case 'message':
-          handleNewMessage(data.message);
-          break;
-        case 'message_edited':
-          handleMessageEdited(data.message);
-          break;
-        case 'message_deleted':
-          handleMessageDeleted(data.message_id);
-          break;
-        case 'typing':
-          handleTyping(data.room_id, data.user_id, data.user_name);
-          break;
-        case 'stop_typing':
-          handleStopTyping(data.room_id, data.user_id);
-          break;
-        case 'messages_read':
-          handleMessagesRead(data.room_id, data.user_id);
-          break;
-        case 'reaction':
-          handleReaction(data.message_id, data.user_id, data.user_name, data.emoji);
-          break;
-        case 'status_update':
-          handleStatusUpdate(data.user_status);
-          break;
-      }
-    };
+    // Check reconnection attempts
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      console.error('Max reconnection attempts reached');
+      Alert.alert(
+        'Connection Error',
+        'Unable to connect to chat server. Please check your internet connection and restart the app.',
+        [
+          { 
+            text: 'Retry', 
+            onPress: () => { 
+              reconnectAttempts.current = 0;
+              connectWebSocket();
+            } 
+          },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return;
+    }
 
-    websocket.onclose = () => {
-      console.log('WebSocket Disconnected');
-      setIsConnected(false);
+    isReconnecting.current = true;
+
+    try {
+      console.log(`Connecting to WebSocket... (Attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
+      
+      // Clean up any existing connection
+      cleanupWebSocket();
+      
+      const websocketUrl = `${wsBaseUrl}/ws/chat/?token=${token}`;
+      const websocket = new WebSocket(websocketUrl);
+
+      websocket.onopen = () => {
+        console.log('✅ WebSocket Connected Successfully');
+        setIsConnected(true);
+        reconnectAttempts.current = 0;
+        isReconnecting.current = false;
+        
+        // Start ping interval
+        startPingInterval();
+        
+        // Rejoin current room if in chat
+        if (selectedChatRoom) {
+          setTimeout(() => {
+            sendWebSocketMessage('join_room', { room_id: selectedChatRoom.id });
+            sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
+          }, 500);
+        }
+      };
+
+      websocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Handle pong response
+          if (data.type === 'pong') {
+            return;
+          }
+
+          switch (data.type) {
+            case 'message':
+              handleNewMessage(data.message);
+              break;
+            case 'message_edited':
+              handleMessageEdited(data.message);
+              break;
+            case 'message_deleted':
+              handleMessageDeleted(data.message_id);
+              break;
+            case 'typing':
+              handleTyping(data.room_id, data.user_id, data.user_name);
+              break;
+            case 'stop_typing':
+              handleStopTyping(data.room_id, data.user_id);
+              break;
+            case 'messages_read':
+              handleMessagesRead(data.room_id, data.user_id);
+              break;
+            case 'reaction':
+              handleReaction(data.message_id, data.user_id, data.user_name, data.emoji);
+              break;
+            case 'status_update':
+              handleStatusUpdate(data.user_status);
+              break;
+            default:
+              console.log('Unknown message type:', data.type);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      websocket.onclose = (event) => {
+        console.log(`WebSocket Disconnected: ${event.code} - ${event.reason || 'No reason provided'}`);
+        setIsConnected(false);
+        isReconnecting.current = false;
+        
+        // Clear ping interval
+        if (pingInterval.current) {
+          clearInterval(pingInterval.current);
+          pingInterval.current = null;
+        }
+        
+        // Only attempt reconnection if not a normal closure
+        if (event.code !== 1000) {
+          reconnectAttempts.current += 1;
+          
+          // Exponential backoff with jitter
+          const baseDelay = 1000;
+          const maxDelay = 30000;
+          const exponentialDelay = Math.min(
+            baseDelay * Math.pow(2, reconnectAttempts.current),
+            maxDelay
+          );
+          const jitter = Math.random() * 1000;
+          const delay = exponentialDelay + jitter;
+          
+          console.log(
+            `Reconnecting in ${Math.round(delay / 1000)}s... ` +
+            `(Attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`
+          );
+          
+          reconnectTimeout.current = setTimeout(() => {
+            connectWebSocket();
+          }, delay);
+        } else {
+          console.log('WebSocket closed normally');
+        }
+      };
+
+      websocket.onerror = (error: any) => {
+        console.error('❌ WebSocket Error:', {
+          message: error.message || 'Unknown error',
+          type: error.type,
+        });
+        // Don't set isReconnecting to false here, onclose will handle it
+      };
+
+      ws.current = websocket;
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+      isReconnecting.current = false;
+      
+      // Attempt reconnection after delay
+      reconnectAttempts.current += 1;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+      
       reconnectTimeout.current = setTimeout(() => {
         connectWebSocket();
-      }, 3000);
-    };
-
-    websocket.onerror = (error) => {
-      console.error('WebSocket Error:', error);
-    };
-
-    ws.current = websocket;
-  }, [wsBaseUrl, token]);
-
-  // WebSocket Handlers
-  const handleNewMessage = (message: Message) => {
-    if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
-      setMessages(prev => [...prev, message]);
-      sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
+      }, delay);
     }
+  }, [wsBaseUrl, token, selectedChatRoom, cleanupWebSocket, startPingInterval]);
+
+  // ============= WEBSOCKET MESSAGE HANDLERS =============
+  const handleNewMessage = useCallback((message: Message) => {
+    if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
+      setMessages(prev => {
+        // Check if message already exists
+        const exists = prev.some(m => m.id === message.id);
+        if (exists) {
+          // Replace existing message
+          return prev.map(m => m.id === message.id ? message : m);
+        }
+        
+        // Remove temp messages with same content sent recently
+        const filtered = prev.filter(m => {
+          const isSameUser = (m.sender.id || m.sender.employee_id) === 
+                            (currentUser.id || currentUser.employee_id);
+          const isSameContent = m.content === message.content;
+          
+          if (isSameUser && isSameContent) {
+            const timeDiff = new Date().getTime() - new Date(m.created_at).getTime();
+            return timeDiff > 2000;
+          }
+          return true;
+        });
+        
+        return [...filtered, message];
+      });
+      
+      // Mark as read
+      if (isConnected && ws.current?.readyState === WebSocket.OPEN) {
+        sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
+      }
+    }
+    
     loadChatRooms();
     loadNotifications();
-  };
+  }, [selectedChatRoom, currentUser, isConnected]);
 
-  const handleMessageEdited = (message: Message) => {
+  const handleMessageEdited = useCallback((message: Message) => {
     setMessages(prev => prev.map(m => m.id === message.id ? message : m));
-  };
+  }, []);
 
-  const handleMessageDeleted = (messageId: number) => {
+  const handleMessageDeleted = useCallback((messageId: number) => {
     setMessages(prev => prev.filter(m => m.id !== messageId));
-  };
+  }, []);
 
-  const handleTyping = (roomId: number, userId: number, userName: string) => {
+  const handleTyping = useCallback((roomId: number, userId: number, userName: string) => {
     const user: User = {
       id: userId,
       employee_id: userId.toString(),
-      first_name: userName.split(' ')[0],
+      first_name: userName.split(' ')[0] || userName,
       last_name: userName.split(' ')[1] || '',
       email: '',
     };
 
-    setTypingUsers(prev => ({
-      ...prev,
-      [roomId]: [...(prev[roomId] || []), user],
-    }));
-
-    setTimeout(() => {
-      setTypingUsers(prev => ({
+    setTypingUsers(prev => {
+      const existingUsers = prev[roomId] || [];
+      const alreadyTyping = existingUsers.some(u => 
+        (u.id || parseInt(u.employee_id || '0')) === userId
+      );
+      
+      if (alreadyTyping) return prev;
+      
+      return {
         ...prev,
-        [roomId]: (prev[roomId] || []).filter(u => u.id !== userId),
-      }));
-    }, 3000);
-  };
+        [roomId]: [...existingUsers, user],
+      };
+    });
 
-  const handleStopTyping = (roomId: number, userId: number) => {
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      handleStopTyping(roomId, userId);
+    }, 3000);
+  }, []);
+
+  const handleStopTyping = useCallback((roomId: number, userId: number) => {
     setTypingUsers(prev => ({
       ...prev,
-      [roomId]: (prev[roomId] || []).filter(u => u.id !== userId),
+      [roomId]: (prev[roomId] || []).filter(u => 
+        (u.id || parseInt(u.employee_id || '0')) !== userId
+      ),
     }));
-  };
+  }, []);
 
-  const handleMessagesRead = (roomId: number, userId: number) => {
+  const handleMessagesRead = useCallback((roomId: number, userId: number) => {
     loadChatRooms();
-  };
+  }, [loadChatRooms]);
 
-  const handleReaction = (messageId: number, userId: number, userName: string, emoji: string) => {
+  const handleReaction = useCallback((
+    messageId: number, 
+    userId: number, 
+    userName: string, 
+    emoji: string
+  ) => {
     const user: User = {
       id: userId,
       employee_id: userId.toString(),
-      first_name: userName.split(' ')[0],
+      first_name: userName.split(' ')[0] || userName,
       last_name: userName.split(' ')[1] || '',
       email: '',
     };
@@ -260,37 +540,62 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       }
       return m;
     }));
-  };
+  }, []);
 
-  const handleStatusUpdate = (userStatus: any) => {
-    if (userStatus.status === 'online') {
+  const handleStatusUpdate = useCallback((userStatus: any) => {
+    if (userStatus?.status === 'online' && userStatus?.user?.id) {
       setOnlineUsers(prev => new Set(prev).add(userStatus.user.id));
-    } else {
+    } else if (userStatus?.user?.id) {
       setOnlineUsers(prev => {
         const newSet = new Set(prev);
         newSet.delete(userStatus.user.id);
         return newSet;
       });
     }
-  };
+  }, []);
 
-  const sendWebSocketMessage = (action: string, data: any) => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ action, ...data }));
+  const sendWebSocketMessage = useCallback((action: string, data: any) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      console.warn(`WebSocket is not connected (state: ${ws.current?.readyState}). Message not sent:`, action);
+      return false;
     }
-  };
 
-  const sendMessage = async (content: string, messageType: string = 'text', file?: any, parentMessageId?: number) => {
+    try {
+      ws.current.send(JSON.stringify({ action, ...data }));
+      return true;
+    } catch (error) {
+      console.error('Error sending WebSocket message:', error);
+      return false;
+    }
+  }, []);
+
+  // ============= MESSAGE SENDING FUNCTIONS =============
+  const sendMessage = async (
+    content: string, 
+    messageType: string = 'text', 
+    file?: any, 
+    parentMessageId?: number
+  ) => {
     if (!selectedChatRoom) return;
 
     try {
       if (file) {
+        // Handle file upload
         const formData = new FormData();
         formData.append('token', token || '');
         formData.append('chat_room_id', selectedChatRoom.id.toString());
         formData.append('content', content);
         formData.append('message_type', messageType);
-        formData.append('file', file);
+        
+        // Handle different file types
+        const fileToUpload: any = {
+          uri: file.uri,
+          type: file.mimeType || file.type || 'application/octet-stream',
+          name: file.name || file.fileName || 'file',
+        };
+        
+        formData.append('file', fileToUpload);
+        
         if (parentMessageId) {
           formData.append('parent_message_id', parentMessageId.toString());
         }
@@ -299,30 +604,76 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           method: 'POST',
           body: formData,
         });
-        await response.json();
+        
+        if (!response.ok) {
+          throw new Error(`File upload failed: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Add the returned message immediately
+        if (result.message) {
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === result.message.id);
+            if (!exists) {
+              return [...prev, result.message];
+            }
+            return prev;
+          });
+        }
       } else {
-        sendWebSocketMessage('send_message', {
+        // Optimistic UI update for text messages
+        const tempMessage: Message = {
+          id: Date.now(), // temporary ID
+          sender: currentUser,
+          content,
+          message_type: messageType as any,
+          created_at: new Date().toISOString(),
+          is_edited: false,
+          parent_message: parentMessageId 
+            ? messages.find(m => m.id === parentMessageId) 
+            : undefined,
+          chat_room: selectedChatRoom.id,
+        };
+        
+        // Add temp message immediately for instant feedback
+        setMessages(prev => [...prev, tempMessage]);
+        
+        // Send via WebSocket
+        const sent = sendWebSocketMessage('send_message', {
           room_id: selectedChatRoom.id,
           content,
           message_type: messageType,
           parent_message_id: parentMessageId,
         });
+
+        // If WebSocket send failed, remove temp message and show error
+        if (!sent) {
+          setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+          Alert.alert('Error', 'Failed to send message. Please check your connection.');
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
 
+  // ============= CHAT MANAGEMENT FUNCTIONS =============
   const createDirectChat = async (employeeId: string) => {
     try {
       const result = await apiCall('createDirectChat', { employee_id: employeeId });
       if (result.chat_room) {
-        loadChatRooms();
-        setSelectedChatRoom(result.chat_room);
+        await loadChatRooms();
+        setSelectedChatRoom({
+          ...result.chat_room,
+          created_at: result.chat_room.created_at || new Date().toISOString(),
+        });
         setViewMode('chat');
       }
     } catch (error) {
       console.error('Error creating direct chat:', error);
+      Alert.alert('Error', 'Failed to create chat. Please try again.');
     }
   };
 
@@ -334,19 +685,23 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         member_ids: memberIds,
       });
       if (result.chat_room) {
-        loadChatRooms();
-        setSelectedChatRoom(result.chat_room);
+        await loadChatRooms();
+        setSelectedChatRoom({
+          ...result.chat_room,
+          created_at: result.chat_room.created_at || new Date().toISOString(),
+        });
         setViewMode('chat');
       }
     } catch (error) {
       console.error('Error creating group chat:', error);
+      Alert.alert('Error', 'Failed to create group. Please try again.');
     }
   };
 
   const muteChat = async (roomId: number) => {
     try {
       await apiCall('muteChat', { chat_room_id: roomId });
-      loadChatRooms();
+      await loadChatRooms();
     } catch (error) {
       console.error('Error muting chat:', error);
     }
@@ -355,66 +710,35 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const unmuteChat = async (roomId: number) => {
     try {
       await apiCall('unmuteChat', { chat_room_id: roomId });
-      loadChatRooms();
+      await loadChatRooms();
     } catch (error) {
       console.error('Error unmuting chat:', error);
     }
   };
 
-  const pinChat = (roomId: number) => {
-    setChatRooms(prev => prev.map(room => {
-      if (room.id === roomId) {
-        return { ...room, is_pinned: true };
-      }
-      return room;
-    }));
-  };
-
-  const unpinChat = (roomId: number) => {
-    setChatRooms(prev => prev.map(room => {
-      if (room.id === roomId) {
-        return { ...room, is_pinned: false };
-      }
-      return room;
-    }));
-  };
-
-  const markAsUnread = (roomId: number) => {
-    setChatRooms(prev => prev.map(room => {
-      if (room.id === roomId) {
-        return { ...room, unread_count: (room.unread_count || 0) + 1 };
-      }
-      return room;
-    }));
-  };
-
-  useEffect(() => {
-    loadChatRooms();
-    loadNotifications();
-    connectWebSocket();
-
-    return () => {
-      if (ws.current) {
-        ws.current.close();
-      }
-      if (reconnectTimeout.current) {
-        clearTimeout(reconnectTimeout.current);
-      }
-    };
+  const pinChat = useCallback((roomId: number) => {
+    setChatRooms(prev => prev.map(room => 
+      room.id === roomId ? { ...room, is_pinned: true } : room
+    ));
   }, []);
 
-  useEffect(() => {
-    if (selectedChatRoom) {
-      setMessagesPage(1);
-      setHasMoreMessages(true);
-      loadMessages(selectedChatRoom.id, 1);
-      sendWebSocketMessage('join_room', { room_id: selectedChatRoom.id });
-      sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
-    }
-  }, [selectedChatRoom]);
+  const unpinChat = useCallback((roomId: number) => {
+    setChatRooms(prev => prev.map(room => 
+      room.id === roomId ? { ...room, is_pinned: false } : room
+    ));
+  }, []);
 
-  const getFilteredChatRooms = () => {
-    let filtered = chatRooms;
+  const markAsUnread = useCallback((roomId: number) => {
+    setChatRooms(prev => prev.map(room => 
+      room.id === roomId 
+        ? { ...room, unread_count: (room.unread_count || 0) + 1 } 
+        : room
+    ));
+  }, []);
+
+  // ============= FILTERING FUNCTION =============
+  const getFilteredChatRooms = useCallback(() => {
+    let filtered = [...chatRooms];
 
     if (searchQuery) {
       filtered = filtered.filter(room => {
@@ -423,13 +747,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         } else {
           const otherMember = room.members.find(m => {
             const member = m as ChatRoomMember;
-            return member.user && member.user.employee_id !== currentUser.employee_id;
+            const user = member.user || m as User;
+            const userId = user?.id || user?.employee_id;
+            const currentUserId = currentUser.id || currentUser.employee_id;
+            return user && userId !== currentUserId;
           });
           
           if (otherMember) {
             const member = otherMember as ChatRoomMember;
-            if (member.user) {
-              return `${member.user.first_name} ${member.user.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
+            const user = member.user || otherMember as User;
+            if (user) {
+              const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
+              return fullName.includes(searchQuery.toLowerCase());
             }
           }
           return false;
@@ -446,23 +775,57 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     return filtered.sort((a, b) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
-      return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      
+      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      
+      return bTime - aTime;
     });
-  };
+  }, [chatRooms, searchQuery, filterType, currentUser]);
 
-  const handleChatSelect = (room: ChatRoom) => {
+  const handleChatSelect = useCallback((room: ChatRoom) => {
     setSelectedChatRoom(room);
     setViewMode('chat');
-  };
+  }, []);
 
-  const loadMoreMessages = () => {
+  const loadMoreMessages = useCallback(() => {
     if (selectedChatRoom && hasMoreMessages && !isLoadingMessages) {
       const nextPage = messagesPage + 1;
       setMessagesPage(nextPage);
       loadMessages(selectedChatRoom.id, nextPage);
     }
-  };
+  }, [selectedChatRoom, hasMoreMessages, isLoadingMessages, messagesPage, loadMessages]);
 
+  // ============= EFFECTS =============
+  // Initial setup
+  useEffect(() => {
+    loadChatRooms();
+    loadNotifications();
+    connectWebSocket();
+
+    return () => {
+      cleanupWebSocket();
+    };
+  }, []);
+
+  // Handle selected chat room changes
+  useEffect(() => {
+    if (selectedChatRoom) {
+      setMessagesPage(1);
+      setHasMoreMessages(true);
+      loadMessages(selectedChatRoom.id, 1);
+      
+      // Join room and mark as read if connected
+      if (isConnected && ws.current?.readyState === WebSocket.OPEN) {
+        setTimeout(() => {
+          sendWebSocketMessage('join_room', { room_id: selectedChatRoom.id });
+          sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
+        }, 300);
+      }
+    }
+  }, [selectedChatRoom?.id]);
+
+  // ============= RENDER =============
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#008069" />
@@ -477,9 +840,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               if (action === 'newChat') setViewMode('newChat');
             }}
             onBack={() => {
-              if (onBack) {
-                onBack();
-              }
+              if (onBack) onBack();
             }}
           />
           <SearchAndFilter
@@ -512,7 +873,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onSendMessage={sendMessage}
           onTyping={() => sendWebSocketMessage('typing', { room_id: selectedChatRoom.id })}
           onStopTyping={() => sendWebSocketMessage('stop_typing', { room_id: selectedChatRoom.id })}
-          onReact={(messageId, emoji) => sendWebSocketMessage('react_message', { message_id: messageId, emoji })}
+          onReact={(messageId, emoji) => 
+            sendWebSocketMessage('react_message', { message_id: messageId, emoji })
+          }
           onLoadMore={loadMoreMessages}
           hasMore={hasMoreMessages}
           isLoading={isLoadingMessages}
@@ -554,13 +917,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           currentUser={currentUser}
           onBack={() => setViewMode('chatDetails')}
           onSave={async (name, description) => {
-            await apiCall('updateGroupInfo', {
-              chat_room_id: selectedChatRoom.id,
-              name,
-              description,
-            });
-            loadChatRooms();
-            setViewMode('chatDetails');
+            try {
+              await apiCall('updateGroupInfo', {
+                chat_room_id: selectedChatRoom.id,
+                name,
+                description,
+              });
+              await loadChatRooms();
+              setViewMode('chatDetails');
+            } catch (error) {
+              console.error('Error updating group:', error);
+              Alert.alert('Error', 'Failed to update group. Please try again.');
+            }
           }}
         />
       )}

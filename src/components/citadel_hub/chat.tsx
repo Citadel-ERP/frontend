@@ -47,6 +47,7 @@ interface Message {
   reactions?: Array<{ user: User; emoji: string }>;
   file_url?: string;
   file_name?: string;
+  chat_room?: number;
 }
 
 interface ChatRoom {
