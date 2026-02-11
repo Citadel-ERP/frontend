@@ -18,7 +18,7 @@ import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; 
 
 // ============= TYPE DEFINITIONS =============
 export interface User {
@@ -101,7 +101,7 @@ export interface Notification {
   is_read: boolean;
 }
 
-export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share';
+export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share' | 'addMember';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -1637,16 +1637,17 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         />
       )}
 
-      {viewMode === 'edit' && selectedChatRoom && (
-        <Edit
-          chatRoom={selectedChatRoom}
-          currentUser={currentUser}
-          onBack={() => setViewMode('chatDetails')}
-          onSave={async (name, description, image) => {
-            try {
-              const formData = new FormData();
-              formData.append('token', token || '');
-              formData.append('chat_room_id', selectedChatRoom.id.toString());
+
+{viewMode === 'edit' && selectedChatRoom && (
+  <Edit
+    chatRoom={selectedChatRoom}
+    currentUser={currentUser}
+    onBack={() => setViewMode('chatDetails')}
+    onSave={async (name, description, image) => {
+      try {
+        const formData = new FormData();
+        formData.append('token', token || '');
+        formData.append('chat_room_id', selectedChatRoom.id.toString());
 
               if (selectedChatRoom.room_type === 'group') {
                 formData.append('name', name);
