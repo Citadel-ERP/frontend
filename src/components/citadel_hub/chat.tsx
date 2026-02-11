@@ -934,7 +934,7 @@ export const Chat: React.FC<ChatProps> = ({
         ) : isSearchMode ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={handleSearchClose} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={24} color="#ffffff" />
+              <Ionicons name="chevron-back" size={24} color="#ffffff" />
             </TouchableOpacity>
             <TextInput
               style={styles.searchInput}
@@ -948,7 +948,7 @@ export const Chat: React.FC<ChatProps> = ({
         ) : (
           <>
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={24} color="#ffffff" />
+              <Ionicons name="chevron-back" size={24} color="#ffffff" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerInfo} onPress={onHeaderClick} activeOpacity={0.7}>
               {getChatAvatar()}

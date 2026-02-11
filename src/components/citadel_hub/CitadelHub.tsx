@@ -18,6 +18,7 @@ import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
+import { AddMember } from './addMember';
 import { Ionicons } from '@expo/vector-icons'; 
 
 // ============= TYPE DEFINITIONS =============
@@ -101,7 +102,7 @@ export interface Notification {
   is_read: boolean;
 }
 
-export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share';
+export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share' | 'addMember';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -1561,7 +1562,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       )}
 
 
-{viewMode === 'edit' && selectedChatRoom && (
+{viewMode === 'edit' && selectedChatRoom && selectedChatRoom.room_type === 'group' && (
   <Edit
     chatRoom={selectedChatRoom}
     currentUser={currentUser}

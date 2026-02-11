@@ -410,25 +410,30 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBack}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={24} color="#ffffff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Contact Info</Text>
-        
-        {/* Edit button */}
-        <TouchableOpacity
-          style={styles.headerEditButton}
-          onPress={onEdit}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="create-outline" size={24} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.header}>
+    <TouchableOpacity
+      style={styles.headerButton}
+      onPress={onBack}
+      activeOpacity={0.7}
+    >
+      <Ionicons name="chevron-back" size={24} color="#ffffff" />
+    </TouchableOpacity>
+    
+    <Text style={styles.headerTitle}>Contact Info</Text>
+    
+    {/* Edit button - Only for groups, empty view for direct chats to maintain center alignment */}
+    {chatRoom.room_type === 'group' ? (
+      <TouchableOpacity
+        style={styles.headerButton}
+        onPress={onEdit}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="create-outline" size={24} color="#ffffff" />
+      </TouchableOpacity>
+    ) : (
+      <View style={styles.headerButton} />
+    )}
+  </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
@@ -697,16 +702,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f2f5',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',  
-    backgroundColor: '#008069',
-    paddingTop: 90,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    gap: 12,
-    marginTop: Platform.OS === 'ios' ? -80 : -50,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',  
+  backgroundColor: '#008069',
+  paddingTop: 90,
+  paddingBottom: 16,
+  paddingHorizontal: 16,
+  marginTop: Platform.OS === 'ios' ? -80 : -50,
+},
+headerButton: {
+  width: 40,  // Fixed width for both buttons
+  height: 40,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+headerTitleContainer: {
+  flex: 1,
+  alignItems: 'center',
+},
   backButton: {
     padding: 5,
   },
@@ -714,10 +728,12 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   headerTitle: {
-    fontSize: 19,
-    color: '#ffffff',
-    fontWeight: '500',
-  },
+  flex: 1,  
+  fontSize: 19,
+  color: '#ffffff',
+  fontWeight: '500',
+  textAlign: 'center',
+},
   
   content: {
     flex: 1,
