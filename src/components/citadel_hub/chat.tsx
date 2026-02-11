@@ -15,6 +15,7 @@ import {
   Keyboard,
   Animated,
   Dimensions,
+  Clipboard
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { EmojiPicker } from './emojiPicker';
@@ -63,6 +64,7 @@ interface Message {
   file_name?: string;
   chat_room?: number;
   is_deleted?: boolean;
+  is_forwarded?: boolean;
 }
 
 interface ChatRoom {
@@ -137,6 +139,8 @@ export const Chat: React.FC<ChatProps> = ({
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [showClearChatConfirm, setShowClearChatConfirm] = useState(false);
+  const [showMessageOptionsModal, setShowMessageOptionsModal] = useState(false);
+  const [messageOptionsPosition, setMessageOptionsPosition] = useState({ x: 0, y: 0 });
 
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -145,6 +149,8 @@ export const Chat: React.FC<ChatProps> = ({
   const reactionBarScale = useRef(new Animated.Value(0)).current;
   const reactionBarOpacity = useRef(new Animated.Value(0)).current;
   const deleteModalSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const messageOptionsScale = useRef(new Animated.Value(0)).current;
+  const messageOptionsOpacity = useRef(new Animated.Value(0)).current;
 
   // Cache messages when room changes
   useEffect(() => {
@@ -173,6 +179,7 @@ export const Chat: React.FC<ChatProps> = ({
       setIsSearchMode(false);
       setSearchText('');
       setSearchResults([]);
+      setShowMessageOptionsModal(false);
 
       // Load from cache if available
       const cacheKey = `room_${chatRoom?.id}`;
@@ -242,6 +249,38 @@ export const Chat: React.FC<ChatProps> = ({
       ]).start();
     }
   }, [showQuickReactions, selectedMessages.length]);
+
+  // Animate message options modal
+  useEffect(() => {
+    if (showMessageOptionsModal) {
+      Animated.parallel([
+        Animated.spring(messageOptionsScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 10,
+        }),
+        Animated.timing(messageOptionsOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(messageOptionsScale, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(messageOptionsOpacity, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showMessageOptionsModal]);
 
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
     if (!member) return null;
@@ -379,11 +418,13 @@ export const Chat: React.FC<ChatProps> = ({
         if (updated.length === 0) {
           setShowQuickReactions(false);
           setLongPressedMessage(null);
+          setShowMessageOptionsModal(false);
         }
         return updated;
       } else {
         if (prev.length >= 1) {
           setShowQuickReactions(false);
+          setShowMessageOptionsModal(false);
         }
         return [...prev, messageId];
       }
@@ -396,6 +437,7 @@ export const Chat: React.FC<ChatProps> = ({
       setShowQuickReactions(false);
       setSelectedMessages([]);
       setLongPressedMessage(null);
+      setShowMessageOptionsModal(false);
     }
   };
 
@@ -403,6 +445,7 @@ export const Chat: React.FC<ChatProps> = ({
     setSelectedMessages([]);
     setShowQuickReactions(false);
     setLongPressedMessage(null);
+    setShowMessageOptionsModal(false);
   };
 
   const canDeleteForEveryone = (message: Message) => {
@@ -431,6 +474,7 @@ export const Chat: React.FC<ChatProps> = ({
       setSelectedMessages([]);
       setShowQuickReactions(false);
       setLongPressedMessage(null);
+      setShowMessageOptionsModal(false);
     });
   };
 
@@ -445,6 +489,7 @@ export const Chat: React.FC<ChatProps> = ({
       setSelectedMessages([]);
       setShowQuickReactions(false);
       setLongPressedMessage(null);
+      setShowMessageOptionsModal(false);
     });
   };
 
@@ -491,6 +536,45 @@ export const Chat: React.FC<ChatProps> = ({
     }
   };
 
+  const handleCopyMessage = () => {
+    if (longPressedMessage && !isDeletedMessage(longPressedMessage) && longPressedMessage.message_type === 'text') {
+      const contentToCopy = longPressedMessage.content;
+      Clipboard.setString(contentToCopy);
+      Alert.alert('Copied', 'Message text copied to clipboard');
+      setShowMessageOptionsModal(false);
+      handleClearSelection();
+    }
+  }
+
+  const handleMessageInfo = () => {
+    Alert.alert('Message Info', 'Opening message information...');
+    setShowMessageOptionsModal(false);
+    handleClearSelection();
+  }
+
+  const handlePinMessage = () => {
+    Alert.alert('Pinned', 'Message has been pinned');
+    setShowMessageOptionsModal(false);
+    handleClearSelection();
+  }
+
+  const handleTranslateMessage = () => {
+    Alert.alert('Coming Soon', 'Translation feature will be available soon');
+    setShowMessageOptionsModal(false);
+    handleClearSelection();
+  }
+
+  const handleMessageOptionsPress = (event: any) => {
+    if (selectedMessages.length === 1) {
+      // Get the position of the header (top right area)
+      const topRightX = SCREEN_WIDTH - 220; // 220px from right edge
+      const topRightY = Platform.OS === 'ios' ? 100 : 70; // Below header
+      
+      setMessageOptionsPosition({ x: topRightX, y: topRightY });
+      setShowMessageOptionsModal(true);
+    }
+  }
+
   const handleCameraPress = async () => {
     if (isPickingMedia) return;
 
@@ -507,15 +591,15 @@ export const Chat: React.FC<ChatProps> = ({
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 1,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        const messageType = asset.type === 'video' ? 'video' : 'image';
-        const fileName = asset.fileName || `${messageType}_${Date.now()}`;
+        const messageType = 'image';
+        const fileName = asset.fileName || `${messageType}_${Date.now()}.jpg`;
 
         onSendMessage(fileName, messageType, asset, replyingTo?.id);
         setReplyingTo(null);
@@ -615,9 +699,8 @@ export const Chat: React.FC<ChatProps> = ({
     }
   };
 
-  // FIXED: When using inverted FlatList, we need to check date separator differently
   const shouldShowDateSeparator = (index: number, messagesArray: Message[]) => {
-    if (index === messagesArray.length - 1) return true; // Last item (oldest message) always shows date
+    if (index === messagesArray.length - 1) return true;
 
     const currentDate = new Date(messagesArray[index].created_at).toDateString();
     const nextDate = new Date(messagesArray[index + 1].created_at).toDateString();
@@ -778,7 +861,6 @@ export const Chat: React.FC<ChatProps> = ({
                 isDeleted && styles.messageBubbleDeleted,
               ]}
             >
-              {/* ← ADD FORWARDED INDICATOR HERE */}
               {message.is_forwarded && !isDeleted && (
                 <View style={styles.forwardedIndicator}>
                   <Ionicons name="arrow-redo-outline" size={12} color="#8696a0" />
@@ -842,10 +924,8 @@ export const Chat: React.FC<ChatProps> = ({
     );
   };
 
-  // FIXED: Reverse messages for inverted FlatList (newest first in array = appears at bottom)
   const messagesToDisplay = useMemo(() => {
     const msgs = isSearchMode ? searchResults : displayMessages;
-    // return [...msgs].reverse(); // Reverse so newest messages are first
     return msgs;
   }, [isSearchMode, searchResults, displayMessages]);
 
@@ -885,13 +965,20 @@ export const Chat: React.FC<ChatProps> = ({
               >
                 <MaterialIcons name="share" size={24} color="#ffffff" />
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.selectionActionBtn}
+                onPress={handleReplyMessage}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="reply" size={24} color="#ffffff" />
+              </TouchableOpacity>
               {selectedMessages.length === 1 && (
                 <TouchableOpacity
                   style={styles.selectionActionBtn}
-                  onPress={handleReplyMessage}
+                  onPress={handleMessageOptionsPress}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="reply" size={24} color="#ffffff" />
+                  <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
                 </TouchableOpacity>
               )}
             </View>
@@ -983,7 +1070,7 @@ export const Chat: React.FC<ChatProps> = ({
           keyExtractor={(item) => item.id.toString()}
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
-          inverted={true} // ✅ WHATSAPP STYLE - renders from bottom, no scrolling needed!
+          inverted={true}
           onEndReached={isSearchMode ? handleSearchLoadMore : onLoadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
@@ -1086,6 +1173,16 @@ export const Chat: React.FC<ChatProps> = ({
             >
               <Ionicons name="happy-outline" size={24} color="#8696a0" />
             </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.inputIconBtn}
+              onPress={handleCameraPress}
+              activeOpacity={0.7}
+              disabled={isPickingMedia}
+            >
+              <Ionicons name="camera" size={24} color={isPickingMedia ? '#ccc' : '#8696a0'} />
+            </TouchableOpacity>
+            
             <TextInput
               style={styles.messageInput}
               placeholder="Message"
@@ -1136,6 +1233,82 @@ export const Chat: React.FC<ChatProps> = ({
         onGallerySelect={handleGalleryPress}
         onClose={() => setShowAttachmentMenu(false)}
       />
+
+      {/* WhatsApp-Style Message Options Modal */}
+      {showMessageOptionsModal && (
+        <TouchableOpacity
+          style={styles.messageOptionsOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMessageOptionsModal(false)}
+        >
+          <Animated.View
+            style={[
+              styles.messageOptionsDropdown,
+              {
+                top: messageOptionsPosition.y,
+                right: 8,
+                opacity: messageOptionsOpacity,
+                transform: [
+                  { 
+                    scale: messageOptionsScale.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.8, 1],
+                    })
+                  },
+                  {
+                    translateY: messageOptionsScale.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-10, 0],
+                    })
+                  }
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.messageOptionItem}
+              onPress={handleCopyMessage}
+              activeOpacity={0.6}
+            >
+              <MaterialIcons name="content-copy" size={20} color="#3b4a54" />
+              <Text style={styles.messageOptionText}>Copy</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.messageOptionDivider} />
+            
+            <TouchableOpacity
+              style={styles.messageOptionItem}
+              onPress={handleMessageInfo}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="information-circle-outline" size={20} color="#3b4a54" />
+              <Text style={styles.messageOptionText}>Info</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.messageOptionDivider} />
+            
+            <TouchableOpacity
+              style={styles.messageOptionItem}
+              onPress={handlePinMessage}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="pin-outline" size={20} color="#3b4a54" />
+              <Text style={styles.messageOptionText}>Pin</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.messageOptionDivider} />
+            
+            <TouchableOpacity
+              style={styles.messageOptionItem}
+              onPress={handleTranslateMessage}
+              activeOpacity={0.6}
+            >
+              <MaterialIcons name="translate" size={20} color="#3b4a54" />
+              <Text style={styles.messageOptionText}>Translate</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      )}
 
       {/* Delete Modal */}
       <Modal
@@ -1792,6 +1965,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  
+  // WhatsApp-Style Message Options Dropdown
+  messageOptionsOverlay: {
+    position: 'absolute',
+    top: 25,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+  },
+  messageOptionsDropdown: {
+    position: 'absolute',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    minWidth: 180,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  messageOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 16,
+  },
+  messageOptionText: {
+    fontSize: 14.5,
+    color: '#3b4a54',
+    fontWeight: '400',
+    letterSpacing: 0.1,
+  },
+  messageOptionDivider: {
+    height: 0.5,
+    backgroundColor: '#e9edef',
+    marginHorizontal: 8,
+  },
+  
   deleteModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
