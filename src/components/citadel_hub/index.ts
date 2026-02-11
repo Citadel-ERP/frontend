@@ -18,6 +18,8 @@ export { Edit } from './edit';
 export { EmojiPicker } from './emojiPicker';
 export { AttachmentMenu } from './attachmentMenu';
 
+export { AddMember } from './addMember';
+
 // Styles
 import './styles.css';
 
