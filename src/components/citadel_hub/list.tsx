@@ -20,6 +20,13 @@ interface User {
   profile_picture?: string;
 }
 
+interface ChatRoomMember {
+  id?: number;
+  user?: User;
+  is_muted?: boolean;
+  is_pinned?: boolean;
+}
+
 interface Message {
   id: number;
   sender: User;
@@ -35,7 +42,7 @@ interface ChatRoom {
   room_type: 'direct' | 'group';
   profile_picture?: string;
   admin?: User;
-  members: User[];
+  members: (User | ChatRoomMember)[]; // ✅ Updated to handle both types
   last_message_at: string;
   created_at: string;
   is_muted?: boolean;
@@ -67,14 +74,38 @@ export const List: React.FC<ListProps> = ({
 }) => {
   const [contextMenuRoom, setContextMenuRoom] = useState<number | null>(null);
 
+  // ✅ Helper to extract User from ChatRoomMember or User
+  const getUserFromMember = (member: User | ChatRoomMember): User | null => {
+    if (!member) return null;
+    if ('first_name' in member && 'last_name' in member) {
+      return member as User;
+    }
+    if ('user' in member && member.user) {
+      return member.user;
+    }
+    return null;
+  };
+
+  // ✅ FIXED: Properly filters out current user
   const getChatName = (room: ChatRoom) => {
     if (room.room_type === 'group') {
       return room.name || 'Unnamed Group';
     }
-    const otherUser = room.members.find(m => m.employee_id !== currentUser.employee_id);
-    return otherUser ? `${otherUser.user.first_name} ${otherUser.user.last_name}` : 'Unknown';
+    
+    // Find the OTHER user (not current user)
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    
+    const otherMember = room.members.find(m => {
+      const user = getUserFromMember(m);
+      const userId = user?.id || user?.employee_id;
+      return user && userId !== currentUserId; // ✅ Exclude current user
+    });
+    
+    const otherUser = getUserFromMember(otherMember!);
+    return otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown';
   };
 
+  // ✅ FIXED: Properly filters out current user for avatar
   const getChatAvatar = (room: ChatRoom) => {
     if (room.room_type === 'group') {
       if (room.profile_picture) {
@@ -91,8 +122,18 @@ export const List: React.FC<ListProps> = ({
         </View>
       );
     }
-    const otherUser = room.members.find(m => m.employee_id !== currentUser.employee_id);
-    console.log('Other user for room', room.id, ':', otherUser);
+    
+    // Find the OTHER user (not current user)
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    
+    const otherMember = room.members.find(m => {
+      const user = getUserFromMember(m);
+      const userId = user?.id || user?.employee_id;
+      return user && userId !== currentUserId; // ✅ Exclude current user
+    });
+    
+    const otherUser = getUserFromMember(otherMember!);
+    
     if (otherUser?.profile_picture) {
       return (
         <Image
@@ -101,10 +142,11 @@ export const List: React.FC<ListProps> = ({
         />
       );
     }
+    
     return (
       <View style={[styles.avatar, styles.avatarPlaceholder]}>
         <Text style={styles.avatarText}>
-          {otherUser ? `${otherUser.user.first_name?.[0] || ''}${otherUser.user.last_name?.[0] || ''}` : '?'}
+          {otherUser ? `${otherUser.first_name?.[0] || ''}${otherUser.last_name?.[0] || ''}` : '?'}
         </Text>
       </View>
     );

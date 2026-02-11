@@ -22,6 +22,8 @@ import { EmojiPicker } from './emojiPicker';
 import { AttachmentMenu } from './attachmentMenu';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { ImagePreview } from './imagePreview';
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const EMOJI_PICKER_HEIGHT = SCREEN_HEIGHT * 0.5;
@@ -67,6 +69,9 @@ interface Message {
   chat_room?: number;
   is_deleted?: boolean;
   is_forwarded?: boolean;
+  image_url?: string;
+  video_url?: string;
+  audio_url?: string;
 }
 
 interface ChatRoom {
@@ -144,6 +149,10 @@ export const Chat: React.FC<ChatProps> = ({
   const [showMessageOptionsModal, setShowMessageOptionsModal] = useState(false);
   const [isEmojiMode, setIsEmojiMode] = useState(false);
   const [messageOptionsPosition, setMessageOptionsPosition] = useState({ x: 0, y: 0 });
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImageUri, setPreviewImageUri] = useState<string>('');
+  
+
 
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -445,21 +454,6 @@ export const Chat: React.FC<ChatProps> = ({
     setShowDeleteModal(true);
   };
 
-  const handleDeleteForMe = () => {
-    setShowDeleteModal(false);
-    Animated.timing(deleteModalSlide, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      selectedMessages.forEach(msgId => onDeleteForMe(msgId));
-      setSelectedMessages([]);
-      setShowQuickReactions(false);
-      setLongPressedMessage(null);
-      setShowMessageOptionsModal(false);
-    });
-  };
-
   const handleDeleteForEveryone = () => {
     setShowDeleteModal(false);
     Animated.timing(deleteModalSlide, {
@@ -467,7 +461,33 @@ export const Chat: React.FC<ChatProps> = ({
       duration: 250,
       useNativeDriver: true,
     }).start(() => {
-      selectedMessages.forEach(msgId => onDeleteForEveryone(msgId));
+      selectedMessages.forEach(msgId => {
+        // Only send delete request if it's not a temporary message
+        if (!String(msgId).startsWith('temp_')) {
+          onDeleteForEveryone(msgId);
+        }
+      });
+      setSelectedMessages([]);
+      setShowQuickReactions(false);
+      setLongPressedMessage(null);
+      setShowMessageOptionsModal(false);
+    });
+  };
+
+const handleDeleteForMe = () => {
+    setShowDeleteModal(false);
+    Animated.timing(deleteModalSlide, {
+      toValue: SCREEN_HEIGHT,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      selectedMessages.forEach(msgId => {
+        // Only send delete request if it's not a temporary message
+        if (!String(msgId).startsWith('temp_')) {
+          onDeleteForMe(msgId);
+        }
+        console.log('Deleting message for me:', msgId);
+      });
       setSelectedMessages([]);
       setShowQuickReactions(false);
       setLongPressedMessage(null);
@@ -553,35 +573,88 @@ export const Chat: React.FC<ChatProps> = ({
     }
   }
 
+
+  // Add a recursive helper inside Chat component
+  const captureMultiplePhotos = async (accumulatedAssets = []) => {
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.length) {
+        const newAssets = [...accumulatedAssets, ...result.assets];
+
+        // Ask user if they want to take another photo
+        return new Promise((resolve) => {
+          Alert.alert(
+            'Add Another?',
+            'Photo captured. Do you want to add another?',
+            [
+              { text: 'No', onPress: () => resolve(newAssets) },
+              {
+                text: 'Yes', onPress: async () => {
+                  const moreAssets = await captureMultiplePhotos(newAssets);
+                  resolve(moreAssets);
+                }
+              }
+            ]
+          );
+        });
+      }
+      return accumulatedAssets; // canceled or no asset
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to capture photo.');
+      return accumulatedAssets;
+    }
+  };
+
   const handleCameraPress = async () => {
     if (isPickingMedia) return;
     try {
       setIsPickingMedia(true);
       setShowAttachmentMenu(false);
+
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert('Permission Required', 'Camera permission is required to take photos!');
-        setIsPickingMedia(false);
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Camera permission is required!');
         return;
       }
+
+      // Launch camera WITHOUT editing/cropping
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 1,
+        allowsEditing: false, // ← CHANGED: No auto-crop
+        quality: 0.8,
       });
-      if (!result.canceled && result.assets && result.assets[0]) {
+
+      if (!result.canceled && result.assets?.length > 0) {
         const asset = result.assets[0];
-        const messageType = 'image';
-        const fileName = asset.fileName || `${messageType}_${Date.now()}.jpg`;
-        onSendMessage(fileName, messageType, asset, replyingTo?.id);
-        setReplyingTo(null);
+        // Show preview modal instead of sending directly
+        setPreviewImageUri(asset.uri);
+        setShowImagePreview(true);
       }
-      setIsPickingMedia(false);
     } catch (error) {
-      console.error('Error taking photo:', error);
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to capture photo.');
+    } finally {
       setIsPickingMedia(false);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
     }
+  };
+  const handleSendFromPreview = (uri: string, caption: string) => {
+    const fileData = {
+      uri: uri,
+      type: 'image/jpeg',
+      name: `photo_${Date.now()}.jpg`,
+    };
+
+    // Send with caption as content
+    onSendMessage(caption || fileData.name, 'image', fileData, replyingTo?.id);
+    setReplyingTo(null);
+    setShowImagePreview(false);
+    setPreviewImageUri('');
   };
 
   const handleGalleryPress = async () => {
@@ -589,29 +662,41 @@ export const Chat: React.FC<ChatProps> = ({
     try {
       setIsPickingMedia(true);
       setShowAttachmentMenu(false);
+
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert('Permission Required', 'Gallery permission is required to select photos!');
-        setIsPickingMedia(false);
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Gallery permission is required!');
         return;
       }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsEditing: true,
-        quality: 1,
+        allowsMultipleSelection: true,   // ← enable multiple
+        selectionLimit: 10,             // optional limit, adjust as needed
+        quality: 0.8,
       });
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        const messageType = asset.type === 'video' ? 'video' : 'image';
-        const fileName = asset.fileName || `${messageType}_${Date.now()}`;
-        onSendMessage(fileName, messageType, asset, replyingTo?.id);
+
+      if (!result.canceled && result.assets?.length) {
+        for (const asset of result.assets) {
+          const isVideo = asset.type === 'video';
+          const messageType = isVideo ? 'video' : 'image';
+          const mimeType = isVideo ? 'video/mp4' : 'image/jpeg';
+          const extension = isVideo ? 'mp4' : 'jpg';
+          const fileData = {
+            uri: asset.uri,
+            type: mimeType,
+            name: asset.fileName || `${messageType}_${Date.now()}.${extension}`,
+          };
+          console.log('Selected media:', fileData);
+          onSendMessage(fileData.name, messageType, fileData, replyingTo?.id);
+        }
         setReplyingTo(null);
       }
-      setIsPickingMedia(false);
     } catch (error) {
-      console.error('Error selecting from gallery:', error);
+      console.error('Gallery error:', error);
+      Alert.alert('Error', 'Failed to select media.');
+    } finally {
       setIsPickingMedia(false);
-      Alert.alert('Error', 'Failed to select media. Please try again.');
     }
   };
 
@@ -620,23 +705,32 @@ export const Chat: React.FC<ChatProps> = ({
     try {
       setIsPickingMedia(true);
       setShowAttachmentMenu(false);
+
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: true,
+        multiple: true,   // ← enable multiple
       });
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        const fileName = asset.name || `document_${Date.now()}`;
-        onSendMessage(fileName, 'file', asset, replyingTo?.id);
+
+      if (!result.canceled && result.assets?.length) {
+        for (const asset of result.assets) {
+          const fileData = {
+            uri: asset.uri,
+            type: asset.mimeType || 'application/octet-stream',
+            name: asset.name || `document_${Date.now()}`,
+          };
+          onSendMessage(fileData.name, 'file', fileData, replyingTo?.id);
+        }
         setReplyingTo(null);
       }
-      setIsPickingMedia(false);
     } catch (error) {
-      console.error('Error selecting file:', error);
+      console.error('File selection error:', error);
+      Alert.alert('Error', 'Failed to select file.');
+    } finally {
       setIsPickingMedia(false);
-      Alert.alert('Error', 'Failed to select file. Please try again.');
     }
   };
+
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -817,17 +911,18 @@ export const Chat: React.FC<ChatProps> = ({
                   </View>
                 </View>
               )}
-              {message.is_forwarded && !isDeleted && (
-                <View style={styles.forwardedIndicator}>
-                  <Ionicons name="arrow-forward" size={12} color="#8696a0" />
-                  <Text style={styles.forwardedText}>Forwarded</Text>
-                </View>
-              )}
+
               <View style={[
                 styles.messageBubble,
                 isOwnMessage ? styles.messageBubbleSent : styles.messageBubbleReceived,
                 isDeleted && styles.messageBubbleDeleted
               ]}>
+                {message.is_forwarded && !isDeleted && (
+                  <View style={styles.forwardedIndicator}>
+                    <Ionicons name="arrow-forward" size={12} color="#8696a0" />
+                    <Text style={styles.forwardedText}>Forwarded</Text>
+                  </View>
+                )}
                 {!isOwnMessage && chatRoom.room_type === 'group' && !isDeleted && (
                   <Text style={[styles.messageSenderName, { color: '#00a884' }]}>
                     {message.sender.first_name}
@@ -838,6 +933,35 @@ export const Chat: React.FC<ChatProps> = ({
                     <Ionicons name="ban-outline" size={16} color="#8696a0" />
                     <Text style={styles.deletedMessageText}>{message.content}</Text>
                   </View>
+                ) : message.message_type === 'image' && message.image_url ? (
+                  <TouchableOpacity onPress={() => setSelectedImageUrl(message.image_url || null)} activeOpacity={0.9}>
+                    <Image
+                      source={{ uri: message.image_url }}
+                      style={styles.messageImage}
+                      resizeMode="cover"
+                    />
+                    {message.content && message.content !== message.file_name && (
+                      <Text style={styles.messageText}>{message.content}</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : message.message_type === 'video' && message.video_url ? (
+                  <View style={styles.videoContainer}>
+                    <Ionicons name="play-circle" size={48} color="#ffffff" style={styles.videoPlayIcon} />
+                    <Text style={styles.messageText}>{message.file_name || 'Video'}</Text>
+                  </View>
+                ) : message.message_type === 'audio' && message.audio_url ? (
+                  <View style={styles.audioContainer}>
+                    <Ionicons name="musical-notes" size={32} color="#00a884" />
+                    <Text style={styles.messageText}>{message.file_name || 'Audio'}</Text>
+                  </View>
+                ) : message.message_type === 'file' && message.file_url ? (
+                  <TouchableOpacity style={styles.fileContainer} activeOpacity={0.7}>
+                    <Ionicons name="document-attach" size={32} color="#00a884" />
+                    <View style={styles.fileInfo}>
+                      <Text style={styles.fileName} numberOfLines={1}>{message.file_name || 'File'}</Text>
+                      <Text style={styles.fileSize}>Tap to download</Text>
+                    </View>
+                  </TouchableOpacity>
                 ) : message.message_type === 'text' ? (
                   <Text style={styles.messageText}>{message.content}</Text>
                 ) : null}
@@ -995,7 +1119,12 @@ export const Chat: React.FC<ChatProps> = ({
           ref={flatListRef}
           data={messagesToDisplay}
           renderItem={renderMessage}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={(item, index) => {
+            if (item?.id != null) {
+              return item.id.toString();
+            }
+            return `msg-${index}-${item?.created_at || Date.now()}`;
+          }}
           style={styles.messagesList}
           contentContainerStyle={[
             styles.messagesContent,
@@ -1106,6 +1235,21 @@ export const Chat: React.FC<ChatProps> = ({
                 color="#8696a0"
               />
             </TouchableOpacity>
+
+            {/* NEW: Camera Shortcut Button */}
+            <TouchableOpacity
+              style={styles.inputIconBtn}
+              onPress={handleCameraPress}
+              activeOpacity={0.7}
+              disabled={isPickingMedia}
+            >
+              <Ionicons
+                name="camera-outline"
+                size={24}
+                color={isPickingMedia ? "#d1d5db" : "#8696a0"}
+              />
+            </TouchableOpacity>
+
             <TextInput
               ref={inputRef}
               style={styles.messageInput}
@@ -1143,6 +1287,7 @@ export const Chat: React.FC<ChatProps> = ({
       )}
 
       {/* Attachment Menu */}
+
       <AttachmentMenu
         visible={showAttachmentMenu}
         onClose={() => setShowAttachmentMenu(false)}
@@ -1321,6 +1466,33 @@ export const Chat: React.FC<ChatProps> = ({
           </View>
         </View>
       </Modal>
+      <Modal visible={!!selectedImageUrl} transparent animationType="fade">
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setSelectedImageUrl(null)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={32} color="#ffffff" />
+          </TouchableOpacity>
+          {selectedImageUrl && (
+            <Image
+              source={{ uri: selectedImageUrl }}
+              style={styles.imageViewerImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+      <ImagePreview
+        visible={showImagePreview}
+        imageUri={previewImageUri}
+        onClose={() => {
+          setShowImagePreview(false);
+          setPreviewImageUri('');
+        }}
+        onSend={handleSendFromPreview}
+      />
     </View>
   );
 };
@@ -1428,6 +1600,7 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     flex: 1,
+    marginBottom: 50
   },
   messagesContent: {
     paddingHorizontal: 16,
@@ -2043,5 +2216,62 @@ const styles = StyleSheet.create({
     color: '#8696a0',
     fontStyle: 'italic',
     fontWeight: '400',
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  videoContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  videoPlayIcon: {
+    position: 'absolute',
+  },
+  fileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(0, 168, 132, 0.1)',
+    borderRadius: 8,
+    gap: 12,
+    minWidth: 200,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#111b21',
+    marginBottom: 2,
+  },
+  fileSize: {
+    fontSize: 12,
+    color: '#667781',
+  },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    right: 20,
+    zIndex: 1,
+    padding: 8,
+  },
+  imageViewerImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.8,
   },
 });
