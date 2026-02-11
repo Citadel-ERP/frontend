@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -105,7 +106,7 @@ export const NewChat: React.FC<NewChatProps> = ({
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <Ionicons name="chevron-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Select contact</Text>
         <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
@@ -192,9 +193,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#008069',
-    paddingTop: 40,
+    paddingTop: 90,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
   backButton: {
     padding: 8,

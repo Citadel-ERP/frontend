@@ -1310,34 +1310,35 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }, [modules, isWeb]);
 
   const handleBackFromPage = useCallback(() => {
-    if (isWeb) {
-      setActivePage('dashboard');
-    } else {
-      setShowAttendance(false);
-      setShowProfile(false);
-      setShowHR(false);
-      setShowCab(false);
-      setShowDriver(false);
-      setShowBDT(false);
-      setShowMedical(false);
-      setShowScoutBoy(false);
-      setShowReminder(false);
-      setShowBUP(false);
-      setShowSiteManager(false);
-      setShowNotifications(false);
-      setShowSettings(false);
-      setShowEmployeeManagement(false);
-      setShowHREmployeeManagement(false);
-      setShowChat(false);
-      setShowChatRoom(false);
-      setShowValidation(false);
-      setShowDriverManager(false);
-      setShowHrManager(false);
-      setActiveMenuItem('Dashboard');
-    }
-    // Reset profile modal state
-    setProfileModalToOpen(null);
-  }, [isWeb]);
+  if (isWeb) {
+    setActivePage('dashboard');
+  } else {
+    setShowAttendance(false);
+    setShowProfile(false);
+    setShowHR(false);
+    setShowCab(false);
+    setShowDriver(false);
+    setShowBDT(false);
+    setShowMedical(false);
+    setShowScoutBoy(false);
+    setShowReminder(false);
+    setShowBUP(false);
+    setShowSiteManager(false);
+    setShowNotifications(false);
+    setShowSettings(false);
+    setShowEmployeeManagement(false);
+    setShowHREmployeeManagement(false);
+    setShowChat(false);
+    setShowChatRoom(false);
+    setShowValidation(false);
+    setShowDriverManager(false);
+    setShowHrManager(false);
+    setActiveMenuItem('Dashboard');
+    setActiveNavItem('home');  // ← ADD THIS LINE
+  }
+  // Reset profile modal state
+  setProfileModalToOpen(null);
+}, [isWeb]);
 
   const handleLogout = useCallback(async () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [

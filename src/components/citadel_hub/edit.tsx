@@ -9,8 +9,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';  
 
 interface User {
   id: number;
@@ -31,7 +33,7 @@ interface EditProps {
   chatRoom: ChatRoom;
   currentUser: User;
   onBack: () => void;
-  onSave: (name: string, description: string) => void;
+  onSave: (name: string, description: string, image?: string | null) => void;  
 }
 
 export const Edit: React.FC<EditProps> = ({
@@ -42,10 +44,40 @@ export const Edit: React.FC<EditProps> = ({
 }) => {
   const [name, setName] = useState(chatRoom.name || '');
   const [description, setDescription] = useState(chatRoom.description || '');
+  const [selectedImage, setSelectedImage] = useState<string | null>(chatRoom.profile_picture || null);
+  const [isNewImage, setIsNewImage] = useState(false);
+
+  const isGroup = chatRoom.room_type === 'group';
+
+  const handlePickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'Permission to access camera roll is required!'); 
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setSelectedImage(result.assets[0].uri);
+      setIsNewImage(true);
+      console.log('New image selected:', result.assets[0].uri);
+    }
+  };
 
   const handleSave = () => {
-    if (name.trim()) {
-      onSave(name, description);
+    // For groups: name is required. For direct: name not needed.
+    const isValid = isGroup ? name.trim() : true;
+    if (isValid) {
+      const imageToSend = isNewImage ? selectedImage : null;
+      console.log('Saving with image:', imageToSend, 'isNewImage:', isNewImage);
+      onSave(name, description, imageToSend);  
     }
   };
 
@@ -60,51 +92,69 @@ export const Edit: React.FC<EditProps> = ({
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <Ionicons name="chevron-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit group info</Text>
+        {/* Title changes based on chat type */}
+        <Text style={styles.headerTitle}>
+          {isGroup ? 'Edit group info' : 'Edit profile'}
+        </Text>
       </View>
 
       <ScrollView style={styles.content}>
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
-            {chatRoom.profile_picture ? (
+            {selectedImage ? (
               <Image
-                source={{ uri: chatRoom.profile_picture }}
+                source={{ uri: selectedImage }}
                 style={styles.avatar}
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Ionicons name="people" size={60} color="#8696a0" />
+                {isGroup ? (
+                  <Ionicons name="people" size={60} color="#8696a0" />
+                ) : (
+                  <Text style={styles.avatarInitials}>
+                    {currentUser.first_name?.[0] || '?'}
+                    {currentUser.last_name?.[0] || ''}
+                  </Text>
+                )}
               </View>
             )}
-            <TouchableOpacity style={styles.changeAvatarButton} activeOpacity={0.8}>
+            <TouchableOpacity 
+              style={styles.changeAvatarButton} 
+              activeOpacity={0.8}
+              onPress={handlePickImage}
+            >
               <Ionicons name="camera" size={20} color="#ffffff" />
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.form}>
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Group name</Text>
-            <TextInput
-              style={styles.fieldInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="Group name"
-              placeholderTextColor="#8696a0"
-              maxLength={25}
-            />
-            <Text style={styles.fieldCounter}>{name.length}/25</Text>
-          </View>
+          {/* Group name field — ONLY shown for groups */}
+          {isGroup && (
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>Group name</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={name}
+                onChangeText={setName}
+                placeholder="Group name"
+                placeholderTextColor="#8696a0"
+                maxLength={25}
+              />
+              <Text style={styles.fieldCounter}>{name.length}/25</Text>
+            </View>
+          )}
 
+          {/* Description — shown for both group and individual */}
           <View style={styles.formField}>
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput
               style={[styles.fieldInput, styles.textArea]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Add group description"
+              placeholder={isGroup ? 'Add group description' : 'Add a description about yourself'}
               placeholderTextColor="#8696a0"
               multiline
               numberOfLines={3}
@@ -119,10 +169,11 @@ export const Edit: React.FC<EditProps> = ({
       <TouchableOpacity
         style={[
           styles.saveButton,
-          !name.trim() && styles.saveButtonDisabled,
+          // Only disable for groups when name is empty
+          isGroup && !name.trim() && styles.saveButtonDisabled,
         ]}
         onPress={handleSave}
-        disabled={!name.trim()}
+        disabled={isGroup && !name.trim()}
         activeOpacity={0.8}
       >
         <Ionicons name="checkmark" size={24} color="#ffffff" />
@@ -140,10 +191,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#008069',
-    paddingTop: 40,
+    paddingTop: 90,
     paddingBottom: 16,
     paddingHorizontal: 16,
     gap: 16,
+    marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
   backButton: {
     padding: 8,
@@ -175,6 +227,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e9edef',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 48,
+    fontWeight: '600',
+    color: '#8696a0',
   },
   changeAvatarButton: {
     position: 'absolute',

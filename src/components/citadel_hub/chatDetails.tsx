@@ -39,6 +39,7 @@ interface ChatRoom {
   admin?: User;
   members: (User | ChatRoomMember)[];
   created_at: string;
+  updated_at?: string;
   is_muted?: boolean;
   is_blocked?: boolean;
   media_count?: number;
@@ -120,49 +121,58 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   };
 
   const getChatAvatar = () => {
-    if (chatRoom.room_type === 'group') {
-      if (chatRoom.profile_picture) {
-        return (
-          <Image
-            source={{ uri: chatRoom.profile_picture }}
-            style={styles.profileAvatar}
-          />
-        );
-      }
-      return (
-        <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-          <Ionicons name="people" size={60} color="#8696a0" />
-        </View>
-      );
-    }
-
-    const currentUserId = currentUser.id || currentUser.employee_id;
-    const otherMember = chatRoom.members.find(m => {
-      const user = getUserFromMember(m);
-      return user && (user.id || user.employee_id) !== currentUserId;
-    });
-
-    const otherUser = otherMember ? getUserFromMember(otherMember) : null;
-
-    if (otherUser?.profile_picture) {
+  if (chatRoom.room_type === 'group') {
+    if (chatRoom.profile_picture) {
+      // Use updated_at timestamp for cache busting - only changes when image actually updates
+      const timestamp = chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now();
       return (
         <Image
-          source={{ uri: otherUser.profile_picture }}
+          source={{ 
+            uri: `${chatRoom.profile_picture}?t=${timestamp}` 
+          }}
           style={styles.profileAvatar}
         />
       );
     }
-
     return (
       <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-        <Text style={styles.avatarText}>
-          {otherUser
-            ? `${otherUser.first_name[0] || '?'}${otherUser.last_name?.[0] || ''}`
-            : '?'}
-        </Text>
+        <Ionicons name="people" size={60} color="#8696a0" />
       </View>
     );
-  };
+  }
+
+  // For direct chats
+  const currentUserId = currentUser.id || currentUser.employee_id;
+  const otherMember = chatRoom.members.find(m => {
+    const user = getUserFromMember(m);
+    return user && (user.id || user.employee_id) !== currentUserId;
+  });
+
+  const otherUser = otherMember ? getUserFromMember(otherMember) : null;
+
+  if (otherUser?.profile_picture) {
+    // Use updated_at timestamp for cache busting
+    const timestamp = chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now();
+    return (
+      <Image
+        source={{ 
+          uri: `${otherUser.profile_picture}?t=${timestamp}` 
+        }}
+        style={styles.profileAvatar}
+      />
+    );
+  }
+
+  return (
+    <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
+      <Text style={styles.avatarText}>
+        {otherUser
+          ? `${otherUser.first_name[0] || '?'}${otherUser.last_name?.[0] || ''}`
+          : '?'}
+      </Text>
+    </View>
+  );
+};
 
   const isAdmin = chatRoom.admin?.id === currentUser.id;
 
@@ -409,6 +419,15 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
           <Ionicons name="chevron-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Contact Info</Text>
+        
+        {/* Edit button */}
+        <TouchableOpacity
+          style={styles.headerEditButton}
+          onPress={onEdit}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="create-outline" size={24} color="#ffffff" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -578,24 +597,6 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
           )}
         </View>
 
-        {/* Edit Group (only for group admins) */}
-        {chatRoom.room_type === 'group' && isAdmin && (
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.sectionItem}
-              onPress={onEdit}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.sectionIcon, styles.sectionIconEdit]}>
-                <Ionicons name="create" size={22} color="#ffffff" />
-              </View>
-              <View style={styles.sectionText}>
-                <Text style={styles.sectionLabel}>Edit group info</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Danger Zone */}
         <View style={[styles.section, styles.sectionDanger]}>
           <TouchableOpacity 
@@ -698,21 +699,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',  
     backgroundColor: '#008069',
     paddingTop: 90,
     paddingBottom: 16,
     paddingHorizontal: 16,
-    gap: 16,
+    gap: 12,
     marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
   backButton: {
-    padding: 8,
+    padding: 5,
+  },
+  headerEditButton: {
+    padding: 5,
   },
   headerTitle: {
     fontSize: 19,
     color: '#ffffff',
     fontWeight: '500',
   },
+  
   content: {
     flex: 1,
   },

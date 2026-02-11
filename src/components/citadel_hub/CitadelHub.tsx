@@ -6,6 +6,7 @@ import {
   StatusBar,
   Alert,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from './header';
@@ -17,6 +18,7 @@ import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
+import { Ionicons } from '@expo/vector-icons'; 
 
 // ============= TYPE DEFINITIONS =============
 export interface User {
@@ -1209,6 +1211,27 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         : room
     ));
   }, []);
+  const handleAddMember = useCallback(() => {
+  // You can either navigate to a new screen or show a modal
+  // For now, let's show an alert as a placeholder
+  Alert.alert(
+    'Add Member',
+    'This feature will open a member selection screen',
+    [
+      {
+        text: 'OK',
+        onPress: () => {
+          // TODO: Navigate to member selection screen
+          // navigation.navigate('AddMemberScreen', { 
+          //   groupId: selectedChatRoom.id,
+          //   currentMembers: selectedChatRoom.members 
+          // });
+        }
+      },
+      { text: 'Cancel', style: 'cancel' }
+    ]
+  );
+}, [selectedChatRoom]);
 
   // ============= MESSAGE SENDING =============
   const sendMessage = async (
@@ -1430,38 +1453,46 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#008069" />
-
-      {viewMode === 'list' && (
-        <View style={styles.listView}>
-          <Header
-            currentUser={currentUser}
-            unreadCount={unreadCount}
-            onMenuClick={(action) => {
-              if (action === 'newGroup') setViewMode('newGroup');
-              if (action === 'newChat') setViewMode('newChat');
-            }}
-            onBack={() => {
-              if (onBack) onBack();
-            }}
-          />
-          <SearchAndFilter
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            filterType={filterType}
-            onFilterChange={setFilterType}
-          />
-          <List
-            chatRooms={getFilteredChatRooms()}
-            currentUser={currentUser}
-            onChatSelect={handleChatSelect}
-            onMute={muteChat}
-            onUnmute={unmuteChat}
-            onPin={pinChat}
-            onUnpin={unpinChat}
-            onMarkAsUnread={markAsUnread}
-          />
-        </View>
-      )}
+{viewMode === 'list' && (
+  <View style={styles.listView}>
+    <Header
+      currentUser={currentUser}
+      unreadCount={unreadCount}
+      onMenuClick={(action) => {
+        if (action === 'newGroup') setViewMode('newGroup');
+        if (action === 'newChat') setViewMode('newChat');
+      }}
+      onBack={() => {
+        if (onBack) onBack();
+      }}
+    />
+    <SearchAndFilter
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      filterType={filterType}
+      onFilterChange={setFilterType}
+    />
+    <List
+      chatRooms={getFilteredChatRooms()}
+      currentUser={currentUser}
+      onChatSelect={handleChatSelect}
+      onMute={muteChat}
+      onUnmute={unmuteChat}
+      onPin={pinChat}
+      onUnpin={unpinChat}
+      onMarkAsUnread={markAsUnread}
+    />
+    
+    {/* NEW: Floating Action Button */}
+    <TouchableOpacity
+      style={styles.fab}
+      onPress={() => setViewMode('newChat')}
+      activeOpacity={0.8}
+    >
+      <Ionicons name="chatbubble" size={24} color="#ffffff" />
+    </TouchableOpacity>
+  </View>
+)}
 
       {viewMode === 'chat' && selectedChatRoom && (
         <Chat
@@ -1506,6 +1537,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onEdit={() => setViewMode('edit')}
           onMute={() => muteChat(selectedChatRoom.id)}
           onUnmute={() => unmuteChat(selectedChatRoom.id)}
+          onAddMember={handleAddMember} 
         />
       )}
 
@@ -1528,27 +1560,85 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         />
       )}
 
-      {viewMode === 'edit' && selectedChatRoom && (
-        <Edit
-          chatRoom={selectedChatRoom}
-          currentUser={currentUser}
-          onBack={() => setViewMode('chatDetails')}
-          onSave={async (name, description) => {
-            try {
-              await apiCall('updateGroupInfo', {
-                chat_room_id: selectedChatRoom.id,
-                name,
-                description,
-              });
-              await loadChatRooms();
-              setViewMode('chatDetails');
-            } catch (error) {
-              console.error('Error updating group:', error);
-              Alert.alert('Error', 'Failed to update group. Please try again.');
-            }
-          }}
-        />
-      )}
+
+{viewMode === 'edit' && selectedChatRoom && (
+  <Edit
+    chatRoom={selectedChatRoom}
+    currentUser={currentUser}
+    onBack={() => setViewMode('chatDetails')}
+    onSave={async (name, description, image) => {
+      try {
+        const formData = new FormData();
+        formData.append('token', token || '');
+        formData.append('chat_room_id', selectedChatRoom.id.toString());
+
+        // Only append name for groups
+        if (selectedChatRoom.room_type === 'group') {
+          formData.append('name', name);
+        }
+        formData.append('description', description);
+
+        if (image) {
+          const imageFile = {
+            uri: image,
+            type: 'image/jpeg',
+            name: `${selectedChatRoom.room_type}_${selectedChatRoom.id}_${Date.now()}.jpg`,
+          };
+          formData.append('profile_picture', imageFile as any);
+        }
+
+        // Use different endpoint based on chat type
+        const endpoint = selectedChatRoom.room_type === 'group'
+          ? 'updateGroupInfo'
+          : 'updateDirectChatInfo';
+          console.log('🔍 Using endpoint:', endpoint, 'for room type:', selectedChatRoom.room_type);
+
+        const response = await fetch(
+          `${apiBaseUrl}/citadel_hub/${endpoint}`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Update failed: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        console.log('✅ Update successful:', result);
+        
+        // Update selectedChatRoom for ChatDetails
+        if (result.chat_room) {
+          const updatedRoom = {
+            ...selectedChatRoom,
+            ...result.chat_room,
+            created_at: selectedChatRoom.created_at,
+          };
+          
+          setSelectedChatRoom(updatedRoom);
+          
+          // Update chatRooms list for List component
+          setChatRooms(prev => prev.map(room =>
+            room.id === selectedChatRoom.id ? updatedRoom : room
+          ));
+          
+          console.log('✅ States updated with new image URL:', updatedRoom.profile_picture);
+        }
+
+        // Refresh chat rooms list from server to ensure consistency
+        await loadChatRooms();
+        
+        setViewMode('chatDetails');
+        
+      } catch (error) {
+        console.error('❌ Error updating group:', error);
+        Alert.alert('Error', `Failed to update ${selectedChatRoom.room_type === 'group' ? 'group' : 'profile'}. Please try again.`);
+      }
+    }}
+  />
+)}
     </SafeAreaView>
   );
 };
@@ -1560,5 +1650,21 @@ const styles = StyleSheet.create({
   },
   listView: {
     flex: 1,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#00a884',  // WhatsApp green
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,  // Android shadow
   },
 });

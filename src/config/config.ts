@@ -16,11 +16,11 @@ const configs: Record<string, AppConfig> = {
     // BACKEND_URL: 'https://backend.citadelnetinc.com',
     // BACKEND_URL_WEBSOCKET: 'https://backend-websocket.citadelnetinc.com',
 
-    BACKEND_URL: 'https://962xzp32-8000.inc1.devtunnels.ms',
-    BACKEND_URL_WEBSOCKET: 'https://962xzp32-8002.inc1.devtunnels.ms',
+    // BACKEND_URL: 'https://962xzp32-8000.inc1.devtunnels.ms',
+    // BACKEND_URL_WEBSOCKET: 'https://962xzp32-8002.inc1.devtunnels.ms',
 
-    // BACKEND_URL: 'https://89vlj2ck-8000.inc1.devtunnels.ms',
-    // BACKEND_URL_WEBSOCKET: 'https://89vlj2ck-8001.inc1.devtunnels.ms',
+    BACKEND_URL: 'https://89vlj2ck-8000.inc1.devtunnels.ms',
+    BACKEND_URL_WEBSOCKET: 'https://89vlj2ck-8001.inc1.devtunnels.ms',
 
   },  
   
