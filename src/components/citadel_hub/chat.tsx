@@ -24,6 +24,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const EMOJI_PICKER_HEIGHT = SCREEN_HEIGHT * 0.5;
+const INPUT_CONTAINER_HEIGHT = 60;
 
 // Message cache for instant loading
 const messageCache = new Map();
@@ -140,12 +142,15 @@ export const Chat: React.FC<ChatProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [showClearChatConfirm, setShowClearChatConfirm] = useState(false);
   const [showMessageOptionsModal, setShowMessageOptionsModal] = useState(false);
+  const [isEmojiMode, setIsEmojiMode] = useState(false);
   const [messageOptionsPosition, setMessageOptionsPosition] = useState({ x: 0, y: 0 });
 
+  const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messageRefs = useRef<{ [key: number]: View | null }>({});
   const previousRoomId = useRef<number | null>(null);
+
   const reactionBarScale = useRef(new Animated.Value(0)).current;
   const reactionBarOpacity = useRef(new Animated.Value(0)).current;
   const deleteModalSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -157,7 +162,6 @@ export const Chat: React.FC<ChatProps> = ({
     if (chatRoom && messages.length > 0) {
       const cacheKey = `room_${chatRoom.id}`;
       messageCache.set(cacheKey, messages.slice(-CACHE_SIZE));
-
       if (messageCache.size > 10) {
         const firstKey = messageCache.keys().next().value;
         messageCache.delete(firstKey);
@@ -167,41 +171,16 @@ export const Chat: React.FC<ChatProps> = ({
 
   const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
 
-  // Room change handling - clear state
-  useEffect(() => {
-    if (previousRoomId.current !== chatRoom?.id) {
-      // Clear immediately
-      setDisplayMessages([]);
-      setSelectedMessages([]);
-      setShowQuickReactions(false);
-      setLongPressedMessage(null);
-      setReplyingTo(null);
-      setIsSearchMode(false);
-      setSearchText('');
-      setSearchResults([]);
-      setShowMessageOptionsModal(false);
-
-      // Load from cache if available
-      const cacheKey = `room_${chatRoom?.id}`;
-      const cached = messageCache.get(cacheKey);
-      if (cached && cached.length > 0) {
-        // Reverse for inverted list
-        setDisplayMessages([...cached].reverse());
-      }
-
-      previousRoomId.current = chatRoom?.id || null;
-    } else {
-      // Update messages for current room - reverse for inverted list
-      setDisplayMessages([...messages].reverse());
-    }
-  }, [chatRoom?.id, messages]);
-
-  // Keyboard handling
+  // Keyboard listeners
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
+        if (isEmojiMode) {
+          setIsEmojiMode(false);
+          setShowEmojiPicker(false);
+        }
       }
     );
 
@@ -216,7 +195,32 @@ export const Chat: React.FC<ChatProps> = ({
       keyboardWillShow.remove();
       keyboardWillHide.remove();
     };
-  }, []);
+  }, [isEmojiMode]);
+
+  // Room change handling - clear state
+  useEffect(() => {
+    if (previousRoomId.current !== chatRoom?.id) {
+      setDisplayMessages([]);
+      setSelectedMessages([]);
+      setShowQuickReactions(false);
+      setLongPressedMessage(null);
+      setReplyingTo(null);
+      setIsSearchMode(false);
+      setSearchText('');
+      setSearchResults([]);
+      setShowMessageOptionsModal(false);
+
+      const cacheKey = `room_${chatRoom?.id}`;
+      const cached = messageCache.get(cacheKey);
+      if (cached && cached.length > 0) {
+        setDisplayMessages([...cached].reverse());
+      }
+
+      previousRoomId.current = chatRoom?.id || null;
+    } else {
+      setDisplayMessages([...messages].reverse());
+    }
+  }, [chatRoom?.id, messages]);
 
   // Animate reaction bar
   useEffect(() => {
@@ -284,15 +288,12 @@ export const Chat: React.FC<ChatProps> = ({
 
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
     if (!member) return null;
-
     if ('first_name' in member && 'last_name' in member) {
       return member as User;
     }
-
     if ('user' in member && member.user) {
       return member.user;
     }
-
     return null;
   };
 
@@ -300,18 +301,15 @@ export const Chat: React.FC<ChatProps> = ({
     if (chatRoom.room_type === 'group') {
       return chatRoom.name || 'Unnamed Group';
     }
-
     const currentUserId = currentUser.id || currentUser.employee_id;
     const otherMember = chatRoom.members.find(m => {
       const user = getUserFromMember(m);
       return user && (user.id || user.employee_id) !== currentUserId;
     });
-
     if (otherMember) {
       const user = getUserFromMember(otherMember);
       return user ? `${user.first_name || 'Unknown'} ${user.last_name || ''}` : 'Unknown';
     }
-
     return 'Unknown';
   }, [chatRoom, currentUser]);
 
@@ -319,10 +317,7 @@ export const Chat: React.FC<ChatProps> = ({
     if (chatRoom.room_type === 'group') {
       if (chatRoom.profile_picture) {
         return (
-          <Image
-            source={{ uri: chatRoom.profile_picture }}
-            style={styles.avatar}
-          />
+          <Image source={{ uri: chatRoom.profile_picture }} style={styles.avatar} />
         );
       }
       return (
@@ -331,30 +326,21 @@ export const Chat: React.FC<ChatProps> = ({
         </View>
       );
     }
-
     const currentUserId = currentUser.id || currentUser.employee_id;
     const otherMember = chatRoom.members.find(m => {
       const user = getUserFromMember(m);
       return user && (user.id || user.employee_id) !== currentUserId;
     });
-
     const otherUser = otherMember ? getUserFromMember(otherMember) : null;
-
     if (otherUser?.profile_picture) {
       return (
-        <Image
-          source={{ uri: otherUser.profile_picture }}
-          style={styles.avatar}
-        />
+        <Image source={{ uri: otherUser.profile_picture }} style={styles.avatar} />
       );
     }
-
     return (
       <View style={[styles.avatar, styles.avatarPlaceholder]}>
         <Text style={styles.avatarText}>
-          {otherUser
-            ? `${otherUser.first_name?.[0] || '?'}${otherUser.last_name?.[0] || ''}`
-            : '?'}
+          {otherUser ? `${otherUser.first_name?.[0] || '?'}${otherUser.last_name?.[0] || ''}` : '?'}
         </Text>
       </View>
     );
@@ -363,11 +349,9 @@ export const Chat: React.FC<ChatProps> = ({
   const handleInputChange = (text: string) => {
     setInputText(text);
     onTyping();
-
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-
     typingTimeoutRef.current = setTimeout(() => {
       onStopTyping();
     }, 1000);
@@ -384,7 +368,11 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleEmojiSelect = (emoji: string) => {
     setInputText(prev => prev + emoji);
+  };
+
+  const handleEmojiPickerClose = () => {
     setShowEmojiPicker(false);
+    setIsEmojiMode(false);
   };
 
   const isDeletedMessage = (message: Message) => {
@@ -394,10 +382,8 @@ export const Chat: React.FC<ChatProps> = ({
   const handleLongPress = (message: Message, event: any) => {
     if (isDeletedMessage(message)) return;
     if (selectedMessages.length > 0) return;
-
     setLongPressedMessage(message);
     setSelectedMessages([message.id]);
-
     if (messageRefs.current[message.id]) {
       messageRefs.current[message.id]?.measure((x, y, width, height, pageX, pageY) => {
         setReactionPosition({ x: pageX, y: pageY });
@@ -409,9 +395,7 @@ export const Chat: React.FC<ChatProps> = ({
   const handleMessageTap = (messageId: number) => {
     const message = messages.find(m => m.id === messageId);
     if (message && isDeletedMessage(message)) return;
-
     if (selectedMessages.length === 0) return;
-
     setSelectedMessages(prev => {
       if (prev.includes(messageId)) {
         const updated = prev.filter(id => id !== messageId);
@@ -450,12 +434,10 @@ export const Chat: React.FC<ChatProps> = ({
 
   const canDeleteForEveryone = (message: Message) => {
     if (isDeletedMessage(message)) return false;
-
     const messageTime = new Date(message.created_at).getTime();
     const currentTime = new Date().getTime();
     const timeDiff = currentTime - messageTime;
     const thirtyMinutes = 30 * 60 * 1000;
-
     return timeDiff <= thirtyMinutes;
   };
 
@@ -516,11 +498,9 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleShareMessage = useCallback(() => {
     if (selectedMessages.length === 0) return;
-
     const messagesToShare = displayMessages.filter(msg =>
       selectedMessages.includes(msg.id) && !isDeletedMessage(msg)
     );
-
     if (onShare) {
       onShare(selectedMessages, messagesToShare, chatRoom?.id);
     } else {
@@ -566,10 +546,8 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleMessageOptionsPress = (event: any) => {
     if (selectedMessages.length === 1) {
-      // Get the position of the header (top right area)
-      const topRightX = SCREEN_WIDTH - 220; // 220px from right edge
-      const topRightY = Platform.OS === 'ios' ? 100 : 70; // Below header
-      
+      const topRightX = SCREEN_WIDTH - 220;
+      const topRightY = Platform.OS === 'ios' ? 100 : 70;
       setMessageOptionsPosition({ x: topRightX, y: topRightY });
       setShowMessageOptionsModal(true);
     }
@@ -577,34 +555,27 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleCameraPress = async () => {
     if (isPickingMedia) return;
-
     try {
       setIsPickingMedia(true);
       setShowAttachmentMenu(false);
-
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
       if (permissionResult.granted === false) {
         Alert.alert('Permission Required', 'Camera permission is required to take photos!');
         setIsPickingMedia(false);
         return;
       }
-
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 1,
       });
-
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const messageType = 'image';
         const fileName = asset.fileName || `${messageType}_${Date.now()}.jpg`;
-
         onSendMessage(fileName, messageType, asset, replyingTo?.id);
         setReplyingTo(null);
       }
-
       setIsPickingMedia(false);
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -615,34 +586,27 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleGalleryPress = async () => {
     if (isPickingMedia) return;
-
     try {
       setIsPickingMedia(true);
       setShowAttachmentMenu(false);
-
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
       if (permissionResult.granted === false) {
         Alert.alert('Permission Required', 'Gallery permission is required to select photos!');
         setIsPickingMedia(false);
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: true,
         quality: 1,
       });
-
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const messageType = asset.type === 'video' ? 'video' : 'image';
         const fileName = asset.fileName || `${messageType}_${Date.now()}`;
-
         onSendMessage(fileName, messageType, asset, replyingTo?.id);
         setReplyingTo(null);
       }
-
       setIsPickingMedia(false);
     } catch (error) {
       console.error('Error selecting from gallery:', error);
@@ -653,24 +617,19 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleFileSelect = async () => {
     if (isPickingMedia) return;
-
     try {
       setIsPickingMedia(true);
       setShowAttachmentMenu(false);
-
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: true,
       });
-
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const fileName = asset.name || `document_${Date.now()}`;
-
         onSendMessage(fileName, 'file', asset, replyingTo?.id);
         setReplyingTo(null);
       }
-
       setIsPickingMedia(false);
     } catch (error) {
       console.error('Error selecting file:', error);
@@ -681,7 +640,11 @@ export const Chat: React.FC<ChatProps> = ({
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -689,22 +652,23 @@ export const Chat: React.FC<ChatProps> = ({
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
     if (date.toDateString() === today.toDateString()) {
       return 'Today';
     } else if (date.toDateString() === yesterday.toDateString()) {
       return 'Yesterday';
     } else {
-      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
     }
   };
 
   const shouldShowDateSeparator = (index: number, messagesArray: Message[]) => {
     if (index === messagesArray.length - 1) return true;
-
     const currentDate = new Date(messagesArray[index].created_at).toDateString();
     const nextDate = new Date(messagesArray[index + 1].created_at).toDateString();
-
     return currentDate !== nextDate;
   };
 
@@ -764,7 +728,7 @@ export const Chat: React.FC<ChatProps> = ({
     <View style={styles.emptyContainer}>
       <View style={styles.emptyCircle}>
         <View style={styles.emptyInnerCircle}>
-          <Ionicons name="chatbubble-ellipses-outline" size={40} color="#00a884" />
+          <Ionicons name="chatbubbles-outline" size={48} color="#00a884" />
         </View>
       </View>
       <Text style={styles.emptyTitle}>Start a Conversation</Text>
@@ -773,7 +737,7 @@ export const Chat: React.FC<ChatProps> = ({
         {chatRoom.room_type === 'group' ? 'the group' : getChatName()}
       </Text>
       <View style={styles.emptyHintContainer}>
-        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#667781" style={styles.emptyHintIcon} />
+        <Ionicons name="arrow-down" size={20} color="#00a884" style={styles.emptyHintIcon} />
         <Text style={styles.emptyHintText}>Start typing below to send a message</Text>
       </View>
     </View>
@@ -788,15 +752,13 @@ export const Chat: React.FC<ChatProps> = ({
     const isDeleted = isDeletedMessage(message);
 
     return (
-      <View>
+      <>
         {showDate && (
           <View style={styles.dateSeparator}>
-            <Text style={styles.dateSeparatorText}>
-              {formatDate(message.created_at)}
-            </Text>
+            <Text style={styles.dateSeparatorText}>{formatDate(message.created_at)}</Text>
           </View>
         )}
-        <TouchableOpacity
+        <View
           ref={(ref) => (messageRefs.current[message.id] = ref)}
           style={[
             styles.messageWrapper,
@@ -804,124 +766,130 @@ export const Chat: React.FC<ChatProps> = ({
             isSelected && styles.messageWrapperSelected,
             isDeleted && styles.messageWrapperDeleted,
           ]}
-          onPress={() => isSelectionMode && !isDeleted ? handleMessageTap(message.id) : null}
-          onLongPress={(e) => !isDeleted ? handleLongPress(message, e) : null}
-          activeOpacity={isDeleted ? 1 : (isSelectionMode ? 0.7 : 0.9)}
-          delayLongPress={isDeleted ? 0 : 500}
-          disabled={isDeleted}
         >
-          {isSelectionMode && !isDeleted && (
-            <View style={styles.checkboxContainer}>
-              <View style={[
-                styles.checkbox,
-                isSelected && styles.checkboxSelected
-              ]}>
-                {isSelected && (
-                  <Ionicons name="checkmark" size={16} color="#ffffff" />
-                )}
-              </View>
-            </View>
-          )}
-          {!isOwnMessage && chatRoom.room_type === 'group' && !isSelectionMode && !isDeleted && (
-            <View style={styles.messageAvatar}>
-              {message.sender.profile_picture ? (
-                <Image
-                  source={{ uri: message.sender.profile_picture }}
-                  style={styles.messageAvatarImage}
-                />
-              ) : (
-                <View style={styles.messageAvatarPlaceholder}>
-                  <Text style={styles.messageAvatarText}>
-                    {message.sender.first_name?.[0] || '?'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-          <View style={styles.messageContentWrapper}>
-            {message.parent_message && !isDeleted && (
-              <View style={styles.replyContext}>
-                <View style={styles.replyBar} />
-                <View style={styles.replyInfo}>
-                  <Text style={styles.replySender}>
-                    {(message.parent_message.sender.id || message.parent_message.sender.employee_id) === (currentUser.id || currentUser.employee_id)
-                      ? 'You'
-                      : message.parent_message.sender.first_name}
-                  </Text>
-                  <Text style={styles.replyPreview} numberOfLines={1}>
-                    {message.parent_message.content.substring(0, 50)}
-                  </Text>
+          <TouchableOpacity
+            style={[
+              styles.messageTouchable,
+              isOwnMessage ? styles.messageTouchableOwn : styles.messageTouchableOther,
+            ]}
+            onPress={() => isSelectionMode && !isDeleted ? handleMessageTap(message.id) : null}
+            onLongPress={(e) => !isDeleted ? handleLongPress(message, e) : null}
+            activeOpacity={isDeleted ? 1 : (isSelectionMode ? 0.7 : 0.9)}
+            delayLongPress={isDeleted ? 0 : 500}
+            disabled={isDeleted}
+          >
+            {isSelectionMode && !isDeleted && (
+              <View style={styles.checkboxContainer}>
+                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={16} color="#ffffff" />
+                  )}
                 </View>
               </View>
             )}
-            <View
-              style={[
-                styles.messageBubble,
-                isOwnMessage ? styles.messageBubbleSent : styles.messageBubbleReceived,
-                isDeleted && styles.messageBubbleDeleted,
-              ]}
-            >
+            {!isOwnMessage && chatRoom.room_type === 'group' && !isSelectionMode && !isDeleted && (
+              <View style={styles.messageAvatar}>
+                {message.sender.profile_picture ? (
+                  <Image
+                    source={{ uri: message.sender.profile_picture }}
+                    style={styles.messageAvatarImage}
+                  />
+                ) : (
+                  <View style={styles.messageAvatarPlaceholder}>
+                    <Text style={styles.messageAvatarText}>{message.sender.first_name?.[0] || '?'}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            <View style={styles.messageContentWrapper}>
+              {message.parent_message && !isDeleted && (
+                <View style={styles.replyContext}>
+                  <View style={styles.replyBar} />
+                  <View style={styles.replyInfo}>
+                    <Text style={styles.replySender}>
+                      {(message.parent_message.sender.id || message.parent_message.sender.employee_id) === (currentUser.id || currentUser.employee_id)
+                        ? 'You'
+                        : message.parent_message.sender.first_name}
+                    </Text>
+                    <Text style={styles.replyPreview} numberOfLines={1}>
+                      {message.parent_message.content.substring(0, 50)}
+                    </Text>
+                  </View>
+                </View>
+              )}
               {message.is_forwarded && !isDeleted && (
                 <View style={styles.forwardedIndicator}>
-                  <Ionicons name="arrow-redo-outline" size={12} color="#8696a0" />
+                  <Ionicons name="arrow-forward" size={12} color="#8696a0" />
                   <Text style={styles.forwardedText}>Forwarded</Text>
                 </View>
               )}
-
-              {!isOwnMessage && chatRoom.room_type === 'group' && !isDeleted && (
-                <Text
-                  style={[
-                    styles.messageSenderName,
-                    { color: `hsl(${(message.sender.id || 0) * 137.5 % 360}, 70%, 50%)` },
-                  ]}
-                >
-                  {message.sender.first_name}
-                </Text>
-              )}
-              {isDeleted ? (
-                <View style={styles.deletedMessageContent}>
-                  <Ionicons name="trash-outline" size={16} color="#8696a0" />
-                  <Text style={styles.deletedMessageText}>{message.content}</Text>
+              <View style={[
+                styles.messageBubble,
+                isOwnMessage ? styles.messageBubbleSent : styles.messageBubbleReceived,
+                isDeleted && styles.messageBubbleDeleted
+              ]}>
+                {!isOwnMessage && chatRoom.room_type === 'group' && !isDeleted && (
+                  <Text style={[styles.messageSenderName, { color: '#00a884' }]}>
+                    {message.sender.first_name}
+                  </Text>
+                )}
+                {isDeleted ? (
+                  <View style={styles.deletedMessageContent}>
+                    <Ionicons name="ban-outline" size={16} color="#8696a0" />
+                    <Text style={styles.deletedMessageText}>{message.content}</Text>
+                  </View>
+                ) : message.message_type === 'text' ? (
+                  <Text style={styles.messageText}>{message.content}</Text>
+                ) : null}
+                <View style={styles.messageMeta}>
+                  <Text style={[styles.messageTime, isDeleted && styles.deletedMessageTime]}>
+                    {formatTime(message.created_at)}
+                  </Text>
+                  {isOwnMessage && !isDeleted && (
+                    <Ionicons
+                      name="checkmark-done"
+                      size={16}
+                      color="#53bdeb"
+                      style={styles.messageStatus}
+                    />
+                  )}
+                  {message.is_edited && !isDeleted && (
+                    <Text style={styles.editedLabel}>edited</Text>
+                  )}
                 </View>
-              ) : message.message_type === 'text' ? (
-                <Text style={styles.messageText}>{message.content}</Text>
-              ) : null}
-              <View style={styles.messageMeta}>
-                <Text style={[styles.messageTime, isDeleted && styles.deletedMessageTime]}>
-                  {formatTime(message.created_at)}
-                </Text>
-                {isOwnMessage && !isDeleted && (
-                  <Ionicons
-                    name="checkmark-done"
-                    size={16}
-                    color="#8696a0"
-                    style={styles.messageStatus}
-                  />
-                )}
-                {message.is_edited && !isDeleted && (
-                  <Text style={styles.editedLabel}>edited</Text>
-                )}
               </View>
+              {Object.keys(reactions).length > 0 && !isDeleted && (
+                <View style={styles.messageReactions}>
+                  {Object.entries(reactions).map(([emoji, users]) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={styles.reactionBubble}
+                      onPress={() => onReact(message.id, emoji)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.reactionEmoji}>{emoji}</Text>
+                      <Text style={styles.reactionCount}>{users.length}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
-            {Object.keys(reactions).length > 0 && !isDeleted && (
-              <View style={styles.messageReactions}>
-                {Object.entries(reactions).map(([emoji, users]) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    style={styles.reactionBubble}
-                    onPress={() => onReact(message.id, emoji)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.reactionEmoji}>{emoji}</Text>
-                    <Text style={styles.reactionCount}>{users.length}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
+      </>
     );
+  };
+
+  const handleEmojiButtonPress = () => {
+    if (isEmojiMode) {
+      setShowEmojiPicker(false);
+      setIsEmojiMode(false);
+      inputRef.current?.focus();
+    } else {
+      Keyboard.dismiss();
+      setShowEmojiPicker(true);
+      setIsEmojiMode(true);
+    }
   };
 
   const messagesToDisplay = useMemo(() => {
@@ -929,12 +897,10 @@ export const Chat: React.FC<ChatProps> = ({
     return msgs;
   }, [isSearchMode, searchResults, displayMessages]);
 
+  const bottomOffset = showEmojiPicker ? EMOJI_PICKER_HEIGHT : keyboardHeight;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    <View style={styles.container}>
       {/* Header */}
       <View style={[
         styles.header,
@@ -942,42 +908,24 @@ export const Chat: React.FC<ChatProps> = ({
       ]}>
         {selectedMessages.length > 0 ? (
           <>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleClearSelection}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={28} color="#fff" />
+            <TouchableOpacity style={styles.backButton} onPress={handleClearSelection} activeOpacity={0.7}>
+              <Ionicons name="close" size={24} color="#ffffff" />
             </TouchableOpacity>
             <Text style={styles.selectionCount}>{selectedMessages.length}</Text>
             <View style={styles.selectionActions}>
-              <TouchableOpacity
-                style={styles.selectionActionBtn}
-                onPress={handleDeleteMessage}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="delete" size={24} color="#ffffff" />
+              {selectedMessages.length === 1 && (
+                <TouchableOpacity style={styles.selectionActionBtn} onPress={handleReplyMessage} activeOpacity={0.7}>
+                  <MaterialIcons name="reply" size={24} color="#ffffff" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.selectionActionBtn} onPress={handleShareMessage} activeOpacity={0.7}>
+                <Ionicons name="arrow-redo" size={24} color="#ffffff" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.selectionActionBtn}
-                onPress={handleShareMessage}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="share" size={24} color="#ffffff" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.selectionActionBtn}
-                onPress={handleReplyMessage}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="reply" size={24} color="#ffffff" />
+              <TouchableOpacity style={styles.selectionActionBtn} onPress={handleDeleteMessage} activeOpacity={0.7}>
+                <Ionicons name="trash-outline" size={24} color="#ffffff" />
               </TouchableOpacity>
               {selectedMessages.length === 1 && (
-                <TouchableOpacity
-                  style={styles.selectionActionBtn}
-                  onPress={handleMessageOptionsPress}
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity style={styles.selectionActionBtn} onPress={handleMessageOptionsPress} activeOpacity={0.7}>
                   <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
                 </TouchableOpacity>
               )}
@@ -985,17 +933,13 @@ export const Chat: React.FC<ChatProps> = ({
           </>
         ) : isSearchMode ? (
           <>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleSearchClose}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="arrow-back" size={28} color="#fff" />
+            <TouchableOpacity style={styles.backButton} onPress={handleSearchClose} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={24} color="#ffffff" />
             </TouchableOpacity>
             <TextInput
               style={styles.searchInput}
               placeholder="Search messages..."
-              placeholderTextColor="#b0b0b0"
+              placeholderTextColor="#8696a0"
               value={searchText}
               onChangeText={handleSearchTextChange}
               autoFocus
@@ -1003,20 +947,12 @@ export const Chat: React.FC<ChatProps> = ({
           </>
         ) : (
           <>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={onBack}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="chevron-back" size={28} color="#fff" />
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={24} color="#ffffff" />
             </TouchableOpacity>
-            <View style={styles.headerInfo}>
+            <TouchableOpacity style={styles.headerInfo} onPress={onHeaderClick} activeOpacity={0.7}>
               {getChatAvatar()}
-              <TouchableOpacity
-                style={styles.headerText}
-                onPress={onHeaderClick}
-                activeOpacity={0.7}
-              >
+              <View style={styles.headerText}>
                 <View style={styles.headerNameRow}>
                   <Text style={styles.headerName} numberOfLines={1}>
                     {getChatName()}
@@ -1025,27 +961,19 @@ export const Chat: React.FC<ChatProps> = ({
                     <Ionicons name="volume-mute" size={16} color="#ffffff" style={styles.mutedIcon} />
                   )}
                 </View>
-                <Text style={styles.headerStatus} numberOfLines={1}>
-                  {typingUsers.length > 0 ? (
-                    <Text style={styles.typingIndicator}>
-                      {typingUsers.length === 1
-                        ? `${typingUsers[0].first_name} is typing...`
-                        : `${typingUsers.length} people are typing...`}
-                    </Text>
-                  ) : chatRoom.room_type === 'group' ? (
-                    `${chatRoom.members.length} members`
-                  ) : (
-                    'Online'
-                  )}
+                <Text style={[styles.headerStatus, typingUsers.length > 0 && styles.typingIndicator]}>
+                  {typingUsers.length > 0
+                    ? (typingUsers.length === 1
+                      ? `${typingUsers[0].first_name} is typing...`
+                      : `${typingUsers.length} people are typing...`)
+                    : chatRoom.room_type === 'group'
+                      ? `${chatRoom.members.length} members`
+                      : 'Online'}
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
             <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.headerIconBtn}
-                onPress={() => setShowOptionsModal(true)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.headerIconBtn} onPress={() => setShowOptionsModal(true)} activeOpacity={0.7}>
                 <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
               </TouchableOpacity>
             </View>
@@ -1058,7 +986,7 @@ export const Chat: React.FC<ChatProps> = ({
         renderEmptyState()
       ) : messagesToDisplay.length === 0 && isSearchMode ? (
         <View style={styles.searchEmptyContainer}>
-          <Ionicons name="search-outline" size={60} color="#d1d7db" />
+          <Ionicons name="search-outline" size={64} color="#8696a0" />
           <Text style={styles.searchEmptyText}>No messages found</Text>
           <Text style={styles.searchEmptySubtext}>Try different keywords</Text>
         </View>
@@ -1067,9 +995,14 @@ export const Chat: React.FC<ChatProps> = ({
           ref={flatListRef}
           data={messagesToDisplay}
           renderItem={renderMessage}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={item => item.id.toString()}
           style={styles.messagesList}
-          contentContainerStyle={styles.messagesContent}
+          contentContainerStyle={[
+            styles.messagesContent,
+            {
+              paddingBottom: INPUT_CONTAINER_HEIGHT + bottomOffset + 10,
+            },
+          ]}
           inverted={true}
           onEndReached={isSearchMode ? handleSearchLoadMore : onLoadMore}
           onEndReachedThreshold={0.5}
@@ -1099,17 +1032,9 @@ export const Chat: React.FC<ChatProps> = ({
             styles.floatingReactionsContainer,
             {
               top: reactionPosition.y - 60,
-              left: Math.max(10, Math.min(reactionPosition.x - 180, SCREEN_WIDTH - 370)),
+              left: reactionPosition.x,
               opacity: reactionBarOpacity,
-              transform: [
-                { scale: reactionBarScale },
-                {
-                  translateY: reactionBarScale.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [20, 0],
-                  })
-                }
-              ],
+              transform: [{ scale: reactionBarScale }],
             },
           ]}
         >
@@ -1135,7 +1060,7 @@ export const Chat: React.FC<ChatProps> = ({
 
       {/* Reply Bar */}
       {replyingTo && (
-        <View style={styles.replyBarContainer}>
+        <View style={[styles.replyBarContainer, { bottom: INPUT_CONTAINER_HEIGHT + bottomOffset }]}>
           <View style={styles.replyBarContent}>
             <View style={styles.replyBarLeft}>
               <View style={styles.replyBarLine} />
@@ -1151,12 +1076,8 @@ export const Chat: React.FC<ChatProps> = ({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.replyClose}
-              onPress={() => setReplyingTo(null)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={20} color="#8696a0" />
+            <TouchableOpacity style={styles.replyClose} onPress={() => setReplyingTo(null)} activeOpacity={0.7}>
+              <Ionicons name="close" size={24} color="#8696a0" />
             </TouchableOpacity>
           </View>
         </View>
@@ -1164,33 +1085,41 @@ export const Chat: React.FC<ChatProps> = ({
 
       {/* Input Container */}
       {!isSearchMode && (
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          {
+            position: 'absolute',
+            bottom: bottomOffset,
+            left: 0,
+            right: 0,
+          }
+        ]}>
           <View style={styles.inputRow}>
             <TouchableOpacity
               style={styles.inputIconBtn}
-              onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+              onPress={handleEmojiButtonPress}
               activeOpacity={0.7}
             >
-              <Ionicons name="happy-outline" size={24} color="#8696a0" />
+              <Ionicons
+                name={isEmojiMode ? "keypad-outline" : "happy-outline"}
+                size={24}
+                color="#8696a0"
+              />
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.inputIconBtn}
-              onPress={handleCameraPress}
-              activeOpacity={0.7}
-              disabled={isPickingMedia}
-            >
-              <Ionicons name="camera" size={24} color={isPickingMedia ? '#ccc' : '#8696a0'} />
-            </TouchableOpacity>
-            
             <TextInput
+              ref={inputRef}
               style={styles.messageInput}
               placeholder="Message"
               placeholderTextColor="#8696a0"
               value={inputText}
               onChangeText={handleInputChange}
               multiline
-              maxLength={1000}
+              onFocus={() => {
+                if (isEmojiMode) {
+                  setShowEmojiPicker(false);
+                  setIsEmojiMode(false);
+                }
+              }}
             />
             <TouchableOpacity
               style={styles.inputIconBtn}
@@ -1198,125 +1127,84 @@ export const Chat: React.FC<ChatProps> = ({
               activeOpacity={0.7}
               disabled={isPickingMedia}
             >
-              <Ionicons name="attach" size={24} color={isPickingMedia ? '#ccc' : '#8696a0'} />
+              <Ionicons name="attach" size={24} color="#8696a0" />
             </TouchableOpacity>
             {inputText.trim() ? (
-              <TouchableOpacity
-                style={styles.sendButton}
-                onPress={handleSend}
-                activeOpacity={0.8}
-                disabled={isPickingMedia}
-              >
+              <TouchableOpacity style={styles.sendButton} onPress={handleSend} activeOpacity={0.7}>
                 <Ionicons name="send" size={20} color="#ffffff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.inputIconBtn} activeOpacity={0.7} disabled={isPickingMedia}>
-                <Ionicons name="mic" size={24} color={isPickingMedia ? '#ccc' : '#8696a0'} />
+              <TouchableOpacity style={styles.inputIconBtn} activeOpacity={0.7}>
+                <Ionicons name="mic" size={24} color="#8696a0" />
               </TouchableOpacity>
             )}
           </View>
         </View>
       )}
 
-      {/* Emoji Picker */}
-      <EmojiPicker
-        visible={showEmojiPicker}
-        onSelect={handleEmojiSelect}
-        onClose={() => setShowEmojiPicker(false)}
-      />
-
       {/* Attachment Menu */}
       <AttachmentMenu
-        visible={showAttachmentMenu && !isPickingMedia}
-        onFileSelect={handleFileSelect}
-        onCameraSelect={handleCameraPress}
-        onGallerySelect={handleGalleryPress}
+        visible={showAttachmentMenu}
         onClose={() => setShowAttachmentMenu(false)}
+        onCameraPress={handleCameraPress}
+        onGalleryPress={handleGalleryPress}
+        onFilePress={handleFileSelect}
       />
+
+      {/* Emoji Picker */}
+      {showEmojiPicker && (
+        <EmojiPicker
+          visible={showEmojiPicker}
+          onSelect={handleEmojiSelect}
+          onClose={handleEmojiPickerClose}
+        />
+      )}
 
       {/* WhatsApp-Style Message Options Modal */}
       {showMessageOptionsModal && (
-        <TouchableOpacity
-          style={styles.messageOptionsOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMessageOptionsModal(false)}
-        >
-          <Animated.View
-            style={[
-              styles.messageOptionsDropdown,
-              {
-                top: messageOptionsPosition.y,
-                right: 8,
-                opacity: messageOptionsOpacity,
-                transform: [
-                  { 
-                    scale: messageOptionsScale.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 1],
-                    })
-                  },
-                  {
-                    translateY: messageOptionsScale.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-10, 0],
-                    })
-                  }
-                ],
-              },
-            ]}
+        <Modal transparent visible={showMessageOptionsModal} animationType="none">
+          <TouchableOpacity
+            style={styles.messageOptionsOverlay}
+            activeOpacity={1}
+            onPress={() => setShowMessageOptionsModal(false)}
           >
-            <TouchableOpacity
-              style={styles.messageOptionItem}
-              onPress={handleCopyMessage}
-              activeOpacity={0.6}
+            <Animated.View
+              style={[
+                styles.messageOptionsDropdown,
+                {
+                  top: messageOptionsPosition.y,
+                  left: messageOptionsPosition.x,
+                  opacity: messageOptionsOpacity,
+                  transform: [{ scale: messageOptionsScale }],
+                },
+              ]}
             >
-              <MaterialIcons name="content-copy" size={20} color="#3b4a54" />
-              <Text style={styles.messageOptionText}>Copy</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.messageOptionDivider} />
-            
-            <TouchableOpacity
-              style={styles.messageOptionItem}
-              onPress={handleMessageInfo}
-              activeOpacity={0.6}
-            >
-              <Ionicons name="information-circle-outline" size={20} color="#3b4a54" />
-              <Text style={styles.messageOptionText}>Info</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.messageOptionDivider} />
-            
-            <TouchableOpacity
-              style={styles.messageOptionItem}
-              onPress={handlePinMessage}
-              activeOpacity={0.6}
-            >
-              <Ionicons name="pin-outline" size={20} color="#3b4a54" />
-              <Text style={styles.messageOptionText}>Pin</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.messageOptionDivider} />
-            
-            <TouchableOpacity
-              style={styles.messageOptionItem}
-              onPress={handleTranslateMessage}
-              activeOpacity={0.6}
-            >
-              <MaterialIcons name="translate" size={20} color="#3b4a54" />
-              <Text style={styles.messageOptionText}>Translate</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </TouchableOpacity>
+              <TouchableOpacity style={styles.messageOptionItem} onPress={handleCopyMessage} activeOpacity={0.7}>
+                <Ionicons name="copy-outline" size={20} color="#3b4a54" />
+                <Text style={styles.messageOptionText}>Copy</Text>
+              </TouchableOpacity>
+              <View style={styles.messageOptionDivider} />
+              <TouchableOpacity style={styles.messageOptionItem} onPress={handleMessageInfo} activeOpacity={0.7}>
+                <Ionicons name="information-circle-outline" size={20} color="#3b4a54" />
+                <Text style={styles.messageOptionText}>Info</Text>
+              </TouchableOpacity>
+              <View style={styles.messageOptionDivider} />
+              <TouchableOpacity style={styles.messageOptionItem} onPress={handlePinMessage} activeOpacity={0.7}>
+                <Ionicons name="pin-outline" size={20} color="#3b4a54" />
+                <Text style={styles.messageOptionText}>Pin</Text>
+              </TouchableOpacity>
+              <View style={styles.messageOptionDivider} />
+              <TouchableOpacity style={styles.messageOptionItem} onPress={handleTranslateMessage} activeOpacity={0.7}>
+                <Ionicons name="language-outline" size={20} color="#3b4a54" />
+                <Text style={styles.messageOptionText}>Translate</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableOpacity>
+        </Modal>
       )}
 
       {/* Delete Modal */}
-      <Modal
-        visible={showDeleteModal}
-        transparent={true}
-        animationType="none"
-        onRequestClose={handleCancelDelete}
-      >
+      <Modal transparent visible={showDeleteModal} animationType="none">
         <View style={styles.deleteModalOverlay}>
           <TouchableOpacity
             style={styles.deleteModalBackdrop}
@@ -1326,9 +1214,7 @@ export const Chat: React.FC<ChatProps> = ({
           <Animated.View
             style={[
               styles.deleteModalContent,
-              {
-                transform: [{ translateY: deleteModalSlide }],
-              },
+              { transform: [{ translateY: deleteModalSlide }] },
             ]}
           >
             <View style={styles.deleteModalHeader}>
@@ -1336,13 +1222,9 @@ export const Chat: React.FC<ChatProps> = ({
                 Delete {selectedMessages.length} {selectedMessages.length === 1 ? 'message' : 'messages'}?
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.deleteModalOption}
-              onPress={handleDeleteForMe}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.deleteModalOption} onPress={handleDeleteForMe} activeOpacity={0.7}>
               <View style={styles.deleteModalOptionContent}>
-                <MaterialIcons name="delete-outline" size={24} color="#111b21" />
+                <Ionicons name="trash-outline" size={24} color="#111b21" />
                 <View style={styles.deleteModalOptionText}>
                   <Text style={styles.deleteModalOptionTitle}>Delete for me</Text>
                   <Text style={styles.deleteModalOptionSubtitle}>
@@ -1352,17 +1234,11 @@ export const Chat: React.FC<ChatProps> = ({
               </View>
             </TouchableOpacity>
             {longPressedMessage && canDeleteForEveryone(longPressedMessage) && (
-              <TouchableOpacity
-                style={styles.deleteModalOption}
-                onPress={handleDeleteForEveryone}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.deleteModalOption} onPress={handleDeleteForEveryone} activeOpacity={0.7}>
                 <View style={styles.deleteModalOptionContent}>
-                  <MaterialIcons name="delete-forever" size={24} color="#ea4335" />
+                  <Ionicons name="trash-bin-outline" size={24} color="#ea4335" />
                   <View style={styles.deleteModalOptionText}>
-                    <Text style={[styles.deleteModalOptionTitle, { color: '#ea4335' }]}>
-                      Delete for everyone
-                    </Text>
+                    <Text style={[styles.deleteModalOptionTitle, { color: '#ea4335' }]}>Delete for everyone</Text>
                     <Text style={styles.deleteModalOptionSubtitle}>
                       {selectedMessages.length === 1 ? 'This message' : 'These messages'} will be removed for all participants
                     </Text>
@@ -1370,11 +1246,7 @@ export const Chat: React.FC<ChatProps> = ({
                 </View>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={styles.deleteModalCancel}
-              onPress={handleCancelDelete}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.deleteModalCancel} onPress={handleCancelDelete} activeOpacity={0.7}>
               <Text style={styles.deleteModalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -1382,12 +1254,7 @@ export const Chat: React.FC<ChatProps> = ({
       </Modal>
 
       {/* Options Modal */}
-      <Modal
-        visible={showOptionsModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowOptionsModal(false)}
-      >
+      <Modal transparent visible={showOptionsModal} animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
@@ -1423,12 +1290,7 @@ export const Chat: React.FC<ChatProps> = ({
       </Modal>
 
       {/* Clear Chat Confirmation */}
-      <Modal
-        visible={showClearChatConfirm}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowClearChatConfirm(false)}
-      >
+      <Modal transparent visible={showClearChatConfirm} animationType="fade">
         <View style={styles.deleteModalOverlay}>
           <TouchableOpacity
             style={styles.deleteModalBackdrop}
@@ -1459,7 +1321,7 @@ export const Chat: React.FC<ChatProps> = ({
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -1694,6 +1556,18 @@ const styles = StyleSheet.create({
   messageWrapperDeleted: {
     opacity: 0.8,
   },
+  messageTouchable: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    flex: 1,
+  },
+  messageTouchableOwn: {
+    flexDirection: 'row-reverse',
+  },
+  messageTouchableOther: {
+    flexDirection: 'row',
+  },
   checkboxContainer: {
     justifyContent: 'center',
     paddingRight: 8,
@@ -1903,6 +1777,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   replyBarContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     backgroundColor: '#f0f2f5',
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1937,6 +1814,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f2f5',
     paddingHorizontal: 8,
     paddingVertical: 8,
+    zIndex: 2,
   },
   inputRow: {
     flexDirection: 'row',
@@ -1965,8 +1843,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
-  // WhatsApp-Style Message Options Dropdown
   messageOptionsOverlay: {
     position: 'absolute',
     top: 25,
@@ -2005,7 +1881,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#e9edef',
     marginHorizontal: 8,
   },
-  
   deleteModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
