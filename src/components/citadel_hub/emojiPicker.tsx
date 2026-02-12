@@ -414,7 +414,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         ]}
       >
         {/* Header with search */}
-        <View style={styles.header}>
+        {/* <View style={styles.header}>
           <View style={styles.searchContainer}>
             <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
             <TextInput
@@ -432,7 +432,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </View> */}
 
         {/* Emoji categories scroll */}
         <ScrollView

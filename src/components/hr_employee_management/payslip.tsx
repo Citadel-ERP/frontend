@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { BACKEND_URL } from '../../config/config';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface Employee {
   employee_id: string;
@@ -108,11 +109,11 @@ const PayslipModal: React.FC<PayslipProps> = ({
         setPayslips(data.payslips || []);
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to fetch payslips');
+        alert('Error', errorData.message || 'Failed to fetch payslips');
       }
     } catch (error) {
       console.error('Error fetching payslips:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -139,7 +140,7 @@ const PayslipModal: React.FC<PayslipProps> = ({
       }
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document');
+      alert('Error', 'Failed to pick document');
     }
   };
 
@@ -177,17 +178,17 @@ const PayslipModal: React.FC<PayslipProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Payslip uploaded successfully');
+        alert('Success', 'Payslip uploaded successfully');
         setModalMode('list');
         setSelectedFile(null);
         fetchPayslips();
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to upload payslip');
+        alert('Error', errorData.message || 'Failed to upload payslip');
       }
     } catch (error) {
       console.error('Error uploading payslip:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setUploading(false);
     }
@@ -195,7 +196,7 @@ const PayslipModal: React.FC<PayslipProps> = ({
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      Alert.alert('Error', 'Please select a payslip file');
+      alert('Error', 'Please select a payslip file');
       return;
     }
 
@@ -205,7 +206,7 @@ const PayslipModal: React.FC<PayslipProps> = ({
     );
 
     if (exists) {
-      Alert.alert(
+      alert(
         'Payslip Exists',
         'A payslip for this month already exists. Do you want to replace it?',
         [
@@ -234,11 +235,11 @@ const PayslipModal: React.FC<PayslipProps> = ({
       if (supported) {
         await Linking.openURL(payslipUrl);
       } else {
-        Alert.alert('Error', 'Cannot open this file');
+        alert('Error', 'Cannot open this file');
       }
     } catch (error) {
       console.error('Error downloading payslip:', error);
-      Alert.alert('Error', 'Failed to download payslip');
+      alert('Error', 'Failed to download payslip');
     }
   };
 

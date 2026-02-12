@@ -17,6 +17,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { WHATSAPP_COLORS } from './constants';
 import { BACKEND_URL } from '../../config/config';
 import { Header } from './header';
+import alert from '../../utils/Alert';
 
 interface Holiday {
     holiday_id: string | number;
@@ -64,14 +65,14 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
 
         if (!token) {
             console.error('EditHoliday: No token provided');
-            Alert.alert('Error', 'Authentication required', [
+            alert('Error', 'Authentication required', [
                 { text: 'OK', onPress: onBack }
             ]);
         }
 
         if (!holiday.holiday_id) {
             console.error('EditHoliday: No holiday_id provided');
-            Alert.alert('Error', 'Holiday ID is missing', [
+            alert('Error', 'Holiday ID is missing', [
                 { text: 'OK', onPress: onBack }
             ]);
         }
@@ -92,11 +93,11 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
 
     const validateForm = (): boolean => {
         if (!holidayName.trim()) {
-            Alert.alert('Validation Error', 'Please enter holiday name');
+            alert('Validation Error', 'Please enter holiday name');
             return false;
         }
         if (selectedCities.length === 0) {
-            Alert.alert('Validation Error', 'Please select at least one city');
+            alert('Validation Error', 'Please select at least one city');
             return false;
         }
         return true;
@@ -106,7 +107,7 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
         if (!validateForm()) return;
 
         if (!token) {
-            Alert.alert('Error', 'Authentication token is missing');
+            alert('Error', 'Authentication token is missing');
             return;
         }
 
@@ -135,24 +136,24 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
             console.log('Update response status:', response.status);
 
             if (response.ok) {
-                Alert.alert('Success', 'Holiday updated successfully', [
+                alert('Success', 'Holiday updated successfully', [
                     { text: 'OK', onPress: onBack }
                 ]);
             } else {
                 const errorData = await response.json();
                 console.error('Update error:', errorData);
-                Alert.alert('Error', errorData.message || 'Failed to update holiday');
+                alert('Error', errorData.message || 'Failed to update holiday');
             }
         } catch (error) {
             console.error('Error updating holiday:', error);
-            Alert.alert('Error', 'Network error occurred. Please try again.');
+            alert('Error', 'Network error occurred. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = () => {
-        Alert.alert(
+        alert(
             'Delete Holiday',
             'Are you sure you want to delete this holiday? This action cannot be undone.',
             [
@@ -171,12 +172,12 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
 
     const confirmDelete = async () => {
         if (!token) {
-            Alert.alert('Error', 'Authentication token is missing');
+            alert('Error', 'Authentication token is missing');
             return;
         }
 
         if (!holiday.holiday_id) {
-            Alert.alert('Error', 'Holiday ID is missing');
+            alert('Error', 'Holiday ID is missing');
             return;
         }
 
@@ -200,7 +201,7 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
             console.log('Delete response status:', response.status);
 
             if (response.ok) {
-                Alert.alert('Success', 'Holiday deleted successfully', [
+                alert('Success', 'Holiday deleted successfully', [
                     { text: 'OK', onPress: onBack }
                 ]);
             } else {
@@ -212,11 +213,11 @@ const EditHoliday: React.FC<EditHolidayProps> = ({ token, holiday, onBack }) => 
                 } catch {
                     errorData = { message: errorText };
                 }
-                Alert.alert('Error', errorData.message || 'Failed to delete holiday');
+                alert('Error', errorData.message || 'Failed to delete holiday');
             }
         } catch (error) {
             console.error('Error deleting holiday:', error);
-            Alert.alert('Error', 'Network error occurred. Please try again.');
+            alert('Error', 'Network error occurred. Please try again.');
         } finally {
             setDeleteLoading(false);
         }

@@ -18,6 +18,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { BACKEND_URL } from '../../config/config';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface Employee {
   employee_id: string;
@@ -115,7 +116,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       }
     } catch (error) {
       console.error('Error fetching mediclaim:', error);
-      Alert.alert('Error', 'Failed to fetch mediclaim data');
+      alert('Error', 'Failed to fetch mediclaim data');
     } finally {
       setLoading(false);
     }
@@ -125,7 +126,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
     if (!formData.policy_number || !formData.insurance_provider_name ||
       !formData.sum_insured_opted || !formData.base_cover ||
       !formData.optional_top_up_cover) {
-      Alert.alert('Error', 'Please fill all required fields');
+      alert('Error', 'Please fill all required fields');
       return;
     }
 
@@ -148,7 +149,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert(
+        alert(
           'Success',
           'Mediclaim created successfully! Employee will be notified to complete their details.',
           [{
@@ -167,11 +168,11 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           }]
         );
       } else {
-        Alert.alert('Error', data.message || 'Failed to create mediclaim');
+        alert('Error', data.message || 'Failed to create mediclaim');
       }
     } catch (error) {
       console.error('Error creating mediclaim:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setActionLoading(false);
     }
@@ -181,7 +182,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
     if (!formData.policy_number || !formData.insurance_provider_name ||
       !formData.sum_insured_opted || !formData.base_cover ||
       !formData.optional_top_up_cover) {
-      Alert.alert('Error', 'Please fill all required fields');
+      alert('Error', 'Please fill all required fields');
       return;
     }
 
@@ -204,17 +205,17 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert('Success', 'Mediclaim updated successfully');
+        alert('Success', 'Mediclaim updated successfully');
         setIsEditing(false);
         setModalMode('view');
         fetchMediclaimData();
         onRefresh?.();
       } else {
-        Alert.alert('Error', data.message || 'Failed to update mediclaim');
+        alert('Error', data.message || 'Failed to update mediclaim');
       }
     } catch (error) {
       console.error('Error updating mediclaim:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setActionLoading(false);
     }
@@ -222,7 +223,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
 
   const handleSignMediclaim = async () => {
     if (!mediclaimData?.employee_signature) {
-      Alert.alert('Error', 'Employee has not signed the mediclaim yet');
+      alert('Error', 'Employee has not signed the mediclaim yet');
       return;
     }
 
@@ -238,7 +239,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
 
       const signatureFile = result.assets[0];
 
-      Alert.alert(
+      alert(
         'Confirm Signature',
         'Once signed, this mediclaim cannot be edited. Continue?',
         [
@@ -252,7 +253,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       );
     } catch (error) {
       console.error('Error picking signature:', error);
-      Alert.alert('Error', 'Failed to pick signature file');
+      alert('Error', 'Failed to pick signature file');
     }
   };
 
@@ -291,7 +292,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert(
+        alert(
           'Success',
           'Mediclaim signed and stamped successfully!',
           [{
@@ -302,11 +303,11 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           }]
         );
       } else {
-        Alert.alert('Error', data.message || 'Failed to sign mediclaim');
+        alert('Error', data.message || 'Failed to sign mediclaim');
       }
     } catch (error) {
       console.error('Error signing mediclaim:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setActionLoading(false);
     }
@@ -318,11 +319,11 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Error', 'Cannot open this document');
+        alert('Error', 'Cannot open this document');
       }
     } catch (error) {
       console.error('Error opening document:', error);
-      Alert.alert('Error', 'Failed to open document');
+      alert('Error', 'Failed to open document');
     }
   };
 

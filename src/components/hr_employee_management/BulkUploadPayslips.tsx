@@ -17,6 +17,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 import { Header } from './header';
+import alert from '../../utils/Alert';
 
 interface BulkUploadPayslipsProps {
   token: string;
@@ -58,7 +59,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
 
   const handleDownloadSample = async () => {
     if (!token) {
-      Alert.alert('Error', 'Authentication required');
+      alert('Error', 'Authentication required');
       return;
     }
 
@@ -84,10 +85,10 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
 
       // Open in browser
       await WebBrowser.openBrowserAsync(fileUrl);
-      Alert.alert('Success', 'Sample payslip downloaded successfully');
+      alert('Success', 'Sample payslip downloaded successfully');
     } catch (error: any) {
       console.error('Download sample error:', error);
-      Alert.alert('Error', error.message || 'Failed to download sample payslip');
+      alert('Error', error.message || 'Failed to download sample payslip');
     } finally {
       setDownloading(false);
     }
@@ -129,7 +130,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       }
     } catch (error) {
       console.error('Error selecting files:', error);
-      Alert.alert('Error', 'Failed to select files');
+      alert('Error', 'Failed to select files');
     }
   };
 
@@ -157,18 +158,18 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
 
   const handleSubmit = async () => {
     if (!selectedMonth || !selectedYear) {
-      Alert.alert('Validation Error', 'Please select both month and year');
+      alert('Validation Error', 'Please select both month and year');
       return;
     }
 
     if (selectedFiles.length === 0) {
-      Alert.alert('Validation Error', 'Please select at least one payslip file');
+      alert('Validation Error', 'Please select at least one payslip file');
       return;
     }
 
     const invalidFiles = selectedFiles.filter(file => !validateFileName(file.name).valid);
     if (invalidFiles.length > 0) {
-      Alert.alert(
+      alert(
         'Invalid File Names',
         `The following files have invalid names:\n${invalidFiles.map(f => f.name).join('\n')}\n\nFile names should only contain the employee ID (e.g., EMP001.pdf)`
       );
@@ -221,7 +222,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       const successMsg = `Successfully uploaded ${data.successful || 0} payslips${data.failed > 0 ? `\n${data.failed} files failed to upload` : ''
         }`;
 
-      Alert.alert('Upload Complete', successMsg, [
+      alert('Upload Complete', successMsg, [
         {
           text: 'OK',
           onPress: () => {
@@ -235,7 +236,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       ]);
     } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Failed', error.message || 'Failed to upload payslips');
+      alert('Upload Failed', error.message || 'Failed to upload payslips');
     } finally {
       setUploading(false);
     }

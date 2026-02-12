@@ -181,7 +181,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   // Cache messages when room changes
   useEffect(() => {
-    if (chatRoom && messages.length > 0) {
+    if (chatRoom) {  // ✅ REMOVED messages.length > 0 check
       const cacheKey = `room_${chatRoom.id}`;
       messageCache.set(cacheKey, messages.slice(-CACHE_SIZE));
       if (messageCache.size > 10) {
@@ -190,6 +190,11 @@ export const Chat: React.FC<ChatProps> = ({
       }
     }
   }, [chatRoom?.id, messages]);
+
+  const clearMessageCacheForRoom = (roomId: number) => {
+  const cacheKey = `room_${roomId}`;
+  messageCache.delete(cacheKey);
+};
 
   const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
 
@@ -270,7 +275,12 @@ export const Chat: React.FC<ChatProps> = ({
       setSearchText('');
       setSearchResults([]);
       setShowMessageOptionsModal(false);
-
+      
+      // ✅ ADDED: Clear cache when switching rooms to ensure fresh data
+      if (previousRoomId.current !== null) {
+        clearMessageCacheForRoom(previousRoomId.current);
+      }
+      
       const cacheKey = `room_${chatRoom?.id}`;
       const cached = messageCache.get(cacheKey);
       if (cached && cached.length > 0) {
@@ -2419,7 +2429,7 @@ const styles = StyleSheet.create({
   },
   videoMessageContainer: {
     maxWidth: 250,
-    width:200,
+    width: 200,
     overflow: 'hidden',
   },
   videoThumbnailContainer: {

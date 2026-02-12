@@ -108,6 +108,7 @@ export const List: React.FC<ListProps> = ({
   // ✅ FIXED: Properly filters out current user for avatar
   const getChatAvatar = (room: ChatRoom) => {
     if (room.room_type === 'group') {
+      console.log('Getting avatar for group chat:', room.profile_picture);
       if (room.profile_picture) {
         return (
           <Image

@@ -17,6 +17,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { Header } from './header';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 // ==================== TYPES ====================
 interface Office {
@@ -203,7 +204,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       setLoading(true);
       await Promise.all([fetchOffices(), fetchTags()]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load initial data');
+      alert('Error', 'Failed to load initial data');
       console.error('Error loading initial data:', error);
     } finally {
       setLoading(false);
@@ -227,7 +228,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching offices:', error);
-      Alert.alert('Error', error.message || 'Failed to fetch offices');
+      alert('Error', error.message || 'Failed to fetch offices');
     }
   };
 
@@ -248,7 +249,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching tags:', error);
-      Alert.alert('Error', error.message || 'Failed to fetch tags');
+      alert('Error', error.message || 'Failed to fetch tags');
     }
   };
 
@@ -310,7 +311,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       }
     } catch (error) {
       console.error('Error picking documents:', error);
-      Alert.alert('Error', 'Failed to pick documents');
+      alert('Error', 'Failed to pick documents');
     }
   };
 
@@ -420,7 +421,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     }
 
     if (!validationResult.isValid) {
-      Alert.alert('Validation Error', validationResult.errorMessage);
+      alert('Validation Error', validationResult.errorMessage);
       return;
     }
 
@@ -509,7 +510,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             formData.append(fieldName, file);
           } catch (error) {
             console.error('Error fetching file for web upload:', error);
-            Alert.alert('Error', `Failed to prepare file ${doc.name} for upload`);
+            alert('Error', `Failed to prepare file ${doc.name} for upload`);
             return;
           }
         } else {
@@ -537,7 +538,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       // ... rest of the code remains the same
     } catch (error: any) {
       console.error('Error creating employee:', error);
-      Alert.alert('Error', error.message || 'Failed to create employee');
+      alert('Error', error.message || 'Failed to create employee');
     } finally {
       setSubmitting(false);
     }

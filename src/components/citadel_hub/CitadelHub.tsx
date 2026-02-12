@@ -1,3 +1,4 @@
+// citadel_hub/CitadelHub.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -18,6 +19,8 @@ import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
+import { AddMember } from './addMember';
+
 import { Ionicons } from '@expo/vector-icons';
 
 // ============= TYPE DEFINITIONS =============
@@ -190,17 +193,87 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handleStatusUpdate: (userStatus: any) => { },
     handleSearchResults: (data: any) => { },
     handleChatCleared: (data: any) => { },
+    handleMemberAdded: (data: any) => { },
+    handleNewGroupAdded: (data: any) => { },
+    handleRoomUpdated: (data: any) => { },
   });
+
+  const memberAddDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleShare = useCallback((messageIds: number[], messages: Message[], chatRoomId?: number) => {
     setShareData({ messageIds, messages, chatRoomId });
     setViewMode('share');
   }, []);
 
+  const handleOptimisticMemberAdd = useCallback((newMember: User) => {
+    if (!selectedChatRoom) return;
+
+    // Optimistically update the selected room's members
+    const updatedMembers = [...selectedChatRoom.members, newMember];
+    const updatedRoom = {
+      ...selectedChatRoom,
+      members: updatedMembers,
+    };
+
+    setSelectedChatRoom(updatedRoom);
+
+    // Also update in the chat rooms list
+    setChatRooms(prev => prev.map(room =>
+      room.id === selectedChatRoom.id ? updatedRoom : room
+    ));
+
+    console.log('✅ Optimistically added member:', newMember.first_name);
+  }, [selectedChatRoom]);
+
   const handleBackFromShare = useCallback(() => {
     setShareData(null);
     setViewMode('chat');
   }, []);
+
+  const loadChatRooms = useCallback(async () => {
+    try {
+      const result = await apiCall('getChatRooms', {});
+      if (result.chat_rooms) {
+        const roomsWithCreatedAt = result.chat_rooms.map((room: any) => ({
+          ...room,
+          created_at: room.created_at || new Date().toISOString(),
+        }));
+        setChatRooms(roomsWithCreatedAt);
+      }
+    } catch (error) {
+      console.error('Error loading chat rooms:', error);
+    }
+  }, [apiBaseUrl, token]);
+
+  const handleMembersAdded = useCallback(async () => {
+    console.log('✅ handleMembersAdded called - debouncing backend refresh...');
+
+    // Clear any existing debounce timer
+    if (memberAddDebounceRef.current) {
+      clearTimeout(memberAddDebounceRef.current);
+    }
+
+    // Debounce the backend refresh by 2 seconds
+    // This gives WebSocket time to broadcast the change first
+    memberAddDebounceRef.current = setTimeout(async () => {
+      console.log('⏰ Debounce timer expired - refreshing from backend...');
+
+      await loadChatRooms();
+
+      // After loading fresh data, update selectedChatRoom if needed
+      if (selectedChatRoom) {
+        // Re-fetch chatRooms state after loadChatRooms completes
+        setChatRooms(prevRooms => {
+          const updatedRoom = prevRooms.find(room => room.id === selectedChatRoom.id);
+          if (updatedRoom) {
+            console.log('🔄 Updating selectedChatRoom with fresh backend data');
+            setSelectedChatRoom(updatedRoom);
+          }
+          return prevRooms; // Return unchanged to avoid re-render
+        });
+      }
+    }, 2000); // Wait 2 seconds before backend refresh
+  }, [selectedChatRoom, loadChatRooms]);
 
   // ============= CACHE MANAGEMENT =============
   const loadCache = useCallback(async () => {
@@ -316,20 +389,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   };
 
   // ============= DATA LOADING FUNCTIONS =============
-  const loadChatRooms = useCallback(async () => {
-    try {
-      const result = await apiCall('getChatRooms', {});
-      if (result.chat_rooms) {
-        const roomsWithCreatedAt = result.chat_rooms.map((room: any) => ({
-          ...room,
-          created_at: room.created_at || new Date().toISOString(),
-        }));
-        setChatRooms(roomsWithCreatedAt);
-      }
-    } catch (error) {
-      console.error('Error loading chat rooms:', error);
-    }
-  }, [apiBaseUrl, token]);
+
 
   const loadMessages = useCallback(async (roomId: number, page: number = 1, useCache: boolean = true) => {
     if (isLoadingMessages) return;
@@ -590,6 +650,103 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }, 30000);
   }, []);
 
+  const handleMemberAdded = useCallback((data: any) => {
+    const { room_id, new_member, added_by } = data;
+
+    console.log(`👥 Member added to room ${room_id}:`, new_member);
+
+    // ✅ REMOVED: loadChatRooms() - no longer needed here
+    // The optimistic update already added the member
+    // handleMembersAdded will refresh from backend after debounce
+
+    // If we're viewing this chat room, update the selected room with WebSocket data
+    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+      // ✅ ADDED: Directly update the selected room with the new member from WebSocket
+      const updatedMembers = [...selectedChatRoom.members];
+
+      // Check if member already exists (from optimistic update)
+      const memberExists = updatedMembers.some(m => {
+        const user = 'user' in m ? m.user : m;
+        return (user?.id || user?.employee_id) === (new_member.id || new_member.employee_id);
+      });
+
+      if (!memberExists) {
+        console.log('➕ Adding member from WebSocket broadcast');
+        updatedMembers.push(new_member);
+
+        const updatedRoom = {
+          ...selectedChatRoom,
+          members: updatedMembers,
+        };
+
+        setSelectedChatRoom(updatedRoom);
+
+        // Also update in chatRooms list
+        setChatRooms(prev => prev.map(room =>
+          room.id.toString() === room_id ? updatedRoom : room
+        ));
+      } else {
+        console.log('✓ Member already exists (from optimistic update)');
+      }
+    }
+
+    // Show notification if current user didn't add the member
+    if (added_by.employee_id !== currentUser.employee_id) {
+      const memberName = `${new_member.first_name} ${new_member.last_name}`;
+      const adderName = `${added_by.first_name} ${added_by.last_name}`;
+      console.log(`ℹ️ ${adderName} added ${memberName} to the group`);
+    }
+  }, [selectedChatRoom, currentUser, isConnected, sendWebSocketMessage]);
+
+  useEffect(() => {
+    handlersRef.current.handleMemberAdded = handleMemberAdded;
+  }, [handleMemberAdded]);
+
+  const handleNewGroupAdded = useCallback((data: any) => {
+    const { chat_room } = data;
+
+    console.log(`📢 You were added to a new group:`, chat_room);
+
+    // Add the new chat room to the list
+    setChatRooms(prev => {
+      // Check if room already exists
+      const exists = prev.some(room => room.id === chat_room.id);
+      if (exists) {
+        return prev.map(room => room.id === chat_room.id ? chat_room : room);
+      }
+      return [chat_room, ...prev];
+    });
+
+    // Show a notification or toast (you can customize this)
+    Alert.alert(
+      'New Group',
+      `You were added to ${chat_room.name}`,
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  useEffect(() => {
+    handlersRef.current.handleNewGroupAdded = handleNewGroupAdded;
+  }, [handleNewGroupAdded]);
+
+  const handleRoomUpdated = useCallback((data: any) => {
+    const { room } = data;
+
+    console.log(`🔄 Room updated:`, room);
+
+    // Update the chat room in the list
+    setChatRooms(prev => prev.map(r => r.id === room.id ? room : r));
+
+    // If this is the selected room, update it
+    if (selectedChatRoom && selectedChatRoom.id === room.id) {
+      setSelectedChatRoom(room);
+    }
+  }, [selectedChatRoom]);
+
+  useEffect(() => {
+    handlersRef.current.handleRoomUpdated = handleRoomUpdated;
+  }, [handleRoomUpdated]);
+
   // ============= WEBSOCKET CONNECTION =============
   const connectWebSocket = useCallback(() => {
     if (isReconnecting.current) {
@@ -701,6 +858,15 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               break;
             case 'chat_cleared':
               handlersRef.current.handleChatCleared(data);
+              break;
+            case 'member_added':
+              handlersRef.current.handleMemberAdded(data);
+              break;
+            case 'new_group_added':
+              handlersRef.current.handleNewGroupAdded(data);
+              break;
+            case 'room_updated':
+              handlersRef.current.handleRoomUpdated(data);
               break;
             default:
               console.log('Unknown message type:', data.type);
@@ -1249,13 +1415,48 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   };
 
-  const createGroupChat = async (name: string, description: string, memberIds: number[]) => {
+  const createGroupChat = async (
+    name: string,
+    description: string,
+    memberIds: string[],  // ✅ CHANGED: string[] instead of number[]
+    groupImage?: string | null
+  ) => {
     try {
-      const result = await apiCall('createGroupChat', {
-        name,
-        description,
-        member_ids: memberIds,
+      console.log('📤 Creating group with member IDs:', memberIds);
+
+      // Use FormData to support file upload
+      const formData = new FormData();
+      formData.append('token', token || '');
+      formData.append('name', name);
+      formData.append('description', description);
+
+      // ✅ Send as JSON array of strings
+      formData.append('member_ids', JSON.stringify(memberIds));
+
+      // Add group image if provided
+      if (groupImage) {
+        const imageFile = {
+          uri: groupImage,
+          type: 'image/jpeg',
+          name: `group_${Date.now()}.jpg`,
+        };
+        formData.append('profile_picture', imageFile as any);
+      }
+
+      const response = await fetch(`${apiBaseUrl}/citadel_hub/createGroupChat`, {
+        method: 'POST',
+        body: formData,
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Group creation failed:', response.status, errorText);
+        throw new Error(`Failed to create group: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Group created successfully:', result);
+
       if (result.chat_room) {
         await loadChatRooms();
         setSelectedChatRoom({
@@ -1265,7 +1466,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         setViewMode('chat');
       }
     } catch (error) {
-      console.error('Error creating group chat:', error);
+      console.error('❌ Error creating group chat:', error);
       Alert.alert('Error', 'Failed to create group. Please try again.');
     }
   };
@@ -1309,19 +1510,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, []);
 
   const handleAddMember = useCallback(() => {
-    Alert.alert(
-      'Add Member',
-      'This feature will open a member selection screen',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            // TODO: Navigate to member selection screen
-          }
-        },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
+    setViewMode('addMember');
   }, []);
 
   // ============= MESSAGE SENDING =============
@@ -1427,7 +1616,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   // ============= FILTERING =============
   const getFilteredChatRooms = useCallback(() => {
     let filtered = [...chatRooms];
-
+    console.log('🔍 Filtering chat rooms with query:', searchQuery, 'and filter type:', filtered);
     if (searchQuery) {
       filtered = filtered.filter(room => {
         if (room.room_type === 'group') {
@@ -1504,6 +1693,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
     return () => {
       cleanupWebSocket();
+
+      // ✅ ADDED: Clean up member add debounce timer
+      if (memberAddDebounceRef.current) {
+        clearTimeout(memberAddDebounceRef.current);
+        memberAddDebounceRef.current = null;
+      }
     };
   }, []);
 
@@ -1643,12 +1838,23 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       )}
 
 
+      {viewMode === 'addMember' && selectedChatRoom && (
+        <AddMember
+          chatRoom={selectedChatRoom}
+          currentUser={currentUser}
+          onBack={() => setViewMode('chatDetails')}
+          onMembersAdded={handleMembersAdded}
+          onOptimisticAdd={handleOptimisticMemberAdd}  // ← ADD THIS LINE
+          apiCall={apiCall}
+        />
+      )}
+
       {viewMode === 'edit' && selectedChatRoom && (
         <Edit
           chatRoom={selectedChatRoom}
           currentUser={currentUser}
           onBack={() => setViewMode('chatDetails')}
-          onSave={async (name, description, image) => {
+          onSave={async (name, description, image) => { // ← CHANGE: Make async
             try {
               const formData = new FormData();
               formData.append('token', token || '');
@@ -1671,7 +1877,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               const endpoint = selectedChatRoom.room_type === 'group'
                 ? 'updateGroupInfo'
                 : 'updateDirectChatInfo';
-              console.log('🔍 Using endpoint:', endpoint, 'for room type:', selectedChatRoom.room_type);
 
               const response = await fetch(
                 `${apiBaseUrl}/citadel_hub/${endpoint}`,
@@ -1687,8 +1892,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
               const result = await response.json();
 
-              console.log('✅ Update successful:', result);
-
               if (result.chat_room) {
                 const updatedRoom = {
                   ...selectedChatRoom,
@@ -1696,22 +1899,27 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
                   created_at: selectedChatRoom.created_at,
                 };
 
+                // ← UPDATE: Set updated room BEFORE changing view
                 setSelectedChatRoom(updatedRoom);
 
                 setChatRooms(prev => prev.map(room =>
                   room.id === selectedChatRoom.id ? updatedRoom : room
                 ));
-
-                console.log('✅ States updated with new image URL:', updatedRoom.profile_picture);
               }
 
+              // ← RELOAD: Ensure fresh data from server
               await loadChatRooms();
 
+              // ← NAVIGATE: Only after successful save
               setViewMode('chatDetails');
+
+              // ← ADD: Success feedback (optional)
+              // Alert.alert('Success', 'Changes saved successfully');
 
             } catch (error) {
               console.error('❌ Error updating group:', error);
-              Alert.alert('Error', `Failed to update ${selectedChatRoom.room_type === 'group' ? 'group' : 'profile'}. Please try again.`);
+              // ← CHANGE: Re-throw error so Edit.tsx can handle it
+              throw new Error(`Failed to update ${selectedChatRoom.room_type === 'group' ? 'group' : 'profile'}`);
             }
           }}
         />

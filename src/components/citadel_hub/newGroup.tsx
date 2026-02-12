@@ -29,7 +29,7 @@ interface User {
 interface NewGroupProps {
   currentUser: User;
   onBack: () => void;
-  onCreate: (name: string, description: string, memberIds: number[], groupImage?: any) => void;
+  onCreate: (name: string, description: string, memberIds: string[], groupImage?: any) => void;
   apiCall: (endpoint: string, data: any) => Promise<any>;
 }
 
@@ -60,37 +60,22 @@ export const NewGroup: React.FC<NewGroupProps> = ({
     return String(user.email);
   };
 
-  // Helper to get numeric ID from user
-  const getNumericId = (user: User): number | null => {
-    if (user.id !== undefined && typeof user.id === 'number') {
-      return user.id;
-    }
-    
+  // Helper to get employee_id or fallback to database ID as string
+  const getMemberId = (user: User): string | null => {
+    // Priority 1: Use employee_id if available (works for both numeric and alphanumeric)
     if (user.employee_id) {
-      const directParse = parseInt(user.employee_id, 10);
-      if (!isNaN(directParse) && directParse > 0) {
-        return directParse;
-      }
-      
-      const match = user.employee_id.match(/\d+/);
-      if (match) {
-        const extracted = parseInt(match[0], 10);
-        if (!isNaN(extracted) && extracted > 0) {
-          return extracted;
-        }
-      }
+      console.log(`Using employee_id for ${user.first_name}: ${user.employee_id}`);
+      return user.employee_id;
     }
-    
-    if (user.email) {
-      let hash = 0;
-      for (let i = 0; i < user.email.length; i++) {
-        const char = user.email.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-      }
-      return Math.abs(hash) || 1;
+
+    // Priority 2: Use database ID if employee_id is missing
+    if (user.id !== undefined) {
+      console.log(`Using database ID for ${user.first_name}: ${user.id}`);
+      return String(user.id);
     }
-    
+
+    // Priority 3: Log warning if no valid ID found
+    console.warn(`⚠️ No valid ID found for user: ${user.first_name} ${user.last_name}`);
     return null;
   };
 
@@ -111,9 +96,9 @@ export const NewGroup: React.FC<NewGroupProps> = ({
         token: currentUser.token,
         search: searchQuery
       };
-      
+
       const result = await apiCall('searchUsers', requestData);
-      
+
       if (result.users && Array.isArray(result.users)) {
         setUsers(result.users);
       } else {
@@ -183,19 +168,26 @@ export const NewGroup: React.FC<NewGroupProps> = ({
       return;
     }
 
-    const memberIds: number[] = selectedUsers
-      .map(user => getNumericId(user))
-      .filter((id): id is number => id !== null);
+    console.log('🔍 Selected users for group creation:', selectedUsers);
+
+    // ✅ NEW: Get employee_ids as strings
+    const memberIds: string[] = selectedUsers
+      .map(user => getMemberId(user))
+      .filter((id): id is string => id !== null);
+
+    console.log('✅ Member IDs for group creation:', memberIds);
 
     if (memberIds.length === 0) {
       Alert.alert(
         'Error',
-        'Selected users do not have valid numeric IDs. Please contact support.'
+        'Selected users do not have valid IDs. Please contact support.'
       );
       return;
     }
 
     if (memberIds.length !== selectedUsers.length) {
+      const missing = selectedUsers.length - memberIds.length;
+      console.warn(`⚠️ ${missing} user(s) dropped due to missing IDs`);
       Alert.alert(
         'Warning',
         `Only ${memberIds.length} out of ${selectedUsers.length} members have valid IDs. Proceeding...`
@@ -204,6 +196,7 @@ export const NewGroup: React.FC<NewGroupProps> = ({
 
     // Set loading state
     setIsCreating(true);
+    console.log('📤 Creating group with member IDs:', memberIds);
 
     try {
       await onCreate(
@@ -219,7 +212,6 @@ export const NewGroup: React.FC<NewGroupProps> = ({
     }
     // Note: Don't set isCreating to false on success because onCreate should navigate away
   };
-
   const clearSearch = () => {
     setSearchQuery('');
   };
@@ -352,7 +344,7 @@ export const NewGroup: React.FC<NewGroupProps> = ({
                           </View>
                         )}
                       </View>
-                      
+
                       <View style={styles.memberInfoContainer}>
                         <Text style={styles.memberName}>
                           {user.first_name} {user.last_name}
@@ -373,7 +365,7 @@ export const NewGroup: React.FC<NewGroupProps> = ({
                         </View>
                       </TouchableOpacity>
                     </View>
-                    
+
                     {index < selectedUsers.length - 1 && (
                       <View style={styles.memberDivider} />
                     )}

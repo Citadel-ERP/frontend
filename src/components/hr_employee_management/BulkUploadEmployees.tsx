@@ -17,6 +17,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 import { Header } from './header';
+import alert from '../../utils/Alert';
 
 interface BulkUploadEmployeesProps {
   token: string;
@@ -42,7 +43,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
 
   const handleDownloadSample = async () => {
     if (!token) {
-      Alert.alert('Error', 'Authentication required');
+      alert('Error', 'Authentication required');
       return;
     }
 
@@ -71,13 +72,13 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
 
       if (data.file_url) {
         await WebBrowser.openBrowserAsync(data.file_url);
-        Alert.alert('Success', 'Sample template downloaded successfully');
+        alert('Success', 'Sample template downloaded successfully');
       } else {
         throw new Error('Invalid response from server');
       }
     } catch (error: any) {
       console.error('Download sample error:', error);
-      Alert.alert('Error', error.message || 'Failed to download sample template');
+      alert('Error', error.message || 'Failed to download sample template');
     } finally {
       setDownloadingSample(false);
     }
@@ -123,7 +124,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       }
     } catch (error) {
       console.error('Error selecting file:', error);
-      Alert.alert('Error', 'Failed to select file');
+      alert('Error', 'Failed to select file');
     }
   };
 
@@ -145,12 +146,12 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
 
   const handleSubmit = async () => {
     if (!selectedFile) {
-      Alert.alert('Validation Error', 'Please select an Excel file');
+      alert('Validation Error', 'Please select an Excel file');
       return;
     }
 
     if (!validateExcelFile(selectedFile.name)) {
-      Alert.alert('Invalid File', 'Please select a valid Excel file (.xlsx or .xls)');
+      alert('Invalid File', 'Please select a valid Excel file (.xlsx or .xls)');
       return;
     }
 
@@ -211,7 +212,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
         }
       }
 
-      Alert.alert('Upload Complete', successMessage, [
+      alert('Upload Complete', successMessage, [
         {
           text: 'OK',
           onPress: () => {
@@ -228,7 +229,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       ]);
     } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Failed', error.message || 'Failed to upload employee data');
+      alert('Upload Failed', error.message || 'Failed to upload employee data');
     } finally {
       setUploading(false);
     }

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { styles } from './styles';
 import { WHATSAPP_COLORS } from './constants';
+import alert from '../../utils/Alert';
 
 interface EditLeavesProps {
   employee: any;

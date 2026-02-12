@@ -24,6 +24,7 @@ import AttendanceDownloadModal from './AttendanceDownloadModal';
 import WorkStatistics from './WorkStatistics';
 import BulkUploadPayslips from './BulkUploadPayslips';
 import BulkUploadEmployees from './BulkUploadEmployees';
+import alert from '../../utils/Alert';
 
 interface CityGroup {
   city: string;
@@ -238,7 +239,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
   const downloadAttendanceReport = async (month: number, year: number, employeeId?: string) => {
     if (!token) {
-      Alert.alert('Error', 'Authentication required');
+      alert('Error', 'Authentication required');
       throw new Error('Authentication required');
     }
 
@@ -267,7 +268,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
           errorData = { message: errorText };
         }
         const errorMessage = errorData.message || 'Failed to download attendance report';
-        Alert.alert('Error', errorMessage);
+        alert('Error', errorMessage);
         throw new Error(errorMessage);
       }
 
@@ -275,7 +276,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       console.log('Success response:', data);
 
       if (!data.file_url) {
-        Alert.alert('Error', 'Invalid response from server');
+        alert('Error', 'Invalid response from server');
         throw new Error('Invalid response from server');
       }
 
@@ -283,7 +284,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       const filename = data.filename || `attendance_report_all_employees_${month}_${year}.pdf`;
       const monthName = data.month || '';
 
-      Alert.alert(
+      alert(
         'Download Report',
         `Attendance report for ${monthName} ${year} is ready. Choose how you want to access it:`,
         [
@@ -294,7 +295,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
                 await WebBrowser.openBrowserAsync(fileUrl);
               } catch (err) {
                 console.error('Failed to open browser:', err);
-                Alert.alert('Error', 'Could not open the file in browser');
+                alert('Error', 'Could not open the file in browser');
               }
             },
           },
@@ -329,13 +330,13 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
                         dialogTitle: 'Share Attendance Report',
                         UTI: 'com.adobe.pdf',
                       });
-                      Alert.alert('Success', 'Report downloaded successfully!');
+                      alert('Success', 'Report downloaded successfully!');
                     } else {
-                      Alert.alert('Info', 'File saved to app directory but sharing is not available on this device');
+                      alert('Info', 'File saved to app directory but sharing is not available on this device');
                     }
                   } catch (shareError) {
                     console.error('Share error:', shareError);
-                    Alert.alert('Error', 'Failed to share PDF. The file may have been saved to app directory.');
+                    alert('Error', 'Failed to share PDF. The file may have been saved to app directory.');
                   } finally {
                     setLoading(false);
                   }
@@ -343,14 +344,14 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
                 reader.onerror = () => {
                   console.error('FileReader error');
-                  Alert.alert('Error', 'Failed to process PDF');
+                  alert('Error', 'Failed to process PDF');
                   setLoading(false);
                 };
 
                 reader.readAsDataURL(blob);
               } catch (err) {
                 console.error('Download error:', err);
-                Alert.alert('Error', 'Failed to download PDF. Please try again.');
+                alert('Error', 'Failed to download PDF. Please try again.');
                 setLoading(false);
               }
             },

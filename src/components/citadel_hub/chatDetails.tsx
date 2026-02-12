@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -101,6 +101,10 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     return null;
   };
 
+  useEffect(() => {
+  console.log('📊 ChatDetails: chatRoom updated, member count:', chatRoom.members.length);
+}, [chatRoom.members.length]); 
+
   const getChatName = () => {
     if (chatRoom.room_type === 'group') {
       return chatRoom.name || 'Unnamed Group';
@@ -123,7 +127,6 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   const getChatAvatar = () => {
   if (chatRoom.room_type === 'group') {
     if (chatRoom.profile_picture) {
-      // Use updated_at timestamp for cache busting - only changes when image actually updates
       const timestamp = chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now();
       return (
         <Image

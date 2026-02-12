@@ -16,6 +16,7 @@ import { Overview } from './overview';
 import { Attendance } from './attendance';
 import { Leaves } from './leaves';
 import EditLeaves from './editLeaves';
+import alert from '../../utils/Alert';
 import { EmployeeDetailsProps, ActiveTab, LeaveRequest } from './types';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
@@ -80,11 +81,11 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
           action_type: data.action_type,
         });
       } else {
-        Alert.alert('Error', 'Failed to fetch employee details');
+        alert('Error', 'Failed to fetch employee details');
       }
     } catch (error) {
       console.error('Error fetching employee details:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -116,7 +117,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
   };
 
   const handleApproveLeave = async (leaveId: string) => {
-    Alert.alert(
+    alert(
       'Approve Leave',
       'Are you sure you want to approve this leave request?',
       [
@@ -136,15 +137,15 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
               });
 
               if (response.ok) {
-                Alert.alert('Success', 'Leave approved successfully');
+                alert('Success', 'Leave approved successfully');
                 setDataChanged(true); // Mark that data changed
                 await fetchEmployeeDetails(); // Refresh employee details
               } else {
-                Alert.alert('Error', 'Failed to approve leave');
+                alert('Error', 'Failed to approve leave');
               }
             } catch (error) {
               console.error('Error approving leave:', error);
-              Alert.alert('Error', 'Network error occurred');
+              alert('Error', 'Network error occurred');
             }
           }
         }
@@ -160,7 +161,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
   
   const submitRejection = async () => {
     if (!selectedLeaveId || !rejectionReason.trim()) {
-      Alert.alert('Error', 'Please enter a reason for rejection');
+      alert('Error', 'Please enter a reason for rejection');
       return;
     }
 
@@ -176,18 +177,18 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Leave rejected successfully');
+        alert('Success', 'Leave rejected successfully');
         setRejectionModalVisible(false);
         setRejectionReason('');
         setSelectedLeaveId(null);
         setDataChanged(true); // Mark that data changed
         await fetchEmployeeDetails(); // Refresh employee details
       } else {
-        Alert.alert('Error', 'Failed to reject leave');
+        alert('Error', 'Failed to reject leave');
       }
     } catch (error) {
       console.error('Error rejecting leave:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 

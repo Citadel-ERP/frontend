@@ -10,9 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';  
+import * as ImagePicker from 'expo-image-picker';
 
 interface User {
   id: number;
@@ -33,7 +34,7 @@ interface EditProps {
   chatRoom: ChatRoom;
   currentUser: User;
   onBack: () => void;
-  onSave: (name: string, description: string, image?: string | null) => void;  
+  onSave: (name: string, description: string, image?: string | null) => void;
 }
 
 export const Edit: React.FC<EditProps> = ({
@@ -46,14 +47,15 @@ export const Edit: React.FC<EditProps> = ({
   const [description, setDescription] = useState(chatRoom.description || '');
   const [selectedImage, setSelectedImage] = useState<string | null>(chatRoom.profile_picture || null);
   const [isNewImage, setIsNewImage] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const isGroup = chatRoom.room_type === 'group';
 
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (permissionResult.granted === false) {
-      Alert.alert('Permission Required', 'Permission to access camera roll is required!'); 
+      Alert.alert('Permission Required', 'Permission to access camera roll is required!');
       return;
     }
 
@@ -71,13 +73,25 @@ export const Edit: React.FC<EditProps> = ({
     }
   };
 
-  const handleSave = () => {
-    // For groups: name is required. For direct: name not needed.
+  const handleSave = async () => { // ← CHANGE: Make async
     const isValid = isGroup ? name.trim() : true;
     if (isValid) {
-      const imageToSend = isNewImage ? selectedImage : null;
-      console.log('Saving with image:', imageToSend, 'isNewImage:', isNewImage);
-      onSave(name, description, imageToSend);  
+      try {
+        setIsSaving(true); // ← ADD: Start loading
+        const imageToSend = isNewImage ? selectedImage : null;
+        await onSave(name, description, imageToSend); // ← CHANGE: Await the promise
+        // Navigation happens in parent after successful save
+      } catch (error) {
+        // ← ADD: Error handling
+        console.error('Save error:', error);
+        Alert.alert(
+          'Error',
+          'Failed to save changes. Please try again.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsSaving(false); // ← ADD: Stop loading
+      }
     }
   };
 
@@ -86,6 +100,14 @@ export const Edit: React.FC<EditProps> = ({
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {isSaving && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#00a884" />
+            <Text style={styles.loadingText}>Saving changes...</Text>
+          </View>
+        </View>
+      )}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -120,8 +142,8 @@ export const Edit: React.FC<EditProps> = ({
                 )}
               </View>
             )}
-            <TouchableOpacity 
-              style={styles.changeAvatarButton} 
+            <TouchableOpacity
+              style={styles.changeAvatarButton}
               activeOpacity={0.8}
               onPress={handlePickImage}
             >
@@ -296,5 +318,29 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     backgroundColor: '#e9edef',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loadingContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    minWidth: 150,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#111b21',
+    fontWeight: '500',
   },
 });

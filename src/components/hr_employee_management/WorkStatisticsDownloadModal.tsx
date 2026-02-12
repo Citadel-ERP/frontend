@@ -17,6 +17,7 @@ import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { WHATSAPP_COLORS } from './constants';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 interface WorkStatisticsDownloadModalProps {
   visible: boolean;
@@ -46,7 +47,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
   const downloadWorkStatsPDF = async () => {
     if (!token) {
-      Alert.alert('Error', 'Authentication required');
+      alert('Error', 'Authentication required');
       return;
     }
 
@@ -91,7 +92,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
       console.log('File URL:', fileUrl);
       console.log('Filename:', filename);
 
-      Alert.alert(
+      alert(
         'Download Report',
         `Work statistics report for ${new Date(dateStr).toLocaleDateString('en-US', { 
           month: 'long', 
@@ -106,7 +107,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
                 await WebBrowser.openBrowserAsync(fileUrl);
               } catch (err) {
                 console.error('Failed to open browser:', err);
-                Alert.alert('Error', 'Could not open the file in browser');
+                alert('Error', 'Could not open the file in browser');
               }
             },
           },
@@ -135,16 +136,16 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
                       dialogTitle: 'Share Work Statistics Report',
                       UTI: 'com.adobe.pdf',
                     });
-                    Alert.alert('Success', 'Report downloaded successfully!');
+                    alert('Success', 'Report downloaded successfully!');
                   } else {
-                    Alert.alert('Info', `File saved to: ${fileUri}`);
+                    alert('Info', `File saved to: ${fileUri}`);
                   }
                 } else {
                   throw new Error(`Download failed with status: ${downloadResult.status}`);
                 }
               } catch (err: any) {
                 console.error('Download error:', err);
-                Alert.alert(
+                alert(
                   'Download Error', 
                   err.message || 'Failed to download PDF. Please try "Open in Browser" instead.'
                 );
@@ -163,7 +164,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
     } catch (error: any) {
       console.error('Download work stats error:', error);
-      Alert.alert('Error', error.message || 'Failed to download work statistics');
+      alert('Error', error.message || 'Failed to download work statistics');
     } finally {
       setLoading(false);
     }

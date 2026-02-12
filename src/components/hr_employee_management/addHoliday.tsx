@@ -16,6 +16,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { WHATSAPP_COLORS } from './constants';
 import { BACKEND_URL } from '../../config/config';
 import { Header } from './header';
+import alert from '../../utils/Alert';
 
 interface AddHolidayProps {
     token: string;
@@ -64,11 +65,11 @@ const AddHoliday: React.FC<AddHolidayProps> = ({ token, onBack }) => {
 
     const validateForm = (): boolean => {
         if (!holidayName.trim()) {
-            Alert.alert('Validation Error', 'Please enter holiday name');
+            alert('Validation Error', 'Please enter holiday name');
             return false;
         }
         if (selectedCities.length === 0) {
-            Alert.alert('Validation Error', 'Please select at least one city');
+            alert('Validation Error', 'Please select at least one city');
             return false;
         }
         return true;
@@ -78,7 +79,7 @@ const AddHoliday: React.FC<AddHolidayProps> = ({ token, onBack }) => {
         if (!validateForm()) return;
 
         if (!token) {
-            Alert.alert('Error', 'Authentication token is missing');
+            alert('Error', 'Authentication token is missing');
             return;
         }
 
@@ -106,17 +107,17 @@ const AddHoliday: React.FC<AddHolidayProps> = ({ token, onBack }) => {
             console.log('Add response status:', response.status);
 
             if (response.ok) {
-                Alert.alert('Success', 'Holiday added successfully', [
+                alert('Success', 'Holiday added successfully', [
                     { text: 'OK', onPress: onBack }
                 ]);
             } else {
                 const errorData = await response.json();
                 console.error('Add error:', errorData);
-                Alert.alert('Error', errorData.message || 'Failed to add holiday');
+                alert('Error', errorData.message || 'Failed to add holiday');
             }
         } catch (error) {
             console.error('Error adding holiday:', error);
-            Alert.alert('Error', 'Network error occurred. Please try again.');
+            alert('Error', 'Network error occurred. Please try again.');
         } finally {
             setLoading(false);
         }

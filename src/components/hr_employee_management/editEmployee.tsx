@@ -18,6 +18,7 @@ import { Picker } from '@react-native-picker/picker';
 import { BACKEND_URL } from '../../config/config';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface Employee {
   employee_id: string;
@@ -291,11 +292,11 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
         setOffices(data.offices || []);
       } else {
         console.error('Failed to fetch offices');
-        Alert.alert('Error', 'Failed to load offices');
+        alert('Error', 'Failed to load offices');
       }
     } catch (error) {
       console.error('Error fetching offices:', error);
-      Alert.alert('Error', 'Network error while loading offices');
+      alert('Error', 'Network error while loading offices');
     } finally {
       setLoadingOffices(false);
     }
@@ -308,15 +309,15 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
     const casual = parseInt(casualLeaves);
 
     if (isNaN(earned) || earned < 0) {
-      Alert.alert('Invalid Input', 'Earned leaves must be a positive number');
+      alert('Invalid Input', 'Earned leaves must be a positive number');
       return false;
     }
     if (isNaN(sick) || sick < 0) {
-      Alert.alert('Invalid Input', 'Sick leaves must be a positive number');
+      alert('Invalid Input', 'Sick leaves must be a positive number');
       return false;
     }
     if (isNaN(casual) || casual < 0) {
-      Alert.alert('Invalid Input', 'Casual leaves must be a positive number');
+      alert('Invalid Input', 'Casual leaves must be a positive number');
       return false;
     }
 
@@ -324,7 +325,7 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
     if (email && email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email.trim())) {
-        Alert.alert('Invalid Input', 'Please enter a valid email address');
+        alert('Invalid Input', 'Please enter a valid email address');
         return false;
       }
     }
@@ -333,7 +334,7 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
     if (phoneNumber && phoneNumber.trim()) {
       const phoneRegex = /^\+?[\d\s-]{10,}$/;
       if (!phoneRegex.test(phoneNumber.trim())) {
-        Alert.alert('Invalid Input', 'Please enter a valid phone number (at least 10 digits)');
+        alert('Invalid Input', 'Please enter a valid phone number (at least 10 digits)');
         return false;
       }
     }
@@ -341,11 +342,11 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
     // Validate reset password if section is shown
     if (showResetSection) {
       if (!resetPassword || resetPassword.length < 6) {
-        Alert.alert('Invalid Input', 'Reset password must be at least 6 characters');
+        alert('Invalid Input', 'Reset password must be at least 6 characters');
         return false;
       }
       if (resetPassword !== confirmPassword) {
-        Alert.alert('Invalid Input', 'Passwords do not match');
+        alert('Invalid Input', 'Passwords do not match');
         return false;
       }
     }
@@ -500,16 +501,16 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Employee details updated successfully');
+        alert('Success', 'Employee details updated successfully');
         onSuccess();
         onClose();
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to update employee');
+        alert('Error', errorData.message || 'Failed to update employee');
       }
     } catch (error) {
       console.error('Error updating employee:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
+import alert from '../../utils/Alert';
 
 interface AttendanceDownloadModalProps {
   visible: boolean;
@@ -75,7 +76,7 @@ const AttendanceDownloadModal: React.FC<AttendanceDownloadModalProps> = ({
       console.error('Download error in modal:', error);
       // Only show alert if error wasn't already handled by parent
       if (!error.message?.includes('Authentication required')) {
-        Alert.alert('Error', error.message || 'Failed to download report');
+        alert('Error', error.message || 'Failed to download report');
       }
     } finally {
       setLoading(false);

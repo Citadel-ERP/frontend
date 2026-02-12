@@ -23,6 +23,7 @@ import OffboardingModal from './offboardingModal';
 import PayslipModal from './payslip';
 import DocumentModal from './document';
 import EditEmployeeModal from './editEmployee';
+import alert from '../../utils/Alert';
 
 interface OverviewProps {
   employee: Employee;
@@ -68,14 +69,14 @@ export const Overview: React.FC<OverviewProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Gift basket marked as sent');
+        alert('Success', 'Gift basket marked as sent');
         onRefresh();
       } else {
-        Alert.alert('Error', 'Failed to mark gift basket');
+        alert('Error', 'Failed to mark gift basket');
       }
     } catch (error) {
       console.error('Error marking gift basket:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
@@ -93,19 +94,19 @@ export const Overview: React.FC<OverviewProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Special attendance allowed');
+        alert('Success', 'Special attendance allowed');
         setShowSpecialAttendanceModal(false);
       } else {
-        Alert.alert('Error', 'Failed to allow special attendance');
+        alert('Error', 'Failed to allow special attendance');
       }
     } catch (error) {
       console.error('Error allowing special attendance:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
   const handleUnlockDevice = async () => {
-    Alert.alert(
+    alert(
       'Unlock Device',
       'If you unlock this device, the user will be able to log in from a new device. Are you sure?',
       [
@@ -125,14 +126,14 @@ export const Overview: React.FC<OverviewProps> = ({
               });
 
               if (response.ok) {
-                Alert.alert('Success', 'Device unlocked successfully');
+                alert('Success', 'Device unlocked successfully');
                 setShowUnlockDeviceModal(false);
               } else {
-                Alert.alert('Error', 'Failed to unlock device');
+                alert('Error', 'Failed to unlock device');
               }
             } catch (error) {
               console.error('Error unlocking device:', error);
-              Alert.alert('Error', 'Network error occurred');
+              alert('Error', 'Network error occurred');
             }
           }
         }
@@ -166,13 +167,13 @@ export const Overview: React.FC<OverviewProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        Alert.alert('Success', 'Attendance report downloaded');
+        alert('Success', 'Attendance report downloaded');
       } else {
-        Alert.alert('Error', 'Failed to download attendance');
+        alert('Error', 'Failed to download attendance');
       }
     } catch (error) {
       console.error('Error downloading attendance:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
