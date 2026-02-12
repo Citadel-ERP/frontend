@@ -6,7 +6,6 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -570,6 +569,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           } catch (error) {
             console.error('Error fetching file for web upload:', error);
             alert('Error', `Failed to prepare file ${doc.name} for upload`);
+            setSubmitting(false);
 
             return;
           }
@@ -598,12 +598,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         
         console.error('Server returned error:', response.status, errorMessage);
         
-        Alert.alert(
-          'Error',
-          errorMessage,
-          [{ text: 'OK' }],
-          { cancelable: false }
-        );
+        alert('Error', errorMessage);
         return; // Exit early on error
       }
 
@@ -611,8 +606,8 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       const data = await response.json();
       console.log('Success response:', data);
 
-      // Success case - show alert and navigate
-      Alert.alert(
+      // Success case - show alert with OK button and navigation callback
+      alert(
         'Success',
         'Employee created successfully!',
         [
@@ -623,8 +618,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               onBack(); // Navigate back to previous screen
             },
           },
-        ],
-        { cancelable: false }
+        ]
       );
 
     } catch (error: any) {

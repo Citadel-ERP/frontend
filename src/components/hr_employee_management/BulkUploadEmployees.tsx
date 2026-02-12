@@ -1,11 +1,9 @@
-// hr_employee_management/BulkUploadEmployees.tsx
 import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
@@ -212,21 +210,25 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
         }
       }
 
-      alert('Upload Complete', successMessage, [
-        {
-          text: 'OK',
-          onPress: () => {
-            setSelectedFile(null);
-            if (onEmployeesAdded) {
-              onEmployeesAdded();
-            }
-            // Optionally go back to employee list
-            if (data.successful > 0) {
-              onBack();
-            }
+      alert(
+        'Upload Complete',
+        successMessage,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setSelectedFile(null);
+              if (onEmployeesAdded) {
+                onEmployeesAdded();
+              }
+              // Optionally go back to employee list
+              if (data.successful > 0) {
+                onBack();
+              }
+            },
           },
-        },
-      ]);
+        ]
+      );
     } catch (error: any) {
       console.error('Upload error:', error);
       alert('Upload Failed', error.message || 'Failed to upload employee data');
@@ -284,38 +286,6 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
               </Text>
             </View>
           </View>
-
-          {/* <TouchableOpacity
-            style={[
-              styles.secondaryButton,
-              {
-                marginTop: 16,
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                justifyContent: 'center',
-                paddingTop: 10,
-                paddingBottom: 10,
-                borderRadius: 25,
-                backgroundColor: WHATSAPP_COLORS.primary,
-              },
-            ]}
-            onPress={handleDownloadSample}
-            disabled={downloadingSample}
-            activeOpacity={0.7}
-          >
-            {downloadingSample ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="download-outline" size={20} color="#FFFFFF" />
-                <Text style={[styles.secondaryButtonText, { color: '#FFFFFF' }]}>
-                  Download Sample Format
-                </Text>
-              </>
-            )}
-          </TouchableOpacity> */}
         </View>
 
         {/* Important Notes */}
