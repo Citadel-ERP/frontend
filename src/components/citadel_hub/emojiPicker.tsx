@@ -9,6 +9,7 @@ import {
   Dimensions,
   ScrollView,
   Platform,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,15 +69,16 @@ const EMOJI_CATEGORIES = {
   flags: {
     name: 'Flags',
     icon: 'flag-outline',
-    emojis: ['🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️', '🇦🇫', '🇦🇽', '🇦🇱', '🇩🇿', '🇦🇸', '🇦🇩', '🇦🇴', '🇦🇮', '🇦🇶', '🇦🇬', '🇦🇷', '🇦🇲', '🇦🇼', '🇦🇺', '🇦🇹', '🇦🇿', '🇧🇸', '🇧🇭', '🇧🇩', '🇧🇧', '🇧🇾', '🇧🇪', '🇧🇿', '🇧🇯', '🇧🇲', '🇧🇹', '🇧🇴', '🇧🇦', '🇧🇼', '🇧🇷', '🇮🇴', '🇻🇬', '🇧🇳', '🇧🇬', '🇧🇫', '🇧🇮', '🇰🇭', '🇨🇲', '🇨🇦', '🇮🇨', '🇨🇻', '🇧🇶', '🇰🇾', '🇨🇫', '🇹🇩', '🇨🇱', '🇨🇳', '🇨🇽', '🇨🇨', '🇨🇴', '🇰🇲', '🇨🇬', '🇨🇩', '🇨🇰', '🇨🇷', '🇨🇮', '🇭🇷', '🇨🇺', '🇨🇼', '🇨🇾', '🇨🇿', '🇩🇰', '🇩🇯', '🇩🇲', '🇩🇴', '🇪🇨', '🇪🇬', '🇸🇻', '🇬🇶', '🇪🇷', '🇪🇪', '🇸🇿', '🇪🇹', '🇪🇺', '🇫🇰', '🇫🇴', '🇫🇯', '🇫🇮', '🇫🇷', '🇬🇫', '🇵🇫', '🇹🇫', '🇬🇦', '🇬🇲', '🇬🇪', '🇩🇪', '🇬🇭', '🇬🇮', '🇬🇷', '🇬🇱', '🇬🇩', '🇬🇵', '🇬🇺', '🇬🇹', '🇬🇬', '🇬🇳', '🇬🇼', '🇬🇾', '🇭🇹', '🇭🇳', '🇭🇰', '🇭🇺', '🇮🇸', '🇮🇳', '🇮🇩', '🇮🇷', '🇮🇶', '🇮🇪', '🇮🇲', '🇮🇱', '🇮🇹', '🇯🇲', '🇯🇵', '🎌', '🇯🇪', '🇯🇴', '🇰🇿', '🇰🇪', '🇰🇮', '🇽🇰', '🇰🇼', '🇰🇬', '🇱🇦', '🇱🇻', '🇱🇧', '🇱🇸', '🇱🇷', '🇱🇾', '🇱🇮', '🇱🇹', '🇱🇺', '🇲🇴', '🇲🇬', '🇲🇼', '🇲🇾', '🇲🇻', '🇲🇱', '🇲🇹', '🇲🇭', '🇲🇶', '🇲🇷', '🇲🇺', '🇾🇹', '🇲🇽', '🇫🇲', '🇲🇩', '🇲🇨', '🇲🇳', '🇲🇪', '🇲🇸', '🇲🇦', '🇲🇿', '🇲🇲', '🇳🇦', '🇳🇷', '🇳🇵', '🇳🇱', '🇳🇨', '🇳🇿', '🇳🇮', '🇳🇪', '🇳🇬', '🇳🇺', '🇳🇫', '🇰🇵', '🇲🇰', '🇲🇵', '🇳🇴', '🇴🇲', '🇵🇰', '🇵🇼', '🇵🇸', '🇵🇦', '🇵🇬', '🇵🇾', '🇵🇪', '🇵🇭', '🇵🇳', '🇵🇱', '🇵🇹', '🇵🇷', '🇶🇦', '🇷🇪', '🇷🇴', '🇷🇺', '🇷🇼', '🇼🇸', '🇸🇲', '🇸🇹', '🇸🇦', '🇸🇳', '🇷🇸', '🇸🇨', '🇸🇱', '🇸🇬', '🇸🇽', '🇸🇰', '🇸🇮', '🇬🇸', '🇸🇧', '🇸🇴', '🇿🇦', '🇰🇷', '🇸🇸', '🇪🇸', '🇱🇰', '🇧🇱', '🇸🇭', '🇰🇳', '🇱🇨', '🇵🇲', '🇻🇨', '🇸🇩', '🇸🇷', '🇸🇪', '🇨🇭', '🇸🇾', '🇹🇼', '🇹🇯', '🇹🇿', '🇹🇭', '🇹🇱', '🇹🇬', '🇹🇰', '🇹🇴', '🇹🇹', '🇹🇳', '🇹🇷', '🇹🇲', '🇹🇨', '🇹🇻', '🇻🇮', '🇺🇬', '🇺🇦', '🇦🇪', '🇬🇧', '🏴󐁧󐁢󐁥󐁮󐁧󐁿', '🏴󐁧󐁢󐁳󐁣󐁴󐁿', '🏴󐁧󐁢󐁷󐁬󐁳󐁿', '🇺🇸', '🇺🇾', '🇺🇿', '🇻🇺', '🇻🇦', '🇻🇪', '🇻🇳', '🇼🇫', '🇪🇭', '🇾🇪', '🇿🇲', '🇿🇼'],
+    emojis: ['🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️', '🇦🇫', '🇦🇽', '🇦🇱', '🇩🇿', '🇦🇸', '🇦🇩', '🇦🇴', '🇦🇮', '🇦🇶', '🇦🇬', '🇦🇷', '🇦🇲', '🇦🇼', '🇦🇺', '🇦🇹', '🇦🇿', '🇧🇸', '🇧🇭', '🇧🇩', '🇧🇧', '🇧🇾', '🇧🇪', '🇧🇿', '🇧🇯', '🇧🇲', '🇧🇹', '🇧🇴', '🇧🇦', '🇧🇼', '🇧🇷', '🇮🇴', '🇻🇬', '🇧🇳', '🇧🇬', '🇧🇫', '🇧🇮', '🇰🇭', '🇨🇲', '🇨🇦', '🇮🇨', '🇨🇻', '🇧🇶', '🇰🇾', '🇨🇫', '🇹🇩', '🇨🇱', '🇨🇳', '🇨🇽', '🇨🇨', '🇨🇴', '🇰🇲', '🇨🇬', '🇨🇩', '🇨🇰', '🇨🇷', '🇨🇮', '🇭🇷', '🇨🇺', '🇨🇼', '🇨🇾', '🇨🇿', '🇩🇰', '🇩🇯', '🇩🇲', '🇩🇴', '🇪🇨', '🇪🇬', '🇸🇻', '🇬🇶', '🇪🇷', '🇪🇪', '🇸🇿', '🇪🇹', '🇪🇺', '🇫🇰', '🇫🇴', '🇫🇯', '🇫🇮', '🇫🇷', '🇬🇫', '🇵🇫', '🇹🇫', '🇬🇦', '🇬🇲', '🇬🇪', '🇩🇪', '🇬🇭', '🇬🇮', '🇬🇷', '🇬🇱', '🇬🇩', '🇬🇵', '🇬🇺', '🇬🇹', '🇬🇬', '🇬🇳', '🇬🇼', '🇬🇾', '🇭🇹', '🇭🇳', '🇭🇰', '🇭🇺', '🇮🇸', '🇮🇳', '🇮🇩', '🇮🇷', '🇮🇶', '🇮🇪', '🇮🇲', '🇮🇱', '🇮🇹', '🇯🇲', '🇯🇵', '🎌', '🇯🇪', '🇯🇴', '🇰🇿', '🇰🇪', '🇰🇮', '🇽🇰', '🇰🇼', '🇰🇬', '🇱🇦', '🇱🇻', '🇱🇧', '🇱🇸', '🇱🇷', '🇱🇾', '🇱🇮', '🇱🇹', '🇱🇺', '🇲🇴', '🇲🇬', '🇲🇼', '🇲🇾', '🇲🇻', '🇲🇱', '🇲🇹', '🇲🇭', '🇲🇶', '🇲🇷', '🇲🇺', '🇾🇹', '🇲🇽', '🇫🇲', '🇲🇩', '🇲🇨', '🇲🇳', '🇲🇪', '🇲🇸', '🇲🇦', '🇲🇿', '🇲🇲', '🇳🇦', '🇳🇷', '🇳🇵', '🇳🇱', '🇳🇨', '🇳🇿', '🇳🇮', '🇳🇪', '🇳🇬', '🇳🇺', '🇳🇫', '🇰🇵', '🇲🇰', '🇲🇵', '🇳🇴', '🇴🇲', '🇵🇰', '🇵🇼', '🇵🇸', '🇵🇦', '🇵🇬', '🇵🇾', '🇵🇪', '🇵🇭', '🇵🇳', '🇵🇱', '🇵🇹', '🇵🇷', '🇶🇦', '🇷🇪', '🇷🇴', '🇷🇺', '🇷🇼', '🇼🇸', '🇸🇲', '🇸🇹', '🇸🇦', '🇸🇳', '🇷🇸', '🇸🇨', '🇸🇱', '🇸🇬', '🇸🇽', '🇸🇰', '🇸🇮', '🇬🇸', '🇸🇧', '🇸🇴', '🇿🇦', '🇰🇷', '🇸🇸', '🇪🇸', '🇱🇰', '🇧🇱', '🇸🇭', '🇰🇳', '🇱🇨', '🇵🇲', '🇻🇨', '🇸🇩', '🇸🇷', '🇸🇪', '🇨🇭', '🇸🇾', '🇹🇼', '🇹🇯', '🇹🇿', '🇹🇭', '🇹🇱', '🇹🇬', '🇹🇰', '🇹🇴', '🇹🇹', '🇹🇳', '🇹🇷', '🇹🇲', '🇹🇨', '🇹🇻', '🇻🇮', '🇺🇬', '🇺🇦', '🇦🇪', '🇬🇧', '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '🏴󠁧󠁢󠁳󠁣󠁴󠁿', '🏴󠁧󠁢󠁷󠁬󠁳󠁿', '🇺🇸', '🇺🇾', '🇺🇿', '🇻🇺', '🇻🇦', '🇻🇪', '🇻🇳', '🇼🇫', '🇪🇭', '🇾🇪', '🇿🇲', '🇿🇼'],
   },
 };
 
 const RECENT_EMOJIS_KEY = '@recent_emojis';
 const MAX_RECENT_EMOJIS = 32;
 
-// Lazy loading chunks
-const EMOJIS_PER_CHUNK = 40;
+// Emoji button size calculation for exactly 8 per row
+const HORIZONTAL_PADDING = 16; // Total horizontal padding (8px on each side)
+const EMOJI_SIZE = (SCREEN_WIDTH - HORIZONTAL_PADDING) / 8;
 
 export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   visible,
@@ -84,12 +86,8 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   onClose,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<keyof typeof EMOJI_CATEGORIES>('recent');
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
-  const [loadedChunks, setLoadedChunks] = useState<Set<string>>(new Set(['recent', 'smileys']));
   const scrollViewRef = useRef<ScrollView>(null);
-  const categoryRefs = useRef<{ [key: string]: number }>({});
-  const chunkTimers = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
   // Animated value for slide in/out
   const translateY = useRef(new Animated.Value(EMOJI_PICKER_HEIGHT)).current;
@@ -136,61 +134,247 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
   const clearSearch = () => setSearchQuery('');
 
-  // Lazy load category when it becomes visible
-  const loadCategoryChunk = (categoryKey: string) => {
-    if (!loadedChunks.has(categoryKey)) {
-      // Clear any existing timer
-      if (chunkTimers.current[categoryKey]) {
-        clearTimeout(chunkTimers.current[categoryKey]);
-      }
+  // Comprehensive emoji to keywords mapping for search
+  const getEmojiKeywords = (emoji: string): string[] => {
+    const keywordMap: { [key: string]: string[] } = {
+      // Hearts
+      '❤️': ['heart', 'love', 'red'],
+      '🧡': ['heart', 'orange', 'love'],
+      '💛': ['heart', 'yellow', 'love'],
+      '💚': ['heart', 'green', 'love'],
+      '💙': ['heart', 'blue', 'love'],
+      '💜': ['heart', 'purple', 'love'],
+      '🖤': ['heart', 'black', 'love'],
+      '🤍': ['heart', 'white', 'love'],
+      '🤎': ['heart', 'brown', 'love'],
+      '💔': ['heart', 'broken', 'love', 'sad'],
+      '💕': ['heart', 'love', 'two'],
+      '💞': ['heart', 'love', 'revolving'],
+      '💓': ['heart', 'love', 'beating'],
+      '💗': ['heart', 'love', 'growing'],
+      '💖': ['heart', 'love', 'sparkle'],
+      '💘': ['heart', 'love', 'arrow', 'cupid'],
+      '💝': ['heart', 'love', 'gift'],
       
-      // Delay loading slightly to allow smooth scrolling
-      chunkTimers.current[categoryKey] = setTimeout(() => {
-        setLoadedChunks(prev => new Set([...prev, categoryKey]));
-        delete chunkTimers.current[categoryKey];
-      }, 50);
-    }
+      // Smileys
+      '😀': ['smile', 'happy', 'face', 'grin', 'joy'],
+      '😃': ['smile', 'happy', 'face', 'joy'],
+      '😄': ['smile', 'happy', 'face', 'laugh'],
+      '😁': ['smile', 'happy', 'face', 'grin', 'teeth'],
+      '😅': ['smile', 'happy', 'sweat', 'nervous'],
+      '😂': ['laugh', 'cry', 'tears', 'joy', 'happy', 'lol'],
+      '🤣': ['laugh', 'rolling', 'floor', 'happy', 'lol'],
+      '😊': ['smile', 'happy', 'blush'],
+      '😇': ['angel', 'halo', 'innocent', 'good'],
+      '😍': ['love', 'heart', 'eyes', 'happy'],
+      '🥰': ['love', 'hearts', 'happy', 'smile'],
+      '😘': ['kiss', 'love', 'heart'],
+      '😗': ['kiss', 'whistle'],
+      '😙': ['kiss', 'smile'],
+      '😚': ['kiss', 'closed', 'eyes'],
+      '😋': ['yum', 'delicious', 'tongue'],
+      '😛': ['tongue', 'playful'],
+      '😝': ['tongue', 'wink', 'playful'],
+      '😜': ['tongue', 'wink', 'playful'],
+      '🤪': ['crazy', 'wild', 'silly'],
+      '😎': ['cool', 'sunglasses'],
+      '🤩': ['star', 'eyes', 'excited'],
+      '🥳': ['party', 'celebrate', 'hat'],
+      '😭': ['cry', 'tears', 'sad', 'sobbing'],
+      '😢': ['cry', 'tears', 'sad'],
+      '😤': ['angry', 'frustrated', 'steam'],
+      '😠': ['angry', 'mad'],
+      '😡': ['angry', 'mad', 'rage'],
+      '🤬': ['angry', 'curse', 'swear'],
+      '😱': ['scream', 'shock', 'scared'],
+      '😨': ['fear', 'scared'],
+      '😰': ['anxious', 'nervous', 'sweat'],
+      '🤔': ['think', 'hmm', 'wonder'],
+      '🤗': ['hug', 'embrace'],
+      '🤭': ['giggle', 'oops', 'hand'],
+      '😴': ['sleep', 'tired', 'zzz'],
+      '🥱': ['yawn', 'tired', 'bored'],
+      '😷': ['mask', 'sick', 'doctor'],
+      
+      // Party & Celebration
+      '🎂': ['cake', 'birthday', 'party', 'celebration'],
+      '🎉': ['party', 'celebrate', 'confetti', 'celebration'],
+      '🎊': ['party', 'celebrate', 'confetti', 'celebration'],
+      '🎁': ['gift', 'present', 'birthday'],
+      '🎈': ['balloon', 'party', 'birthday'],
+      '🎀': ['bow', 'ribbon', 'gift'],
+      
+      // Symbols
+      '🔥': ['fire', 'hot', 'lit', 'flame'],
+      '⭐': ['star', 'favorite'],
+      '✨': ['sparkle', 'stars', 'shine'],
+      '💯': ['hundred', 'perfect', 'score', '100'],
+      '✅': ['check', 'yes', 'done', 'correct'],
+      '❌': ['cross', 'no', 'wrong', 'x'],
+      
+      // Gestures
+      '👍': ['thumbs', 'up', 'good', 'yes', 'like', 'ok'],
+      '👎': ['thumbs', 'down', 'bad', 'no', 'dislike'],
+      '👋': ['wave', 'hello', 'hi', 'bye', 'hand'],
+      '🙏': ['pray', 'thank', 'please', 'hands', 'thanks'],
+      '💪': ['strong', 'muscle', 'flex', 'arm', 'strength'],
+      '👏': ['clap', 'applause', 'praise'],
+      '🤝': ['handshake', 'deal', 'agreement'],
+      '✌️': ['peace', 'victory', 'two'],
+      '🤞': ['fingers', 'crossed', 'luck', 'hope'],
+      '🤟': ['love', 'hand', 'you'],
+      '🤘': ['rock', 'metal', 'horns'],
+      '👌': ['ok', 'okay', 'perfect', 'good'],
+      '🤌': ['pinch', 'italian', 'hand'],
+      '👈': ['left', 'point', 'finger'],
+      '👉': ['right', 'point', 'finger'],
+      '👆': ['up', 'point', 'finger'],
+      '👇': ['down', 'point', 'finger'],
+      
+      // Common Animals
+      '🐶': ['dog', 'puppy', 'pet'],
+      '🐱': ['cat', 'kitty', 'pet'],
+      '🐭': ['mouse', 'rat'],
+      '🐹': ['hamster', 'pet'],
+      '🐰': ['rabbit', 'bunny'],
+      '🦊': ['fox'],
+      '🐻': ['bear'],
+      '🐼': ['panda', 'bear'],
+      '🐨': ['koala', 'bear'],
+      '🐯': ['tiger', 'face'],
+      '🦁': ['lion', 'face'],
+      '🐮': ['cow', 'face'],
+      '🐷': ['pig', 'face'],
+      '🐸': ['frog', 'face'],
+      '🐵': ['monkey', 'face'],
+      
+      // Food
+      '🍕': ['pizza', 'food'],
+      '🍔': ['burger', 'hamburger', 'food'],
+      '🍟': ['fries', 'french', 'food'],
+      '🌭': ['hotdog', 'food'],
+      '🍿': ['popcorn', 'snack'],
+      '🍩': ['donut', 'doughnut', 'sweet'],
+      '🍪': ['cookie', 'sweet'],
+      '🎂': ['cake', 'birthday', 'dessert'],
+      '🍰': ['cake', 'dessert', 'sweet'],
+      '🧁': ['cupcake', 'sweet'],
+      '🍫': ['chocolate', 'sweet'],
+      '🍬': ['candy', 'sweet'],
+      '🍭': ['lollipop', 'candy', 'sweet'],
+      '🍦': ['ice', 'cream', 'sweet'],
+      '🍨': ['ice', 'cream', 'sweet'],
+      '☕': ['coffee', 'drink', 'hot'],
+      '🍵': ['tea', 'drink', 'hot'],
+      '🥤': ['drink', 'soda', 'cup'],
+      '🍺': ['beer', 'drink', 'alcohol'],
+      '🍻': ['beer', 'cheers', 'drink'],
+      '🍷': ['wine', 'drink', 'alcohol'],
+      
+      // Sports & Activity
+      '⚽': ['soccer', 'football', 'ball', 'sport'],
+      '🏀': ['basketball', 'ball', 'sport'],
+      '🏈': ['football', 'american', 'ball', 'sport'],
+      '⚾': ['baseball', 'ball', 'sport'],
+      '🎾': ['tennis', 'ball', 'sport'],
+      '🏐': ['volleyball', 'ball', 'sport'],
+      '🏆': ['trophy', 'winner', 'award', 'champion'],
+      '🥇': ['gold', 'medal', 'first', 'winner'],
+      '🥈': ['silver', 'medal', 'second'],
+      '🥉': ['bronze', 'medal', 'third'],
+      
+      // Nature
+      '🌸': ['flower', 'blossom', 'cherry'],
+      '🌺': ['flower', 'hibiscus'],
+      '🌻': ['flower', 'sunflower'],
+      '🌹': ['flower', 'rose'],
+      '🌷': ['flower', 'tulip'],
+      '🌲': ['tree', 'pine', 'evergreen'],
+      '🌳': ['tree', 'deciduous'],
+      '🌴': ['tree', 'palm'],
+      '🌵': ['cactus', 'desert'],
+      '🌾': ['grain', 'wheat'],
+      '🌿': ['herb', 'leaf'],
+      '☘️': ['shamrock', 'clover', 'lucky'],
+      '🍀': ['clover', 'four', 'leaf', 'lucky'],
+      
+      // Weather
+      '☀️': ['sun', 'sunny', 'weather'],
+      '🌤️': ['sun', 'cloud', 'weather'],
+      '⛅': ['sun', 'cloud', 'weather'],
+      '🌥️': ['cloud', 'sun', 'weather'],
+      '☁️': ['cloud', 'cloudy', 'weather'],
+      '🌦️': ['rain', 'sun', 'weather'],
+      '🌧️': ['rain', 'weather'],
+      '⛈️': ['storm', 'thunder', 'weather'],
+      '🌩️': ['lightning', 'weather'],
+      '❄️': ['snow', 'cold', 'winter'],
+      '⛄': ['snowman', 'winter'],
+      '☃️': ['snowman', 'winter'],
+      
+      // Objects
+      '📱': ['phone', 'mobile', 'cell', 'smartphone'],
+      '💻': ['computer', 'laptop', 'pc'],
+      '⌨️': ['keyboard', 'type'],
+      '🖱️': ['mouse', 'computer'],
+      '📷': ['camera', 'photo'],
+      '📸': ['camera', 'photo', 'flash'],
+      '🎥': ['camera', 'video', 'movie'],
+      '📺': ['tv', 'television'],
+      '📻': ['radio', 'music'],
+      '🎵': ['music', 'note'],
+      '🎶': ['music', 'notes'],
+      '🎤': ['microphone', 'sing', 'karaoke'],
+      '🎧': ['headphones', 'music'],
+      '📚': ['books', 'library', 'study'],
+      '📖': ['book', 'open', 'read'],
+      '✏️': ['pencil', 'write'],
+      '✒️': ['pen', 'write'],
+      '🖊️': ['pen', 'write'],
+      '📝': ['memo', 'note', 'write'],
+    };
+    
+    return keywordMap[emoji] || [];
   };
 
-  // Filtered categories
+  // Search functionality - filter emojis based on keywords
   const filteredCategories = useMemo(() => {
+    const categories = { ...EMOJI_CATEGORIES };
+    categories.recent.emojis = recentEmojis;
+
     if (!searchQuery.trim()) {
-      const categories = { ...EMOJI_CATEGORIES };
-      categories.recent.emojis = recentEmojis;
       return categories;
     }
-    return EMOJI_CATEGORIES;
+
+    const query = searchQuery.toLowerCase().trim();
+    const filtered: typeof EMOJI_CATEGORIES = {} as any;
+
+    Object.entries(categories).forEach(([key, category]) => {
+      // Search through emojis using keywords
+      const matchingEmojis = category.emojis.filter(emoji => {
+        const keywords = getEmojiKeywords(emoji);
+        return keywords.some(keyword => keyword.includes(query) || query.includes(keyword));
+      });
+
+      // Only include category if it has matching emojis
+      if (matchingEmojis.length > 0) {
+        filtered[key as keyof typeof EMOJI_CATEGORIES] = {
+          ...category,
+          emojis: matchingEmojis,
+        };
+      }
+    });
+
+    return filtered;
   }, [searchQuery, recentEmojis]);
 
   const categoryKeys = Object.keys(filteredCategories) as (keyof typeof EMOJI_CATEGORIES)[];
 
-  const scrollToCategory = (category: keyof typeof EMOJI_CATEGORIES) => {
-    const offset = categoryRefs.current[category];
-    if (offset !== undefined && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: offset, animated: true });
-      setActiveCategory(category);
-      // Preload this category
-      loadCategoryChunk(category);
-    }
-  };
-
-  const renderEmojiGrid = (emojis: string[], categoryKey: string) => {
+  const renderEmojiGrid = (emojis: string[]) => {
     if (emojis.length === 0) {
       return (
         <View style={styles.emptyCategory}>
-          <Text style={styles.emptyCategoryText}>No emojis</Text>
-        </View>
-      );
-    }
-
-    // Check if this category should be lazy loaded
-    const shouldLazyLoad = !loadedChunks.has(categoryKey);
-    
-    if (shouldLazyLoad) {
-      // Show placeholder
-      return (
-        <View style={styles.loadingPlaceholder}>
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.emptyCategoryText}>No emojis found</Text>
         </View>
       );
     }
@@ -214,108 +398,80 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   if (!visible) return null;
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ translateY }],
-          height: EMOJI_PICKER_HEIGHT,
-        },
-      ]}
-    >
-      {/* Header with search */}
-      <View style={styles.header}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search emoji"
-            placeholderTextColor="#8696a0"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={clearSearch} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={20} color="#8696a0" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+    <>
+      {/* Backdrop to detect outside clicks */}
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.backdrop} />
+      </TouchableWithoutFeedback>
 
-      {/* Emoji categories scroll */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.categoriesScroll}
-        contentContainerStyle={styles.categoriesContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={(e) => {
-          const scrollY = e.nativeEvent.contentOffset.y;
-          let currentCategory: keyof typeof EMOJI_CATEGORIES = 'recent';
-          Object.entries(categoryRefs.current).forEach(([key, offset]) => {
-            if (scrollY >= offset - 50) {
-              currentCategory = key as keyof typeof EMOJI_CATEGORIES;
-              // Preload next category
-              const currentIndex = categoryKeys.indexOf(currentCategory);
-              if (currentIndex < categoryKeys.length - 1) {
-                loadCategoryChunk(categoryKeys[currentIndex + 1]);
-              }
-            }
-          });
-          setActiveCategory(currentCategory);
-        }}
-        scrollEventThrottle={16}
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            transform: [{ translateY }],
+            height: EMOJI_PICKER_HEIGHT,
+          },
+        ]}
       >
-        {categoryKeys.map((categoryKey) => {
-          const category = filteredCategories[categoryKey];
-          return (
-            <View
-              key={categoryKey}
-              onLayout={(e) => {
-                categoryRefs.current[categoryKey] = e.nativeEvent.layout.y;
-                // Trigger lazy load when category becomes visible
-                if (e.nativeEvent.layout.y < EMOJI_PICKER_HEIGHT * 2) {
-                  loadCategoryChunk(categoryKey);
-                }
-              }}
-              style={styles.category}
-            >
-              <Text style={styles.categoryTitle}>{category.name}</Text>
-              {renderEmojiGrid(category.emojis, categoryKey)}
-            </View>
-          );
-        })}
-      </ScrollView>
-
-      {/* Bottom category tabs */}
-      <View style={styles.bottomTabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
-          {categoryKeys.map((categoryKey) => {
-            const category = filteredCategories[categoryKey];
-            const isActive = activeCategory === categoryKey;
-            return (
-              <TouchableOpacity
-                key={categoryKey}
-                style={[styles.tabButton, isActive && styles.tabButtonActive]}
-                onPress={() => scrollToCategory(categoryKey)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={category.icon as any}
-                  size={24}
-                  color={isActive ? '#00a884' : '#8696a0'}
-                />
+        {/* Header with search */}
+        <View style={styles.header}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search emoji"
+              placeholderTextColor="#8696a0"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity style={styles.clearButton} onPress={clearSearch} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={20} color="#8696a0" />
               </TouchableOpacity>
-            );
-          })}
+            )}
+          </View>
+        </View>
+
+        {/* Emoji categories scroll */}
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.categoriesScroll}
+          contentContainerStyle={styles.categoriesContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {categoryKeys.length === 0 ? (
+            <View style={styles.emptyCategory}>
+              <Text style={styles.emptyCategoryText}>No categories match your search</Text>
+            </View>
+          ) : (
+            categoryKeys.map((categoryKey) => {
+              const category = filteredCategories[categoryKey];
+              return (
+                <View key={categoryKey} style={styles.category}>
+                  <Text style={styles.categoryTitle}>{category.name}</Text>
+                  {renderEmojiGrid(category.emojis)}
+                </View>
+              );
+            })
+          )}
         </ScrollView>
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    zIndex: 0,
+  },
   container: {
     position: 'absolute',
     bottom: 0,
@@ -354,7 +510,11 @@ const styles = StyleSheet.create({
   },
   clearButton: { padding: 4, marginLeft: 4 },
   categoriesScroll: { flex: 1 },
-  categoriesContent: { paddingHorizontal: 8, paddingVertical: 12, paddingBottom: 20 },
+  categoriesContent: { 
+    paddingHorizontal: 8, 
+    paddingVertical: 12, 
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
+  },
   category: { marginBottom: 20 },
   categoryTitle: {
     fontSize: 14,
@@ -368,34 +528,20 @@ const styles = StyleSheet.create({
   emojiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
   },
   emojiButton: {
-    width: (SCREEN_WIDTH - 40) / 8,
-    height: 44,
+    width: EMOJI_SIZE,
+    height: EMOJI_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 8,
   },
   emoji: { fontSize: 28 },
-  emptyCategory: { paddingVertical: 20, alignItems: 'center' },
-  emptyCategoryText: { fontSize: 14, color: '#8696a0' },
-  loadingPlaceholder: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyCategory: { 
+    paddingVertical: 40, 
+    alignItems: 'center' 
   },
-  loadingText: {
-    fontSize: 14,
-    color: '#8696a0',
+  emptyCategoryText: { 
+    fontSize: 14, 
+    color: '#8696a0' 
   },
-  bottomTabs: {
-    borderTopWidth: 1,
-    borderTopColor: '#e9edef',
-    backgroundColor: '#f0f2f5',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-  },
-  tabsContent: { paddingHorizontal: 8, paddingVertical: 6, gap: 4 },
-  tabButton: { width: 48, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
-  tabButtonActive: { backgroundColor: 'rgba(0, 168, 132, 0.1)' },
 });
