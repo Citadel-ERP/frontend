@@ -1,11 +1,9 @@
-// hr_employee_management/BulkUploadPayslips.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
@@ -85,6 +83,7 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
 
       // Open in browser
       await WebBrowser.openBrowserAsync(fileUrl);
+      
       alert('Success', 'Sample payslip downloaded successfully');
     } catch (error: any) {
       console.error('Download sample error:', error);
@@ -222,18 +221,22 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
       const successMsg = `Successfully uploaded ${data.successful || 0} payslips${data.failed > 0 ? `\n${data.failed} files failed to upload` : ''
         }`;
 
-      alert('Upload Complete', successMsg, [
-        {
-          text: 'OK',
-          onPress: () => {
-            setSelectedFiles([]);
-            // Reset to current month and year
-            const currentDate = new Date();
-            setSelectedMonth(currentDate.getMonth() + 1);
-            setSelectedYear(currentDate.getFullYear());
+      alert(
+        'Upload Complete',
+        successMsg,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setSelectedFiles([]);
+              // Reset to current month and year
+              const currentDate = new Date();
+              setSelectedMonth(currentDate.getMonth() + 1);
+              setSelectedYear(currentDate.getFullYear());
+            },
           },
-        },
-      ]);
+        ]
+      );
     } catch (error: any) {
       console.error('Upload error:', error);
       alert('Upload Failed', error.message || 'Failed to upload payslips');
@@ -292,36 +295,6 @@ const BulkUploadPayslips: React.FC<BulkUploadPayslipsProps> = ({ token, onBack }
               </Text>
             </View>
           </View>
-
-          {/* <TouchableOpacity
-            style={[
-              styles.secondaryButton, 
-              { 
-                marginTop: 16,
-                display: 'flex', 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                gap: 8, 
-                justifyContent: 'center', 
-                paddingTop: 10, 
-                paddingBottom: 10, 
-                borderRadius: 25, 
-                backgroundColor: WHATSAPP_COLORS.primary 
-              }
-            ]}
-            onPress={handleDownloadSample}
-            disabled={downloading}
-            activeOpacity={0.7}
-          >
-            {downloading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="download-outline" size={20} color='#FFFFFF' />
-                <Text style={[styles.secondaryButtonText, { color: '#FFFFFF' }]}>Download Sample Format</Text>
-              </>
-            )}
-          </TouchableOpacity> */}
         </View>
 
         {/* Period Selection */}
