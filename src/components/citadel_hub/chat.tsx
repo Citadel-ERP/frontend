@@ -15,6 +15,7 @@ import {
   Keyboard,
   Animated,
   Dimensions,
+  Linking,
   Clipboard
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -23,6 +24,11 @@ import { AttachmentMenu } from './attachmentMenu';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { ImagePreview } from './imagePreview';
+import { VideoPlayer } from './videoPlayer';
+import { CameraRecorder } from './cameraRecorder';
+import { Video, ResizeMode } from 'expo-av';
+import { AudioRecorder } from './audioRecorder';
+import { AudioPlayer } from './audioPlayer';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -88,6 +94,7 @@ interface ChatProps {
   messages: Message[];
   currentUser: User;
   typingUsers: User[];
+  userStatuses?: { [userId: string]: 'online' | 'offline' | 'away' | 'busy' };
   onBack: () => void;
   onHeaderClick: () => void;
   onSendMessage: (content: string, type?: string, file?: any, parentId?: number) => void;
@@ -111,6 +118,7 @@ export const Chat: React.FC<ChatProps> = ({
   messages,
   currentUser,
   typingUsers,
+  userStatuses,
   onBack,
   onHeaderClick,
   onSendMessage,
@@ -151,7 +159,12 @@ export const Chat: React.FC<ChatProps> = ({
   const [messageOptionsPosition, setMessageOptionsPosition] = useState({ x: 0, y: 0 });
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState<string>('');
-  
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [showCameraRecorder, setShowCameraRecorder] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'photo' | 'video'>('photo');
+  const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  // Add near other state declarations (around line 50):
+
 
 
   const inputRef = useRef<TextInput>(null);
@@ -180,6 +193,23 @@ export const Chat: React.FC<ChatProps> = ({
 
   const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
 
+  const handleCameraCapture = (uri: string, type: 'photo' | 'video') => {
+    if (type === 'photo') {
+      setPreviewImageUri(uri);
+      setShowImagePreview(true);
+    } else if (type === 'video') {
+      // Send video directly
+      const videoFile = {
+        uri: uri,
+        type: 'video/mp4',
+        name: `video_${Date.now()}.mp4`,
+      };
+      onSendMessage(videoFile.name, 'video', videoFile, replyingTo?.id);
+      setReplyingTo(null);
+    }
+    setShowCameraRecorder(false);
+  };
+
   // Keyboard listeners
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
@@ -193,6 +223,8 @@ export const Chat: React.FC<ChatProps> = ({
       }
     );
 
+
+
     const keyboardWillHide = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => {
@@ -205,6 +237,26 @@ export const Chat: React.FC<ChatProps> = ({
       keyboardWillHide.remove();
     };
   }, [isEmojiMode]);
+
+  const getOtherUserStatus = useCallback(() => {
+    if (chatRoom.room_type === 'group') {
+      return null; // Groups don't show online/offline
+    }
+
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    const otherMember = chatRoom.members.find(m => {
+      const user = getUserFromMember(m);
+      return user && (user.id || user.employee_id) !== currentUserId;
+    });
+
+    if (!otherMember) return 'offline';
+
+    const otherUser = getUserFromMember(otherMember);
+    if (!otherUser) return 'offline';
+
+    const userId = String(otherUser.id || otherUser.employee_id);
+    return userStatuses?.[userId] || 'offline';
+  }, [chatRoom, currentUser, userStatuses]);
 
   // Room change handling - clear state
   useEffect(() => {
@@ -321,7 +373,16 @@ export const Chat: React.FC<ChatProps> = ({
     }
     return 'Unknown';
   }, [chatRoom, currentUser]);
-
+  const handleAudioCapture = (uri: string) => {
+    const audioFile = {
+      uri: uri,
+      type: 'audio/m4a',
+      name: `audio_${Date.now()}.m4a`,
+    };
+    onSendMessage(audioFile.name, 'audio', audioFile, replyingTo?.id);
+    setReplyingTo(null);
+    setShowAudioRecorder(false);
+  };
   const getChatAvatar = useCallback(() => {
     if (chatRoom.room_type === 'group') {
       if (chatRoom.profile_picture) {
@@ -474,7 +535,7 @@ export const Chat: React.FC<ChatProps> = ({
     });
   };
 
-const handleDeleteForMe = () => {
+  const handleDeleteForMe = () => {
     setShowDeleteModal(false);
     Animated.timing(deleteModalSlide, {
       toValue: SCREEN_HEIGHT,
@@ -945,21 +1006,60 @@ const handleDeleteForMe = () => {
                     )}
                   </TouchableOpacity>
                 ) : message.message_type === 'video' && message.video_url ? (
-                  <View style={styles.videoContainer}>
-                    <Ionicons name="play-circle" size={48} color="#ffffff" style={styles.videoPlayIcon} />
-                    <Text style={styles.messageText}>{message.file_name || 'Video'}</Text>
+                  <View style={styles.videoMessageContainer}>
+                    <TouchableOpacity
+                      style={styles.videoThumbnailContainer}
+                      onPress={() => setSelectedVideoUrl(message.video_url || null)}
+                      activeOpacity={0.8}
+                    >
+                      <Video
+                        source={{ uri: message.video_url }}
+                        style={styles.videoThumbnail}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay={false}
+                        isMuted
+                        useNativeControls={false}
+                        posterSource={{ uri: message.video_url }}
+                        usePoster
+                      />
+                      <View style={styles.videoOverlay}>
+                        <View style={styles.playButtonContainer}>
+                          <Ionicons name="play-circle" size={56} color="#ffffff" />
+                        </View>
+                      </View>
+                      <View style={styles.videoDurationBadge}>
+                        <Ionicons name="videocam" size={12} color="#ffffff" />
+                      </View>
+                    </TouchableOpacity>
+                    {message.content && message.content !== message.file_name && (
+                      <Text style={styles.messageText}>{message.content}</Text>
+                    )}
                   </View>
                 ) : message.message_type === 'audio' && message.audio_url ? (
-                  <View style={styles.audioContainer}>
-                    <Ionicons name="musical-notes" size={32} color="#00a884" />
-                    <Text style={styles.messageText}>{message.file_name || 'Audio'}</Text>
-                  </View>
+                  <AudioPlayer
+                    audioUrl={message.audio_url}
+                    isOwnMessage={isOwnMessage}
+                  />
                 ) : message.message_type === 'file' && message.file_url ? (
-                  <TouchableOpacity style={styles.fileContainer} activeOpacity={0.7}>
+                  <TouchableOpacity
+                    style={styles.fileContainer}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      // ✅ ADDED: Open file URL in browser
+                      if (message.file_url) {
+                        Linking.openURL(message.file_url).catch(err => {
+                          console.error('Failed to open file:', err);
+                          Alert.alert('Error', 'Could not open file. Please try again.');
+                        });
+                      }
+                    }}
+                  >
                     <Ionicons name="document-attach" size={32} color="#00a884" />
                     <View style={styles.fileInfo}>
-                      <Text style={styles.fileName} numberOfLines={1}>{message.file_name || 'File'}</Text>
-                      <Text style={styles.fileSize}>Tap to download</Text>
+                      <Text style={styles.fileName} numberOfLines={1}>
+                        {message.file_name || message.content || 'File'}
+                      </Text>
+                      <Text style={styles.fileSize}>Tap to open</Text>
                     </View>
                   </TouchableOpacity>
                 ) : message.message_type === 'text' ? (
@@ -1092,7 +1192,9 @@ const handleDeleteForMe = () => {
                       : `${typingUsers.length} people are typing...`)
                     : chatRoom.room_type === 'group'
                       ? `${chatRoom.members.length} members`
-                      : 'Online'}
+                      : getOtherUserStatus() === 'online'
+                        ? 'Online'
+                        : 'Offline'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1239,7 +1341,14 @@ const handleDeleteForMe = () => {
             {/* NEW: Camera Shortcut Button */}
             <TouchableOpacity
               style={styles.inputIconBtn}
-              onPress={handleCameraPress}
+              onPress={() => {
+                setCameraMode('photo');
+                setShowCameraRecorder(true);
+              }}
+              onLongPress={() => {
+                setCameraMode('video');
+                setShowCameraRecorder(true);
+              }}
               activeOpacity={0.7}
               disabled={isPickingMedia}
             >
@@ -1278,7 +1387,11 @@ const handleDeleteForMe = () => {
                 <Ionicons name="send" size={20} color="#ffffff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.inputIconBtn} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.inputIconBtn}
+                onPress={() => setShowAudioRecorder(true)}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="mic" size={24} color="#8696a0" />
               </TouchableOpacity>
             )}
@@ -1291,9 +1404,22 @@ const handleDeleteForMe = () => {
       <AttachmentMenu
         visible={showAttachmentMenu}
         onClose={() => setShowAttachmentMenu(false)}
-        onCameraPress={handleCameraPress}
+        onCameraPress={() => {
+          setShowAttachmentMenu(false);
+          setCameraMode('photo');
+          setShowCameraRecorder(true);
+        }}
+        onVideoPress={() => {
+          setShowAttachmentMenu(false);
+          setCameraMode('video');
+          setShowCameraRecorder(true);
+        }}
         onGalleryPress={handleGalleryPress}
         onFilePress={handleFileSelect}
+        onAudioPress={() => {  // ADD THIS
+          setShowAttachmentMenu(false);
+          setShowAudioRecorder(true);
+        }}
       />
 
       {/* Emoji Picker */}
@@ -1493,7 +1619,24 @@ const handleDeleteForMe = () => {
         }}
         onSend={handleSendFromPreview}
       />
-    </View>
+      <VideoPlayer
+        visible={!!selectedVideoUrl}
+        videoUri={selectedVideoUrl || ''}
+        onClose={() => setSelectedVideoUrl(null)}
+      />
+      <CameraRecorder
+        visible={showCameraRecorder}
+        mode={cameraMode}
+        onClose={() => setShowCameraRecorder(false)}
+        onCapture={handleCameraCapture}
+      />
+      <AudioRecorder
+        visible={showAudioRecorder}
+        onClose={() => setShowAudioRecorder(false)}
+        onSend={handleAudioCapture}
+      />
+    </View >
+
   );
 };
 
@@ -2232,9 +2375,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  videoPlayIcon: {
-    position: 'absolute',
-  },
+  // videoPlayIcon: {
+  //   position: 'absolute',
+  // },
   fileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2273,5 +2416,62 @@ const styles = StyleSheet.create({
   imageViewerImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.8,
+  },
+  videoMessageContainer: {
+    maxWidth: 250,
+    width:200,
+    overflow: 'hidden',
+  },
+  videoThumbnailContainer: {
+    width: '100%',
+    height: 180,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  videoThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButtonContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(0, 168, 132, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  videoPlayIcon: {
+    // Keep this for backward compatibility but it won't be used
+    position: 'absolute',
+  },
+  videoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoDurationBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

@@ -18,7 +18,7 @@ import { NewGroup } from './newGroup';
 import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
-import { Ionicons } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons';
 
 // ============= TYPE DEFINITIONS =============
 export interface User {
@@ -146,7 +146,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState<{ [roomId: number]: User[] }>({});
-  const [onlineUsers, setOnlineUsers] = useState<Set<number>>(new Set());
+  const [userStatuses, setUserStatuses] = useState<{ [userId: string]: 'online' | 'offline' | 'away' | 'busy' }>({});
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
 
   // Cache & Optimistic Updates
@@ -1071,14 +1071,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [handleMessagesRead]);
 
   const handleStatusUpdate = useCallback((userStatus: any) => {
-    if (userStatus?.status === 'online' && userStatus?.user?.id) {
-      setOnlineUsers(prev => new Set(prev).add(userStatus.user.id));
-    } else if (userStatus?.user?.id) {
-      setOnlineUsers(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(userStatus.user.id);
-        return newSet;
-      });
+    console.log('📍 Status update received:', userStatus);
+
+    if (userStatus?.user?.id || userStatus?.user?.employee_id) {
+      const userId = String(userStatus.user.id || userStatus.user.employee_id);
+      const status = userStatus.status || 'offline';
+
+      console.log(`📍 Setting user ${userId} to ${status}`);
+
+      setUserStatuses(prev => ({
+        ...prev,
+        [userId]: status
+      }));
     }
   }, []);
 
@@ -1356,11 +1360,11 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         const result = await response.json();
         console.log('✅ File uploaded successfully:', result);
         if (result.message_data && ws.current?.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify({
-                action: 'broadcast_file_message',
-                message: result.message_data,
-                room_id: selectedChatRoom.id,
-            }));
+          ws.current.send(JSON.stringify({
+            action: 'broadcast_file_message',
+            message: result.message_data,
+            room_id: selectedChatRoom.id,
+          }));
         }
 
         // ✅ IMPORTANT: Don't add message here - WebSocket will handle it
@@ -1575,6 +1579,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           messages={messages}
           currentUser={currentUser}
           typingUsers={typingUsers[selectedChatRoom.id] || []}
+          userStatuses={userStatuses}  // ← ADD THIS LINE
           onBack={() => setViewMode('list')}
           onHeaderClick={() => setViewMode('chatDetails')}
           onSendMessage={sendMessage}
@@ -1638,16 +1643,16 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       )}
 
 
-{viewMode === 'edit' && selectedChatRoom && (
-  <Edit
-    chatRoom={selectedChatRoom}
-    currentUser={currentUser}
-    onBack={() => setViewMode('chatDetails')}
-    onSave={async (name, description, image) => {
-      try {
-        const formData = new FormData();
-        formData.append('token', token || '');
-        formData.append('chat_room_id', selectedChatRoom.id.toString());
+      {viewMode === 'edit' && selectedChatRoom && (
+        <Edit
+          chatRoom={selectedChatRoom}
+          currentUser={currentUser}
+          onBack={() => setViewMode('chatDetails')}
+          onSave={async (name, description, image) => {
+            try {
+              const formData = new FormData();
+              formData.append('token', token || '');
+              formData.append('chat_room_id', selectedChatRoom.id.toString());
 
               if (selectedChatRoom.room_type === 'group') {
                 formData.append('name', name);

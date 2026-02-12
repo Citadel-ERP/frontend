@@ -19,16 +19,20 @@ interface AttachmentMenuProps {
   visible: boolean;
   onClose: () => void;
   onCameraPress: () => void;
+  onVideoPress: () => void;
   onGalleryPress: () => void;
   onFilePress: () => void;
+   onAudioPress: () => void;
 }
 
 export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
   visible,
   onClose,
   onCameraPress,
+  onVideoPress,
   onGalleryPress,
   onFilePress,
+   onAudioPress,
 }) => {
   const slideAnim = useRef(new Animated.Value(MENU_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -131,7 +135,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       iconType: 'ionicons' as const,
       label: 'Audio',
       color: '#F3A638',
-      onPress: () => handleOptionPress(() => console.log('Audio')),
+      onPress: () => handleOptionPress(onAudioPress),
       scale: optionsScale[3],
     },
     {
@@ -143,11 +147,11 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       scale: optionsScale[4],
     },
     {
-      icon: 'person',
+      icon: 'video-camera',
       iconType: 'ionicons' as const,
-      label: 'Contact',
+      label: 'Video',
       color: '#009DE2',
-      onPress: () => handleOptionPress(() => console.log('Contact')),
+      onPress: () => handleOptionPress(onVideoPress),
       scale: optionsScale[5],
     },
   ];
