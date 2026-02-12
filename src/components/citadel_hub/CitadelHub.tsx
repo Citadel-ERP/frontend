@@ -89,6 +89,14 @@ export interface ChatRoom {
   admin?: User;
   is_blocked?: boolean;
   media_count?: number;
+  blocked_by?: User;  // ← ADD
+  blocked_at?: string;  // ← ADD
+  block_status?: {  // ← ADD
+    is_blocked: boolean;
+    blocked_by_me: boolean;
+    blocked_by_other: boolean;
+    blocker_name?: string;
+  };
 }
 
 export interface MessageRead {
@@ -222,6 +230,24 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       room.id === selectedChatRoom.id ? updatedRoom : room
     ));
 
+    if (viewMode === 'chat' && selectedChatRoom) {
+      const tempSystemMessage: Message = {
+        id: `temp_system_${Date.now()}`,   // temporary ID
+        sender: currentUser,
+        content: `${newMember.first_name} ${newMember.last_name} was added by ${currentUser.first_name} ${currentUser.last_name}`,
+        message_type: 'system',
+        created_at: new Date().toISOString(),
+        is_edited: false,
+      };
+      setMessages(prev => {
+        const updated = [...prev, tempSystemMessage].sort((a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        saveMessageCache(selectedChatRoom.id, updated);
+        return updated;
+      });
+    }
+
     console.log('✅ Optimistically added member:', newMember.first_name);
   }, [selectedChatRoom]);
 
@@ -229,6 +255,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     setShareData(null);
     setViewMode('chat');
   }, []);
+
+
 
   const loadChatRooms = useCallback(async () => {
     try {
@@ -387,6 +415,30 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       throw error;
     }
   };
+
+  const handleExitGroup = useCallback(async () => {
+    if (!selectedChatRoom) return;
+
+    try {
+      const result = await apiCall('exit_group', {
+        chat_room_id: selectedChatRoom.id,
+      });
+
+      if (result.message) {
+        // Remove from local state
+        setChatRooms(prev => prev.filter(room => room.id !== selectedChatRoom.id));
+        setSelectedChatRoom(null);
+        setViewMode('list');
+
+        Alert.alert('Success', 'You have left the group', [{ text: 'OK' }]);
+      }
+    } catch (error) {
+      console.error('Error exiting group:', error);
+      Alert.alert('Error', 'Failed to exit group. Please try again.');
+    }
+  }, [selectedChatRoom, apiCall]);
+
+
 
   // ============= DATA LOADING FUNCTIONS =============
 
@@ -651,42 +703,75 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, []);
 
   const handleMemberAdded = useCallback((data: any) => {
-    const { room_id, new_member, added_by } = data;
+    const { room_id, new_member, added_by, system_message } = data;
 
     console.log(`👥 Member added to room ${room_id}:`, new_member);
 
-    // ✅ REMOVED: loadChatRooms() - no longer needed here
-    // The optimistic update already added the member
-    // handleMembersAdded will refresh from backend after debounce
+    // ✅ CRITICAL: ALWAYS update chatRooms list for ALL users (not just selected room)
+    setChatRooms(prev => prev.map(room => {
+      if (room.id.toString() === room_id) {
+        const updatedMembers = [...room.members];
 
-    // If we're viewing this chat room, update the selected room with WebSocket data
-    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
-      // ✅ ADDED: Directly update the selected room with the new member from WebSocket
-      const updatedMembers = [...selectedChatRoom.members];
+        // Check if member already exists (from optimistic update)
+        const memberExists = updatedMembers.some(m => {
+          const user = 'user' in m ? m.user : m;
+          return (user?.id || user?.employee_id) === (new_member.id || new_member.employee_id);
+        });
 
-      // Check if member already exists (from optimistic update)
-      const memberExists = updatedMembers.some(m => {
-        const user = 'user' in m ? m.user : m;
-        return (user?.id || user?.employee_id) === (new_member.id || new_member.employee_id);
-      });
+        if (!memberExists) {
+          console.log('➕ Adding member from WebSocket broadcast to chatRooms list');
+          updatedMembers.push(new_member);
+        } else {
+          console.log('✓ Member already exists in chatRooms list (from optimistic update)');
+        }
 
-      if (!memberExists) {
-        console.log('➕ Adding member from WebSocket broadcast');
-        updatedMembers.push(new_member);
-
-        const updatedRoom = {
-          ...selectedChatRoom,
+        return {
+          ...room,
           members: updatedMembers,
         };
+      }
+      return room;
+    }));
 
-        setSelectedChatRoom(updatedRoom);
+    // ✅ If viewing this chat room, also update selectedChatRoom
+    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+      setSelectedChatRoom(prev => {
+        if (!prev) return prev;
 
-        // Also update in chatRooms list
-        setChatRooms(prev => prev.map(room =>
-          room.id.toString() === room_id ? updatedRoom : room
-        ));
-      } else {
-        console.log('✓ Member already exists (from optimistic update)');
+        const updatedMembers = [...prev.members];
+
+        const memberExists = updatedMembers.some(m => {
+          const user = 'user' in m ? m.user : m;
+          return (user?.id || user?.employee_id) === (new_member.id || new_member.employee_id);
+        });
+
+        if (!memberExists) {
+          console.log('➕ Adding member from WebSocket broadcast to selectedChatRoom');
+          updatedMembers.push(new_member);
+        }
+
+        return {
+          ...prev,
+          members: updatedMembers,
+        };
+      });
+
+      // ✅ If in chat view, add system message to messages
+      if (system_message && viewMode === 'chat' && selectedChatRoom) {
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === system_message.id);
+          if (!exists) {
+            const updated = [...prev, system_message].sort((a, b) =>
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+            // ✅ Save cache with the updated array
+            saveMessageCache(selectedChatRoom.id, updated);
+            return updated;
+          }
+          // ✅ Save cache even if message already exists (defensive)
+          saveMessageCache(selectedChatRoom.id, prev);
+          return prev;
+        });
       }
     }
 
@@ -696,7 +781,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       const adderName = `${added_by.first_name} ${added_by.last_name}`;
       console.log(`ℹ️ ${adderName} added ${memberName} to the group`);
     }
-  }, [selectedChatRoom, currentUser, isConnected, sendWebSocketMessage]);
+  }, [selectedChatRoom, currentUser, viewMode, messages, saveMessageCache]);
 
   useEffect(() => {
     handlersRef.current.handleMemberAdded = handleMemberAdded;
@@ -746,6 +831,84 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   useEffect(() => {
     handlersRef.current.handleRoomUpdated = handleRoomUpdated;
   }, [handleRoomUpdated]);
+
+
+  const handleMemberRemoved = useCallback((data: any) => {
+    const { room_id, removed_member, is_self_exit, system_message } = data;
+
+    console.log(`👋 Member removed from room ${room_id}:`, removed_member);
+
+    // If current user was removed, remove the chat room from list
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    const removedUserId = removed_member.id || removed_member.employee_id;
+
+    if (currentUserId === removedUserId) {
+      // Current user was removed or exited
+      setChatRooms(prev => prev.filter(room => room.id.toString() !== room_id));
+
+      // If viewing this chat, navigate back to list
+      if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+        setSelectedChatRoom(null);
+        setViewMode('list');
+
+        const message = is_self_exit
+          ? 'You have left the group'
+          : 'You have been removed from the group';
+        Alert.alert('Group Update', message);
+      }
+    } else {
+      // ✅ Someone else was removed - update members list for ALL users
+      setChatRooms(prev => prev.map(room => {
+        if (room.id.toString() === room_id) {
+          const updatedMembers = room.members.filter(m => {
+            const user = getUserFromMember(m);
+            return user && (user.id || user.employee_id) !== removedUserId;
+          });
+
+          return {
+            ...room,
+            members: updatedMembers,
+          };
+        }
+        return room;
+      }));
+
+      // ✅ If viewing this chat, also update selectedChatRoom
+      if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+        const updatedMembers = selectedChatRoom.members.filter(m => {
+          const user = getUserFromMember(m);
+          return user && (user.id || user.employee_id) !== removedUserId;
+        });
+
+        const updatedRoom = {
+          ...selectedChatRoom,
+          members: updatedMembers,
+        };
+
+        setSelectedChatRoom(updatedRoom);
+
+        // ✅ If in chat view, add system message
+        if (system_message && viewMode === 'chat') {
+          console.log('📨 Adding system message to chat:', system_message.content);
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === system_message.id);
+            if (!exists) {
+              return [...prev, system_message].sort((a, b) =>
+                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              );
+            }
+            return prev;
+          });
+          saveMessageCache(selectedChatRoom.id, messages);
+        }
+      }
+    }
+  }, [selectedChatRoom, currentUser, viewMode, messages, saveMessageCache]);
+
+  // Add to handlersRef
+  useEffect(() => {
+    handlersRef.current.handleMemberRemoved = handleMemberRemoved;
+  }, [handleMemberRemoved]);
 
   // ============= WEBSOCKET CONNECTION =============
   const connectWebSocket = useCallback(() => {
@@ -867,6 +1030,15 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               break;
             case 'room_updated':
               handlersRef.current.handleRoomUpdated(data);
+              break;
+            case 'member_removed':
+              handlersRef.current.handleMemberRemoved(data);
+              break;
+            case 'chat_blocked':
+              handlersRef.current.handleChatBlocked(data);
+              break;
+            case 'chat_unblocked':
+              handlersRef.current.handleChatUnblocked(data);
               break;
             default:
               console.log('Unknown message type:', data.type);
@@ -1702,6 +1874,42 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     };
   }, []);
 
+  const handleReportGroup = useCallback(async (reason: string, alsoExit: boolean) => {
+    if (!selectedChatRoom) return;
+
+    try {
+      const result = await apiCall('report_group', {
+        chat_room_id: selectedChatRoom.id,
+        reason,
+        also_exit: alsoExit,
+      });
+
+      if (result.can_exit === false) {
+        Alert.alert(
+          'Report Submitted',
+          result.message,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      if (result.exited) {
+        // Remove from local state
+        setChatRooms(prev => prev.filter(room => room.id !== selectedChatRoom.id));
+        setSelectedChatRoom(null);
+        setViewMode('list');
+
+        Alert.alert('Success', result.message, [{ text: 'OK' }]);
+      } else {
+        Alert.alert('Success', 'Group reported successfully', [{ text: 'OK' }]);
+        setViewMode('chatDetails');
+      }
+    } catch (error) {
+      console.error('Error reporting group:', error);
+      Alert.alert('Error', 'Failed to report group. Please try again.');
+    }
+  }, [selectedChatRoom, apiCall]);
+
   useEffect(() => {
     if (selectedChatRoom && isInitialCacheLoaded) {
       setMessagesPage(1);
@@ -1717,6 +1925,159 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       }
     }
   }, [selectedChatRoom?.id, isInitialCacheLoaded]);
+
+  const handleBlockChat = useCallback(async () => {
+    if (!selectedChatRoom) return;
+
+    try {
+      const result = await apiCall('block_chat', {
+        chat_room_id: selectedChatRoom.id,
+      });
+
+      if (result.chat_room) {
+        // Update selected chat room
+        setSelectedChatRoom(result.chat_room);
+
+        // Update in list
+        setChatRooms(prev => prev.map(room =>
+          room.id === selectedChatRoom.id ? result.chat_room : room
+        ));
+
+        Alert.alert('Success', 'Contact blocked', [{ text: 'OK' }]);
+      }
+    } catch (error) {
+      console.error('Error blocking chat:', error);
+      Alert.alert('Error', 'Failed to block contact. Please try again.');
+    }
+  }, [selectedChatRoom, apiCall]);
+
+  const handleUnblockChat = useCallback(async () => {
+    if (!selectedChatRoom) return;
+
+    try {
+      const result = await apiCall('unblock_chat', {
+        chat_room_id: selectedChatRoom.id,
+      });
+
+      if (result.chat_room) {
+        // Update selected chat room
+        setSelectedChatRoom(result.chat_room);
+
+        // Update in list
+        setChatRooms(prev => prev.map(room =>
+          room.id === selectedChatRoom.id ? result.chat_room : room
+        ));
+
+        Alert.alert('Success', 'Contact unblocked', [{ text: 'OK' }]);
+      }
+    } catch (error) {
+      console.error('Error unblocking chat:', error);
+      Alert.alert('Error', 'Failed to unblock contact. Please try again.');
+    }
+  }, [selectedChatRoom, apiCall]);
+
+  // Add WebSocket handlers
+  const handleChatBlocked = useCallback((data: any) => {
+    const { room_id, blocked_by_id } = data;
+
+    setChatRooms(prev => prev.map(room => {
+      if (room.id.toString() === room_id) {
+        const isBlockedByMe = blocked_by_id === (currentUser.id || currentUser.employee_id);
+        return {
+          ...room,
+          blocked_by: isBlockedByMe ? currentUser : room.members.find(m => {
+            const user = getUserFromMember(m);
+            return user && (user.id || user.employee_id) === blocked_by_id;
+          }),
+          block_status: {
+            is_blocked: true,
+            blocked_by_me: isBlockedByMe,
+            blocked_by_other: !isBlockedByMe,
+          }
+        };
+      }
+      return room;
+    }));
+
+    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+      const isBlockedByMe = blocked_by_id === (currentUser.id || currentUser.employee_id);
+      setSelectedChatRoom({
+        ...selectedChatRoom,
+        block_status: {
+          is_blocked: true,
+          blocked_by_me: isBlockedByMe,
+          blocked_by_other: !isBlockedByMe,
+        }
+      });
+    }
+  }, [selectedChatRoom, currentUser]);
+
+  const handleChatUnblocked = useCallback((data: any) => {
+    const { room_id } = data;
+
+    setChatRooms(prev => prev.map(room => {
+      if (room.id.toString() === room_id) {
+        return {
+          ...room,
+          blocked_by: null,
+          block_status: null,
+        };
+      }
+      return room;
+    }));
+
+    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+      setSelectedChatRoom({
+        ...selectedChatRoom,
+        blocked_by: null,
+        block_status: null,
+      });
+    }
+  }, [selectedChatRoom]);
+
+  const handleRemoveMember = useCallback(async (memberId: string) => {
+    if (!selectedChatRoom) return;
+
+    try {
+      const result = await apiCall('remove_member', {
+        chat_room_id: selectedChatRoom.id,
+        user_id: memberId,
+      });
+
+      if (result.removed_member) {
+        // Optimistically update UI
+        const updatedMembers = selectedChatRoom.members.filter(m => {
+          const user = getUserFromMember(m);
+          const userEmployeeId = user?.employee_id || String(user?.id);
+          return userEmployeeId !== memberId;
+        });
+
+        const updatedRoom = {
+          ...selectedChatRoom,
+          members: updatedMembers,
+        };
+
+        setSelectedChatRoom(updatedRoom);
+        setChatRooms(prev => prev.map(room =>
+          room.id === selectedChatRoom.id ? updatedRoom : room
+        ));
+
+        Alert.alert('Success', 'Member removed from group', [{ text: 'OK' }]);
+      }
+    } catch (error) {
+      console.error('Error removing member:', error);
+      Alert.alert('Error', 'Failed to remove member. Please try again.');
+    }
+  }, [selectedChatRoom, apiCall]);
+
+  // Add to handlersRef
+  useEffect(() => {
+    handlersRef.current.handleChatBlocked = handleChatBlocked;
+  }, [handleChatBlocked]);
+
+  useEffect(() => {
+    handlersRef.current.handleChatUnblocked = handleChatUnblocked;
+  }, [handleChatUnblocked]);
 
   useEffect(() => {
     if (isConnected && pendingActions.length > 0) {
@@ -1815,6 +2176,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onMute={() => muteChat(selectedChatRoom.id)}
           onUnmute={() => unmuteChat(selectedChatRoom.id)}
           onAddMember={handleAddMember}
+          onExitGroup={handleExitGroup}
+          onReportGroup={handleReportGroup}
+          onBlock={handleBlockChat}
+          onUnblock={handleUnblockChat}
+          onRemoveMember={handleRemoveMember}
+          apiCall={apiCall} // ✅ ADD THIS LINE
         />
       )}
 

@@ -95,209 +95,213 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
   }, [visible, isRecording]);
 
   const handleStopAttempt = () => {
-  if (!isRecording) {
-    console.log('⏹️ Not recording, ignoring stop attempt');
-    return;
-  }
+    console.log('👆 User released button');
 
-  // ✅ Check if native recording has started
-  if (!recordingStarted.current) {
-    console.log('⏸️ Released before native started, waiting 500ms...');
-    setTimeout(() => {
-      if (isRecording && recordingStarted.current) {
-        console.log('✅ Native ready now, stopping...');
-        stopRecording();
-      } else if (isRecording) {
-        console.log('⚠️ Still not ready, forcing stop...');
-        Alert.alert('Recording Issue', 'Recording did not start properly. Please try again.');
-        forceStopRecording();
-      }
-    }, 500);
-    return;
-  }
+    if (!isRecording) {
+      console.log('⏹️ Not recording');
+      return;
+    }
 
-  // ✅ Check minimum time
-  if (!canStopRecording) {
-    console.log('⏸️ Minimum time not reached, waiting...');
-    setTimeout(() => {
-      if (isRecording) {
-        stopRecording();
-      }
-    }, 300);
-    return;
-  }
+    if (!recordingStarted.current) {
+      console.log('⏸️ Not started yet, waiting 600ms...');
+      setTimeout(() => {
+        if (isRecording && recordingStarted.current) {
+          console.log('✅ Ready now, stopping...');
+          stopRecording();
+        } else if (isRecording) {
+          console.log('⚠️ Still not ready, forcing...');
+          Alert.alert('Too Quick', 'Please hold the button longer to record video');
+          forceStopRecording();
+        }
+      }, 600);
+      return;
+    }
 
-  // ✅ All checks passed, stop normally
-  console.log('✅ All checks passed, stopping recording');
-  stopRecording();
-};
+    if (!canStopRecording) {
+      console.log('⏸️ Too soon, waiting 400ms...');
+      setTimeout(() => {
+        if (isRecording) {
+          stopRecording();
+        }
+      }, 400);
+      return;
+    }
+
+    console.log('✅ Conditions met, stopping now');
+    stopRecording();
+  };
 
   const startRecording = async () => {
-  if (!cameraRef.current || mode !== 'video') return;
-  if (isRecording) return;
+    if (!cameraRef.current || mode !== 'video') return;
+    if (isRecording) return;
 
-  try {
-    console.log('🎬 Starting recording...');
-    setIsRecording(true);
-    setCanStopRecording(false);
-    setRecordingDuration(0);
-    recordingStarted.current = false; // ← NOT started yet
+    try {
+      console.log('🎬 Starting recording...');
+      setIsRecording(true);
+      setCanStopRecording(false);
+      setRecordingDuration(0);
+      recordingStarted.current = false;
 
-    // Animate button
-    Animated.spring(recordButtonScale, {
-      toValue: 1.3,
-      useNativeDriver: true,
-    }).start();
+      // Animate button
+      Animated.spring(recordButtonScale, {
+        toValue: 1.3,
+        useNativeDriver: true,
+      }).start();
 
-    // Start timer
-    recordingTimer.current = setInterval(() => {
-      setRecordingDuration(prev => prev + 1);
-    }, 1000);
+      // Start timer
+      recordingTimer.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
 
-    // ✅ Start recording
-    console.log('📹 Calling recordAsync...');
-    recordingPromise.current = cameraRef.current.recordAsync({
-      maxDuration: 60,
-      mute: false,
-    });
+      // ✅ FIX: Await the recording and handle it properly
+      console.log('📹 Starting recordAsync...');
 
-    // ✅ CRITICAL FIX: Wait for native recording to actually initialize
-    // The native camera module needs time to start capturing data
-    setTimeout(() => {
-      recordingStarted.current = true;
-      console.log('✅ Native recording initialized');
-    }, 300); // 300ms delay for native initialization
+      // Mark as started after brief delay for native init
+      setTimeout(() => {
+        recordingStarted.current = true;
+        console.log('✅ Recording started (native initialized)');
+      }, 300);
 
-    // ✅ Allow stopping after minimum 1.5 seconds total (300ms init + 1200ms recording)
-    setTimeout(() => {
-      setCanStopRecording(true);
-      console.log('✅ Can now stop recording (minimum time reached)');
-    }, 1500);
+      setTimeout(() => {
+        setCanStopRecording(true);
+        console.log('✅ Can stop recording now');
+      }, 1500);
 
-    // ✅ Handle completion
-    recordingPromise.current
-      .then((video) => {
-        console.log('✅ Recording completed:', video?.uri);
-        if (video && video.uri) {
-          setPreviewUri(video.uri);
-          setPreviewType('video');
-        }
-      })
-      .catch((error) => {
-        if (error?.message?.includes('stopped')) {
-          console.log('ℹ️ Recording stopped by user');
-        } else {
-          console.error('❌ Recording error:', error);
-          Alert.alert('Error', 'Failed to record video. Please try again.');
-        }
+      // ✅ CRITICAL: Store the promise but don't await yet
+      const recordingOperation = cameraRef.current.recordAsync({
+        maxDuration: 60,
+        mute: false,
       });
 
-  } catch (error) {
-    console.error('❌ Start recording error:', error);
-    Alert.alert('Error', 'Failed to start recording. Please try again.');
+      recordingPromise.current = recordingOperation;
 
-    // Cleanup
-    setIsRecording(false);
-    setCanStopRecording(false);
-    recordingStarted.current = false;
-    
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
+      // ✅ Handle the promise separately (this runs in background)
+      recordingOperation
+        .then((video) => {
+          console.log('✅ Recording promise resolved!');
+          console.log('📹 Video data:', JSON.stringify(video));
+
+          if (video && video.uri) {
+            console.log('✅ Setting preview URI:', video.uri);
+            setPreviewUri(video.uri);
+            setPreviewType('video');
+          } else {
+            console.error('❌ No video URI in response:', video);
+            Alert.alert('Error', 'Video was not saved properly');
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Recording promise rejected:', error);
+          console.error('Error details:', JSON.stringify(error));
+
+          // Only show error if it's not a normal stop
+          if (!error?.message?.includes('stopped') && !error?.message?.includes('cancelled')) {
+            Alert.alert('Recording Error', error?.message || 'Failed to record video');
+          }
+        })
+        .finally(() => {
+          console.log('🏁 Recording promise completed');
+          recordingPromise.current = null;
+        });
+
+    } catch (error) {
+      console.error('❌ Start recording failed:', error);
+      Alert.alert('Error', 'Failed to start recording');
+
+      setIsRecording(false);
+      setCanStopRecording(false);
+      recordingStarted.current = false;
+
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+        recordingTimer.current = null;
+      }
+
+      Animated.spring(recordButtonScale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
     }
-
-    Animated.spring(recordButtonScale, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  }
-};
+  };
 
   const stopRecording = async () => {
-  if (!cameraRef.current || !isRecording) {
-    console.log('⏹️ Stop called but not recording');
-    return;
-  }
-
-  // ✅ CRITICAL: Don't stop until native recording has initialized
-  if (!recordingStarted.current) {
-    console.log('⏸️ Native recording not initialized yet, waiting...');
-    // Wait and retry
-    setTimeout(() => {
-      if (isRecording && recordingStarted.current) {
-        stopRecording();
-      } else {
-        console.log('⚠️ Recording never initialized properly');
-        forceStopRecording();
-      }
-    }, 600); // Wait 600ms and retry
-    return;
-  }
-
-  // ✅ Don't stop before minimum time
-  if (!canStopRecording) {
-    console.log('⏸️ Minimum recording time not reached');
-    return;
-  }
-
-  // ✅ Additional safety: Check recording duration
-  if (recordingDuration < 1) {
-    console.log('⚠️ Recording duration too short, waiting...');
-    setTimeout(() => {
-      if (isRecording) {
-        stopRecording();
-      }
-    }, 300);
-    return;
-  }
-
-  try {
-    console.log(`🛑 Stopping recording (duration: ${recordingDuration}s)...`);
-    
-    // Stop the camera
-    cameraRef.current.stopRecording();
-    
-    // Reset states
-    setIsRecording(false);
-    setCanStopRecording(false);
-    recordingStarted.current = false;
-
-    // Animate button
-    Animated.spring(recordButtonScale, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-
-    // Clear timer
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
+    if (!cameraRef.current || !isRecording) {
+      console.log('⏹️ Not recording, cannot stop');
+      return;
     }
 
-    recordingPromise.current = null;
-    console.log('✅ Recording stopped successfully');
+    if (!recordingStarted.current) {
+      console.log('⏸️ Recording not started yet, waiting...');
+      setTimeout(() => {
+        if (isRecording && recordingStarted.current) {
+          stopRecording();
+        } else if (isRecording) {
+          console.log('⚠️ Force stopping...');
+          forceStopRecording();
+        }
+      }, 500);
+      return;
+    }
 
-  } catch (error) {
-    console.error('❌ Stop recording error:', error);
-    forceStopRecording();
-  }
-};
+    if (!canStopRecording) {
+      console.log('⏸️ Too early to stop, waiting...');
+      return;
+    }
+
+    if (recordingDuration < 1) {
+      console.log('⚠️ Duration too short, waiting...');
+      setTimeout(() => {
+        if (isRecording) stopRecording();
+      }, 300);
+      return;
+    }
+
+    try {
+      console.log(`🛑 Stopping recording (${recordingDuration}s recorded)...`);
+
+      // ✅ CRITICAL: Call stopRecording which will resolve the promise
+      cameraRef.current.stopRecording();
+
+      // ✅ Reset UI state immediately
+      setIsRecording(false);
+      setCanStopRecording(false);
+      recordingStarted.current = false;
+
+      Animated.spring(recordButtonScale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+        recordingTimer.current = null;
+      }
+
+      // ✅ DON'T set recordingPromise.current = null here!
+      // Let it resolve naturally and clean up in .finally()
+      console.log('✅ Stop command sent, waiting for promise to resolve...');
+
+    } catch (error) {
+      console.error('❌ Stop failed:', error);
+      forceStopRecording();
+      Alert.alert('Error', 'Failed to stop recording properly');
+    }
+  };
 
   const forceStopRecording = () => {
-    console.log('🚨 Force stopping recording');
+    console.log('🚨 Force stopping...');
 
     if (cameraRef.current && isRecording) {
       try {
         cameraRef.current.stopRecording();
       } catch (e) {
-        console.log('Error force stopping:', e);
+        console.log('Error in force stop:', e);
       }
     }
 
     setIsRecording(false);
     setCanStopRecording(false);
     recordingStarted.current = false;
-    recordingPromise.current = null;
 
     if (recordingTimer.current) {
       clearInterval(recordingTimer.current);
@@ -308,6 +312,9 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
       toValue: 1,
       useNativeDriver: true,
     }).start();
+
+    // Clear the promise reference
+    recordingPromise.current = null;
   };
   const handleRecordingPress = async () => {
     if (mode !== 'video') return;
@@ -343,7 +350,17 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
   };
 
   const handleCapture = () => {
-    if (!previewUri) return;
+    console.log('📤 Send button pressed');
+    console.log('Preview URI:', previewUri);
+    console.log('Preview Type:', previewType);
+
+    if (!previewUri) {
+      console.error('❌ No preview URI!');
+      Alert.alert('Error', 'No video to send');
+      return;
+    }
+
+    console.log('✅ Calling onCapture callback...');
     onCapture(previewUri, previewType);
     handleClose();
   };

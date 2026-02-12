@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import {
   Modal,
   Alert,
   Pressable,
-  Animated,
-  Platform
+  Platform,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -43,6 +44,13 @@ interface ChatRoom {
   is_muted?: boolean;
   is_blocked?: boolean;
   media_count?: number;
+  // ✅ Added block_status
+  block_status?: {
+    is_blocked: boolean;
+    blocked_by_me: boolean;
+    blocked_by_other: boolean;
+    blocker_name?: string;
+  };
 }
 
 interface ChatDetailsProps {
@@ -56,9 +64,11 @@ interface ChatDetailsProps {
   onUnblock?: () => void;
   onDeleteChat?: () => void;
   onExitGroup?: () => void;
-  onReportGroup?: () => void;
+  onReportGroup?: (reason: string, alsoExit: boolean) => void;
   onViewMedia?: () => void;
   onAddMember?: () => void;
+  onRemoveMember?: (memberId: string) => void;
+  apiCall?: (endpoint: string, data: any) => Promise<any>;
 }
 
 export const ChatDetails: React.FC<ChatDetailsProps> = ({
@@ -75,6 +85,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   onReportGroup,
   onViewMedia,
   onAddMember,
+  onRemoveMember,
 }) => {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [showEncryptionModal, setShowEncryptionModal] = useState(false);
@@ -83,17 +94,18 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [alsoExitGroup, setAlsoExitGroup] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
   // Helper function to extract user from member object
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
     if (!member) return null;
 
-    // If it's already a User object
     if ('first_name' in member && 'last_name' in member && 'email' in member) {
       return member as User;
     }
 
-    // If it's a ChatRoomMember with nested user
     if ('user' in member && member.user) {
       return member.user;
     }
@@ -101,9 +113,32 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     return null;
   };
 
+  const handleRemoveMember = useCallback(
+    (member: User) => {
+      Alert.alert(
+        'Remove Member',
+        `Remove ${member.first_name} ${member.last_name} from this group?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              if (onRemoveMember) {
+                setRemovingMemberId(member.employee_id || String(member.id));
+                onRemoveMember(member.employee_id || String(member.id));
+              }
+            },
+          },
+        ]
+      );
+    },
+    [onRemoveMember]
+  );
+
   useEffect(() => {
-  console.log('📊 ChatDetails: chatRoom updated, member count:', chatRoom.members.length);
-}, [chatRoom.members.length]); 
+    console.log('📊 ChatDetails: chatRoom updated, member count:', chatRoom.members.length);
+  }, [chatRoom.members.length]);
 
   const getChatName = () => {
     if (chatRoom.room_type === 'group') {
@@ -111,7 +146,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     }
 
     const currentUserId = currentUser.id || currentUser.employee_id;
-    const otherMember = chatRoom.members.find(m => {
+    const otherMember = chatRoom.members.find((m) => {
       const user = getUserFromMember(m);
       return user && (user.id || user.employee_id) !== currentUserId;
     });
@@ -124,68 +159,143 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     return 'Unknown';
   };
 
+  // ✅ ADD: Helper to get member role
+  const getMemberRole = (member: User | ChatRoomMember): string => {
+    if ('role' in member) {
+      return (member as ChatRoomMember).role || 'member';
+    }
+    // If it's just a User object, check if they're the admin
+    const userId = (member as User).id || (member as User).employee_id;
+    const adminId = chatRoom.admin?.id || chatRoom.admin?.employee_id;
+    return userId === adminId ? 'admin' : 'member';
+  };
+
+  // ✅ ADD: Action sheet for member management
+  const showMemberActionSheet = (member: User, currentRole: string) => {
+    Alert.alert(
+      `Manage ${member.first_name} ${member.last_name}`,
+      'Choose an action',
+      [
+        {
+          text: currentRole === 'admin' ? 'Remove Admin' : 'Make Admin',
+          onPress: () => handleMakeAdmin(member, currentRole),
+        },
+        {
+          text: 'Remove from Group',
+          style: 'destructive',
+          onPress: () => handleRemoveMember(member),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  // ✅ ADD: Handle making someone admin
+  // ✅ UPDATED: Handle making someone admin
+  const handleMakeAdmin = async (member: User, currentRole: string) => {
+    const newRole = currentRole === 'admin' ? 'member' : 'admin';
+
+    Alert.alert(
+      currentRole === 'admin' ? 'Remove Admin' : 'Make Admin',
+      `${currentRole === 'admin' ? 'Remove admin privileges from' : 'Make'} ${member.first_name} ${member.last_name} ${currentRole === 'admin' ? '?' : 'an admin?'}`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: currentRole === 'admin' ? 'Remove' : 'Confirm',
+          onPress: async () => {
+            try {
+              // ✅ Check if apiCall is available (for backward compatibility)
+              if (!apiCall) {
+                Alert.alert('Info', 'This feature requires backend integration. Please add apiCall prop.');
+                return;
+              }
+
+              await apiCall('updateMemberRole', {
+                chat_room_id: chatRoom.id,
+                user_id: member.employee_id,
+                new_role: newRole,
+              });
+
+              Alert.alert(
+                'Success',
+                `${member.first_name} is now ${newRole === 'admin' ? 'an admin' : 'a member'}`,
+                [{ text: 'OK', onPress: onBack }]
+              );
+            } catch (error) {
+              console.error('Error updating member role:', error);
+              Alert.alert('Error', 'Failed to update member role. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getChatAvatar = () => {
-  if (chatRoom.room_type === 'group') {
-    if (chatRoom.profile_picture) {
+    if (chatRoom.room_type === 'group') {
+      if (chatRoom.profile_picture) {
+        const timestamp = chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now();
+        return (
+          <Image
+            source={{
+              uri: `${chatRoom.profile_picture}?t=${timestamp}`,
+            }}
+            style={styles.profileAvatar}
+          />
+        );
+      }
+      return (
+        <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
+          <Ionicons name="people" size={60} color="#8696a0" />
+        </View>
+      );
+    }
+
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    const otherMember = chatRoom.members.find((m) => {
+      const user = getUserFromMember(m);
+      return user && (user.id || user.employee_id) !== currentUserId;
+    });
+
+    const otherUser = otherMember ? getUserFromMember(otherMember) : null;
+
+    if (otherUser?.profile_picture) {
       const timestamp = chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now();
       return (
         <Image
-          source={{ 
-            uri: `${chatRoom.profile_picture}?t=${timestamp}` 
+          source={{
+            uri: `${otherUser.profile_picture}?t=${timestamp}`,
           }}
           style={styles.profileAvatar}
         />
       );
     }
+
     return (
       <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-        <Ionicons name="people" size={60} color="#8696a0" />
+        <Text style={styles.avatarText}>
+          {otherUser
+            ? `${otherUser.first_name[0] || '?'}${otherUser.last_name?.[0] || ''}`
+            : '?'}
+        </Text>
       </View>
     );
-  }
-
-  // For direct chats
-  const currentUserId = currentUser.id || currentUser.employee_id;
-  const otherMember = chatRoom.members.find(m => {
-    const user = getUserFromMember(m);
-    return user && (user.id || user.employee_id) !== currentUserId;
-  });
-
-  const otherUser = otherMember ? getUserFromMember(otherMember) : null;
-
-  if (otherUser?.profile_picture) {
-    // Use updated_at timestamp for cache busting
-    const timestamp = chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now();
-    return (
-      <Image
-        source={{ 
-          uri: `${otherUser.profile_picture}?t=${timestamp}` 
-        }}
-        style={styles.profileAvatar}
-      />
-    );
-  }
-
-  return (
-    <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-      <Text style={styles.avatarText}>
-        {otherUser
-          ? `${otherUser.first_name[0] || '?'}${otherUser.last_name?.[0] || ''}`
-          : '?'}
-      </Text>
-    </View>
-  );
-};
+  };
 
   const isAdmin = chatRoom.admin?.id === currentUser.id;
 
-  // Extract and normalize members list
-  const normalizedMembers = chatRoom.members.map(m => getUserFromMember(m)).filter(Boolean) as User[];
+  const normalizedMembers = chatRoom.members.map((m) => getUserFromMember(m)).filter(Boolean) as User[];
   const displayedMembers = showAllMembers ? normalizedMembers : normalizedMembers.slice(0, 5);
 
   const getOtherUserEmail = () => {
     const currentUserId = currentUser.id || currentUser.employee_id;
-    const otherMember = chatRoom.members.find(m => {
+    const otherMember = chatRoom.members.find((m) => {
       const user = getUserFromMember(m);
       return user && (user.id || user.employee_id) !== currentUserId;
     });
@@ -200,14 +310,9 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
   const handleMuteOption = (duration: string) => {
     setShowMuteOptions(false);
-    // Call the backend mute function with duration
     if (onMute) {
       onMute();
-      Alert.alert(
-        'Muted',
-        `Notifications muted for ${duration}`,
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Muted', `Notifications muted for ${duration}`, [{ text: 'OK' }]);
     }
   };
 
@@ -224,16 +329,10 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
   const handleBlock = () => {
     setShowBlockConfirm(false);
-    if (chatRoom.is_blocked) {
-      if (onUnblock) {
-        onUnblock();
-        Alert.alert('Unblocked', 'User has been unblocked', [{ text: 'OK' }]);
-      }
+    if (chatRoom.block_status?.blocked_by_me) {
+      if (onUnblock) onUnblock();
     } else {
-      if (onBlock) {
-        onBlock();
-        Alert.alert('Blocked', 'User has been blocked', [{ text: 'OK' }]);
-      }
+      if (onBlock) onBlock();
     }
   };
 
@@ -243,9 +342,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
   const handleDelete = () => {
     setShowDeleteConfirm(false);
-    if (onDeleteChat) {
-      onDeleteChat();
-    }
+    if (onDeleteChat) onDeleteChat();
   };
 
   const handleExitPress = () => {
@@ -254,9 +351,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
   const handleExit = () => {
     setShowExitConfirm(false);
-    if (onExitGroup) {
-      onExitGroup();
-    }
+    if (onExitGroup) onExitGroup();
   };
 
   const handleReportPress = () => {
@@ -266,16 +361,140 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   const handleReport = () => {
     setShowReportConfirm(false);
     if (onReportGroup) {
-      onReportGroup();
-      Alert.alert('Reported', 'Group has been reported', [{ text: 'OK' }]);
+      onReportGroup(reportReason, alsoExitGroup);
     }
+    setReportReason('');
+    setAlsoExitGroup(false);
   };
 
   const handleMediaPress = () => {
-    if (onViewMedia) {
-      onViewMedia();
-    }
+    if (onViewMedia) onViewMedia();
   };
+
+  // ✅ Generic Confirmation Modal (fixed)
+  const ConfirmationModal = ({
+    visible,
+    onClose,
+    onConfirm,
+    title,
+    message,
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    isDanger = false,
+  }: {
+    visible: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDanger?: boolean;
+  }) => (
+    <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.confirmModalContent} onPress={(e) => e.stopPropagation()}>
+          <Text style={styles.confirmModalTitle}>{title}</Text>
+          <Text style={styles.confirmModalMessage}>{message}</Text>
+          <View style={styles.confirmModalButtons}>
+            <TouchableOpacity
+              style={[styles.confirmModalButton, styles.confirmModalButtonCancel]}
+              onPress={onClose}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.confirmModalButtonCancelText}>{cancelText}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmModalButton, isDanger && styles.confirmModalButtonDanger]}
+              onPress={onConfirm}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.confirmModalButtonText, isDanger && styles.confirmModalButtonDangerText]}>
+                {confirmText}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
+  // ✅ New Report Modal
+  const ReportModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={showReportConfirm}
+      onRequestClose={() => {
+        setShowReportConfirm(false);
+        setReportReason('');
+        setAlsoExitGroup(false);
+      }}
+    >
+      <Pressable
+        style={styles.modalOverlay}
+        onPress={() => {
+          setShowReportConfirm(false);
+          setReportReason('');
+          setAlsoExitGroup(false);
+        }}
+      >
+        <Pressable style={styles.confirmModalContent} onPress={(e) => e.stopPropagation()}>
+          <Text style={styles.confirmModalTitle}>Report Group</Text>
+          <Text style={styles.confirmModalMessage}>Please tell us why you're reporting this group:</Text>
+
+          <TextInput
+            style={styles.reportInput}
+            placeholder="Enter reason for reporting..."
+            placeholderTextColor="#8696a0"
+            value={reportReason}
+            onChangeText={setReportReason}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity
+            style={styles.checkboxContainer}
+            onPress={() => setAlsoExitGroup(!alsoExitGroup)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, alsoExitGroup && styles.checkboxChecked]}>
+              {alsoExitGroup && <Ionicons name="checkmark" size={16} color="#ffffff" />}
+            </View>
+            <Text style={styles.checkboxLabel}>Also exit this group</Text>
+          </TouchableOpacity>
+
+          <View style={styles.confirmModalButtons}>
+            <TouchableOpacity
+              style={[styles.confirmModalButton, styles.confirmModalButtonCancel]}
+              onPress={() => {
+                setShowReportConfirm(false);
+                setReportReason('');
+                setAlsoExitGroup(false);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.confirmModalButtonCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmModalButton, styles.confirmModalButtonDanger]}
+              onPress={() => {
+                if (reportReason.trim()) {
+                  handleReport();
+                } else {
+                  Alert.alert('Error', 'Please provide a reason for reporting');
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.confirmModalButtonDangerText}>Report</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 
   const EncryptionModal = () => (
     <Modal
@@ -284,23 +503,17 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
       visible={showEncryptionModal}
       onRequestClose={() => setShowEncryptionModal(false)}
     >
-      <Pressable 
-        style={styles.modalOverlay}
-        onPress={() => setShowEncryptionModal(false)}
-      >
+      <Pressable style={styles.modalOverlay} onPress={() => setShowEncryptionModal(false)}>
         <View style={styles.modalContent}>
           <View style={styles.modalIconContainer}>
             <Ionicons name="lock-closed" size={48} color="#00a884" />
           </View>
           <Text style={styles.modalTitle}>End-to-end encrypted</Text>
           <Text style={styles.modalMessage}>
-            Messages and calls are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or listen to them.
+            Messages and calls are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or
+            listen to them.
           </Text>
-          <TouchableOpacity
-            style={styles.modalButton}
-            onPress={() => setShowEncryptionModal(false)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.modalButton} onPress={() => setShowEncryptionModal(false)} activeOpacity={0.7}>
             <Text style={styles.modalButtonText}>OK</Text>
           </TouchableOpacity>
         </View>
@@ -315,10 +528,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
       visible={showMuteOptions}
       onRequestClose={() => setShowMuteOptions(false)}
     >
-      <Pressable 
-        style={styles.bottomSheetOverlay}
-        onPress={() => setShowMuteOptions(false)}
-      >
+      <Pressable style={styles.bottomSheetOverlay} onPress={() => setShowMuteOptions(false)}>
         <View style={styles.bottomSheet}>
           <View style={styles.bottomSheetHeader}>
             <Text style={styles.bottomSheetTitle}>Mute notifications</Text>
@@ -356,87 +566,23 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     </Modal>
   );
 
-  const ConfirmationModal = ({ 
-    visible, 
-    onClose, 
-    onConfirm, 
-    title, 
-    message,
-    confirmText = 'Confirm',
-    cancelText = 'Cancel',
-    isDanger = false
-  }: {
-    visible: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
-    title: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    isDanger?: boolean;
-  }) => (
-    <Modal
-      animationType="fade"
-      transparent={true}
-      visible={visible}
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={styles.confirmModalContent}>
-          <Text style={styles.confirmModalTitle}>{title}</Text>
-          <Text style={styles.confirmModalMessage}>{message}</Text>
-          <View style={styles.confirmModalButtons}>
-            <TouchableOpacity
-              style={[styles.confirmModalButton, styles.confirmModalButtonCancel]}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.confirmModalButtonCancelText}>{cancelText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmModalButton, isDanger && styles.confirmModalButtonDanger]}
-              onPress={onConfirm}
-              activeOpacity={0.7}
-            >
-              <Text style={[
-                styles.confirmModalButtonText,
-                isDanger && styles.confirmModalButtonDangerText
-              ]}>
-                {confirmText}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
-  );
-
   return (
     <View style={styles.container}>
-    <View style={styles.header}>
-    <TouchableOpacity
-      style={styles.headerButton}
-      onPress={onBack}
-      activeOpacity={0.7}
-    >
-      <Ionicons name="chevron-back" size={24} color="#ffffff" />
-    </TouchableOpacity>
-    
-    <Text style={styles.headerTitle}>Contact Info</Text>
-    
-    {/* Edit button - Only for groups, empty view for direct chats to maintain center alignment */}
-    {chatRoom.room_type === 'group' ? (
-      <TouchableOpacity
-        style={styles.headerButton}
-        onPress={onEdit}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="create-outline" size={24} color="#ffffff" />
-      </TouchableOpacity>
-    ) : (
-      <View style={styles.headerButton} />
-    )}
-  </View>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerButton} onPress={onBack} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color="#ffffff" />
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Contact Info</Text>
+
+        {chatRoom.room_type === 'group' ? (
+          <TouchableOpacity style={styles.headerButton} onPress={onEdit} activeOpacity={0.7}>
+            <Ionicons name="create-outline" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerButton} />
+        )}
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
@@ -444,14 +590,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
           {getChatAvatar()}
           <Text style={styles.profileName}>{getChatName()}</Text>
           {chatRoom.room_type === 'group' && (
-            <Text style={styles.profileMeta}>
-              Group · {normalizedMembers.length} members
-            </Text>
-          )}
-          {chatRoom.room_type === 'direct' && (
-            <Text style={styles.profileMeta}>
-              {getOtherUserEmail()}
-            </Text>
+            <Text style={styles.profileMeta}>Group · {normalizedMembers.length} members</Text>
           )}
         </View>
 
@@ -467,8 +606,8 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
         {/* Encryption Info */}
         <View style={styles.section}>
-          <TouchableOpacity 
-            style={styles.sectionItem} 
+          <TouchableOpacity
+            style={styles.sectionItem}
             onPress={() => setShowEncryptionModal(true)}
             activeOpacity={0.7}
           >
@@ -485,11 +624,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
         {/* Media Section */}
         <View style={styles.section}>
-          <TouchableOpacity 
-            style={styles.sectionItem} 
-            onPress={handleMediaPress}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.sectionItem} onPress={handleMediaPress} activeOpacity={0.7}>
             <View style={styles.sectionIcon}>
               <Ionicons name="images" size={22} color="#00a884" />
             </View>
@@ -505,55 +640,87 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
         {chatRoom.room_type === 'group' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>
-                {normalizedMembers.length} members
-              </Text>
+              <Text style={styles.sectionHeaderText}>{normalizedMembers.length} members</Text>
               {isAdmin && (
-                <TouchableOpacity 
-                  style={styles.addMemberBtn} 
-                  onPress={onAddMember}
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity style={styles.addMemberBtn} onPress={onAddMember} activeOpacity={0.7}>
                   <Ionicons name="person-add" size={20} color="#00a884" />
                 </TouchableOpacity>
               )}
             </View>
 
-            {displayedMembers.map(member => (
-              <View key={member.id || member.employee_id} style={styles.memberItem}>
-                <View style={styles.memberAvatar}>
-                  {member.profile_picture ? (
-                    <Image
-                      source={{ uri: member.profile_picture }}
-                      style={styles.memberAvatarImage}
-                    />
-                  ) : (
-                    <View style={styles.memberAvatarPlaceholder}>
-                      <Text style={styles.memberAvatarText}>
-                        {member.first_name[0] || '?'}
-                        {member.last_name?.[0] || ''}
+            {displayedMembers.map((member) => {
+              // ✅ Get the original member object to check role
+              const originalMember = chatRoom.members.find(m => {
+                const user = getUserFromMember(m);
+                return user && (user.id || user.employee_id) === (member.id || member.employee_id);
+              });
+
+              const memberRole = originalMember ? getMemberRole(originalMember) : 'member';
+              const isMemberAdmin = memberRole === 'admin';
+              const isCurrentUser = (member.id || member.employee_id) === (currentUser.id || currentUser.employee_id);
+              const canManageMember = isAdmin && !isCurrentUser;
+
+              return (
+                <TouchableOpacity
+                  key={member.id || member.employee_id}
+                  style={styles.memberItem}
+                  onPress={() => {
+                    // ✅ Only admins can tap to manage members (except themselves)
+                    if (canManageMember) {
+                      showMemberActionSheet(member, memberRole);
+                    }
+                  }}
+                  activeOpacity={canManageMember ? 0.7 : 1}
+                  disabled={!canManageMember}
+                >
+                  <View style={styles.memberAvatar}>
+                    {member.profile_picture ? (
+                      <Image
+                        source={{
+                          uri: `${member.profile_picture}?t=${chatRoom.updated_at ? new Date(chatRoom.updated_at).getTime() : Date.now()}`,
+                        }}
+                        style={styles.memberAvatarImage}
+                      />
+                    ) : (
+                      <View style={styles.memberAvatarPlaceholder}>
+                        <Text style={styles.memberAvatarText}>
+                          {member.first_name[0]}
+                          {member.last_name?.[0]}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.memberInfo}>
+                    {/* ✅ Name row with admin badge */}
+                    <View style={styles.memberNameRow}>
+                      <Text style={styles.memberName}>
+                        {member.first_name} {member.last_name}
+                        {isCurrentUser && ' (You)'}
                       </Text>
+                      {/* ✅ Admin badge */}
+                      {isMemberAdmin && (
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>Admin</Text>
+                        </View>
+                      )}
                     </View>
+
+                    <Text style={styles.memberStatus} numberOfLines={1}>
+                      {member.email}
+                    </Text>
+                  </View>
+
+                  {/* ✅ Show chevron only if current user is admin and can manage this member */}
+                  {canManageMember && (
+                    <Ionicons name="chevron-forward" size={20} color="#8696a0" />
                   )}
-                </View>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>
-                    {member.first_name} {member.last_name}
-                    {(member.id || member.employee_id) === (currentUser.id || currentUser.employee_id) && ' (You)'}
-                  </Text>
-                  <Text style={styles.memberStatus} numberOfLines={1}>
-                    {(member.id || member.employee_id) === chatRoom.admin?.id ? 'Group Admin' : member.email}
-                  </Text>
-                </View>
-              </View>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
 
             {normalizedMembers.length > 5 && !showAllMembers && (
-              <TouchableOpacity
-                style={styles.showAllMembers}
-                onPress={() => setShowAllMembers(true)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.showAllMembers} onPress={() => setShowAllMembers(true)} activeOpacity={0.7}>
                 <Text style={styles.showAllMembersText}>Show all members</Text>
               </TouchableOpacity>
             )}
@@ -562,7 +729,6 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
         {/* Settings Section */}
         <View style={styles.section}>
-          {/* Mute/Unmute */}
           <TouchableOpacity
             style={styles.sectionItem}
             onPress={chatRoom.is_muted ? handleUnmute : handleMutePress}
@@ -582,23 +748,18 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
             </View>
           </TouchableOpacity>
 
-          {/* Block/Unblock (only for direct chats) */}
           {chatRoom.room_type === 'direct' && (
-            <TouchableOpacity
-              style={styles.sectionItem}
-              onPress={handleBlockPress}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.sectionItem} onPress={handleBlockPress} activeOpacity={0.7}>
               <View style={styles.sectionIcon}>
                 <Ionicons
-                  name={chatRoom.is_blocked ? "checkmark-circle" : "ban"}
+                  name={chatRoom.block_status?.blocked_by_me ? 'checkmark-circle' : 'ban'}
                   size={22}
                   color="#667781"
                 />
               </View>
               <View style={styles.sectionText}>
                 <Text style={styles.sectionLabel}>
-                  {chatRoom.is_blocked ? 'Unblock' : 'Block'}
+                  {chatRoom.block_status?.blocked_by_me ? 'Unblock' : 'Block'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -607,17 +768,13 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
 
         {/* Danger Zone */}
         <View style={[styles.section, styles.sectionDanger]}>
-          <TouchableOpacity 
-            style={styles.sectionItem} 
+          <TouchableOpacity
+            style={styles.sectionItem}
             onPress={chatRoom.room_type === 'group' ? handleExitPress : handleDeletePress}
             activeOpacity={0.7}
           >
             <View style={styles.sectionIcon}>
-              <Ionicons 
-                name={chatRoom.room_type === 'group' ? "exit" : "trash"} 
-                size={22} 
-                color="#f15c6d" 
-              />
+              <Ionicons name={chatRoom.room_type === 'group' ? 'exit' : 'trash'} size={22} color="#f15c6d" />
             </View>
             <View style={styles.sectionText}>
               <Text style={[styles.sectionLabel, styles.sectionLabelRed]}>
@@ -627,43 +784,37 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
           </TouchableOpacity>
 
           {chatRoom.room_type === 'group' && (
-            <TouchableOpacity 
-              style={styles.sectionItem} 
-              onPress={handleReportPress}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.sectionItem} onPress={handleReportPress} activeOpacity={0.7}>
               <View style={styles.sectionIcon}>
                 <Ionicons name="flag" size={22} color="#f15c6d" />
               </View>
               <View style={styles.sectionText}>
-                <Text style={[styles.sectionLabel, styles.sectionLabelRed]}>
-                  Report group
-                </Text>
+                <Text style={[styles.sectionLabel, styles.sectionLabelRed]}>Report group</Text>
               </View>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Bottom Padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Modals */}
+      {/* ✅ Modals - Fixed */}
       <EncryptionModal />
       <MuteOptionsModal />
-      
+      <ReportModal />
+
       <ConfirmationModal
         visible={showBlockConfirm}
         onClose={() => setShowBlockConfirm(false)}
         onConfirm={handleBlock}
-        title={chatRoom.is_blocked ? "Unblock Contact" : "Block Contact"}
+        title={chatRoom.block_status?.blocked_by_me ? 'Unblock Contact' : 'Block Contact'}
         message={
-          chatRoom.is_blocked 
-            ? "Are you sure you want to unblock this contact?" 
-            : "Blocked contacts will no longer be able to call you or send you messages."
+          chatRoom.block_status?.blocked_by_me
+            ? 'Are you sure you want to unblock this contact?'
+            : 'Blocked contacts will no longer be able to call you or send you messages.'
         }
-        confirmText={chatRoom.is_blocked ? "Unblock" : "Block"}
-        isDanger={!chatRoom.is_blocked}
+        confirmText={chatRoom.block_status?.blocked_by_me ? 'Unblock' : 'Block'}
+        isDanger={!chatRoom.block_status?.blocked_by_me}
       />
 
       <ConfirmationModal
@@ -685,16 +836,6 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
         confirmText="Exit"
         isDanger={true}
       />
-
-      <ConfirmationModal
-        visible={showReportConfirm}
-        onClose={() => setShowReportConfirm(false)}
-        onConfirm={handleReport}
-        title="Report Group"
-        message="Report this group to WhatsApp?"
-        confirmText="Report"
-        isDanger={true}
-      />
     </View>
   );
 };
@@ -705,39 +846,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f2f5',
   },
   header: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',  
-  backgroundColor: '#008069',
-  paddingTop: 90,
-  paddingBottom: 16,
-  paddingHorizontal: 16,
-  marginTop: Platform.OS === 'ios' ? -80 : -50,
-},
-headerButton: {
-  width: 40,  // Fixed width for both buttons
-  height: 40,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-headerTitleContainer: {
-  flex: 1,
-  alignItems: 'center',
-},
-  backButton: {
-    padding: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#008069',
+    paddingTop: 90,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
-  headerEditButton: {
-    padding: 5,
+  headerButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
-  flex: 1,  
-  fontSize: 19,
-  color: '#ffffff',
-  fontWeight: '500',
-  textAlign: 'center',
-},
-  
+    flex: 1,
+    fontSize: 19,
+    color: '#ffffff',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   content: {
     flex: 1,
   },
@@ -813,9 +943,6 @@ headerTitleContainer: {
     backgroundColor: '#f0f2f5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  sectionIconEdit: {
-    backgroundColor: '#00a884',
   },
   sectionText: {
     flex: 1,
@@ -900,8 +1027,6 @@ headerTitleContainer: {
   bottomPadding: {
     height: 32,
   },
-
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -953,8 +1078,6 @@ headerTitleContainer: {
     fontWeight: '600',
     textAlign: 'center',
   },
-
-  // Bottom Sheet Styles
   bottomSheetOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -997,8 +1120,6 @@ headerTitleContainer: {
     fontWeight: '600',
     textAlign: 'center',
   },
-
-  // Confirmation Modal Styles
   confirmModalContent: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -1048,5 +1169,60 @@ headerTitleContainer: {
   },
   confirmModalButtonDangerText: {
     color: '#ffffff',
+  },
+  reportInput: {
+    backgroundColor: '#f0f2f5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: '#111b21',
+    marginBottom: 16,
+    minHeight: 100,
+    maxHeight: 150,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#8696a0',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#00a884',
+    borderColor: '#00a884',
+  },
+  checkboxLabel: {
+    fontSize: 15,
+    color: '#111b21',
+  },
+  removeMemberBtn: {
+    padding: 8,
+  },
+  memberNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  adminBadge: {
+    backgroundColor: '#00a884',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
 });

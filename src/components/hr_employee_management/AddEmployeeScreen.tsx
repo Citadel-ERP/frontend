@@ -568,18 +568,9 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               console.log(`Mobile file prepared: ${fieldName} - ${doc.name}`);
             }
           } catch (error) {
-<<<<<<< HEAD
             console.error('Error fetching file for web upload:', error);
             alert('Error', `Failed to prepare file ${doc.name} for upload`);
-=======
-            console.error(`Error preparing file ${doc.name}:`, error);
-            Alert.alert(
-              'File Upload Error',
-              `Failed to prepare "${doc.name}" for upload. Please try removing and re-adding this file.`,
-              [{ text: 'OK' }]
-            );
-            setSubmitting(false);
->>>>>>> f13ea067ba3e9040d5f396778ff77ed0f21265e2
+
             return;
           }
         }
@@ -638,20 +629,8 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
     } catch (error: any) {
       console.error('Error creating employee:', error);
-<<<<<<< HEAD
       alert('Error', error.message || 'Failed to create employee');
-=======
-      
-      // Network or unexpected error
-      const errorMessage = error.message || 'An unexpected error occurred. Please check your connection and try again.';
-      
-      Alert.alert(
-        'Error',
-        errorMessage,
-        [{ text: 'OK' }],
-        { cancelable: false }
-      );
->>>>>>> f13ea067ba3e9040d5f396778ff77ed0f21265e2
+
     } finally {
       setSubmitting(false);
     }

@@ -87,6 +87,14 @@ interface ChatRoom {
   profile_picture?: string;
   members: (User | ChatRoomMember)[];
   is_muted?: boolean;
+  blocked_by?: User;
+  blocked_at?: string;
+  block_status?: {
+    is_blocked: boolean;
+    blocked_by_me: boolean;
+    blocked_by_other: boolean;
+    blocker_name?: string;
+  };
 }
 
 interface ChatProps {
@@ -163,6 +171,9 @@ export const Chat: React.FC<ChatProps> = ({
   const [showCameraRecorder, setShowCameraRecorder] = useState(false);
   const [cameraMode, setCameraMode] = useState<'photo' | 'video'>('photo');
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const isBlocked = chatRoom.block_status?.is_blocked;
+  const isBlockedByMe = chatRoom.block_status?.blocked_by_me;
+  const isBlockedByOther = chatRoom.block_status?.blocked_by_other;
   // Add near other state declarations (around line 50):
 
 
@@ -192,9 +203,9 @@ export const Chat: React.FC<ChatProps> = ({
   }, [chatRoom?.id, messages]);
 
   const clearMessageCacheForRoom = (roomId: number) => {
-  const cacheKey = `room_${roomId}`;
-  messageCache.delete(cacheKey);
-};
+    const cacheKey = `room_${roomId}`;
+    messageCache.delete(cacheKey);
+  };
 
   const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
 
@@ -275,12 +286,12 @@ export const Chat: React.FC<ChatProps> = ({
       setSearchText('');
       setSearchResults([]);
       setShowMessageOptionsModal(false);
-      
+
       // ✅ ADDED: Clear cache when switching rooms to ensure fresh data
       if (previousRoomId.current !== null) {
         clearMessageCacheForRoom(previousRoomId.current);
       }
-      
+
       const cacheKey = `room_${chatRoom?.id}`;
       const cached = messageCache.get(cacheKey);
       if (cached && cached.length > 0) {
@@ -909,6 +920,21 @@ export const Chat: React.FC<ChatProps> = ({
   );
 
   const renderMessage = ({ item: message, index }: { item: Message; index: number }) => {
+    if (message.message_type === 'system') {
+      const showDate = shouldShowDateSeparator(index, messagesToDisplay);
+      return (
+        <>
+          {showDate && (
+            <View style={styles.dateSeparator}>
+              <Text style={styles.dateSeparatorText}>{formatDate(message.created_at)}</Text>
+            </View>
+          )}
+          <View style={styles.systemMessageContainer}>
+            <Text style={styles.systemMessageText}>{message.content}</Text>
+          </View>
+        </>
+      );
+    }
     const isOwnMessage = (message.sender.id || message.sender.employee_id) === (currentUser.id || currentUser.employee_id);
     const showDate = shouldShowDateSeparator(index, messagesToDisplay);
     const reactions = groupedReactions(message.reactions || []);
@@ -1325,7 +1351,7 @@ export const Chat: React.FC<ChatProps> = ({
       )}
 
       {/* Input Container */}
-      {!isSearchMode && (
+      {!isSearchMode && !isBlocked && (
         <View style={[
           styles.inputContainer,
           {
@@ -1406,6 +1432,29 @@ export const Chat: React.FC<ChatProps> = ({
               </TouchableOpacity>
             )}
           </View>
+        </View>
+      )}
+
+      {!isSearchMode && isBlocked && (
+        <View style={styles.blockedContainer}>
+          <Ionicons name="ban" size={24} color="#8696a0" />
+          <Text style={styles.blockedText}>
+            {isBlockedByMe
+              ? 'You blocked this contact. Unblock to send messages.'
+              : 'You cannot send messages to this contact.'}
+          </Text>
+          {isBlockedByMe && (
+            <TouchableOpacity
+              style={styles.unblockButton}
+              onPress={() => {
+                // Navigate to chat details to unblock
+                onHeaderClick();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.unblockButtonText}>Unblock</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -2483,5 +2532,50 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  blockedContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#f0f2f5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e9edef',
+  },
+  blockedText: {
+    fontSize: 14,
+    color: '#667781',
+    flex: 1,
+  },
+  unblockButton: {
+    backgroundColor: '#00a884',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  unblockButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  }, systemMessageContainer: {
+    alignItems: 'center',
+    marginVertical: 8,
+    paddingHorizontal: 16,
+  },
+  systemMessageText: {
+    backgroundColor: '#d1e7fd',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    fontSize: 12.5,
+    color: '#054a91',
+    textAlign: 'center',
+    maxWidth: '80%',
   },
 });
