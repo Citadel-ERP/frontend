@@ -27,6 +27,8 @@ interface Employee {
   casual_leaves: number;
   birth_date?: string;
   joining_date?: string;
+  email?: string;
+  phone_number?: string;
 }
 
 interface Office {
@@ -94,7 +96,7 @@ const WebDateInput: React.FC<{
     }
     return value.toISOString().split('T')[0];
   };
-
+  
   const handleChange = (e: any) => {
     const inputValue = e.target.value;
     if (!inputValue) return;
@@ -143,6 +145,10 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
   const [earnedLeaves, setEarnedLeaves] = useState(employee.earned_leaves.toString());
   const [sickLeaves, setSickLeaves] = useState(employee.sick_leaves.toString());
   const [casualLeaves, setCasualLeaves] = useState(employee.casual_leaves.toString());
+const [showOfficePicker, setShowOfficePicker] = useState(false);
+  // Contact Information
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   // Work timings with Date objects for picker
   const [loginTime, setLoginTime] = useState<Date>(new Date());
@@ -218,6 +224,10 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     setEarnedLeaves(employee.earned_leaves.toString());
     setSickLeaves(employee.sick_leaves.toString());
     setCasualLeaves(employee.casual_leaves.toString());
+
+    // Initialize contact information
+    setEmail(employee.email || '');
+    setPhoneNumber(employee.phone_number || '');
 
     // Initialize work timings - READ FROM employeeDetails
     if (employeeDetails?.login_time) {
@@ -308,6 +318,24 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     if (isNaN(casual) || casual < 0) {
       Alert.alert('Invalid Input', 'Casual leaves must be a positive number');
       return false;
+    }
+
+    // Validate email if provided
+    if (email && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        Alert.alert('Invalid Input', 'Please enter a valid email address');
+        return false;
+      }
+    }
+
+    // Validate phone number if provided
+    if (phoneNumber && phoneNumber.trim()) {
+      const phoneRegex = /^\+?[\d\s-]{10,}$/;
+      if (!phoneRegex.test(phoneNumber.trim())) {
+        Alert.alert('Invalid Input', 'Please enter a valid phone number (at least 10 digits)');
+        return false;
+      }
     }
 
     // Validate reset password if section is shown
@@ -436,6 +464,14 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
         logout_time: formatTimeToString(logoutTime),
       };
 
+      // Add contact information if provided
+      if (email && email.trim()) {
+        payload.email = email.trim();
+      }
+      if (phoneNumber && phoneNumber.trim()) {
+        payload.phone_number = phoneNumber.trim();
+      }
+
       // Add office if selected
       if (selectedOfficeId) {
         payload.office_id = selectedOfficeId;
@@ -556,34 +592,92 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                   </Text>
                 </View>
 
+                {/* Contact Information Section */}
+                {renderSection('Contact Information', 'mail-outline', (
+                  <View>
+                    <Text style={styles.editLabel}>Email Address</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      placeholder="Enter email address"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      autoCapitalize="none"
+                    />
+
+                    <Text style={styles.editLabel}>Phone Number</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={phoneNumber}
+                      onChangeText={setPhoneNumber}
+                      keyboardType="phone-pad"
+                      placeholder="Enter phone number"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    />
+                  </View>
+                ))}
+
+           
                 {/* Office Assignment Section */}
                 {renderSection('Office Assignment', 'business-outline', (
                   <View>
-                    <Text style={[styles.editLabel]}>Assigned Office</Text>
+                    <Text style={styles.editLabel}>Assigned Office</Text>
                     {loadingOffices ? (
                       <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
                     ) : (
-                      <View style={[styles.pickerContainer]}>
-                        <Picker
-                          selectedValue={selectedOfficeId}
-                          onValueChange={(itemValue) => setSelectedOfficeId(itemValue)}
-                          style={styles.picker}
+                      <>
+                        <TouchableOpacity
+                          style={[styles.editInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                          onPress={() => setShowOfficePicker(!showOfficePicker)}
                         >
-                          <Picker.Item label="Select Office" value={null} />
-                          {offices.map((office) => (
-                            <Picker.Item
-                              key={office.id}
-                              label={`${office.name}${office.address?.city ? ` - ${office.address.city}` : ''}`}
-                              value={office.id}
-                            />
-                          ))}
-                        </Picker>
-                      </View>
-                    )}
-                    {selectedOfficeId && (
-                      <Text style={styles.infoSubtext}>
-                        Current: {offices.find(o => o.id === selectedOfficeId)?.name || 'Unknown'}
-                      </Text>
+                          <Text style={{ 
+                            color: selectedOfficeId ? WHATSAPP_COLORS.textPrimary : WHATSAPP_COLORS.textTertiary,
+                            fontSize: 16 
+                          }}>
+                            {selectedOfficeId 
+                              ? offices.find(o => o.id === selectedOfficeId)?.name || 'Select Office'
+                              : 'Select Office'}
+                          </Text>
+                          <Ionicons 
+                            name={showOfficePicker ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color={WHATSAPP_COLORS.textSecondary} 
+                          />
+                        </TouchableOpacity>
+                        
+                        {showOfficePicker && (
+                          <View style={styles.pickerContainer}>
+                            <ScrollView style={{ maxHeight: 200 }}>
+                              {offices.map((office) => (
+                                <TouchableOpacity
+                                  key={office.id}
+                                  style={[
+                                    styles.officeOption,
+                                    selectedOfficeId === office.id && styles.officeOptionSelected
+                                  ]}
+                                  onPress={() => {
+                                    setSelectedOfficeId(office.id);
+                                    setShowOfficePicker(false);
+                                  }}
+                                >
+                                  <Text style={[
+                                    styles.officeName,
+                                    selectedOfficeId === office.id && styles.officeNameSelected
+                                  ]}>
+                                    {office.name}
+                                  </Text>
+                                  {office.address?.city && (
+                                    <Text style={styles.officeAddress}>
+                                      {office.address.city}
+                                    </Text>
+                                  )}
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                        )}
+                      </>
                     )}
                   </View>
                 ))}

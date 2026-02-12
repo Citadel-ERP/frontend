@@ -1487,8 +1487,13 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pickerContainer: {
-    marginBottom: 16,
-  },
+  marginTop: 8,
+  backgroundColor: WHATSAPP_COLORS.surface,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: WHATSAPP_COLORS.border,
+  maxHeight: 200,
+},
   monthPicker: {
     flexDirection: 'row',
   },
@@ -2048,11 +2053,11 @@ export const styles = StyleSheet.create({
   },
 
   officeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 2,
-  },
+  fontSize: 14,
+  fontWeight: '600',
+  color: WHATSAPP_COLORS.textPrimary,
+  marginBottom: 2,
+},
 
   officeNameSelected: {
     color: WHATSAPP_COLORS.primary,
@@ -2275,12 +2280,10 @@ export const styles = StyleSheet.create({
   elevation: 5,
 },
   officeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
-  },
+  padding: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: WHATSAPP_COLORS.border,
+},
 
   officeOptionSelected: {
     backgroundColor: WHATSAPP_COLORS.chatBubbleReceived,
