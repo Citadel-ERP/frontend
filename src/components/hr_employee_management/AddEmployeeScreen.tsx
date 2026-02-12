@@ -824,7 +824,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const renderStep2 = () => (
     <ScrollView showsVerticalScrollIndicator={false}>
 
-      <View style={[styles.section, { marginTop: 10 }]}>
+      <View style={[styles.section, { marginTop: 10, zIndex: 10, position: 'relative' }]}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Office Assignment *
         </Text>
@@ -834,17 +834,17 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         ) : (
           <View style={[styles.formGroup, { marginBottom: 20 }]}>
             <TouchableOpacity
-              style={[
-                styles.input,
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingVertical: 12
-                }
-              ]}
-              onPress={() => setShowOfficePicker(true)}
-            >
+                style={[
+                  styles.input,
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 12
+                  }
+                ]}
+                onPress={() => setShowOfficePicker(!showOfficePicker)}
+              >
               <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
                 {addressInfo.office_id
                   ? selectedOffice?.name || 'Select Office'
