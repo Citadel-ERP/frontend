@@ -115,6 +115,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         phase: 'initial_phase',
         subphase: 'without_contact_details',
         vendorName: '',
+        contactPersonName: '',
     });
 
     const [editingEmails, setEditingEmails] = useState<string[]>([]);
@@ -389,6 +390,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
             if (officeType) meta.office_type = officeType;
             if (location.trim()) meta.location = location.trim();
             if (formData.vendorName.trim()) meta.vendor_name = formData.vendorName.trim();
+            if (formData.contactPersonName.trim()) meta.contact_person_name = formData.contactPersonName.trim();
 
             customFields.forEach(field => {
                 if (field.key.trim() && field.value.trim()) {
@@ -433,15 +435,15 @@ const CreateLead: React.FC<CreateLeadProps> = ({
 
             Alert.alert('Success', 'Lead created successfully!');
 
-            // Reset form
-            setFormData({
+           setFormData({
                 company: '',
                 status: 'active',
                 phase: 'initial_phase',
                 subphase: 'without_contact_details',
                 vendorName: '',
-                city: ''
-            });
+                city: '',
+                contactPersonName: '',  
+                });
             setEditingEmails([]);
             setEditingPhones([]);
             setAreaRequirements('');
@@ -516,6 +518,16 @@ const CreateLead: React.FC<CreateLeadProps> = ({
                             placeholderTextColor={THEME_COLORS.textTertiary}
                         />
                     </View>
+                    <View style={s.field}>
+                        <Text style={s.label}>Contact Person Name</Text>
+                        <TextInput
+                            style={s.input}
+                            value={formData.contactPersonName}
+                            onChangeText={(text) => setFormData({ ...formData, contactPersonName: text })}
+                            placeholder="Enter contact person name (optional)"
+                            placeholderTextColor={THEME_COLORS.textTertiary}
+                        />
+                        </View>
 
                     <View style={s.field}>
                         <Text style={s.label}>City *</Text>
@@ -528,6 +540,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
                         />
                     </View>
                 </View>
+                
 
                 <View style={s.card}>
                     <View style={s.cardHeader}>

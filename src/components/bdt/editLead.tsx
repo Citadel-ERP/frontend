@@ -157,6 +157,11 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [areaRequirements, setAreaRequirements] = useState(lead.meta?.area_requirements || '');
   const [officeType, setOfficeType] = useState(lead.meta?.office_type || '');
   const [location, setLocation] = useState(lead.meta?.location || '');
+  const [contactPersonName, setContactPersonName] = useState<string>(
+  (lead.meta && typeof lead.meta === 'object' && lead.meta.contact_person_name)
+    ? String(lead.meta.contact_person_name)
+    : ''
+);
   const [customFields, setCustomFields] = useState<CustomField[]>(() => {
     const fields: CustomField[] = [];
     if (lead.meta) {
@@ -440,6 +445,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                   collaborator_id: collaboratorId
                 })
               });
+              
 
               const data = await response.json();
               
@@ -460,6 +466,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       setLoadingCollaborators(false);
     }
   };
+  
 
   const beautifyName = (name: string): string => {
     return name
@@ -477,6 +484,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
   };
+  
 
   const handleAddEmail = () => {
     const trimmedEmail = newEmail.trim();
@@ -587,7 +595,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
-      
+      if (formData.contactPersonName.trim()) meta.contact_person_name = formData.contactPersonName.trim();
       // Add custom fields
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
@@ -700,6 +708,16 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Lead Specific Information</Text>
           </View>
+          <View style={s.field}>
+          <Text style={s.label}>Contact Person Name</Text>
+          <TextInput
+            style={s.input}
+            value={contactPersonName}
+            onChangeText={setContactPersonName}
+            placeholder="Enter contact person name"
+            placeholderTextColor={THEME_COLORS.textTertiary}
+          />
+        </View>
           
           <View style={s.field}>
             <Text style={s.label}>Area Requirements</Text>
@@ -743,6 +761,7 @@ const EditLead: React.FC<EditLeadProps> = ({
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
+          
 
           {/* Custom Fields */}
           {customFields.length > 0 && (
@@ -800,6 +819,7 @@ const EditLead: React.FC<EditLeadProps> = ({
             <Text style={s.cardTitle}>Email Addresses ({editingEmails.length})</Text>
           </View>
           
+          
           {editingEmails.length > 0 ? editingEmails.map((email, index) => (
             <View key={index} style={s.listItem}>
               <View style={s.listItemContent}>
@@ -844,6 +864,7 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
           {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
+
 
         {/* Phone Numbers Card */}
         <View style={s.card}>
