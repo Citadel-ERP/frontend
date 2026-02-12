@@ -437,6 +437,49 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     }
   };
 
+  // ==================== UTILITY FUNCTIONS ====================
+  const getDocumentFieldName = (fileName: string): string => {
+    const lowerName = fileName.toLowerCase();
+
+    const documentMappings: { [key: string]: string } = {
+      'aadhaar': 'aadhar_card',
+      'aadhar': 'aadhar_card',
+      'pan': 'pan_card',
+      'education': 'educational_documents',
+      'offer': 'offer_letter',
+      'appointment': 'appointment_letter',
+      'relieving': 'relieving_letter',
+      'experience': 'experience_letter',
+      'bank': 'bank_statement',
+      'form16': 'form_16',
+      'form_16': 'form_16',
+      'passport': 'passport',
+      'epfo': 'epfo_number',
+      'uan': 'epfo_number',
+    };
+
+    for (const [keyword, fieldName] of Object.entries(documentMappings)) {
+      if (lowerName.includes(keyword)) return fieldName;
+    }
+
+    return 'other_document';
+  };
+
+  const getDocumentIcon = (mimeType: string): string => {
+    if (mimeType.includes('pdf')) return 'document-text';
+    if (mimeType.includes('image')) return 'image';
+    if (mimeType.includes('word') || mimeType.includes('document')) return 'document';
+    return 'document-attach';
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   // ==================== SUBMISSION ====================
   const handleSubmit = async () => {
     try {
@@ -449,7 +492,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       Object.entries(basicInfo).forEach(([key, value]) => {
         if (value) {
           if (key.includes('leaves')) {
-            formData.append(key, parseInt(value) || 0);
+            formData.append(key, String(parseInt(value) || 0));
           } else {
             formData.append(key, value);
           }
@@ -493,40 +536,61 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         formData.append('reporting_tag_ids', selectedReportingTag);
       }
 
-      // Add documents - FIXED FOR WEB
-      // Add documents - FIXED FOR WEB
-      for (let index = 0; index < documents.length; index++) {
-        const doc = documents[index];
-        const fieldName = getDocumentFieldName(doc.name || `document_${index}`);
+      // Add documents - IMPROVED FOR WEB AND MOBILE
+      if (documents.length > 0) {
+        for (let index = 0; index < documents.length; index++) {
+          const doc = documents[index];
+          const fieldName = getDocumentFieldName(doc.name || `document_${index}`);
 
-        if (Platform.OS === 'web') {
-          // For web, we need to fetch the file and create a File object
           try {
-            const response = await fetch(doc.uri);
-            const blob = await response.blob();
-            const file = new File([blob], doc.name || `document_${index}`, {
-              type: doc.type || 'application/octet-stream'
-            });
-            formData.append(fieldName, file);
+            if (Platform.OS === 'web') {
+              // For web, fetch the blob and create a File object
+              const response = await fetch(doc.uri);
+              
+              if (!response.ok) {
+                throw new Error(`Failed to fetch file: ${response.statusText}`);
+              }
+              
+              const blob = await response.blob();
+              const file = new File([blob], doc.name || `document_${index}`, {
+                type: doc.type || 'application/octet-stream'
+              });
+              
+              formData.append(fieldName, file);
+              console.log(`Web file prepared: ${fieldName} - ${doc.name}`);
+            } else {
+              // For mobile (iOS/Android)
+              formData.append(fieldName, {
+                uri: doc.uri,
+                name: doc.name || `document_${index}`,
+                type: doc.type || 'application/octet-stream',
+              } as any);
+              console.log(`Mobile file prepared: ${fieldName} - ${doc.name}`);
+            }
           } catch (error) {
+<<<<<<< HEAD
             console.error('Error fetching file for web upload:', error);
             alert('Error', `Failed to prepare file ${doc.name} for upload`);
+=======
+            console.error(`Error preparing file ${doc.name}:`, error);
+            Alert.alert(
+              'File Upload Error',
+              `Failed to prepare "${doc.name}" for upload. Please try removing and re-adding this file.`,
+              [{ text: 'OK' }]
+            );
+            setSubmitting(false);
+>>>>>>> f13ea067ba3e9040d5f396778ff77ed0f21265e2
             return;
           }
-        } else {
-          // For mobile (iOS/Android)
-          formData.append(fieldName, {
-            uri: doc.uri,
-            name: doc.name || `document_${index}`,
-            type: doc.type || 'application/octet-stream',
-          } as any);
         }
       }
 
       // Add joining date
       formData.append('joining_date', new Date().toISOString().split('T')[0]);
 
-      // API call - Updated headers for web
+      console.log('Submitting employee data...');
+
+      // API call
       const response = await fetch(`${BACKEND_URL}/manager/addEmployee`, {
         method: 'POST',
         headers: Platform.OS === 'web' ? {} : {
@@ -535,56 +599,62 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         body: formData,
       });
 
-      // ... rest of the code remains the same
+      // CRITICAL: Check response status FIRST before parsing JSON
+      if (!response.ok) {
+        // Parse error response
+        const errorData = await response.json();
+        const errorMessage = errorData.message || errorData.error || 'Failed to create employee. Please try again.';
+        
+        console.error('Server returned error:', response.status, errorMessage);
+        
+        Alert.alert(
+          'Error',
+          errorMessage,
+          [{ text: 'OK' }],
+          { cancelable: false }
+        );
+        return; // Exit early on error
+      }
+
+      // Only parse success response if response.ok is true
+      const data = await response.json();
+      console.log('Success response:', data);
+
+      // Success case - show alert and navigate
+      Alert.alert(
+        'Success',
+        'Employee created successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              onEmployeeAdded(); // Callback to refresh employee list
+              onBack(); // Navigate back to previous screen
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+
     } catch (error: any) {
       console.error('Error creating employee:', error);
+<<<<<<< HEAD
       alert('Error', error.message || 'Failed to create employee');
+=======
+      
+      // Network or unexpected error
+      const errorMessage = error.message || 'An unexpected error occurred. Please check your connection and try again.';
+      
+      Alert.alert(
+        'Error',
+        errorMessage,
+        [{ text: 'OK' }],
+        { cancelable: false }
+      );
+>>>>>>> f13ea067ba3e9040d5f396778ff77ed0f21265e2
     } finally {
       setSubmitting(false);
     }
-  };
-
-  // ==================== UTILITY FUNCTIONS ====================
-  const getDocumentFieldName = (fileName: string): string => {
-    const lowerName = fileName.toLowerCase();
-
-    const documentMappings: { [key: string]: string } = {
-      'aadhaar': 'aadhar_card',
-      'aadhar': 'aadhar_card',
-      'pan': 'pan_card',
-      'education': 'educational_documents',
-      'offer': 'offer_letter',
-      'appointment': 'appointment_letter',
-      'relieving': 'relieving_letter',
-      'experience': 'experience_letter',
-      'bank': 'bank_statement',
-      'form16': 'form_16',
-      'form_16': 'form_16',
-      'passport': 'passport',
-      'epfo': 'epfo_number',
-      'uan': 'epfo_number',
-    };
-
-    for (const [keyword, fieldName] of Object.entries(documentMappings)) {
-      if (lowerName.includes(keyword)) return fieldName;
-    }
-
-    return 'other_document';
-  };
-
-  const getDocumentIcon = (mimeType: string): string => {
-    if (mimeType.includes('pdf')) return 'document-text';
-    if (mimeType.includes('image')) return 'image';
-    if (mimeType.includes('word') || mimeType.includes('document')) return 'document';
-    return 'document-attach';
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   // ==================== RENDER COMPONENTS ====================
@@ -633,26 +703,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           Documents
         </Text>
       </View>
-    </View>
-  );
-
-  const renderStepLabels = () => (
-    <View style={styles.stepLabelsContainer}>
-      <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive, { marginLeft: -15 }]}>
-        Basic Info
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
-        Address
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
-        Tags
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
-        Reporting
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive, { marginRight: 25 }]}>
-        Documents
-      </Text>
     </View>
   );
 
@@ -1294,7 +1344,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
         <View style={styles.stepProgress}>
           {renderStepIndicator()}
-          {/* {renderStepLabels()} */}
         </View>
 
         <View style={styles.content}>

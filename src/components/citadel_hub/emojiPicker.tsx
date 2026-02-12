@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   Platform,
   TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -80,13 +81,30 @@ const MAX_RECENT_EMOJIS = 32;
 const HORIZONTAL_PADDING = 16; // Total horizontal padding (8px on each side)
 const EMOJI_SIZE = (SCREEN_WIDTH - HORIZONTAL_PADDING) / 8;
 
+// Lazy loading configuration
+const INITIAL_EMOJI_LOAD = 40;
+const LOAD_MORE_INCREMENT = 40;
+
+// Memoized Emoji Button Component
+const EmojiButton = React.memo(({ emoji, onPress }: { emoji: string; onPress: (e: string) => void }) => (
+  <TouchableOpacity
+    style={styles.emojiButton}
+    onPress={() => onPress(emoji)}
+    activeOpacity={0.6}
+  >
+    <Text style={styles.emoji}>{emoji}</Text>
+  </TouchableOpacity>
+));
+
 export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   visible,
   onSelect,
   onClose,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
+  const [visibleEmojiCount, setVisibleEmojiCount] = useState<{ [key: string]: number }>({});
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Animated value for slide in/out
@@ -96,6 +114,15 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   useEffect(() => {
     loadRecentEmojis();
   }, []);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Animate when visibility changes
   useEffect(() => {
@@ -127,15 +154,21 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     }
   };
 
-  const handleEmojiSelect = (emoji: string) => {
+  const handleEmojiSelect = useCallback((emoji: string) => {
     onSelect(emoji);
     saveRecentEmoji(emoji);
-  };
+  }, [onSelect]);
 
   const clearSearch = () => setSearchQuery('');
 
+  // Handle backdrop press - only close if not interacting with picker
+  const handleBackdropPress = () => {
+    Keyboard.dismiss();
+    onClose();
+  };
+
   // Comprehensive emoji to keywords mapping for search
-  const getEmojiKeywords = (emoji: string): string[] => {
+  const getEmojiKeywords = useCallback((emoji: string): string[] => {
     const keywordMap: { [key: string]: string[] } = {
       // Hearts
       '❤️': ['heart', 'love', 'red'],
@@ -335,18 +368,18 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     };
     
     return keywordMap[emoji] || [];
-  };
+  }, []);
 
-  // Search functionality - filter emojis based on keywords
+  // Search functionality - filter emojis based on keywords (with debounce)
   const filteredCategories = useMemo(() => {
     const categories = { ...EMOJI_CATEGORIES };
     categories.recent.emojis = recentEmojis;
 
-    if (!searchQuery.trim()) {
+    if (!debouncedQuery.trim()) {
       return categories;
     }
 
-    const query = searchQuery.toLowerCase().trim();
+    const query = debouncedQuery.toLowerCase().trim();
     const filtered: typeof EMOJI_CATEGORIES = {} as any;
 
     Object.entries(categories).forEach(([key, category]) => {
@@ -366,11 +399,18 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     });
 
     return filtered;
-  }, [searchQuery, recentEmojis]);
+  }, [debouncedQuery, recentEmojis, getEmojiKeywords]);
 
   const categoryKeys = Object.keys(filteredCategories) as (keyof typeof EMOJI_CATEGORIES)[];
 
-  const renderEmojiGrid = (emojis: string[]) => {
+  const handleLoadMore = useCallback((categoryKey: string) => {
+    setVisibleEmojiCount(prev => ({
+      ...prev,
+      [categoryKey]: (prev[categoryKey] || INITIAL_EMOJI_LOAD) + LOAD_MORE_INCREMENT,
+    }));
+  }, []);
+
+  const renderEmojiGrid = useCallback((emojis: string[], categoryKey: string) => {
     if (emojis.length === 0) {
       return (
         <View style={styles.emptyCategory}>
@@ -379,37 +419,53 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       );
     }
 
+    const visible = visibleEmojiCount[categoryKey] || INITIAL_EMOJI_LOAD;
+    const displayEmojis = emojis.slice(0, visible);
+    const hasMore = visible < emojis.length;
+
     return (
-      <View style={styles.emojiGrid}>
-        {emojis.map((emoji, index) => (
+      <View>
+        <View style={styles.emojiGrid}>
+          {displayEmojis.map((emoji, index) => (
+            <EmojiButton 
+              key={`${emoji}-${index}`} 
+              emoji={emoji} 
+              onPress={handleEmojiSelect} 
+            />
+          ))}
+        </View>
+        {hasMore && (
           <TouchableOpacity
-            key={`${emoji}-${index}`}
-            style={styles.emojiButton}
-            onPress={() => handleEmojiSelect(emoji)}
-            activeOpacity={0.6}
+            style={styles.loadMoreButton}
+            onPress={() => handleLoadMore(categoryKey)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.emoji}>{emoji}</Text>
+            <Text style={styles.loadMoreText}>
+              Load more ({emojis.length - visible} remaining)
+            </Text>
           </TouchableOpacity>
-        ))}
+        )}
       </View>
     );
-  };
+  }, [visibleEmojiCount, handleEmojiSelect, handleLoadMore]);
 
   if (!visible) return null;
 
   return (
-    <>
-      {/* Backdrop to detect outside clicks */}
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.backdrop} />
-      </TouchableWithoutFeedback>
+    <View style={styles.fullScreenContainer}>
+      {/* Backdrop - tap to close - only covers top area, doesn't overlap picker */}
+      <View style={styles.backdropArea} pointerEvents="box-none">
+        <TouchableWithoutFeedback onPress={handleBackdropPress}>
+          <View style={styles.backdrop} />
+        </TouchableWithoutFeedback>
+      </View>
 
+      {/* Emoji Picker - positioned absolutely at bottom, completely separate from backdrop */}
       <Animated.View
         style={[
-          styles.container,
+          styles.pickerContainer,
           {
             transform: [{ translateY }],
-            height: EMOJI_PICKER_HEIGHT,
           },
         ]}
       >
@@ -440,6 +496,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
           style={styles.categoriesScroll}
           contentContainerStyle={styles.categoriesContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {categoryKeys.length === 0 ? (
             <View style={styles.emptyCategory}>
@@ -451,32 +508,43 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               return (
                 <View key={categoryKey} style={styles.category}>
                   <Text style={styles.categoryTitle}>{category.name}</Text>
-                  {renderEmojiGrid(category.emojis)}
+                  {renderEmojiGrid(category.emojis, categoryKey)}
                 </View>
               );
             })
           )}
         </ScrollView>
       </Animated.View>
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
+  fullScreenContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'transparent',
-    zIndex: 0,
   },
-  container: {
+  backdropArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: EMOJI_PICKER_HEIGHT,
+    zIndex: 1,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  pickerContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    height: EMOJI_PICKER_HEIGHT,
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -485,7 +553,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 10,
-    zIndex: 1,
+    zIndex: 2,
   },
   header: {
     paddingHorizontal: 12,
@@ -543,5 +611,16 @@ const styles = StyleSheet.create({
   emptyCategoryText: { 
     fontSize: 14, 
     color: '#8696a0' 
+  },
+  loadMoreButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    color: '#00a884',
+    fontWeight: '600',
   },
 });
