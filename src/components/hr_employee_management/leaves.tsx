@@ -32,7 +32,7 @@ export const Leaves: React.FC<LeavesProps> = ({
     if (processingLeaveId) {
       const currentLeave = leaves.find(leave => leave.id === processingLeaveId);
       if (!currentLeave || 
-          (actionType === 'approve' && currentLeave.status === 'pending') ||
+          (actionType === 'approve' && currentLeave.status === 'approved') ||
           (actionType === 'reject' && currentLeave.status === 'rejected')) {
         setProcessingLeaveId(null);
         setActionType(null);
@@ -140,7 +140,6 @@ export const Leaves: React.FC<LeavesProps> = ({
                 ]}>
                   {processing && actionType === 'approve' ? 'Approving...' :
                    processing && actionType === 'reject' ? 'Rejecting...' :
-                  //  leave.status === 'approved_by_manager' ? 'Approved by Manager' : 
                    leave.status === 'rejected' ? 'Rejected' : 
                    leave.status === 'approved' ? 'Approved' : 'Pending'}
                 </Text>
@@ -154,6 +153,7 @@ export const Leaves: React.FC<LeavesProps> = ({
               </Text>
             )}
             
+            {/* For PENDING leaves - show Approve & Reject buttons */}
             {leave.status === 'pending' && (
               <View style={styles.leaveActions}>
                 <TouchableOpacity
@@ -192,6 +192,56 @@ export const Leaves: React.FC<LeavesProps> = ({
                     <>
                       <Ionicons name="close" size={18} color="#FFFFFF" />
                       <Text style={styles.leaveActionText}>Reject</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* For APPROVED leaves - show Cancel (Reject) button */}
+            {leave.status === 'approved' && (
+              <View style={styles.leaveActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.leaveActionButton, 
+                    { backgroundColor: '#FF9800' },
+                    processing && styles.disabledButton
+                  ]}
+                  onPress={() => handleReject(leave.id)}
+                  activeOpacity={processing ? 1 : 0.8}
+                  disabled={processing}
+                >
+                  {processing && actionType === 'reject' ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="close-circle" size={18} color="#FFFFFF" />
+                      <Text style={styles.leaveActionText}>Cancel Approval</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* For REJECTED leaves - show Approve button */}
+            {leave.status === 'rejected' && (
+              <View style={styles.leaveActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.leaveActionButton, 
+                    { backgroundColor: '#4CAF50' },
+                    processing && styles.disabledButton
+                  ]}
+                  onPress={() => handleApprove(leave.id)}
+                  activeOpacity={processing ? 1 : 0.8}
+                  disabled={processing}
+                >
+                  {processing && actionType === 'approve' ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                      <Text style={styles.leaveActionText}>Approve</Text>
                     </>
                   )}
                 </TouchableOpacity>
