@@ -1151,7 +1151,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             }
             ListEmptyComponent={
               <View style={s.emptyChat}>
-                <MaterialIcons name="forum" size={64} color={C.border} />
+                <MaterialIcons name="forum" size={64} color={C.primary} />
                 <Text style={s.emptyChatTitle}>No conversations yet</Text>
                 <Text style={s.emptyChatText}>
                   Start by sending a message or quick reply
@@ -1162,8 +1162,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         )}
       </View>
 
-      {selectedDocuments.length > 0 && (
-        <View style={s.selectedFilesPreview}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={{ backgroundColor: C.surface }}
+      >
+        {selectedDocuments.length > 0 && (
+          <View style={s.selectedFilesPreview}>
           <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
           <FlatList
             horizontal
@@ -1241,6 +1246,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </View>
         </SafeAreaView>
       </View>
+      </KeyboardAvoidingView>
 
       {showDefaultComments && (
         <View style={s.defaultCommentsOverlay}>
@@ -1378,9 +1384,7 @@ const s = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
-  } : {
-    flexDirection: 'column',
-  }),
+  } : {}),
 },
 
   backIcon: {
@@ -1950,17 +1954,14 @@ chatContainer: {
   borderTopColor: C.border,
   paddingHorizontal: 12,
   paddingVertical: 8,
-  left: 0,
-  right: 0,
   zIndex: 9,
   maxHeight: 100,
   ...(Platform.OS === 'web' ? {
     position: 'fixed',
     bottom: 68,
-  } : {
-    position: 'absolute',
-    bottom: 68,
-  }),
+    left: 0,
+    right: 0,
+  } : {}),
 },
   selectedFilesTitle: {
     fontSize: 13,
@@ -1997,15 +1998,17 @@ chatContainer: {
     backgroundColor: C.surface,
   },
   inputContainer: {
-    backgroundColor: C.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
+  backgroundColor: C.surface,
+  paddingHorizontal: 12,
+  paddingTop: 8,
+  paddingBottom: 8,
+},
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  paddingHorizontal: 4,
+},
   attachmentButton: {
     padding: 6,
     position: 'relative',
@@ -2134,7 +2137,6 @@ chatContainer: {
     color: C.textPrimary,
     lineHeight: 20
   },
-
   inputContainerWrapper: {
   borderTopWidth: 1,
   borderTopColor: C.border,
@@ -2145,17 +2147,9 @@ chatContainer: {
     bottom: 0,
     left: 0,
     right: 0,
-  } : {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  }),
+  } : {}),
 },
   inputWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 8 : 8
   },
 
   modalOverlay: {

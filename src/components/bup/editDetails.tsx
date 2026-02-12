@@ -150,6 +150,11 @@ const EditLead: React.FC<EditLeadProps> = ({
       ? String(lead.meta.location)
       : ''
   );
+  const [contactPersonName, setContactPersonName] = useState<string>(
+  (lead.meta && typeof lead.meta === 'object' && lead.meta.contact_person_name)
+    ? String(lead.meta.contact_person_name)
+    : ''
+);
   const [customFields, setCustomFields] = useState<CustomField[]>(() => {
     if (!lead.meta || typeof lead.meta !== 'object') return [];
 
@@ -584,7 +589,8 @@ const EditLead: React.FC<EditLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
-
+      if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
+      
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
           meta[field.key.trim()] = field.value.trim();
@@ -669,6 +675,17 @@ const EditLead: React.FC<EditLeadProps> = ({
               value={editedLead.company || ''}
               onChangeText={(text) => setEditedLead({ ...editedLead, company: text })}
               placeholder="Enter company name"
+              placeholderTextColor={THEME_COLORS.textTertiary}
+            />
+          </View>
+
+          <View style={s.field}>
+            <Text style={s.label}>Contact Person Name</Text>
+            <TextInput
+              style={s.input}
+              value={contactPersonName}
+              onChangeText={setContactPersonName}
+              placeholder="Enter contact person name"
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>

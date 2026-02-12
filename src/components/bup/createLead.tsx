@@ -129,6 +129,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     phase: 'initial_phase',
     subphase: 'without_contact_details',
     leadPartner: '',
+    contactPersonName: '', 
   });
 
   const [editingEmails, setEditingEmails] = useState<string[]>([]);
@@ -490,7 +491,8 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
       if (formData.leadPartner.trim()) meta.lead_partner = formData.leadPartner.trim();
-      
+      if (formData.contactPersonName.trim()) meta.contact_person_name = formData.contactPersonName.trim();
+
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
           meta[field.key.trim()] = field.value.trim();
@@ -565,14 +567,15 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       
       Alert.alert('Success', 'Lead created successfully!');
       
-      // Reset form
       setFormData({
         company: '',
         status: 'active',
         phase: 'initial_phase',
         subphase: 'without_contact_details',
         leadPartner: '',
+        contactPersonName: '', 
       });
+
       setEditingEmails([]);
       setEditingPhones([]);
       setCollaborators([]);
@@ -644,6 +647,17 @@ const CreateLead: React.FC<CreateLeadProps> = ({
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
+
+          <View style={s.field}>
+          <Text style={s.label}>Contact Person Name</Text>
+          <TextInput
+            style={s.input}
+            value={formData.contactPersonName}
+            onChangeText={(text) => setFormData({ ...formData, contactPersonName: text })}
+            placeholder="Enter contact person name (optional)"
+            placeholderTextColor={THEME_COLORS.textTertiary}
+          />
+        </View>
 
           <View style={s.field}>
             <Text style={s.label}>Assigned To</Text>
