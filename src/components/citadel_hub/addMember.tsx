@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// citadel_hub/AddMember.tsx
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,32 +10,57 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Platform,
+  StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { User } from './CitadelHub';
+import { User, ChatRoom } from './CitadelHub';
+import { getAvatarColor } from './avatarColors';
 
+
+// ✅ UPDATED: Match props passed from CitadelHub
 interface AddMemberProps {
-  currentMembers: User[];
+  chatRoom: ChatRoom; // ✅ CHANGED: Receive full ChatRoom instead of currentMembers + groupId
   currentUser: User;
-  groupId: number;
   onBack: () => void;
-  onAddMembers: (memberIds: string[]) => Promise<void>;
+  onMembersAdded: () => Promise<void>; // ✅ CHANGED: Renamed from onAddMembers
+  onOptimisticAdd: (newMember: User) => void; // ✅ NEW: For optimistic updates
   apiCall: (endpoint: string, data: any) => Promise<any>;
+  wsRef: React.MutableRefObject<WebSocket | null>; // ✅ NEW: WebSocket ref passed from parent
 }
 
+// ✅ Helper to extract user from member object
+const getUserFromMember = (member: User | any): User | null => {
+  if (!member) return null;
+
+  if ('first_name' in member && 'last_name' in member && 'email' in member) {
+    return member as User;
+  }
+
+  if ('user' in member && member.user) {
+    return member.user;
+  }
+
+  return null;
+};
+
 export const AddMember: React.FC<AddMemberProps> = ({
-  currentMembers,
+  chatRoom, // ✅ CHANGED
   currentUser,
-  groupId,
   onBack,
-  onAddMembers,
+  onMembersAdded, // ✅ CHANGED
+  onOptimisticAdd, // ✅ NEW
   apiCall,
+  wsRef
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+
+  // ✅ NEW: WebSocket ref (will be passed from parent)
+  // const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -43,16 +69,22 @@ export const AddMember: React.FC<AddMemberProps> = ({
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const result = await apiCall('getEmployees', {});
+      const result = await apiCall('searchUsers', {});
       
-      if (result.employees) {
-        // Filter out current members and current user
+      // ✅ FIXED: Support both 'users' and 'employees' field names
+      if (result.users || result.employees) {
+        const users = result.users || result.employees;
+        
+        // ✅ UPDATED: Extract current members from chatRoom
         const currentMemberIds = new Set(
-          currentMembers.map(m => m.employee_id || m.id?.toString())
+          chatRoom.members.map(m => {
+            const user = getUserFromMember(m);
+            return user?.employee_id || user?.id?.toString();
+          }).filter(Boolean)
         );
         const currentUserId = currentUser.employee_id || currentUser.id?.toString();
         
-        const availableUsers = result.employees.filter((user: User) => {
+        const availableUsers = users.filter((user: User) => {
           const userId = user.employee_id || user.id?.toString();
           return userId !== currentUserId && !currentMemberIds.has(userId);
         });
@@ -96,6 +128,7 @@ export const AddMember: React.FC<AddMemberProps> = ({
     });
   };
 
+  // ✅ UPDATED: Handle member addition with WebSocket broadcast
   const handleAddMembers = async () => {
     if (selectedUsers.size === 0) {
       Alert.alert('No Selection', 'Please select at least one member to add.');
@@ -104,9 +137,60 @@ export const AddMember: React.FC<AddMemberProps> = ({
 
     try {
       setAdding(true);
-      await onAddMembers(Array.from(selectedUsers));
+      const selectedUserIds = Array.from(selectedUsers);
+      
+      console.log(`📤 Adding ${selectedUserIds.length} members to group ${chatRoom.id}`);
+
+      // ✅ Add members sequentially
+      for (const userId of selectedUserIds) {
+        try {
+          const result = await apiCall('addMember', {
+            chat_room_id: chatRoom.id,
+            user_id: userId,
+          });
+
+          if (result.new_member) {
+            console.log(`✅ Member added via API: ${result.new_member.first_name}`);
+
+            // ✅ STEP 1: Optimistic UI update
+            onOptimisticAdd(result.new_member);
+
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              console.log(`📢 Broadcasting member addition for ${result.new_member.first_name}`);
+              
+              wsRef.current.send(JSON.stringify({
+                action: 'broadcast_member_added',
+                room_id: result.room_id,
+                new_member: result.new_member,
+                added_by: result.added_by,
+                system_message: result.system_message,
+              }));
+
+              console.log('✅ Broadcast sent successfully');
+            } else {
+              console.warn('⚠️ WebSocket not open, members may not receive realtime update');
+            }
+          }
+        } catch (memberError) {
+          console.error(`❌ Error adding member ${userId}:`, memberError);
+          Alert.alert('Partial Success', `Some members could not be added. Please try again.`);
+        }
+      }
+
+      // ✅ STEP 3: Trigger backend refresh (debounced in parent)
+      console.log('📡 Triggering backend refresh via onMembersAdded');
+      await onMembersAdded();
+
+      // ✅ STEP 4: Navigate back
+      Alert.alert(
+        'Success', 
+        `${selectedUserIds.length} member${selectedUserIds.length > 1 ? 's' : ''} added successfully`,
+        [{ text: 'OK', onPress: onBack }]
+      );
+
     } catch (error) {
-      console.error('Error in handleAddMembers:', error);
+      console.error('❌ Error in handleAddMembers:', error);
+      Alert.alert('Error', 'Failed to add members. Please try again.');
     } finally {
       setAdding(false);
     }
@@ -116,6 +200,9 @@ export const AddMember: React.FC<AddMemberProps> = ({
     const userId = item.employee_id || item.id?.toString() || '';
     const isSelected = selectedUsers.has(userId);
     const fullName = `${item.first_name} ${item.last_name}`;
+    
+    // ✅ ADD THIS - Generate colors
+    const colors = getAvatarColor(userId);
 
     return (
       <TouchableOpacity
@@ -130,8 +217,9 @@ export const AddMember: React.FC<AddMemberProps> = ({
               style={styles.avatar}
             />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarText}>
+            // ✅ CHANGED: Use dynamic colors instead of hardcoded green
+            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.light }]}>
+              <Text style={[styles.avatarText, { color: colors.dark }]}>
                 {item.first_name.charAt(0).toUpperCase()}
                 {item.last_name.charAt(0).toUpperCase()}
               </Text>
@@ -165,6 +253,7 @@ export const AddMember: React.FC<AddMemberProps> = ({
   return (
     <View style={styles.container}>
       {/* Header */}
+      <StatusBar barStyle="light-content" backgroundColor="#008069" />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
@@ -259,6 +348,7 @@ export const AddMember: React.FC<AddMemberProps> = ({
   );
 };
 
+// ✅ Styles remain the same
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -270,7 +360,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#00a884',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: 16,
+    // paddingTop: 20,
+    marginTop: Platform.OS === 'ios' ? -80 : 0,
+    paddingTop: Platform.OS === 'ios' ? 80 : 50,
   },
   backButton: {
     padding: 8,
@@ -341,12 +433,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarPlaceholder: {
-    backgroundColor: '#00a884',
+    // backgroundColor: '#00a884',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: '#ffffff',
+    // color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
   },

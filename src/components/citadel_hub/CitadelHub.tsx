@@ -139,6 +139,20 @@ const CACHE_KEYS = {
   PENDING_ACTIONS: 'pending_actions_cache',
 };
 
+const getUserFromMember = (member: User | ChatRoomMember): User | null => {
+  if (!member) return null;
+
+  if ('first_name' in member && 'last_name' in member && 'email' in member) {
+    return member as User;
+  }
+
+  if ('user' in member && member.user) {
+    return member.user;
+  }
+
+  return null;
+};
+
 // ============= MAIN COMPONENT =============
 export const CitadelHub: React.FC<CitadelHubProps> = ({
   apiBaseUrl,
@@ -159,6 +173,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [typingUsers, setTypingUsers] = useState<{ [roomId: number]: User[] }>({});
   const [userStatuses, setUserStatuses] = useState<{ [userId: string]: 'online' | 'offline' | 'away' | 'busy' }>({});
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
 
   // Cache & Optimistic Updates
   const [messageCache, setMessageCache] = useState<{ [roomId: number]: Message[] }>({});
@@ -204,6 +220,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handleMemberAdded: (data: any) => { },
     handleNewGroupAdded: (data: any) => { },
     handleRoomUpdated: (data: any) => { },
+    handleRoleUpdated: (data: any) => { }
   });
 
   const memberAddDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -303,6 +320,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }, 2000); // Wait 2 seconds before backend refresh
   }, [selectedChatRoom, loadChatRooms]);
 
+
   // ============= CACHE MANAGEMENT =============
   const loadCache = useCallback(async () => {
     try {
@@ -351,6 +369,110 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error saving message cache:', error);
     }
   }, []);
+
+  const handleRoleUpdated = useCallback((data: any) => {
+    const { room_id, updated_user, new_role, old_role, system_message } = data;
+
+    console.log(`🔄 Role updated in room ${room_id}:`, updated_user, old_role, '→', new_role);
+
+    // ✅ Update chatRooms list
+    setChatRooms(prev => prev.map(room => {
+      if (room.id.toString() === room_id) {
+        const updatedMembers = room.members.map(m => {
+          const user = getUserFromMember(m);
+          const userId = user?.id || user?.employee_id;
+          const updatedUserId = updated_user.id || updated_user.employee_id;
+
+          if (userId === updatedUserId) {
+            if ('role' in m) {
+              return { ...m, role: new_role };
+            }
+            return {
+              user: m as User,
+              role: new_role,
+            };
+          }
+          return m;
+        });
+
+        const updatedRoom = {
+          ...room,
+          members: updatedMembers,
+        };
+
+        if (new_role === 'admin' && !room.admin) {
+          updatedRoom.admin = updated_user;
+        }
+
+        return updatedRoom;
+      }
+      return room;
+    }));
+
+    // ✅ Update selectedChatRoom if this is the active chat
+    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
+      setSelectedChatRoom(prev => {
+        if (!prev) return prev;
+
+        const updatedMembers = prev.members.map(m => {
+          const user = getUserFromMember(m);
+          const userId = user?.id || user?.employee_id;
+          const updatedUserId = updated_user.id || updated_user.employee_id;
+
+          if (userId === updatedUserId) {
+            if ('role' in m) {
+              return { ...m, role: new_role };
+            }
+            return {
+              user: m as User,
+              role: new_role,
+            };
+          }
+          return m;
+        });
+
+        const updatedRoom = {
+          ...prev,
+          members: updatedMembers,
+        };
+
+        if (new_role === 'admin' && !prev.admin) {
+          updatedRoom.admin = updated_user;
+        }
+
+        return updatedRoom;
+      });
+
+      // ✅ CRITICAL FIX: Add system message IMMEDIATELY for active chat
+      if (system_message) {
+        console.log('📨 Adding system message to active chat:', system_message.content);
+
+        setMessages(prev => {
+          // Check if message already exists
+          const exists = prev.some(m => m.id === system_message.id);
+          if (exists) {
+            console.log('⚠️ System message already exists, skipping');
+            return prev;
+          }
+
+          console.log('✅ Adding new system message to messages array');
+          const updated = [...prev, system_message].sort((a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+
+          // ✅ Save to cache immediately
+          saveMessageCache(selectedChatRoom.id, updated);
+          return updated;
+        });
+      } else {
+        console.warn('⚠️ No system_message in role update data');
+      }
+    }
+  }, [selectedChatRoom, viewMode, saveMessageCache]);
+
+  useEffect(() => {
+    handlersRef.current.handleRoleUpdated = handleRoleUpdated;
+  }, [handleRoleUpdated]);
 
   const savePendingActions = useCallback(async (actions: PendingAction[]) => {
     try {
@@ -706,6 +828,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     const { room_id, new_member, added_by, system_message } = data;
 
     console.log(`👥 Member added to room ${room_id}:`, new_member);
+    console.log('📨 System message received:', system_message);  // ✅ ADD THIS LOG
 
     // ✅ CRITICAL: ALWAYS update chatRooms list for ALL users (not just selected room)
     setChatRooms(prev => prev.map(room => {
@@ -756,22 +879,29 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         };
       });
 
-      // ✅ If in chat view, add system message to messages
-      if (system_message && viewMode === 'chat' && selectedChatRoom) {
+      // ✅ CRITICAL FIX: Add system message IMMEDIATELY for active chat
+      if (system_message) {
+        console.log('📨 Adding member addition system message to active chat:', system_message.content);
+
         setMessages(prev => {
+          // Check if message already exists
           const exists = prev.some(m => m.id === system_message.id);
-          if (!exists) {
-            const updated = [...prev, system_message].sort((a, b) =>
-              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-            );
-            // ✅ Save cache with the updated array
-            saveMessageCache(selectedChatRoom.id, updated);
-            return updated;
+          if (exists) {
+            console.log('⚠️ System message already exists, skipping');
+            return prev;
           }
-          // ✅ Save cache even if message already exists (defensive)
-          saveMessageCache(selectedChatRoom.id, prev);
-          return prev;
+
+          console.log('✅ Adding new member addition system message');
+          const updated = [...prev, system_message].sort((a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+
+          // ✅ Save cache immediately
+          saveMessageCache(selectedChatRoom.id, updated);
+          return updated;
         });
+      } else {
+        console.warn('⚠️ No system_message in member_added data');
       }
     }
 
@@ -781,7 +911,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       const adderName = `${added_by.first_name} ${added_by.last_name}`;
       console.log(`ℹ️ ${adderName} added ${memberName} to the group`);
     }
-  }, [selectedChatRoom, currentUser, viewMode, messages, saveMessageCache]);
+  }, [selectedChatRoom, currentUser, saveMessageCache]);
 
   useEffect(() => {
     handlersRef.current.handleMemberAdded = handleMemberAdded;
@@ -801,13 +931,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       }
       return [chat_room, ...prev];
     });
-
-    // Show a notification or toast (you can customize this)
-    Alert.alert(
-      'New Group',
-      `You were added to ${chat_room.name}`,
-      [{ text: 'OK' }]
-    );
   }, []);
 
   useEffect(() => {
@@ -837,10 +960,23 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     const { room_id, removed_member, is_self_exit, system_message } = data;
 
     console.log(`👋 Member removed from room ${room_id}:`, removed_member);
+    console.log('📨 System message received:', system_message);  // ✅ ADD THIS LOG
+
+    // ✅ Safety check for removed_member
+    if (!removed_member) {
+      console.error('❌ removed_member is null or undefined');
+      return;
+    }
 
     // If current user was removed, remove the chat room from list
     const currentUserId = currentUser.id || currentUser.employee_id;
     const removedUserId = removed_member.id || removed_member.employee_id;
+
+    // ✅ Safety check for removedUserId
+    if (!removedUserId) {
+      console.error('❌ Could not determine removed user ID');
+      return;
+    }
 
     if (currentUserId === removedUserId) {
       // Current user was removed or exited
@@ -854,7 +990,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         const message = is_self_exit
           ? 'You have left the group'
           : 'You have been removed from the group';
-        Alert.alert('Group Update', message);
+        // Alert.alert('Group Update', message);  // Optional: uncomment if you want alerts
       }
     } else {
       // ✅ Someone else was removed - update members list for ALL users
@@ -862,7 +998,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         if (room.id.toString() === room_id) {
           const updatedMembers = room.members.filter(m => {
             const user = getUserFromMember(m);
-            return user && (user.id || user.employee_id) !== removedUserId;
+            if (!user) return false;
+            const userId = user.id || user.employee_id;
+            return userId && userId !== removedUserId;
           });
 
           return {
@@ -877,7 +1015,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       if (selectedChatRoom && selectedChatRoom.id.toString() === room_id) {
         const updatedMembers = selectedChatRoom.members.filter(m => {
           const user = getUserFromMember(m);
-          return user && (user.id || user.employee_id) !== removedUserId;
+          if (!user) return false;
+          const userId = user.id || user.employee_id;
+          return userId && userId !== removedUserId;
         });
 
         const updatedRoom = {
@@ -887,23 +1027,33 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
         setSelectedChatRoom(updatedRoom);
 
-        // ✅ If in chat view, add system message
-        if (system_message && viewMode === 'chat') {
-          console.log('📨 Adding system message to chat:', system_message.content);
+        // ✅ CRITICAL FIX: Add system message IMMEDIATELY for active chat
+        if (system_message) {
+          console.log('📨 Adding member removal system message to active chat:', system_message.content);
+
           setMessages(prev => {
+            // Check if message already exists
             const exists = prev.some(m => m.id === system_message.id);
-            if (!exists) {
-              return [...prev, system_message].sort((a, b) =>
-                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-              );
+            if (exists) {
+              console.log('⚠️ System message already exists, skipping');
+              return prev;
             }
-            return prev;
+
+            console.log('✅ Adding new member removal system message');
+            const updated = [...prev, system_message].sort((a, b) =>
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+
+            // ✅ Save cache with updated array
+            saveMessageCache(selectedChatRoom.id, updated);
+            return updated;
           });
-          saveMessageCache(selectedChatRoom.id, messages);
+        } else {
+          console.warn('⚠️ No system_message in member_removed data');
         }
       }
     }
-  }, [selectedChatRoom, currentUser, viewMode, messages, saveMessageCache]);
+  }, [selectedChatRoom, currentUser, saveMessageCache]);
 
   // Add to handlersRef
   useEffect(() => {
@@ -1040,6 +1190,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             case 'chat_unblocked':
               handlersRef.current.handleChatUnblocked(data);
               break;
+            case 'role_updated':  // ← ADD THIS
+              handlersRef.current.handleRoleUpdated(data);
+              break;
             default:
               console.log('Unknown message type:', data.type);
           }
@@ -1103,6 +1256,41 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       }, delay);
     }
   }, [wsBaseUrl, token, selectedChatRoom, cleanupWebSocket, startPingInterval, sendWebSocketMessage, retryPendingActions]);
+  const handleRefresh = useCallback(async () => {
+    console.log('🔄 Pull-to-refresh triggered');
+    setIsRefreshing(true);
+
+    try {
+      // 1. Check WebSocket health and reconnect if needed
+      if (!isConnected || ws.current?.readyState !== WebSocket.OPEN) {
+        console.log('🔌 WebSocket not connected, reconnecting...');
+        reconnectAttempts.current = 0; // Reset attempts for manual refresh
+        connectWebSocket();
+      } else {
+        // Ping to verify connection is truly alive
+        console.log('📡 Pinging WebSocket...');
+        sendWebSocketMessage('ping', {});
+      }
+
+      // 2. Reload chat rooms data
+      console.log('📥 Reloading chat rooms...');
+      await loadChatRooms();
+
+      // 3. Reload notifications
+      console.log('🔔 Reloading notifications...');
+      await loadNotifications();
+
+      // 4. Small delay for better UX (prevents flash)
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      console.log('✅ Refresh complete');
+    } catch (error) {
+      console.error('❌ Refresh error:', error);
+      Alert.alert('Refresh Failed', 'Could not refresh chat list. Please try again.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isConnected, loadChatRooms, loadNotifications, connectWebSocket, sendWebSocketMessage]);
 
   // ============= WEBSOCKET MESSAGE HANDLERS =============
   const handleNewMessage = useCallback((message: Message) => {
@@ -1630,6 +1818,23 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.log('✅ Group created successfully:', result);
 
       if (result.chat_room) {
+        const roomId = result.chat_room.id;
+        const allMemberIds = [...memberIds, currentUser.employee_id]; // Include creator
+
+        if (ws.current?.readyState === WebSocket.OPEN) {
+          console.log('📢 Broadcasting new group to members:', allMemberIds);
+
+          ws.current.send(JSON.stringify({
+            action: 'broadcast_new_group',
+            room_id: roomId,
+            member_ids: allMemberIds,
+          }));
+
+          console.log('✅ Broadcast sent successfully');
+        } else {
+          console.warn('⚠️ WebSocket not open, members may not receive realtime update');
+        }
+
         await loadChatRooms();
         setSelectedChatRoom({
           ...result.chat_room,
@@ -2062,13 +2267,31 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           room.id === selectedChatRoom.id ? updatedRoom : room
         ));
 
+        // ✅ FIXED: Send the full data from API response
+        if (ws.current?.readyState === WebSocket.OPEN) {
+          console.log('📢 Broadcasting member removal...');
+
+          ws.current.send(JSON.stringify({
+            action: 'broadcast_member_removed',
+            room_id: selectedChatRoom.id,
+            removed_member: result.removed_member,  // ✅ Full user object
+            removed_by: result.removed_by || currentUser,  // ✅ Who removed them
+            is_self_exit: result.is_self_exit || false,  // ✅ Exit vs removal
+            system_message: result.system_message,  // ✅ System message if any
+          }));
+
+          console.log('✅ Member removal broadcast sent successfully');
+        } else {
+          console.warn('⚠️ WebSocket not open, member removal notification may be delayed');
+        }
+
         Alert.alert('Success', 'Member removed from group', [{ text: 'OK' }]);
       }
     } catch (error) {
       console.error('Error removing member:', error);
       Alert.alert('Error', 'Failed to remove member. Please try again.');
     }
-  }, [selectedChatRoom, apiCall]);
+  }, [selectedChatRoom, apiCall, currentUser]);
 
   // Add to handlersRef
   useEffect(() => {
@@ -2117,8 +2340,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onPin={pinChat}
             onUnpin={unpinChat}
             onMarkAsUnread={markAsUnread}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
           />
-
           <TouchableOpacity
             style={styles.fab}
             onPress={() => setViewMode('newChat')}
@@ -2150,6 +2374,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onDeleteForMe={handleDeleteForMe}
           onDeleteForEveryone={handleDeleteForEveryone}
           onShare={handleShare}
+          ws={ws}
         />
       )}
 
@@ -2181,7 +2406,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onBlock={handleBlockChat}
           onUnblock={handleUnblockChat}
           onRemoveMember={handleRemoveMember}
-          apiCall={apiCall} // ✅ ADD THIS LINE
+          apiCall={apiCall}
+          wsRef={ws}
         />
       )}
 
@@ -2213,6 +2439,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onMembersAdded={handleMembersAdded}
           onOptimisticAdd={handleOptimisticMemberAdd}  // ← ADD THIS LINE
           apiCall={apiCall}
+          wsRef={ws}
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -69,6 +69,7 @@ interface ChatDetailsProps {
   onAddMember?: () => void;
   onRemoveMember?: (memberId: string) => void;
   apiCall?: (endpoint: string, data: any) => Promise<any>;
+  wsRef?: React.MutableRefObject<WebSocket | null>;
 }
 
 export const ChatDetails: React.FC<ChatDetailsProps> = ({
@@ -86,6 +87,8 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   onViewMedia,
   onAddMember,
   onRemoveMember,
+  apiCall,
+  wsRef,
 }) => {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [showEncryptionModal, setShowEncryptionModal] = useState(false);
@@ -193,8 +196,6 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     );
   };
 
-  // ✅ ADD: Handle making someone admin
-  // ✅ UPDATED: Handle making someone admin
   const handleMakeAdmin = async (member: User, currentRole: string) => {
     const newRole = currentRole === 'admin' ? 'member' : 'admin';
 
@@ -210,25 +211,51 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
           text: currentRole === 'admin' ? 'Remove' : 'Confirm',
           onPress: async () => {
             try {
-              // ✅ Check if apiCall is available (for backward compatibility)
               if (!apiCall) {
-                Alert.alert('Info', 'This feature requires backend integration. Please add apiCall prop.');
+                Alert.alert('Info', 'This feature requires backend integration.');
                 return;
               }
 
-              await apiCall('updateMemberRole', {
+              // ✅ STEP 1: Call API
+              const result = await apiCall('updateMemberRole', {
                 chat_room_id: chatRoom.id,
                 user_id: member.employee_id,
                 new_role: newRole,
               });
 
+              console.log('✅ API returned 200 with data:', result);
+              console.log('📨 System message from API:', result.system_message);  // ✅ ADD THIS LOG
+
+              // ✅ STEP 2: Broadcast via WebSocket
+              if (wsRef?.current?.readyState === WebSocket.OPEN) {
+                console.log('📢 Broadcasting role update via WebSocket');
+
+                const broadcastData = {
+                  action: 'broadcast_role_update',
+                  room_id: chatRoom.id.toString(),
+                  updated_user: result.user || member,
+                  new_role: result.new_role || newRole,
+                  old_role: result.old_role || currentRole,
+                  updated_by: currentUser,
+                  system_message: result.system_message,  // ✅ From API response
+                };
+
+                console.log('📤 Broadcasting:', broadcastData);  // ✅ ADD THIS LOG
+
+                wsRef.current.send(JSON.stringify(broadcastData));
+
+                console.log('✅ Role update broadcast sent');
+              } else {
+                console.warn('⚠️ WebSocket not connected');
+              }
+
               Alert.alert(
                 'Success',
                 `${member.first_name} is now ${newRole === 'admin' ? 'an admin' : 'a member'}`,
-                [{ text: 'OK', onPress: onBack }]
+                [{ text: 'OK' }]
               );
             } catch (error) {
-              console.error('Error updating member role:', error);
+              console.error('❌ Error updating member role:', error);
               Alert.alert('Error', 'Failed to update member role. Please try again.');
             }
           },
@@ -288,7 +315,25 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     );
   };
 
-  const isAdmin = chatRoom.admin?.id === currentUser.id;
+  const isAdmin = useMemo(() => {
+    // Check if user is the group admin (primary check)
+    const adminId = chatRoom.admin?.id || chatRoom.admin?.employee_id;
+    const currentUserId = currentUser.id || currentUser.employee_id;
+
+    if (adminId === currentUserId) {
+      return true;
+    }
+
+    // Fallback: Check role in members list
+    const currentMembership = chatRoom.members.find(m => {
+      const user = getUserFromMember(m);
+      if (!user) return false;
+      const userId = user.id || user.employee_id;
+      return userId === currentUserId;
+    });
+
+    return currentMembership && 'role' in currentMembership && currentMembership.role === 'admin';
+  }, [chatRoom, currentUser]);
 
   const normalizedMembers = chatRoom.members.map((m) => getUserFromMember(m)).filter(Boolean) as User[];
   const displayedMembers = showAllMembers ? normalizedMembers : normalizedMembers.slice(0, 5);

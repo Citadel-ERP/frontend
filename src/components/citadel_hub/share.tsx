@@ -19,6 +19,8 @@ import {
     Image,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { getAvatarColor } from './avatarColors';
+
 
 // ============= TYPE DEFINITIONS =============
 interface User {
@@ -80,6 +82,10 @@ const UserItem: React.FC<UserItemProps> = React.memo(({ user, isSelected, onTogg
         return `${first}${last}`.toUpperCase() || '?';
     };
 
+    // ✅ ADD THIS - Generate colors based on user ID
+    const userId = user.employee_id || user.id?.toString() || '';
+    const colors = getAvatarColor(userId);
+
     const handlePress = () => {
         if (!disabled) {
             onToggle(user.employee_id || user.id?.toString() || '');
@@ -97,8 +103,8 @@ const UserItem: React.FC<UserItemProps> = React.memo(({ user, isSelected, onTogg
                 {user.profile_picture ? (
                     <Image source={{ uri: user.profile_picture }} style={styles.userAvatar} />
                 ) : (
-                    <View style={[styles.userAvatar, styles.userAvatarPlaceholder]}>
-                        <Text style={styles.userAvatarText}>{getInitials()}</Text>
+                    <View style={[styles.userAvatar, styles.userAvatarPlaceholder, { backgroundColor: colors.light }]}>
+                        <Text style={[styles.userAvatarText, { color: colors.dark }]}>{getInitials()}</Text>
                     </View>
                 )}
             </View>
@@ -140,6 +146,8 @@ interface GroupItemProps {
 }
 
 const GroupItem: React.FC<GroupItemProps> = React.memo(({ group, isSelected, onToggle, disabled }) => {
+    const colors = getAvatarColor(group.id);
+
     const handlePress = () => {
         if (!disabled) {
             onToggle(group.id);
@@ -157,8 +165,8 @@ const GroupItem: React.FC<GroupItemProps> = React.memo(({ group, isSelected, onT
                 {group.profile_picture ? (
                     <Image source={{ uri: group.profile_picture }} style={styles.userAvatar} />
                 ) : (
-                    <View style={[styles.userAvatar, styles.groupAvatarPlaceholder]}>
-                        <Ionicons name="people" size={24} color="#8696A0" />
+                   <View style={[styles.userAvatar, styles.groupAvatarPlaceholder, { backgroundColor: colors.light }]}>
+                        <Ionicons name="people" size={24} color={colors.dark} />
                     </View>
                 )}
             </View>
@@ -911,19 +919,19 @@ const styles = StyleSheet.create({
         borderRadius: 25,
     },
     userAvatarPlaceholder: {
-        backgroundColor: '#E9EDEF',
+        // backgroundColor: '#E9EDEF',
         justifyContent: 'center',
         alignItems: 'center',
     },
     groupAvatarPlaceholder: {
-        backgroundColor: '#D1F4E8',
+        // backgroundColor: '#D1F4E8',
         justifyContent: 'center',
         alignItems: 'center',
     },
     userAvatarText: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#8696A0',
+        // color: '#8696A0',
     },
     userInfo: {
         flex: 1,

@@ -8,8 +8,11 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getAvatarColor } from './avatarColors';
+
 
 interface User {
   id: number;
@@ -60,6 +63,8 @@ interface ListProps {
   onPin: (roomId: number) => void;
   onUnpin: (roomId: number) => void;
   onMarkAsUnread: (roomId: number) => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export const List: React.FC<ListProps> = ({
@@ -71,6 +76,8 @@ export const List: React.FC<ListProps> = ({
   onPin,
   onUnpin,
   onMarkAsUnread,
+  onRefresh,
+  isRefreshing = false,
 }) => {
   const [contextMenuRoom, setContextMenuRoom] = useState<number | null>(null);
 
@@ -91,24 +98,22 @@ export const List: React.FC<ListProps> = ({
     if (room.room_type === 'group') {
       return room.name || 'Unnamed Group';
     }
-    
+
     // Find the OTHER user (not current user)
     const currentUserId = currentUser.id || currentUser.employee_id;
-    
+
     const otherMember = room.members.find(m => {
       const user = getUserFromMember(m);
       const userId = user?.id || user?.employee_id;
       return user && userId !== currentUserId; // ✅ Exclude current user
     });
-    
+
     const otherUser = getUserFromMember(otherMember!);
     return otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown';
   };
 
-  // ✅ FIXED: Properly filters out current user for avatar
   const getChatAvatar = (room: ChatRoom) => {
     if (room.room_type === 'group') {
-      console.log('Getting avatar for group chat:', room.profile_picture);
       if (room.profile_picture) {
         return (
           <Image
@@ -117,24 +122,28 @@ export const List: React.FC<ListProps> = ({
           />
         );
       }
+
+      // ✅ Group placeholder with light background and dark icon
+      const colors = getAvatarColor(room.id);
+
       return (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Ionicons name="people" size={20} color="#8696a0" />
+        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.light }]}>
+          <Ionicons name="people" size={20} color={colors.dark} />
         </View>
       );
     }
-    
+
     // Find the OTHER user (not current user)
     const currentUserId = currentUser.id || currentUser.employee_id;
-    
+
     const otherMember = room.members.find(m => {
       const user = getUserFromMember(m);
       const userId = user?.id || user?.employee_id;
-      return user && userId !== currentUserId; // ✅ Exclude current user
+      return user && userId !== currentUserId;
     });
-    
+
     const otherUser = getUserFromMember(otherMember!);
-    
+
     if (otherUser?.profile_picture) {
       return (
         <Image
@@ -143,12 +152,17 @@ export const List: React.FC<ListProps> = ({
         />
       );
     }
-    
+
+    // ✅ User placeholder with light background and dark initials
+    const initials = otherUser
+      ? `${otherUser.first_name?.[0] || ''}${otherUser.last_name?.[0] || ''}`.toUpperCase()
+      : '?';
+    const userId = otherUser?.id || otherUser?.employee_id || room.id;
+    const colors = getAvatarColor(userId);
+
     return (
-      <View style={[styles.avatar, styles.avatarPlaceholder]}>
-        <Text style={styles.avatarText}>
-          {otherUser ? `${otherUser.first_name?.[0] || ''}${otherUser.last_name?.[0] || ''}` : '?'}
-        </Text>
+      <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.light }]}>
+        <Text style={[styles.avatarText, { color: colors.dark }]}>{initials}</Text>
       </View>
     );
   };
@@ -171,15 +185,15 @@ export const List: React.FC<ListProps> = ({
 
   const getLastMessagePreview = (room: ChatRoom) => {
     if (!room.last_message) return 'No messages yet';
-    
+
     const { sender, content, message_type } = room.last_message;
     const senderName = sender.id === currentUser.id ? 'You' : sender.first_name;
-    
+
     if (message_type === 'image') return `${senderName}: 📷 Photo`;
     if (message_type === 'file') return `${senderName}: 📄 File`;
     if (message_type === 'audio') return `${senderName}: 🎤 Audio`;
     if (message_type === 'video') return `${senderName}: 🎥 Video`;
-    
+
     return `${senderName}: ${content}`;
   };
 
@@ -196,7 +210,7 @@ export const List: React.FC<ListProps> = ({
             <View style={styles.dividerLine} />
           </View>
         )}
-        
+
         <TouchableOpacity
           style={[styles.chatItem, isPinned && styles.chatItemPinned]}
           onPress={() => onChatSelect(room)}
@@ -250,6 +264,19 @@ export const List: React.FC<ListProps> = ({
         renderItem={renderChatItem}
         keyExtractor={(item) => item.id.toString()}
         style={styles.list}
+        // ✅ ADD REFRESHCONTROL:
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={['#00a884']} // Android
+              tintColor="#00a884" // iOS
+              title="Pull to refresh" // iOS
+              titleColor="#00a884" // iOS
+            />
+          ) : undefined
+        }
       />
 
       {/* Context Menu Modal */}
@@ -372,14 +399,14 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   avatarPlaceholder: {
-    backgroundColor: '#e9edef',
+    // backgroundColor: '#e9edef',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#8696a0',
+    // color: '#ffffff',
   },
   chatInfo: {
     flex: 1,

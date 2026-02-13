@@ -1,3 +1,4 @@
+//citadel_hub/Chat.tsx
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -16,7 +17,10 @@ import {
   Animated,
   Dimensions,
   Linking,
-  Clipboard
+  Clipboard,
+  ImageBackground,
+  StatusBar,
+  
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { EmojiPicker } from './emojiPicker';
@@ -29,6 +33,8 @@ import { CameraRecorder } from './cameraRecorder';
 import { Video, ResizeMode } from 'expo-av';
 import { AudioRecorder } from './audioRecorder';
 import { AudioPlayer } from './audioPlayer';
+import { getAvatarColor } from './avatarColors';
+
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -65,7 +71,7 @@ interface Message {
   id: number;
   sender: User;
   content: string;
-  message_type: 'text' | 'image' | 'file' | 'audio' | 'video';
+  message_type: 'text' | 'image' | 'file' | 'audio' | 'video' | "system";
   created_at: string;
   is_edited: boolean;
   parent_message?: Message;
@@ -117,6 +123,7 @@ interface ChatProps {
   onDeleteForMe: (messageId: number) => void;
   onDeleteForEveryone: (messageId: number) => void;
   onShare?: (messageIds: number[], messages: Message[], chatRoomId?: number) => void;
+  ws?: React.MutableRefObject<WebSocket | null>;
 }
 
 const QUICK_REACTIONS = ['😂', '👍', '😢', '❤️', '😮', '🙏', '👏'];
@@ -141,6 +148,7 @@ export const Chat: React.FC<ChatProps> = ({
   onDeleteForMe,
   onDeleteForEveryone,
   onShare,
+  ws,
 }) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -300,10 +308,55 @@ export const Chat: React.FC<ChatProps> = ({
 
       previousRoomId.current = chatRoom?.id || null;
     } else {
+      console.log(`📨 Chat.tsx: Messages updated, count = ${messages.length}`);
+      console.log('📨 Last 3 messages:', messages.slice(-3).map(m => ({
+        id: m.id,
+        type: m.message_type,
+        content: m.content?.substring(0, 50)
+      })));
       setDisplayMessages([...messages].reverse());
     }
   }, [chatRoom?.id, messages]);
 
+useEffect(() => {
+  if (!chatRoom?.id) return;
+  
+  // Check if WebSocket is connected and ready
+  const isWsReady = ws?.current?.readyState === WebSocket.OPEN;
+  
+  if (!isWsReady) {
+    console.log('⚠️ WebSocket not ready, cannot set active room');
+    return;
+  }
+
+  console.log(`👁️ User entered room ${chatRoom.id}`);
+  
+  // Notify backend that user is viewing this room
+  try {
+    ws.current.send(JSON.stringify({
+      action: 'set_active_room',
+      room_id: chatRoom.id
+    }));
+    console.log(`✅ Notified backend: viewing room ${chatRoom.id}`);
+  } catch (error) {
+    console.error('❌ Failed to set active room:', error);
+  }
+
+  // Cleanup: Notify backend when user leaves this room
+  return () => {
+    if (ws?.current?.readyState === WebSocket.OPEN) {
+      console.log(`👁️ User left room ${chatRoom.id}`);
+      try {
+        ws.current.send(JSON.stringify({
+          action: 'clear_active_room'
+        }));
+        console.log('✅ Notified backend: cleared active room');
+      } catch (error) {
+        console.error('❌ Failed to clear active room:', error);
+      }
+    }
+  };
+}, [chatRoom?.id]); 
   // Animate reaction bar
   useEffect(() => {
     if (showQuickReactions && selectedMessages.length === 1) {
@@ -411,27 +464,39 @@ export const Chat: React.FC<ChatProps> = ({
           <Image source={{ uri: chatRoom.profile_picture }} style={styles.avatar} />
         );
       }
+      // ✅ CHANGED: Use dynamic colors for group avatar
+      const colors = getAvatarColor(chatRoom.id);
       return (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Ionicons name="people" size={20} color="#8696a0" />
+        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.light }]}>
+          <Ionicons name="people" size={20} color={colors.dark} />
         </View>
       );
     }
+
     const currentUserId = currentUser.id || currentUser.employee_id;
     const otherMember = chatRoom.members.find(m => {
       const user = getUserFromMember(m);
       return user && (user.id || user.employee_id) !== currentUserId;
     });
     const otherUser = otherMember ? getUserFromMember(otherMember) : null;
+
     if (otherUser?.profile_picture) {
       return (
         <Image source={{ uri: otherUser.profile_picture }} style={styles.avatar} />
       );
     }
+
+    // ✅ CHANGED: Use dynamic colors for user avatar
+    const userId = otherUser?.employee_id || otherUser?.id?.toString() || chatRoom.id;
+    const colors = getAvatarColor(userId);
+    const initials = otherUser
+      ? `${otherUser.first_name?.[0] || '?'}${otherUser.last_name?.[0] || ''}`
+      : '?';
+
     return (
-      <View style={[styles.avatar, styles.avatarPlaceholder]}>
-        <Text style={styles.avatarText}>
-          {otherUser ? `${otherUser.first_name?.[0] || '?'}${otherUser.last_name?.[0] || ''}` : '?'}
+      <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.light }]}>
+        <Text style={[styles.avatarText, { color: colors.dark }]}>
+          {initials}
         </Text>
       </View>
     );
@@ -944,11 +1009,7 @@ export const Chat: React.FC<ChatProps> = ({
 
     return (
       <>
-        {showDate && (
-          <View style={styles.dateSeparator}>
-            <Text style={styles.dateSeparatorText}>{formatDate(message.created_at)}</Text>
-          </View>
-        )}
+
         <View
           ref={(ref) => (messageRefs.current[message.id] = ref)}
           style={[
@@ -986,9 +1047,18 @@ export const Chat: React.FC<ChatProps> = ({
                     style={styles.messageAvatarImage}
                   />
                 ) : (
-                  <View style={styles.messageAvatarPlaceholder}>
-                    <Text style={styles.messageAvatarText}>{message.sender.first_name?.[0] || '?'}</Text>
-                  </View>
+                  // ✅ ADD THIS: Generate colors based on sender ID
+                  (() => {
+                    const senderId = message.sender.employee_id || message.sender.id?.toString() || '';
+                    const colors = getAvatarColor(senderId);
+                    return (
+                      <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.light }]}>
+                        <Text style={[styles.messageAvatarText, { color: colors.dark }]}>
+                          {message.sender.first_name?.[0] || '?'}
+                        </Text>
+                      </View>
+                    );
+                  })()
                 )}
               </View>
             )}
@@ -1136,6 +1206,11 @@ export const Chat: React.FC<ChatProps> = ({
             </View>
           </TouchableOpacity>
         </View>
+        {showDate && (
+          <View style={styles.dateSeparator}>
+            <Text style={styles.dateSeparatorText}>{formatDate(message.created_at)}</Text>
+          </View>
+        )}
       </>
     );
   };
@@ -1160,7 +1235,14 @@ export const Chat: React.FC<ChatProps> = ({
   const bottomOffset = showEmojiPicker ? EMOJI_PICKER_HEIGHT : keyboardHeight;
 
   return (
-    <View style={styles.container}>
+    <ImageBackground
+      source={require('../../assets/whatsappBackground.jpg')}
+      style={styles.container}
+      imageStyle={{ opacity: 0.4 }}
+      resizeMode="cover"
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+
       {/* Header */}
       <View style={[
         styles.header,
@@ -1169,32 +1251,33 @@ export const Chat: React.FC<ChatProps> = ({
         {selectedMessages.length > 0 ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={handleClearSelection} activeOpacity={0.7}>
-              <Ionicons name="close" size={24} color="#ffffff" />
+              <Ionicons name="close" size={24} color="#000000" />
             </TouchableOpacity>
             <Text style={styles.selectionCount}>{selectedMessages.length}</Text>
             <View style={styles.selectionActions}>
               {selectedMessages.length === 1 && (
                 <TouchableOpacity style={styles.selectionActionBtn} onPress={handleReplyMessage} activeOpacity={0.7}>
-                  <MaterialIcons name="reply" size={24} color="#ffffff" />
+                  <MaterialIcons name="reply" size={24} color="#000000" />
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.selectionActionBtn} onPress={handleShareMessage} activeOpacity={0.7}>
-                <Ionicons name="arrow-redo" size={24} color="#ffffff" />
+                <Ionicons name="arrow-redo" size={24} color="#000000" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.selectionActionBtn} onPress={handleDeleteMessage} activeOpacity={0.7}>
-                <Ionicons name="trash-outline" size={24} color="#ffffff" />
+                <Ionicons name="trash-outline" size={24} color="#000000" />
               </TouchableOpacity>
-              {selectedMessages.length === 1 && (
+              {/* DO NOT DELETE */}
+              {/* {selectedMessages.length === 1 && (
                 <TouchableOpacity style={styles.selectionActionBtn} onPress={handleMessageOptionsPress} activeOpacity={0.7}>
-                  <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
+                  <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
                 </TouchableOpacity>
-              )}
+              )} */}
             </View>
           </>
         ) : isSearchMode ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={handleSearchClose} activeOpacity={0.7}>
-              <Ionicons name="chevron-back" size={24} color="#ffffff" />
+              <Ionicons name="chevron-back" size={24} color="#000000" />
             </TouchableOpacity>
             <TextInput
               style={styles.searchInput}
@@ -1208,7 +1291,7 @@ export const Chat: React.FC<ChatProps> = ({
         ) : (
           <>
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <Ionicons name="chevron-back" size={24} color="#ffffff" />
+              <Ionicons name="chevron-back" size={24} color="#000000" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerInfo} onPress={onHeaderClick} activeOpacity={0.7}>
               {getChatAvatar()}
@@ -1218,7 +1301,7 @@ export const Chat: React.FC<ChatProps> = ({
                     {getChatName()}
                   </Text>
                   {chatRoom.is_muted && (
-                    <Ionicons name="volume-mute" size={16} color="#ffffff" style={styles.mutedIcon} />
+                    <Ionicons name="volume-mute" size={16} color="#000000" style={styles.mutedIcon} />
                   )}
                 </View>
                 <Text style={[styles.headerStatus, typingUsers.length > 0 && styles.typingIndicator]}>
@@ -1236,7 +1319,7 @@ export const Chat: React.FC<ChatProps> = ({
             </TouchableOpacity>
             <View style={styles.headerActions}>
               <TouchableOpacity style={styles.headerIconBtn} onPress={() => setShowOptionsModal(true)} activeOpacity={0.7}>
-                <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
+                <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
               </TouchableOpacity>
             </View>
           </>
@@ -1694,7 +1777,7 @@ export const Chat: React.FC<ChatProps> = ({
         onClose={() => setShowAudioRecorder(false)}
         onSend={handleAudioCapture}
       />
-    </View >
+    </ImageBackground>
 
   );
 };
@@ -1707,7 +1790,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#008069',
+    backgroundColor: '#ffffff',
     paddingTop: 90,
     paddingBottom: 10,
     paddingHorizontal: 16,
@@ -1716,7 +1799,7 @@ const styles = StyleSheet.create({
     marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
   headerWithSelection: {
-    backgroundColor: '#075e54',
+    backgroundColor: '#ffffff',
   },
   backButton: {
     padding: 8,
@@ -1724,7 +1807,7 @@ const styles = StyleSheet.create({
   selectionCount: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#ffffff',
+    color: '#000000',
     marginLeft: 8,
   },
   selectionActions: {
@@ -1749,14 +1832,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: '#e9edef',
+    // backgroundColor: '#e9edef',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8696a0',
+    // color: '#8696a0',
   },
   headerText: {
     flex: 1,
@@ -1770,7 +1853,7 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#ffffff',
+    color: '#000000',
     flex: 1,
   },
   mutedIcon: {
@@ -1778,7 +1861,7 @@ const styles = StyleSheet.create({
   },
   headerStatus: {
     fontSize: 13,
-    color: '#ffffff',
+    color: '#000000',
     marginTop: 2,
   },
   typingIndicator: {
@@ -1974,14 +2057,14 @@ const styles = StyleSheet.create({
   messageAvatarPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#e9edef',
+    // backgroundColor: '#e9edef',
     justifyContent: 'center',
     alignItems: 'center',
   },
   messageAvatarText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#8696a0',
+    // color: '#8696a0',
   },
   messageContentWrapper: {
     maxWidth: '75%',
@@ -2220,8 +2303,8 @@ const styles = StyleSheet.create({
   },
   messageOptionsOverlay: {
     position: 'absolute',
-    top: 25,
-    left: 0,
+    top: -20,
+    left: 40,
     right: 0,
     bottom: 0,
     zIndex: 9999,
