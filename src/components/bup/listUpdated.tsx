@@ -62,6 +62,7 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
   searchQuery,
 }) => {
   const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+  
 
   const beautifyName = (name: string): string => {
     if (!name) return '';
@@ -83,17 +84,15 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
     }
   };
 
-  const getAvatarColor = (name: string): string => {
-    if (!name) return avatarColors[0];
-    
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    
-    const index = Math.abs(hash) % avatarColors.length;
-    return avatarColors[index];
-  };
+  const getAvatarColor = (name: string | null): string => {
+  if (!name) return avatarColors[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
 
   const formatDateTime = (dateString?: string): string => {
     if (!dateString) return '-';
@@ -138,7 +137,7 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
   };
 
   const renderLeadItem = ({ item: lead }: { item: Lead }) => {
-    const avatarColor = getAvatarColor(lead.name);
+    const avatarColor = getAvatarColor(lead.company);
     const initials = getInitials(lead.company);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
     const statusIcon = getStatusIcon(lead.status);

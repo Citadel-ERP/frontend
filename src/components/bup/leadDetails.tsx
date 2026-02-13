@@ -296,6 +296,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
+  const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+
+  const getAvatarColor = (name: string | null): string => {
+  if (!name) return avatarColors[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
+
   const fetchIncentiveData = async (): Promise<void> => {
     try {
       if (!token || !lead.incentive_present) return;
@@ -799,7 +811,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <View style={s.containerBox}>
             <View style={s.leadInfoContainer}>
               <View style={s.leadAvatarSection}>
-                <View style={s.leadAvatar}>
+                <View style={[s.leadAvatar, { backgroundColor: getAvatarColor(lead.company) }]}>
                   <Text style={s.leadAvatarText}>
                     {getInitials(lead.company || 'L')}
                   </Text>
@@ -1066,12 +1078,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             onPress={() => setShowLeadDetailsModal(true)}
             activeOpacity={0.7}
           >
-            <View style={s.avatarContainer}>
-              <View style={s.avatarPlaceholder}>
-                <Text style={s.avatarText}>
-                  {getInitials(lead.company)}
-                </Text>
-              </View>
+            <View style={[s.avatarPlaceholder, { backgroundColor: getAvatarColor(lead.company) }]}>
+              <Text style={s.avatarText}>
+                {getInitials(lead.company)}
+              </Text>
             </View>
             <View style={s.headerTextContainer}>
               <Text style={s.headerTitle} numberOfLines={1}>
@@ -1349,7 +1359,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <Incentive
             onBack={() => setShowIncentiveModal(false)}
             leadId={lead.id}
-            leadName={lead.company}
+            leadName={lead.company || ''}
             theme={theme}
           />
         </Modal>
@@ -1364,7 +1374,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         >
           <Invoice
             leadId={lead.id}
-            leadName={lead.company}
+            leadName={lead.company || ''}
             token={token}
             theme={theme}
             onBack={() => setShowInvoiceModal(false)}
@@ -1449,20 +1459,22 @@ headerWrapper: {
     marginRight: 10,
   },
   avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   avatarText: {
-    color: C.primary,
-    fontSize: 14,
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: '600',
   },
   headerTextContainer: {
     flex: 1,
+    marginLeft: 4,
   },
   headerTitle: {
     fontSize: 16,
@@ -1538,11 +1550,8 @@ headerWrapper: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: C.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: C.primary
   },
 
   leadAvatarText: {

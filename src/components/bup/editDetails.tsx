@@ -13,56 +13,40 @@ interface FilterOptionWithColor extends FilterOption {
   color?: string;
 }
 
-// Updated color scheme with green as primary
 const THEME_COLORS = {
-  // Primary Greens (Your main brand colors)
-  primary: '#0D9488',      // Teal green (more professional than WhatsApp green)
-  primaryLight: '#14B8A6', // Lighter teal
-  primaryDark: '#0F766E',  // Darker teal
-  
-  // Secondary & Accent
-  secondary: '#10B981',    // Emerald green
-  accent: '#A7F3D0',       // Light mint
-  
-  // Backgrounds
-  background: '#F9FAFB',   // Light gray background
-  card: '#FFFFFF',         // White cards
-  surface: '#F8FAFC',      // Slightly off-white
-  
-  // Text
-  textPrimary: '#111827',   // Near black
-  textSecondary: '#6B7280', // Medium gray
-  textTertiary: '#9CA3AF',  // Light gray
-  
-  // Borders & Dividers
-  border: '#E5E7EB',       // Light gray border
-  divider: '#F3F4F6',      // Very light divider
-  
-  // Status Colors
-  success: '#10B981',      // Green
-  warning: '#F59E0B',      // Amber
-  danger: '#EF4444',       // Red
-  info: '#3B82F6',        // Blue
-  
-  // Category-specific backgrounds with green tints
-  emailBg: '#F0F9FF',      // Light blue with green tint
+  primary: '#0D9488',
+  primaryLight: '#14B8A6',
+  primaryDark: '#0F766E',
+  secondary: '#10B981',
+  accent: '#A7F3D0',
+  background: '#F9FAFB',
+  card: '#FFFFFF',
+  surface: '#F8FAFC',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+  divider: '#F3F4F6',
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  info: '#3B82F6',
+  emailBg: '#F0F9FF',
   emailBorder: '#0EA5E9',
-  phoneBg: '#FEF3C7',      // Light amber with green tint
+  phoneBg: '#FEF3C7',
   phoneBorder: '#F59E0B',
-  collabBg: '#F0FDF4',     // Light green
+  collabBg: '#F0FDF4',
   collabBorder: '#10B981',
-  leadInfoBg: '#F0F9FF',   // Light cyan
+  leadInfoBg: '#F0F9FF',
   leadInfoBorder: '#06B6D4',
-  customFieldBg: '#FAF5FF', // Light purple
+  customFieldBg: '#FAF5FF',
   customFieldBorder: '#8B5CF6',
-  managementBg: '#FFFBEB',  // Light yellow
+  managementBg: '#FFFBEB',
   managementBorder: '#F59E0B',
-  
-  // Interactive States
-  hover: '#ECFDF5',        // Very light green
-  active: '#D1FAE5',       // Light green
-  disabled: '#F3F4F6',     // Light gray
-  white: '#FFFFFF',        // White
+  hover: '#ECFDF5',
+  active: '#D1FAE5',
+  disabled: '#F3F4F6',
+  white: '#FFFFFF',
 };
 
 interface EditLeadProps {
@@ -134,7 +118,6 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [assignedToLoading, setAssignedToLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Lead Specific Information States
   const [areaRequirements, setAreaRequirements] = useState<string>(
     (lead.meta && typeof lead.meta === 'object' && lead.meta.area_requirements)
       ? String(lead.meta.area_requirements)
@@ -151,14 +134,13 @@ const EditLead: React.FC<EditLeadProps> = ({
       : ''
   );
   const [contactPersonName, setContactPersonName] = useState<string>(
-  (lead.meta && typeof lead.meta === 'object' && lead.meta.contact_person_name)
-    ? String(lead.meta.contact_person_name)
-    : ''
-);
+    (lead.meta && typeof lead.meta === 'object' && lead.meta.contact_person_name)
+      ? String(lead.meta.contact_person_name)
+      : ''
+  );
   const [customFields, setCustomFields] = useState<CustomField[]>(() => {
     if (!lead.meta || typeof lead.meta !== 'object') return [];
-
-    const defaultKeys = ['area_requirements', 'office_type', 'location'];
+    const defaultKeys = ['area_requirements', 'office_type', 'location', 'contact_person_name'];
     const customEntries = Object.entries(lead.meta)
       .filter(([key]) => !defaultKeys.includes(key))
       .map(([key, value], index) => ({
@@ -166,10 +148,11 @@ const EditLead: React.FC<EditLeadProps> = ({
         key,
         value: String(value)
       }));
-
     return customEntries;
   });
   const [customFieldErrors, setCustomFieldErrors] = useState<{ [key: string]: string }>({});
+
+  const initializationDoneRef = useRef(false);
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
@@ -191,9 +174,13 @@ const EditLead: React.FC<EditLeadProps> = ({
   ];
 
   useEffect(() => {
-    fetchPhases();
-    fetchEmployees();
-    if (editedLead.phase) fetchSubphasesForPhase(editedLead.phase);
+    if (!initializationDoneRef.current) {
+      initializationDoneRef.current = true;
+      fetchPhases();
+      fetchEmployees();
+      fetchCollaborators();
+      if (editedLead.phase) fetchSubphasesForPhase(editedLead.phase);
+    }
   }, []);
 
   useEffect(() => {
@@ -254,8 +241,13 @@ const EditLead: React.FC<EditLeadProps> = ({
             text: 'Delete',
             style: 'destructive',
             onPress: async () => {
-              await onDelete();
-              setDeleteLoading(false);
+              try {
+                await onDelete();
+                onBack();
+              } catch (error) {
+                Alert.alert('Error', 'Failed to delete lead');
+                setDeleteLoading(false);
+              }
             }
           }
         ]
@@ -324,7 +316,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   const fetchCollaborators = async () => {
     try {
       if (!token || !lead.id) return;
-      setLoadingCollaborators(true);
+      
       const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -335,9 +327,6 @@ const EditLead: React.FC<EditLeadProps> = ({
       if (data.collaborators) setCollaborators(data.collaborators);
     } catch (error) {
       console.error('Error fetching collaborators:', error);
-      Alert.alert('Error', 'Failed to fetch collaborators');
-    } finally {
-      setLoadingCollaborators(false);
     }
   };
 
@@ -415,23 +404,56 @@ const EditLead: React.FC<EditLeadProps> = ({
         Alert.alert('Error', 'Please enter a valid email address');
         return;
       }
-      setLoadingCollaborators(true);
+      
+      // Find the collaborator being added to get their data
+      const selectedEmployee = potentialCollaborators.find(emp => emp.value === email) as any;
+      if (!selectedEmployee) {
+        Alert.alert('Error', 'Employee data not found');
+        return;
+      }
+      
+      // Create optimistic collaborator object
+      const optimisticCollaborator: Collaborator = {
+        id: `temp-${Date.now()}`,
+        user: {
+          email: email,
+          first_name: selectedEmployee.userData?.first_name || email.split('@')[0],
+          last_name: selectedEmployee.userData?.last_name || '',
+          full_name: selectedEmployee.label.split('(')[0].trim(),
+          employee_id: selectedEmployee.userData?.employee_id || '',
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      // OPTIMISTIC: Add to state immediately without waiting for backend
+      setCollaborators([...collaborators, optimisticCollaborator]);
+      setSearchQuery('');
+      setPotentialCollaborators([]);
+      
+      // Now send to backend (non-blocking)
       const response = await fetch(`${BACKEND_URL}/manager/addCollaborator`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: lead.id, email: email })
       });
+      
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to add collaborator');
+      if (!response.ok) {
+        // If backend fails, remove the optimistic entry
+        setCollaborators(prevCollab => prevCollab.filter(c => c.id !== optimisticCollaborator.id));
+        Alert.alert('Error', data.message || 'Failed to add collaborator');
+        return;
+      }
+      
+      // Success - fetch fresh data from backend to replace optimistic entry with real data
       await fetchCollaborators();
-      setSearchQuery('');
-      setPotentialCollaborators([]);
-      Alert.alert('Success', data.message || 'Collaborator added successfully');
+      
     } catch (error: any) {
       console.error('Error adding collaborator:', error);
+      // Remove optimistic entry on error
+      setCollaborators(prevCollab => prevCollab.filter(c => !c.id.toString().startsWith('temp-')));
       Alert.alert('Error', error.message || 'Failed to add collaborator');
-    } finally {
-      setLoadingCollaborators(false);
     }
   };
 
@@ -447,16 +469,24 @@ const EditLead: React.FC<EditLeadProps> = ({
             text: 'Remove',
             style: 'destructive',
             onPress: async () => {
-              setLoadingCollaborators(true);
-              const response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, lead_id: lead.id, collaborator_id: collaboratorId })
-              });
-              const data = await response.json();
-              if (!response.ok) throw new Error(data.message || 'Failed to remove collaborator');
-              await fetchCollaborators();
-              Alert.alert('Success', data.message || 'Collaborator removed successfully');
+              // OPTIMISTIC: Remove from state immediately
+              setCollaborators(collaborators.filter(c => c.id !== collaboratorId));
+              
+              try {
+                const response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token, lead_id: lead.id, collaborator_id: collaboratorId })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Failed to remove collaborator');
+                
+                Alert.alert('Success', data.message || 'Collaborator removed successfully');
+              } catch (error: any) {
+                // If backend fails, add back to list
+                await fetchCollaborators();
+                Alert.alert('Error', error.message || 'Failed to remove collaborator');
+              }
             }
           }
         ]
@@ -464,8 +494,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     } catch (error: any) {
       console.error('Error removing collaborator:', error);
       Alert.alert('Error', error.message || 'Failed to remove collaborator');
-    } finally {
-      setLoadingCollaborators(false);
     }
   };
 
@@ -837,10 +865,10 @@ const EditLead: React.FC<EditLeadProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => handleRemoveEmail(idx)} 
-                style={s.deleteBtn}
+                style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
+                <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           ))}
@@ -883,10 +911,10 @@ const EditLead: React.FC<EditLeadProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => handleRemovePhone(idx)} 
-                style={s.deleteBtn}
+                style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
+                <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           ))}
@@ -918,7 +946,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Ionicons name="people-outline" size={20} color={THEME_COLORS.collabBorder} />
             </View>
             <Text style={s.cardTitle}>Colleagues ({collaborators.length})</Text>
-            {loadingCollaborators && <ActivityIndicator size="small" color={THEME_COLORS.collabBorder} style={{ marginLeft: 8 }} />}
           </View>
 
           {collaborators.map((collab) => (
@@ -929,15 +956,10 @@ const EditLead: React.FC<EditLeadProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => removeCollaborator(collab.id)} 
-                disabled={loadingCollaborators} 
-                style={s.deleteBtn}
+                style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
-                {loadingCollaborators ? (
-                  <ActivityIndicator size="small" color={THEME_COLORS.danger} />
-                ) : (
-                  <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
-                )}
+                <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           ))}
@@ -965,7 +987,6 @@ const EditLead: React.FC<EditLeadProps> = ({
                     key={employee.value}
                     style={s.resultItem}
                     onPress={() => addCollaborator(employee.value)}
-                    disabled={loadingCollaborators}
                     activeOpacity={0.7}
                   >
                     <View style={s.resultContent}>
@@ -1108,118 +1129,109 @@ const EditLead: React.FC<EditLeadProps> = ({
       />
 
       {/* Assigned To Modal */}
-      // Replace the Assigned To Modal section (around line 850-920) with this:
-
-{/* Assigned To Modal */}
-{/* Assigned To Modal */}
-{activeDropdown === 'assigned' && (
-  <Modal
-    visible={true}
-    transparent={true}
-    animationType="fade"
-    onRequestClose={() => setActiveDropdown(null)}
-  >
-    <TouchableOpacity 
-      style={s.modalOverlay}
-      activeOpacity={1} 
-      onPress={() => setActiveDropdown(null)}
-    >
-      <TouchableOpacity 
-        activeOpacity={1} 
-        onPress={(e) => e.stopPropagation()}
-        style={s.modalContent}
-      >
-        <View style={s.modalHeader}>
-          <Text style={s.modalTitle}>Assign Lead To</Text>
+      {activeDropdown === 'assigned' && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setActiveDropdown(null)}
+        >
           <TouchableOpacity 
+            style={s.modalOverlay}
+            activeOpacity={1} 
             onPress={() => setActiveDropdown(null)}
-            activeOpacity={0.7}
           >
-            <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity 
+              activeOpacity={1} 
+              onPress={(e) => e.stopPropagation()}
+              style={s.modalContent}
+            >
+              <View style={s.modalHeader}>
+                <Text style={s.modalTitle}>Assign Lead To</Text>
+                <TouchableOpacity 
+                  onPress={() => setActiveDropdown(null)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
 
-        <View style={s.searchContainer}>
-          <TextInput
-            style={s.searchInput}
-            value={assignedToSearch}
-            onChangeText={setAssignedToSearch}
-            placeholder="Search employees..."
-            placeholderTextColor={THEME_COLORS.textTertiary}
-            autoCapitalize="none"
-          />
-          {assignedToLoading && (
-            <ActivityIndicator 
-              size="small" 
-              color={THEME_COLORS.primary} 
-              style={s.searchLoader} 
-            />
-          )}
-        </View>
-
-        <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-          {assignedToResults.length > 0 ? (
-            assignedToResults.map((user) => (
-              <TouchableOpacity
-                key={user.email}
-                style={[
-                  s.modalItem, 
-                  editedLead.assigned_to?.email === user.email && s.modalItemSelected
-                ]}
-                onPress={() => handleAssignToUser(user)}
-                activeOpacity={0.7}
-              >
-                <View style={s.modalItemContent}>
-                  <Ionicons 
-                    name="person" 
-                    size={18} 
-                    color={
-                      editedLead.assigned_to?.email === user.email 
-                        ? THEME_COLORS.primary 
-                        : THEME_COLORS.textSecondary
-                    } 
-                  />
-                  <View style={s.modalItemInfo}>
-                    <Text style={s.modalItemName} numberOfLines={1}>
-                      {user.full_name || `${user.first_name} ${user.last_name}`}
-                    </Text>
-                    <Text style={s.modalItemEmail} numberOfLines={1}>
-                      {user.email}
-                    </Text>
-                  </View>
-                </View>
-                {editedLead.assigned_to?.email === user.email && (
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={20} 
+              <View style={s.searchContainer}>
+                <TextInput
+                  style={s.searchInput}
+                  value={assignedToSearch}
+                  onChangeText={setAssignedToSearch}
+                  placeholder="Search employees..."
+                  placeholderTextColor={THEME_COLORS.textTertiary}
+                  autoCapitalize="none"
+                />
+                {assignedToLoading && (
+                  <ActivityIndicator 
+                    size="small" 
                     color={THEME_COLORS.primary} 
+                    style={s.searchLoader} 
                   />
                 )}
-              </TouchableOpacity>
-            ))
-          ) : (
-            !assignedToLoading && (
-              <View style={s.emptyState}>
-                <Text style={s.emptyText}>No users found</Text>
               </View>
-            )
-          )}
-        </ScrollView>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  </Modal>
-)}
+
+              <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+                {assignedToResults.length > 0 ? (
+                  assignedToResults.map((user) => (
+                    <TouchableOpacity
+                      key={user.email}
+                      style={[
+                        s.modalItem, 
+                        editedLead.assigned_to?.email === user.email && s.modalItemSelected
+                      ]}
+                      onPress={() => handleAssignToUser(user)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={s.modalItemContent}>
+                        <Ionicons 
+                          name="person" 
+                          size={18} 
+                          color={
+                            editedLead.assigned_to?.email === user.email 
+                              ? THEME_COLORS.primary 
+                              : THEME_COLORS.textSecondary
+                          } 
+                        />
+                        <View style={s.modalItemInfo}>
+                          <Text style={s.modalItemName} numberOfLines={1}>
+                            {user.full_name || `${user.first_name} ${user.last_name}`}
+                          </Text>
+                          <Text style={s.modalItemEmail} numberOfLines={1}>
+                            {user.email}
+                          </Text>
+                        </View>
+                      </View>
+                      {editedLead.assigned_to?.email === user.email && (
+                        <Ionicons 
+                          name="checkmark-circle" 
+                          size={20} 
+                          color={THEME_COLORS.primary} 
+                        />
+                      )}
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  !assignedToLoading && (
+                    <View style={s.emptyState}>
+                      <Text style={s.emptyText}>No users found</Text>
+                    </View>
+                  )
+                )}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 };
 
 const s = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: THEME_COLORS.background 
-  },
-  
-  // Header (Kept exactly as requested)
+  container: { flex: 1, backgroundColor: THEME_COLORS.background },
   header: { 
     backgroundColor: '#075E54', 
     borderBottomWidth: 1, 
@@ -1238,27 +1250,11 @@ const s = StyleSheet.create({
     paddingVertical: 12, 
     height: 60 
   },
-  backButton: { 
-    padding: 8, 
-    marginRight: 8 
-  },
-  headerTextContainer: { 
-    flex: 1 
-  },
-  headerTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: '#FFFFFF', 
-    marginBottom: 2 
-  },
-  headerSubtitle: { 
-    fontSize: 14, 
-    color: 'rgba(255, 255, 255, 0.8)' 
-  },
-  headerActions: { 
-    flexDirection: 'row', 
-    alignItems: 'center' 
-  },
+  backButton: { padding: 8, marginRight: 8 },
+  headerTextContainer: { flex: 1 },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', marginBottom: 2 },
+  headerSubtitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)' },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   deleteHeaderButton: {
     padding: 8,
     backgroundColor: '#EF4444',
@@ -1268,28 +1264,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveHeaderButton: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 8, 
-    backgroundColor: '#25D366', 
-    borderRadius: 20 
-  },
-  saveHeaderText: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: '#FFFFFF' 
-  },
-  
-  // Main Content
-  scrollView: { 
-    flex: 1 
-  },
-  scrollContent: { 
-    paddingTop: 16, 
-    paddingBottom: 32 
-  },
-  
-  // Cards
+  saveHeaderButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#25D366', borderRadius: 20 },
+  saveHeaderText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingTop: 16, paddingBottom: 32 },
   card: {
     marginHorizontal: 16,
     marginBottom: 16,
@@ -1304,432 +1282,65 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME_COLORS.border,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: THEME_COLORS.textPrimary,
-    letterSpacing: -0.3,
-  },
-  
-  // Form Fields
-  field: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME_COLORS.textSecondary,
-    marginBottom: 8,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: THEME_COLORS.textPrimary,
-    backgroundColor: THEME_COLORS.surface,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  inputError: {
-    borderColor: THEME_COLORS.danger,
-    backgroundColor: '#FEF2F2',
-  },
-  
-  // Read-only fields
-  readOnlyField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.divider,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: THEME_COLORS.surface,
-  },
-  fieldIcon: {
-    marginRight: 10,
-  },
-  readOnlyText: {
-    fontSize: 15,
-    color: THEME_COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  
-  // Selectors
-  selector: {
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: THEME_COLORS.surface,
-  },
-  selectorContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  selectorText: {
-    fontSize: 15,
-    color: THEME_COLORS.textPrimary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  selectorPlaceholder: {
-    fontSize: 15,
-    color: THEME_COLORS.textTertiary,
-    fontStyle: 'italic',
-  },
-  
-  // List Items
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingRight: 14,
-    paddingLeft:14,
-    paddingTop:0,
-    paddingBottom:0,
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: THEME_COLORS.surface,
-    borderWidth: 1,
-    borderColor: THEME_COLORS.border,
-  },
-  listItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  listItemText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: THEME_COLORS.textPrimary,
-    flex: 1,
-  },
-  
-  
-  // Add Rows
-  addRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1.5,
-    borderTopColor: THEME_COLORS.divider,
-  },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME_COLORS.hover,
-  },
-  
-  // Error Messages
-  error: {
-    fontSize: 12,
-    color: THEME_COLORS.danger,
-    marginTop: 6,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  
-  // Search
-  searchContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  searchInput: {
-    marginBottom: 70,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: THEME_COLORS.textPrimary,
-    backgroundColor: THEME_COLORS.surface,
-    paddingRight: 40,
-  },
-  searchLoader: {
-    position: 'absolute',
-    right: 14,
-    top: 12,
-  },
-  
-  // Results
-  resultsBox: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1.5,
-    borderTopColor: THEME_COLORS.divider,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: THEME_COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-  },
-  resultContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  resultText: {
-    fontSize: 13,
-    color: THEME_COLORS.textPrimary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  
-  // Layout
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  halfField: {
-    flex: 1,
-  },
-  
-  // Icons
-  iconCircleSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  // Custom Fields
-  customFieldsSection: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  customFieldRow: {
-    marginBottom: 12,
-  },
-  customFieldInputs: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  customFieldInput: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
-    color: THEME_COLORS.textPrimary,
-    backgroundColor: THEME_COLORS.customFieldBg,
-  },
-  removeCustomFieldBtn: {
-    padding: 10,
-  },
-  addCustomFieldBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: THEME_COLORS.hover,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-    borderStyle: 'dashed',
-  },
-  addCustomFieldText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME_COLORS.primary,
-  },
-  
-  // Delete Button
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRadius: 12,
-    backgroundColor: '#ef444400',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    marginRight:-10
-  },
-  deleteBtnDisabled: {
-    opacity: 0.6,
-  },
-  deleteBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  
-  // Save Button
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    backgroundColor: THEME_COLORS.primary,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    shadowColor: THEME_COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveBtnDisabled: {
-    opacity: 0.6,
-  },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: THEME_COLORS.white,
-    letterSpacing: 0.3,
-  },
-  
-  // Modal
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '70%',
-    backgroundColor: THEME_COLORS.card,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: THEME_COLORS.divider,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME_COLORS.textPrimary,
-  },
-  modalScroll: {
-    maxHeight: 350,
-  },
-  modalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: THEME_COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-  },
-  modalItemSelected: {
-    backgroundColor: THEME_COLORS.accent,
-    borderLeftWidth: 4,
-    borderLeftColor: THEME_COLORS.primary,
-    borderColor: THEME_COLORS.primary,
-  },
-  modalItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modalItemInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  modalItemName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: THEME_COLORS.textPrimary,
-  },
-  modalItemEmail: {
-    fontSize: 12,
-    color: THEME_COLORS.textTertiary,
-    marginTop: 2,
-  },
-  
-  // Empty States
-  emptyState: {
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: THEME_COLORS.textTertiary,
-    fontStyle: 'italic',
-  },
-  
-  // Spacing
-  bottomSpacer: {
-    height: 30,
-  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
+  cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 17, fontWeight: '600', color: THEME_COLORS.textPrimary, letterSpacing: -0.3 },
+  field: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '600', color: THEME_COLORS.textSecondary, marginBottom: 8, letterSpacing: 0.2, textTransform: 'uppercase' },
+  input: { borderWidth: 1.5, borderColor: THEME_COLORS.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: THEME_COLORS.textPrimary, backgroundColor: THEME_COLORS.surface },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  inputError: { borderColor: THEME_COLORS.danger, backgroundColor: '#FEF2F2' },
+  readOnlyField: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: THEME_COLORS.divider, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: THEME_COLORS.surface },
+  fieldIcon: { marginRight: 10 },
+  readOnlyText: { fontSize: 15, color: THEME_COLORS.textPrimary, fontWeight: '500' },
+  selector: { borderWidth: 1.5, borderColor: THEME_COLORS.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: THEME_COLORS.surface },
+  selectorContent: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  selectorText: { fontSize: 15, color: THEME_COLORS.textPrimary, flex: 1, fontWeight: '500' },
+  selectorPlaceholder: { fontSize: 15, color: THEME_COLORS.textTertiary, fontStyle: 'italic' },
+  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 12, paddingLeft: 14, paddingVertical: 12, borderRadius: 10, marginBottom: 8, backgroundColor: THEME_COLORS.surface, borderWidth: 1, borderColor: THEME_COLORS.border },
+  listItemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  listItemText: { fontSize: 14, fontWeight: '500', color: THEME_COLORS.textPrimary, flex: 1 },
+  listItemDeleteBtn: { padding: 8, borderRadius: 20, backgroundColor: THEME_COLORS.background, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  addRow: { flexDirection: 'row', gap: 12, alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1.5, borderTopColor: THEME_COLORS.divider },
+  addBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: THEME_COLORS.hover },
+  error: { fontSize: 12, color: THEME_COLORS.danger, marginTop: 6, marginLeft: 4, fontWeight: '500' },
+  searchContainer: { flex: 1, position: 'relative' },
+  searchInput: { marginBottom: 12, borderWidth: 1.5, borderColor: THEME_COLORS.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: THEME_COLORS.textPrimary, backgroundColor: THEME_COLORS.surface, paddingRight: 40 },
+  searchLoader: { position: 'absolute', right: 14, top: 12 },
+  resultsBox: { marginTop: 16, paddingTop: 16, borderTopWidth: 1.5, borderTopColor: THEME_COLORS.divider },
+  resultItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 10, marginBottom: 8, backgroundColor: THEME_COLORS.surface, borderWidth: 1.5, borderColor: THEME_COLORS.border },
+  resultContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  resultText: { fontSize: 13, color: THEME_COLORS.textPrimary, flex: 1, fontWeight: '500' },
+  row: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  halfField: { flex: 1 },
+  iconCircleSmall: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  customFieldsSection: { marginTop: 8, marginBottom: 16 },
+  customFieldRow: { marginBottom: 12 },
+  customFieldInputs: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 4 },
+  customFieldInput: { flex: 1, borderWidth: 1.5, borderColor: THEME_COLORS.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: THEME_COLORS.textPrimary, backgroundColor: THEME_COLORS.customFieldBg },
+  removeCustomFieldBtn: { padding: 10 },
+  addCustomFieldBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 10, backgroundColor: THEME_COLORS.hover, borderWidth: 1.5, borderColor: THEME_COLORS.border, borderStyle: 'dashed' },
+  addCustomFieldText: { fontSize: 14, fontWeight: '600', color: THEME_COLORS.primary },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#EF4444', marginHorizontal: 16, marginTop: 8, marginBottom: 8 },
+  deleteBtnDisabled: { opacity: 0.6 },
+  deleteBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.3 },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 12, backgroundColor: THEME_COLORS.primary, marginHorizontal: 16, marginTop: 8, marginBottom: 8, shadowColor: THEME_COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { fontSize: 16, fontWeight: '700', color: THEME_COLORS.white, letterSpacing: 0.3 },
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  modalContent: { width: '90%', maxHeight: '70%', backgroundColor: THEME_COLORS.card, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 2, borderBottomColor: THEME_COLORS.divider },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: THEME_COLORS.textPrimary },
+  modalScroll: { maxHeight: 350 },
+  modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 10, marginBottom: 8, backgroundColor: THEME_COLORS.surface, borderWidth: 1.5, borderColor: THEME_COLORS.border },
+  modalItemSelected: { backgroundColor: THEME_COLORS.accent, borderLeftWidth: 4, borderLeftColor: THEME_COLORS.primary, borderColor: THEME_COLORS.primary },
+  modalItemContent: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  modalItemInfo: { flex: 1, marginLeft: 12 },
+  modalItemName: { fontSize: 15, fontWeight: '600', color: THEME_COLORS.textPrimary },
+  modalItemEmail: { fontSize: 12, color: THEME_COLORS.textTertiary, marginTop: 2 },
+  emptyState: { padding: 30, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontSize: 14, color: THEME_COLORS.textTertiary, fontStyle: 'italic' },
+  bottomSpacer: { height: 30 },
 });
 
 export default EditLead;
