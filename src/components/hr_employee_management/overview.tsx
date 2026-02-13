@@ -31,6 +31,7 @@ interface OverviewProps {
   token: string;
   onRefresh: () => void;
   onEditLeaves: () => void;
+  onEditEmployeeSuccess?: () => void;
 }
 
 export const Overview: React.FC<OverviewProps> = ({
@@ -38,7 +39,8 @@ export const Overview: React.FC<OverviewProps> = ({
   employeeDetails,
   token,
   onRefresh,
-  onEditLeaves
+  onEditLeaves,
+  onEditEmployeeSuccess 
 }) => {
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showMediclaimModal, setShowMediclaimModal] = useState(false);
@@ -53,9 +55,11 @@ export const Overview: React.FC<OverviewProps> = ({
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [showDocumentModal, setShowDocumentModal] = useState(false);
 
-  const getInitials = (firstName: string, lastName: string): string => {
-    return `${firstName.charAt(0).toUpperCase()}${lastName.charAt(0).toUpperCase()}`;
-  };
+  const getInitials = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
+  const first = firstName && firstName.trim() ? firstName.charAt(0).toUpperCase() : 'F';
+  const last = lastName && lastName.trim() ? lastName.charAt(0).toUpperCase() : '_';
+  return `${first}${last}`;
+};
 
   const markGiftBasketSent = async () => {
     try {
@@ -296,7 +300,13 @@ export const Overview: React.FC<OverviewProps> = ({
             </View>
 
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{employee.full_name}</Text>
+              <Text style={styles.profileName}>
+                {employee.first_name && employee.last_name 
+                  ? `${employee.first_name} ${employee.last_name}` 
+                  : employee.first_name 
+                  ? `${employee.first_name}   ` 
+                  : 'Employee'}
+              </Text>
               <Text style={styles.profileDesignation}>
                 {employee.designation || employee.designation}
               </Text>
@@ -649,7 +659,7 @@ export const Overview: React.FC<OverviewProps> = ({
         employee={employee}
         employeeDetails={employeeDetails}
         token={token}
-        onSuccess={handleEditEmployeeSuccess}
+        onSuccess={onEditEmployeeSuccess || onRefresh}
       />
     </View>
   );
