@@ -141,10 +141,9 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'collaborator' | 'officeType' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'officeType' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
-  const [allEmployees, setAllEmployees] = useState<FilterOption[]>([]);
   const [collaborators, setCollaborators] = useState<Collaborator[]>(lead.collaborators || []);
   const [loadingCollaborators, setLoadingCollaborators] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -166,7 +165,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     const fields: CustomField[] = [];
     if (lead.meta) {
       Object.entries(lead.meta).forEach(([key, value]) => {
-        if (!['area_requirements', 'office_type', 'location'].includes(key)) {
+        if (!['area_requirements', 'office_type', 'location', 'contact_person_name'].includes(key)) {
           fields.push({
             id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             key,
@@ -211,7 +210,6 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   useEffect(() => {
     fetchPhases();
-    fetchEmployees();
     if (editedLead.phase) {
       fetchSubphasesForPhase(editedLead.phase);
     }
@@ -219,10 +217,12 @@ const EditLead: React.FC<EditLeadProps> = ({
   }, []);
 
   useEffect(() => {
-    if (activeDropdown === 'collaborator' && debouncedSearchQuery.length >= 2) {
+    if (debouncedSearchQuery.length >= 2) {
       searchPotentialCollaborators(debouncedSearchQuery);
+    } else {
+      setPotentialCollaborators([]);
     }
-  }, [debouncedSearchQuery, activeDropdown]);
+  }, [debouncedSearchQuery]);
 
   const fetchPhases = async () => {
     try {
@@ -278,34 +278,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   };
 
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/employee/getPotentialCollaborators?query=`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      const employeeOptions = data.potential_collaborators.map((emp: any) => ({
-        value: emp.email,
-        label: `${emp.first_name} ${emp.last_name} (${emp.email})`,
-        employeeData: emp
-      }));
-      
-      setAllEmployees(employeeOptions);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      setAllEmployees([]);
-    }
-  };
-
   const fetchCollaborators = async () => {
     try {
       if (!token || !lead.id) return;
@@ -339,43 +311,54 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   const searchPotentialCollaborators = async (query: string) => {
-    try {
-      if (!token || query.length < 2) {
-        setPotentialCollaborators([]);
-        return;
-      }
-
-      setSearchLoading(true);
-      const response = await fetch(
-        `${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      const options = data.potential_collaborators.map((user: any) => ({
-        value: user.email,
-        label: `${user.first_name} ${user.last_name} (${user.email})`,
-        userData: user
-      }));
-
-      setPotentialCollaborators(options);
-    } catch (error) {
-      console.error('Error searching collaborators:', error);
+  try {
+    if (query.length < 2) {
       setPotentialCollaborators([]);
-    } finally {
-      setSearchLoading(false);
+      return;
     }
-  };
+
+    setSearchLoading(true);
+    const response = await fetch(
+      `${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Search error response:', errorData);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(data)
+    if (!data.potential_collaborators) {
+      console.warn('No potential_collaborators in response');
+      setPotentialCollaborators([]);
+      return;
+    }
+
+    const options = data.potential_collaborators.map((user: any) => ({
+      value: user.email,
+      label: `${user.first_name} ${user.last_name} (${user.email})`,
+      userData: user
+    }));
+
+    setPotentialCollaborators(options);
+  } catch (error) {
+    console.error('Error searching collaborators:', error);
+    setPotentialCollaborators([]);
+    // Optionally show a user-friendly message
+    // Alert.alert('Search Error', 'Unable to search for colleagues. Please try again.');
+  } finally {
+    setSearchLoading(false);
+  }
+};
 
   const addCollaborator = async (email: string) => {
     try {
@@ -446,7 +429,6 @@ const EditLead: React.FC<EditLeadProps> = ({
                 })
               });
               
-
               const data = await response.json();
               
               if (!response.ok) {
@@ -455,6 +437,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
               await fetchCollaborators();
               Alert.alert('Success', data.message || 'Collaborator removed successfully');
+              setLoadingCollaborators(false);
             }
           }
         ]
@@ -462,12 +445,10 @@ const EditLead: React.FC<EditLeadProps> = ({
     } catch (error: any) {
       console.error('Error removing collaborator:', error);
       Alert.alert('Error', error.message || 'Failed to remove collaborator');
-    } finally {
       setLoadingCollaborators(false);
     }
   };
   
-
   const beautifyName = (name: string): string => {
     return name
       .split('_')
@@ -485,7 +466,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
   };
   
-
   const handleAddEmail = () => {
     const trimmedEmail = newEmail.trim();
     
@@ -595,7 +575,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
-      if (formData.contactPersonName.trim()) meta.contact_person_name = formData.contactPersonName.trim();
+      if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
       // Add custom fields
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
@@ -691,10 +671,10 @@ const EditLead: React.FC<EditLeadProps> = ({
     >
       <ModernHeader />
       <StatusBar
-                barStyle="light-content"
-                backgroundColor="#075E54"
-                translucent={false}
-            />
+        barStyle="light-content"
+        backgroundColor="#075E54"
+        translucent={false}
+      />
       <ScrollView 
         style={s.scrollView}
         showsVerticalScrollIndicator={false}
@@ -709,15 +689,15 @@ const EditLead: React.FC<EditLeadProps> = ({
             <Text style={s.cardTitle}>Lead Specific Information</Text>
           </View>
           <View style={s.field}>
-          <Text style={s.label}>Contact Person Name</Text>
-          <TextInput
-            style={s.input}
-            value={contactPersonName}
-            onChangeText={setContactPersonName}
-            placeholder="Enter contact person name"
-            placeholderTextColor={THEME_COLORS.textTertiary}
-          />
-        </View>
+            <Text style={s.label}>Contact Person Name</Text>
+            <TextInput
+              style={s.input}
+              value={contactPersonName}
+              onChangeText={setContactPersonName}
+              placeholder="Enter contact person name"
+              placeholderTextColor={THEME_COLORS.textTertiary}
+            />
+          </View>
           
           <View style={s.field}>
             <Text style={s.label}>Area Requirements</Text>
@@ -762,7 +742,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             />
           </View>
           
-
           {/* Custom Fields */}
           {customFields.length > 0 && (
             <View style={s.customFieldsSection}>
@@ -819,7 +798,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             <Text style={s.cardTitle}>Email Addresses ({editingEmails.length})</Text>
           </View>
           
-          
           {editingEmails.length > 0 ? editingEmails.map((email, index) => (
             <View key={index} style={s.listItem}>
               <View style={s.listItemContent}>
@@ -864,7 +842,6 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
           {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
-
 
         {/* Phone Numbers Card */}
         <View style={s.card}>
@@ -977,19 +954,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               )}
             </View>
           </View>
-
-          {/* Browse All Employees Button */}
-          {searchQuery.length < 2 && potentialCollaborators.length === 0 && (
-            <TouchableOpacity
-              style={s.browseButton}
-              onPress={() => setActiveDropdown('collaborator')}
-              disabled={loadingCollaborators}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="person-add" size={18} color={THEME_COLORS.primary} />
-              <Text style={s.browseButtonText}>Browse All Employees</Text>
-            </TouchableOpacity>
-          )}
 
           {/* Search Results */}
           {potentialCollaborators.length > 0 && (
@@ -1153,119 +1117,6 @@ const EditLead: React.FC<EditLeadProps> = ({
           border: THEME_COLORS.border,
         }}
       />
-      
-      {/* Collaborator Modal */}
-      {activeDropdown === 'collaborator' && (
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Add Colleague</Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  setActiveDropdown(null);
-                  setSearchQuery('');
-                  setPotentialCollaborators([]);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={s.searchContainer}>
-              <TextInput
-                style={s.searchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search employees..."
-                placeholderTextColor={THEME_COLORS.textTertiary}
-                autoCapitalize="none"
-              />
-              {searchLoading && (
-                <ActivityIndicator 
-                  size="small" 
-                  color={THEME_COLORS.primary} 
-                  style={s.searchLoader} 
-                />
-              )}
-            </View>
-            
-            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-              {potentialCollaborators.length > 0 ? (
-                potentialCollaborators
-                  .filter(emp => !collaborators.some(collab => collab.user.email === emp.value))
-                  .map((employee) => (
-                    <TouchableOpacity
-                      key={employee.value}
-                      style={s.modalItem}
-                      onPress={() => addCollaborator(employee.value)}
-                      disabled={loadingCollaborators}
-                      activeOpacity={0.7}
-                    >
-                      <View style={s.modalItemContent}>
-                        <Ionicons 
-                          name="person" 
-                          size={18} 
-                          color={THEME_COLORS.primary}
-                        />
-                        <View style={s.modalItemInfo}>
-                          <Text style={s.modalItemName} numberOfLines={1}>
-                            {employee.label.split(' (')[0]}
-                          </Text>
-                          <Text style={s.modalItemEmail} numberOfLines={1}>
-                            {employee.value}
-                          </Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => addCollaborator(employee.value)}
-                        disabled={loadingCollaborators}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="add-circle" size={22} color={THEME_COLORS.success} />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  ))
-              ) : searchQuery.length >= 2 && !searchLoading ? (
-                <View style={s.emptyState}>
-                  <Text style={s.emptyText}>No users found</Text>
-                </View>
-              ) : (
-                allEmployees
-                  .filter(emp => !collaborators.some(collab => collab.user.email === emp.value))
-                  .map((employee) => (
-                    <TouchableOpacity
-                      key={employee.value}
-                      style={s.modalItem}
-                      onPress={() => addCollaborator(employee.value)}
-                      disabled={loadingCollaborators}
-                      activeOpacity={0.7}
-                    >
-                      <View style={s.modalItemContent}>
-                        <Ionicons name="person" size={18} color={THEME_COLORS.primary} />
-                        <View style={s.modalItemInfo}>
-                          <Text style={s.modalItemName} numberOfLines={1}>
-                            {employee.label.split(' (')[0]}
-                          </Text>
-                          <Text style={s.modalItemEmail} numberOfLines={1}>
-                            {employee.value}
-                          </Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => addCollaborator(employee.value)}
-                        disabled={loadingCollaborators}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="add-circle" size={22} color={THEME_COLORS.success} />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  ))
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      )}
     </KeyboardAvoidingView>
   );
 };
@@ -1405,26 +1256,6 @@ const s = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   
-  // Read-only fields
-  readOnlyField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.divider,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: THEME_COLORS.surface,
-  },
-  fieldIcon: {
-    marginRight: 10,
-  },
-  readOnlyText: {
-    fontSize: 15,
-    color: THEME_COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  
   // Selectors
   selector: {
     borderWidth: 1.5,
@@ -1448,11 +1279,6 @@ const s = StyleSheet.create({
     color: THEME_COLORS.textPrimary,
     flex: 1,
     fontWeight: '500',
-  },
-  selectorPlaceholder: {
-    fontSize: 15,
-    color: THEME_COLORS.textTertiary,
-    fontStyle: 'italic',
   },
   
   // List Items
@@ -1550,26 +1376,6 @@ const s = StyleSheet.create({
     position: 'absolute',
     right: 14,
     top: 12,
-  },
-  
-  // Browse Button
-  browseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-    borderRadius: 12,
-    paddingVertical: 14,
-    backgroundColor: THEME_COLORS.surface,
-    borderStyle: 'dashed',
-    marginTop: 8,
-  },
-  browseButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME_COLORS.primary,
   },
   
   // Results
@@ -1696,90 +1502,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: THEME_COLORS.white,
     letterSpacing: 0.3,
-  },
-  
-  // Modal
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '70%',
-    backgroundColor: THEME_COLORS.card,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: THEME_COLORS.divider,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME_COLORS.textPrimary,
-  },
-  modalScroll: {
-    maxHeight: 350,
-  },
-  modalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: THEME_COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-  },
-  modalItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modalItemInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  modalItemName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: THEME_COLORS.textPrimary,
-  },
-  modalItemEmail: {
-    fontSize: 12,
-    color: THEME_COLORS.textTertiary,
-    marginTop: 2,
-  },
-  
-  // Empty States
-  emptyState: {
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: THEME_COLORS.textTertiary,
-    fontStyle: 'italic',
   },
   
   // Spacing

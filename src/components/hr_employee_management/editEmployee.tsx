@@ -30,6 +30,8 @@ interface Employee {
   joining_date?: string;
   email?: string;
   phone_number?: string;
+  first_name?: string;       
+  last_name?: string; 
 }
 
 interface Office {
@@ -146,11 +148,15 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
   const [earnedLeaves, setEarnedLeaves] = useState(employee.earned_leaves.toString());
   const [sickLeaves, setSickLeaves] = useState(employee.sick_leaves.toString());
   const [casualLeaves, setCasualLeaves] = useState(employee.casual_leaves.toString());
-const [showOfficePicker, setShowOfficePicker] = useState(false);
+  const [showOfficePicker, setShowOfficePicker] = useState(false);
+  
   // Contact Information
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-
+  const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  
   // Work timings with Date objects for picker
   const [loginTime, setLoginTime] = useState<Date>(new Date());
   const [logoutTime, setLogoutTime] = useState<Date>(new Date());
@@ -229,6 +235,9 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
     // Initialize contact information
     setEmail(employee.email || '');
     setPhoneNumber(employee.phone_number || '');
+    setNewEmployeeId(employee.employee_id || '');
+    setFirstName(employee.first_name || '');
+    setLastName(employee.last_name || '');
 
     // Initialize work timings - READ FROM employeeDetails
     if (employeeDetails?.login_time) {
@@ -320,12 +329,37 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
       alert('Invalid Input', 'Casual leaves must be a positive number');
       return false;
     }
+    if (!firstName || !firstName.trim()) {
+      alert('Invalid Input', 'First name is required');
+      return false;
+    }
+
+    // First name must be at least 2 characters
+    if (firstName.trim().length < 2) {
+      alert('Invalid Input', 'First name must be at least 2 characters');
+      return false;
+    }
+
+    // Last name validation (optional but if provided, must be 2+ chars)
+    if (lastName && lastName.trim().length > 0 && lastName.trim().length < 2) {
+      alert('Invalid Input', 'Last name must be at least 2 characters if provided');
+      return false;
+    }
+
 
     // Validate email if provided
     if (email && email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email.trim())) {
         alert('Invalid Input', 'Please enter a valid email address');
+        return false;
+      }
+    }
+
+    // Validate employee ID if changed
+    if (newEmployeeId && newEmployeeId.trim() !== employee.employee_id) {
+      if (newEmployeeId.trim().length < 3) {
+        alert('Invalid Input', 'Employee ID must be at least 3 characters');
         return false;
       }
     }
@@ -463,7 +497,14 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
         casual_leaves: parseInt(casualLeaves),
         login_time: formatTimeToString(loginTime),
         logout_time: formatTimeToString(logoutTime),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
       };
+
+      // Add employee ID if changed
+      if (newEmployeeId && newEmployeeId.trim() !== employee.employee_id) {
+        payload.new_employee_id = newEmployeeId.trim();
+      }
 
       // Add contact information if provided
       if (email && email.trim()) {
@@ -500,11 +541,29 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        alert('Success', 'Employee details updated successfully');
-        onSuccess();
-        onClose();
-      } else {
+     if (response.ok) {
+      const result = await response.json();
+      console.log('Update response:', result);
+      
+      // Update the employee object with ALL changed fields
+      if (result.employee) {
+        employee.email = result.employee.email || email;
+        employee.phone_number = result.employee.phone_number || phoneNumber;
+        employee.earned_leaves = result.employee.earned_leaves;
+        employee.sick_leaves = result.employee.sick_leaves;
+        employee.casual_leaves = result.employee.casual_leaves;
+        
+        // Update employee ID if changed
+        if (result.new_employee_id) {
+          employee.employee_id = result.new_employee_id;
+        }
+      }
+      
+      alert('Success', 'Employee details updated successfully');
+      onSuccess();  // This will trigger fetchEmployeeDetails() in parent
+      onClose();
+    }
+      else {
         const errorData = await response.json();
         alert('Error', errorData.message || 'Failed to update employee');
       }
@@ -593,7 +652,49 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
                   </Text>
                 </View>
 
-                {/* Contact Information Section */}
+                {renderSection('Personal Information', 'person-outline', (
+                <View>
+                  <Text style={styles.editLabel}>First Name *</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    placeholder="Enter first name"
+                    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    autoCapitalize="words"
+                  />
+
+                  <Text style={styles.editLabel}>Last Name</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    placeholder="Enter last name (optional)"
+                    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    autoCapitalize="words"
+                  />
+                </View>
+              ))}
+
+                {/* Employee Information Section - SEPARATE */}
+                {renderSection('Employee Information', 'person-outline', (
+                  <View>
+                    <Text style={styles.editLabel}>Employee ID</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={newEmployeeId}
+                      onChangeText={setNewEmployeeId}
+                      placeholder="Enter employee ID"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      autoCapitalize="characters"
+                    />
+                    <Text style={[styles.infoLabel, { color: WHATSAPP_COLORS.textTertiary, fontSize: 12, marginTop: 4 }]}>
+                      Current ID: {employee.employee_id}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Contact Information Section - SEPARATE */}
                 {renderSection('Contact Information', 'mail-outline', (
                   <View>
                     <Text style={styles.editLabel}>Email Address</Text>
@@ -619,7 +720,6 @@ const [showOfficePicker, setShowOfficePicker] = useState(false);
                   </View>
                 ))}
 
-           
                 {/* Office Assignment Section */}
                 {renderSection('Office Assignment', 'business-outline', (
                   <View>

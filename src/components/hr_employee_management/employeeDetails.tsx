@@ -26,7 +26,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
   employee: initialEmployee, 
   onBack, 
   token,
-  onDataChange // Add this optional prop to notify parent of data changes
+  onDataChange 
 }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   const [loading, setLoading] = useState(false);
@@ -71,6 +71,8 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
         // Update the employee state with fresh data from API
         setEmployee({
           ...employee,
+          first_name: data.first_name,           
+          last_name: data.last_name,  
           earned_leaves: data.earned_leaves,
           sick_leaves: data.sick_leaves,
           casual_leaves: data.casual_leaves,
@@ -198,11 +200,14 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
 
   const handleBackFromEditLeaves = () => {
     setShowEditLeaves(false);
-    fetchEmployeeDetails(); // Refresh data when coming back
+    fetchEmployeeDetails(); 
   };
 
+  const handleEditEmployeeSuccess = () => {
+  fetchEmployeeDetails();
+};
+
   const handleBack = () => {
-    // If data changed, notify parent to refresh
     if (dataChanged && onDataChange) {
       onDataChange();
     }
@@ -230,6 +235,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({
             token={token}
             onRefresh={fetchEmployeeDetails}
             onEditLeaves={handleEditLeaves}
+            onEditEmployeeSuccess={handleEditEmployeeSuccess}
           />
         );
       case 'attendance':

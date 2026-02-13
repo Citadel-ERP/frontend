@@ -69,6 +69,17 @@ const C = {
   customFieldBg: '#f3fffa',
   customFieldBorder: '#25D366',
 };
+const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+
+const getAvatarColor = (name: string | null): string => {
+  if (!name) return avatarColors[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
 
 const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
   lead,
@@ -798,7 +809,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
             activeOpacity={0.7}
           >
             <View style={s.avatarContainer}>
-              <View style={s.avatarPlaceholder}>
+              <View style={[s.avatarPlaceholder, { backgroundColor: getAvatarColor(lead.company) }]}>
                 <Text style={s.avatarText}>
                   {getInitials(lead.company || 'L')}
                 </Text>
@@ -837,7 +848,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           <View style={s.containerBox}>
             <View style={s.leadInfoContainer}>
               <View style={s.leadAvatarSection}>
-                <View style={s.leadAvatar}>
+                <View style={[s.leadAvatar, { backgroundColor: getAvatarColor(lead.company) }]}>
                   <Text style={s.leadAvatarText}>
                     {getInitials(lead.company || 'L')}
                   </Text>
@@ -1504,15 +1515,13 @@ headerWrapper: {
   headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   avatarContainer: { marginRight: 12, position: 'relative' },
   avatarPlaceholder: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: C.primaryDark
-  },
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+},
   avatarText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
   onlineIndicator: {
     position: 'absolute',
@@ -1583,15 +1592,13 @@ headerWrapper: {
   },
 
   leadAvatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: C.primary
-  },
+  width: 70,
+  height: 70,
+  borderRadius: 35,
+  alignItems: 'center',
+  justifyContent: 'center',
+ 
+},
 
   leadAvatarText: {
     fontSize: 28,
