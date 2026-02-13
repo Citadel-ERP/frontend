@@ -595,7 +595,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
-      if (formData.contactPersonName.trim()) meta.contact_person_name = formData.contactPersonName.trim();
+      if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
       // Add custom fields
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {

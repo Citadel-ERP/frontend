@@ -71,7 +71,7 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
       .join(' ');
   };
 
-  const getInitials = (name: string): string => {
+  const getInitials = (name: string | null): string => {
     if (!name || name.trim().length === 0) return '?';
     
     const nameParts = name.trim().split(/\s+/);
@@ -139,7 +139,7 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
 
   const renderLeadItem = ({ item: lead }: { item: Lead }) => {
     const avatarColor = getAvatarColor(lead.name);
-    const initials = getInitials(lead.name);
+    const initials = getInitials(lead.company);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
     const statusIcon = getStatusIcon(lead.status);
     
@@ -173,9 +173,14 @@ const LeadsListUpdated: React.FC<LeadsListProps> = ({
           </View> */}
           
           <View style={styles.leadStatus}>
-            <Text style={styles.leadStatusText}>
+            <Text style={styles.leadStatusText} numberOfLines={2}>
               {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
             </Text>
+            <Ionicons 
+              name={statusIcon.icon as any} 
+              size={16} 
+              color={statusIcon.color} 
+            />
           </View>
           
           {lead.emails && lead.emails.length > 0 && (
@@ -343,13 +348,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   leadStatus: {
-    marginBottom: 4,
-  },
-  leadStatusText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.primary,
-    fontWeight: '500',
-  },
+  marginBottom: 4,
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+leadStatusText: {
+  fontSize: 12,
+  color: WHATSAPP_COLORS.primary,
+  fontWeight: '500',
+  flex: 1,
+  marginRight: 8,
+},
   leadContact: {
     flexDirection: 'row',
     alignItems: 'center',

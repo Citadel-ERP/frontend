@@ -58,20 +58,20 @@ const beautifyName = (name: string): string => {
     .join(' ');
 };
 
-const getInitials = (company: string): string => {
-  if (!company || company.trim().length === 0) return '?';
+const getInitials = (name: string | null): string => {
+  if (!name || name === null || name.trim().length === 0) return '?';
   
-  const companyParts = company.trim().split(/\s+/);
+  const nameParts = name.trim().split(/\s+/);
   
-  if (companyParts.length === 1) {
-    return companyParts[0].charAt(0).toUpperCase();
+  if (nameParts.length === 1) {
+    return nameParts[0].charAt(0).toUpperCase();
   } else {
-    return (companyParts[0].charAt(0) + companyParts[1].charAt(0)).toUpperCase();
+    return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
   }
 };
 
-const getAvatarColor = (company: string): string => {
-  if (!company) return avatarColors[0];
+const getAvatarColor = (company: string | null): string => {
+  if (!company || company === null) return avatarColors[0];
   
   let hash = 0;
   for (let i = 0; i < company.length; i++) {
@@ -137,7 +137,7 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
 }) => {
   // Memoize the render function
   const renderLeadItem = useCallback(({ item: lead }: { item: Lead }) => {
-    const avatarColor = getAvatarColor(lead.company);
+    const avatarColor = getAvatarColor(lead.name);
     const initials = getInitials(lead.company);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
     const statusIcon = getStatusIcon(lead.status);
@@ -161,7 +161,7 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
           </View>
           
           <View style={styles.leadInfo}>
-            <Text style={styles.leadPhase} numberOfLines={1}>
+            <Text style={styles.leadPhase} numberOfLines={2}>
               {beautifyName(lead.phase)} • {beautifyName(lead.subphase)}
             </Text>
             <Ionicons 
@@ -180,14 +180,14 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
             </View>
           )}
           
-          {lead.phone_numbers && lead.phone_numbers.length > 0 && (
+          {/* {lead.phone_numbers && lead.phone_numbers.length > 0 && (
             <View style={styles.leadContact}>
               <Ionicons name="call" size={12} color={WHATSAPP_COLORS.textTertiary} />
               <Text style={styles.leadContactText} numberOfLines={1}>
                 {lead.phone_numbers[0].phone_number}
               </Text>
             </View>
-          )}
+          )} */}
         </View>
         
         <View style={styles.leadArrow}>
@@ -318,17 +318,18 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textTertiary,
   },
   leadInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 4,
+},
   leadPhase: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-    flex: 1,
-    marginRight: 8,
-  },
+  fontSize: 12,
+  color: WHATSAPP_COLORS.primary,
+  fontWeight: '500',
+  flex: 1,
+  marginRight: 8,
+},
   leadContact: {
     flexDirection: 'row',
     alignItems: 'center',
