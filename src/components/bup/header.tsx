@@ -48,7 +48,7 @@ const Header: React.FC<HeaderProps> = ({
   onEdit,
   onSave,
   onAddPress,
-  addButtonText = '+ Add',
+  addButtonText = '+',
   loading = false,
 }) => {
   
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rightSection: {
-  width: 90, 
+  width: 80, 
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'flex-end',

@@ -1006,7 +1006,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         onBack: handleBackToBDTSelection,
         showAddButton: true,
         onAddPress: handleCreateLead,
-        addButtonText: 'Add Lead',
+        addButtonText: 'Add',
         showThemeToggle: true,
       };
     }
