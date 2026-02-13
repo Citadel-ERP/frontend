@@ -137,7 +137,7 @@ const LeadsList: React.FC<LeadsListProps> = React.memo(({
 }) => {
   // Memoize the render function
   const renderLeadItem = useCallback(({ item: lead }: { item: Lead }) => {
-    const avatarColor = getAvatarColor(lead.name);
+    const avatarColor = getAvatarColor(lead.company);
     const initials = getInitials(lead.company);
     const lastOpened = formatDateTime(lead.created_at || lead.createdAt);
     const statusIcon = getStatusIcon(lead.status);

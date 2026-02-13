@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   ActivityIndicator, Alert, SafeAreaView, StatusBar, Platform,
@@ -173,24 +173,177 @@ const EditLead: React.FC<EditLeadProps> = ({
     { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
   ];
 
-  useEffect(() => {
-    if (!initializationDoneRef.current) {
-      initializationDoneRef.current = true;
-      fetchPhases();
-      fetchEmployees();
-      fetchCollaborators();
-      if (editedLead.phase) fetchSubphasesForPhase(editedLead.phase);
+  const fetchPhases = useCallback(async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllPhases`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      const beautifyName = (name: string): string => {
+        return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+      };
+      setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
+    } catch (error) {
+      console.error('Error fetching phases:', error);
+      setAllPhases([]);
     }
   }, []);
 
-  useEffect(() => {
-    if (debouncedSearchQuery.length >= 2) searchPotentialCollaborators(debouncedSearchQuery);
-    else setPotentialCollaborators([]);
-  }, [debouncedSearchQuery]);
+  const fetchSubphasesForPhase = useCallback(async (phase: string) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      const beautifyName = (name: string): string => {
+        return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+      };
+      setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
+    } catch (error) {
+      console.error('Error fetching subphases:', error);
+      setAllSubphases([]);
+    }
+  }, []);
+
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/getPotentialCollaborators?query=`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      const employeeOptions = data.potential_collaborators.map((emp: any) => ({
+        value: emp.email,
+        label: `${emp.first_name} ${emp.last_name} (${emp.email})`,
+        employeeData: emp
+      }));
+      setAllEmployees(employeeOptions);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      setAllEmployees([]);
+    }
+  }, []);
+
+  const fetchCollaborators = useCallback(async () => {
+    try {
+      if (!token || !lead.id) return;
+      
+      const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, lead_id: lead.id })
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      if (data.collaborators) setCollaborators(data.collaborators);
+    } catch (error) {
+      console.error('Error fetching collaborators:', error);
+    }
+  }, [token, lead.id]);
+
+  const searchPotentialCollaborators = useCallback(async (query: string) => {
+    try {
+      if (!token || query.length < 2) {
+        setPotentialCollaborators([]);
+        return;
+      }
+      setSearchLoading(true);
+      const response = await fetch(
+        `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      const options = data.potential_collaborators.map((user: any) => ({
+        value: user.email,
+        label: `${user.first_name} ${user.last_name} (${user.email})`,
+        userData: user
+      }));
+      setPotentialCollaborators(options);
+    } catch (error) {
+      console.error('Error searching collaborators:', error);
+      setPotentialCollaborators([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [token]);
+
+  const searchAssignedToUsers = useCallback(async (query: string) => {
+    try {
+      if (!token) {
+        setAssignedToResults([]);
+        return;
+      }
+      setAssignedToLoading(true);
+      if (query.length === 0) {
+        const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        setAssignedToResults(data.users || []);
+        return;
+      }
+      if (query.length >= 2) {
+        const response = await fetch(
+          `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+          { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+        );
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        setAssignedToResults(data.potential_collaborators);
+      } else {
+        setAssignedToResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching assignable users:', error);
+      setAssignedToResults([]);
+    } finally {
+      setAssignedToLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
-    if (activeDropdown === 'assigned') searchAssignedToUsers(debouncedAssignedSearch);
-  }, [debouncedAssignedSearch, activeDropdown]);
+  if (!initializationDoneRef.current) {
+    initializationDoneRef.current = true;
+    
+    const initialize = async () => {
+      await fetchPhases();
+      await fetchEmployees();
+      await fetchCollaborators();
+      
+      // Capture the initial phase value from props
+      const initialPhase = lead.phase;
+      if (initialPhase) {
+        await fetchSubphasesForPhase(initialPhase);
+      }
+    };
+    
+    initialize();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // Empty dependency array - runs only once on mount
+
+  useEffect(() => {
+    if (debouncedSearchQuery.length >= 2) {
+      searchPotentialCollaborators(debouncedSearchQuery);
+    } else {
+      setPotentialCollaborators([]);
+    }
+  }, [debouncedSearchQuery, searchPotentialCollaborators]);
+
+  useEffect(() => {
+    if (activeDropdown === 'assigned') {
+      searchAssignedToUsers(debouncedAssignedSearch);
+    }
+  }, [debouncedAssignedSearch, activeDropdown, searchAssignedToUsers]);
 
   const ModernHeader = () => (
     <SafeAreaView style={s.header}>
@@ -257,144 +410,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   };
 
-  const fetchPhases = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/getAllPhases`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-      };
-      setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
-    } catch (error) {
-      console.error('Error fetching phases:', error);
-      setAllPhases([]);
-    }
-  };
-
-  const fetchSubphasesForPhase = async (phase: string) => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-      };
-      setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
-    } catch (error) {
-      console.error('Error fetching subphases:', error);
-      setAllSubphases([]);
-    }
-  };
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/manager/getPotentialCollaborators?query=`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const employeeOptions = data.potential_collaborators.map((emp: any) => ({
-        value: emp.email,
-        label: `${emp.first_name} ${emp.last_name} (${emp.email})`,
-        employeeData: emp
-      }));
-      setAllEmployees(employeeOptions);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      setAllEmployees([]);
-    }
-  };
-
-  const fetchCollaborators = async () => {
-    try {
-      if (!token || !lead.id) return;
-      
-      const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, lead_id: lead.id })
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      if (data.collaborators) setCollaborators(data.collaborators);
-    } catch (error) {
-      console.error('Error fetching collaborators:', error);
-    }
-  };
-
-  const searchPotentialCollaborators = async (query: string) => {
-    try {
-      if (!token || query.length < 2) {
-        setPotentialCollaborators([]);
-        return;
-      }
-      setSearchLoading(true);
-      const response = await fetch(
-        `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
-        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-      );
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const options = data.potential_collaborators.map((user: any) => ({
-        value: user.email,
-        label: `${user.first_name} ${user.last_name} (${user.email})`,
-        userData: user
-      }));
-      setPotentialCollaborators(options);
-    } catch (error) {
-      console.error('Error searching collaborators:', error);
-      setPotentialCollaborators([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  const searchAssignedToUsers = async (query: string) => {
-    try {
-      if (!token) {
-        setAssignedToResults([]);
-        return;
-      }
-      setAssignedToLoading(true);
-      if (query.length === 0) {
-        const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token })
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        setAssignedToResults(data.users || []);
-        return;
-      }
-      if (query.length >= 2) {
-        const response = await fetch(
-          `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
-          { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-        );
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        setAssignedToResults(data.potential_collaborators);
-      } else {
-        setAssignedToResults([]);
-      }
-    } catch (error) {
-      console.error('Error searching assignable users:', error);
-      setAssignedToResults([]);
-    } finally {
-      setAssignedToLoading(false);
-    }
-  };
-
-  const addCollaborator = async (email: string) => {
+  const addCollaborator = useCallback(async (email: string) => {
     try {
       if (!token || !lead.id) {
         Alert.alert('Error', 'Missing required information');
@@ -455,9 +471,9 @@ const EditLead: React.FC<EditLeadProps> = ({
       setCollaborators(prevCollab => prevCollab.filter(c => !c.id.toString().startsWith('temp-')));
       Alert.alert('Error', error.message || 'Failed to add collaborator');
     }
-  };
+  }, [token, lead.id, potentialCollaborators, collaborators, fetchCollaborators]);
 
-  const removeCollaborator = async (collaboratorId: string | number) => {
+  const removeCollaborator = useCallback(async (collaboratorId: string | number) => {
     try {
       if (!token || !lead.id) return;
       Alert.alert(
@@ -495,14 +511,14 @@ const EditLead: React.FC<EditLeadProps> = ({
       console.error('Error removing collaborator:', error);
       Alert.alert('Error', error.message || 'Failed to remove collaborator');
     }
-  };
+  }, [token, lead.id, collaborators, fetchCollaborators]);
 
-  const handleAssignToUser = (user: AssignedTo) => {
-    setEditedLead({ ...editedLead, assigned_to: user });
+  const handleAssignToUser = useCallback((user: AssignedTo) => {
+    setEditedLead(prev => ({ ...prev, assigned_to: user }));
     setActiveDropdown(null);
     setAssignedToSearch('');
     setAssignedToResults([]);
-  };
+  }, []);
 
   const beautifyName = (name: string): string => {
     return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
@@ -518,7 +534,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
   };
 
-  const handleAddEmail = () => {
+  const handleAddEmail = useCallback(() => {
     const trimmedEmail = newEmail.trim();
     if (!trimmedEmail) {
       setEmailError('Please enter an email address');
@@ -535,13 +551,13 @@ const EditLead: React.FC<EditLeadProps> = ({
     setEditingEmails([...editingEmails, trimmedEmail]);
     setNewEmail('');
     setEmailError(null);
-  };
+  }, [newEmail, editingEmails]);
 
-  const handleRemoveEmail = (index: number) => {
+  const handleRemoveEmail = useCallback((index: number) => {
     setEditingEmails(editingEmails.filter((_, i) => i !== index));
-  };
+  }, [editingEmails]);
 
-  const handleAddPhone = () => {
+  const handleAddPhone = useCallback(() => {
     const trimmedPhone = newPhone.trim();
     if (!trimmedPhone) {
       setPhoneError('Please enter a phone number');
@@ -558,37 +574,41 @@ const EditLead: React.FC<EditLeadProps> = ({
     setEditingPhones([...editingPhones, trimmedPhone]);
     setNewPhone('');
     setPhoneError(null);
-  };
+  }, [newPhone, editingPhones]);
 
-  const handleRemovePhone = (index: number) => {
+  const handleRemovePhone = useCallback((index: number) => {
     setEditingPhones(editingPhones.filter((_, i) => i !== index));
-  };
+  }, [editingPhones]);
 
-  const handleAddCustomField = () => {
+  const handleAddCustomField = useCallback(() => {
     const newId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setCustomFields([...customFields, { id: newId, key: '', value: '' }]);
-  };
+  }, [customFields]);
 
-  const handleRemoveCustomField = (id: string) => {
+  const handleRemoveCustomField = useCallback((id: string) => {
     setCustomFields(customFields.filter(field => field.id !== id));
-    const newErrors = { ...customFieldErrors };
-    delete newErrors[id];
-    setCustomFieldErrors(newErrors);
-  };
+    setCustomFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+  }, [customFields]);
 
-  const handleCustomFieldChange = (id: string, field: 'key' | 'value', text: string) => {
+  const handleCustomFieldChange = useCallback((id: string, field: 'key' | 'value', text: string) => {
     setCustomFields(customFields.map(fieldItem =>
       fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem
     ));
 
     if (customFieldErrors[id]) {
-      const newErrors = { ...customFieldErrors };
-      delete newErrors[id];
-      setCustomFieldErrors(newErrors);
+      setCustomFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[id];
+        return newErrors;
+      });
     }
-  };
+  }, [customFields, customFieldErrors]);
 
-  const validateCustomFields = (): boolean => {
+  const validateCustomFields = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};
     let isValid = true;
 
@@ -601,7 +621,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
     setCustomFieldErrors(errors);
     return isValid;
-  };
+  }, [customFields]);
 
   const handleSave = async () => {
     try {
@@ -638,14 +658,14 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   };
 
-  const handlePhaseSelection = async (phase: string) => {
-    setEditedLead({ ...editedLead, phase: phase });
+  const handlePhaseSelection = useCallback(async (phase: string) => {
+    setEditedLead(prev => ({ ...prev, phase: phase }));
     await fetchSubphases(phase);
     await fetchSubphasesForPhase(phase);
     if (allSubphases.length > 0) {
       setEditedLead(prev => ({ ...prev, subphase: '' }));
     }
-  };
+  }, [fetchSubphases, fetchSubphasesForPhase, allSubphases.length]);
 
   const getFilterLabel = (filterKey: string, value: string): string => {
     let choices: FilterOption[] = [];
