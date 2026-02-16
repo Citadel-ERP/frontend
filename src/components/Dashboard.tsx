@@ -328,8 +328,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
-  const [debugLogs, setDebugLogs] = useState<any[]>([]);
-  const [showDebugConsole, setShowDebugConsole] = useState(true);
 
   // ============================================================================
   // NEW: Dynamic Tile Configuration State
@@ -647,22 +645,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Debug logging function
   const debugLog = useCallback(async (message: string, data?: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      message,
-      data: data ? (typeof data === 'object' ? JSON.stringify(data) : data) : null
-    };
-
     console.log(message, data);
-
-    // Add to on-screen logs
-    setDebugLogs(prev => [...prev.slice(-49), logEntry]); // Keep last 50 logs
-
-    // Still save to AsyncStorage
     try {
       const logs = await AsyncStorage.getItem('debug_logs') || '[]';
       const logArray = JSON.parse(logs);
-      logArray.push(logEntry);
+      logArray.push({
+        timestamp: new Date().toISOString(),
+        message,
+        data: data ? JSON.stringify(data) : null
+      });
       const recentLogs = logArray.slice(-50);
       await AsyncStorage.setItem('debug_logs', JSON.stringify(recentLogs));
     } catch (error) {
@@ -710,36 +701,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('❌ Failed to send error log to backend:', logError);
     }
   }, []);
-  const debugPushTokenIssue = useCallback(async () => {
-    try {
-      console.log('=== PUSH TOKEN DEBUG START ===');
 
-      // Check device
-      console.log('Device.isDevice:', Device.isDevice);
-      console.log('Platform.OS:', Platform.OS);
-      console.log('Constants.appOwnership:', Constants.appOwnership);
-
-      // Check project ID
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
-      console.log('Project ID:', projectId);
-
-      // Check permissions
-      const { status } = await NotificationsExpo.getPermissionsAsync();
-      console.log('Current permission status:', status);
-
-      // Try to get existing token
-      try {
-        const existingToken = await AsyncStorage.getItem('expo_push_token');
-        console.log('Existing stored token:', existingToken);
-      } catch (e) {
-        console.log('No existing token found');
-      }
-
-      console.log('=== PUSH TOKEN DEBUG END ===');
-    } catch (error: any) {
-      console.error('Debug error:', error);
-    }
-  }, []);
   // Setup push notifications
   useEffect(() => {
     let isMounted = true;
@@ -754,7 +716,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         await debugLog('Starting notification setup', { token: !!token });
 
         const pushToken = await registerForPushNotificationsAsync();
-        await debugPushTokenIssue();
         await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
 
         if (pushToken && isMounted) {
@@ -1349,35 +1310,35 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }, [modules, isWeb]);
 
   const handleBackFromPage = useCallback(() => {
-    if (isWeb) {
-      setActivePage('dashboard');
-    } else {
-      setShowAttendance(false);
-      setShowProfile(false);
-      setShowHR(false);
-      setShowCab(false);
-      setShowDriver(false);
-      setShowBDT(false);
-      setShowMedical(false);
-      setShowScoutBoy(false);
-      setShowReminder(false);
-      setShowBUP(false);
-      setShowSiteManager(false);
-      setShowNotifications(false);
-      setShowSettings(false);
-      setShowEmployeeManagement(false);
-      setShowHREmployeeManagement(false);
-      setShowChat(false);
-      setShowChatRoom(false);
-      setShowValidation(false);
-      setShowDriverManager(false);
-      setShowHrManager(false);
-      setActiveMenuItem('Dashboard');
-      setActiveNavItem('home');  // ← ADD THIS LINE
-    }
-    // Reset profile modal state
-    setProfileModalToOpen(null);
-  }, [isWeb]);
+  if (isWeb) {
+    setActivePage('dashboard');
+  } else {
+    setShowAttendance(false);
+    setShowProfile(false);
+    setShowHR(false);
+    setShowCab(false);
+    setShowDriver(false);
+    setShowBDT(false);
+    setShowMedical(false);
+    setShowScoutBoy(false);
+    setShowReminder(false);
+    setShowBUP(false);
+    setShowSiteManager(false);
+    setShowNotifications(false);
+    setShowSettings(false);
+    setShowEmployeeManagement(false);
+    setShowHREmployeeManagement(false);
+    setShowChat(false);
+    setShowChatRoom(false);
+    setShowValidation(false);
+    setShowDriverManager(false);
+    setShowHrManager(false);
+    setActiveMenuItem('Dashboard');
+    setActiveNavItem('home');  // ← ADD THIS LINE
+  }
+  // Reset profile modal state
+  setProfileModalToOpen(null);
+}, [isWeb]);
 
   const handleLogout = useCallback(async () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -1547,71 +1508,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           <Text style={styles.moduleTitle}>{config.displayName}</Text>
         </LinearGradient>
       </TouchableOpacity>
-    );
-  };
-
-  const DebugConsole = ({ logs, onClose }: { logs: any[], onClose: () => void }) => {
-    const [minimized, setMinimized] = useState(false);
-
-    return (
-      <View style={{
-        position: 'absolute',
-        bottom: 80,
-        right: 10,
-        width: minimized ? 60 : 350,
-        height: minimized ? 60 : 400,
-        backgroundColor: 'rgba(0, 0, 0, 0.95)',
-        borderRadius: 12,
-        zIndex: 9999,
-        borderWidth: 2,
-        borderColor: '#00ff00',
-      }}>
-        <View style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: 10,
-          borderBottomWidth: minimized ? 0 : 1,
-          borderBottomColor: '#333',
-        }}>
-          <Text style={{ color: '#00ff00', fontWeight: 'bold', fontSize: 12 }}>
-            {minimized ? '🐛' : '🐛 DEBUG LOGS'}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity onPress={() => setMinimized(!minimized)}>
-              <Text style={{ color: '#00ff00', fontSize: 16 }}>
-                {minimized ? '□' : '−'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={{ color: '#ff0000', fontSize: 16 }}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {!minimized && (
-          <ScrollView
-            style={{ flex: 1, padding: 10 }}
-            showsVerticalScrollIndicator={true}
-          >
-            {logs.map((log, index) => (
-              <View key={index} style={{ marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#222' }}>
-                <Text style={{ color: '#888', fontSize: 10 }}>
-                  {new Date(log.timestamp).toLocaleTimeString()}
-                </Text>
-                <Text style={{ color: '#00ff00', fontSize: 11, marginTop: 2 }}>
-                  {log.message}
-                </Text>
-                {log.data && (
-                  <Text style={{ color: '#ffaa00', fontSize: 10, marginTop: 2 }}>
-                    {typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2)}
-                  </Text>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-        )}
-      </View>
     );
   };
 
@@ -2409,61 +2305,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           unreadNotificationCount={unreadNotificationCount}
         />
       )}
-
-      {/* DEBUG TOGGLE BUTTON - Always visible - REMOVE IN PRODUCTION */}
-      {!isWeb && (
-        <TouchableOpacity
-          onPress={() => setShowDebugConsole(!showDebugConsole)}
-          onLongPress={() => setDebugLogs([])} // Long press to clear logs
-          style={{
-            position: 'absolute',
-            bottom: 150,
-            left: 10,
-            width: 56,
-            height: 56,
-            backgroundColor: showDebugConsole ? '#ff4444' : '#00ff00',
-            borderRadius: 28,
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 9998,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-            borderWidth: 2,
-            borderColor: '#fff',
-          }}
-        >
-          <Text style={{ fontSize: 28 }}>🐛</Text>
-          <View style={{
-            position: 'absolute',
-            top: -5,
-            right: -5,
-            backgroundColor: '#ff0000',
-            borderRadius: 10,
-            minWidth: 20,
-            height: 20,
-            justifyContent: 'center',
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: '#fff',
-          }}>
-            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>
-              {debugLogs.length > 99 ? '99+' : debugLogs.length}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      )}
-
-      {/* DEBUG CONSOLE - REMOVE IN PRODUCTION */}
-      {showDebugConsole && !isWeb && (
-        <DebugConsole
-          logs={debugLogs}
-          onClose={() => setShowDebugConsole(false)}
-        />
-      )}
-
     </View>
   );
 }
