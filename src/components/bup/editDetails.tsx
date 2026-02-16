@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   ActivityIndicator, Alert, SafeAreaView, StatusBar, Platform,
-  KeyboardAvoidingView, Modal 
+  KeyboardAvoidingView, Modal
 } from 'react-native';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption, AssignedTo } from './types';
 import DropdownModal from './dropdownModal';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 interface FilterOptionWithColor extends FilterOption {
   color?: string;
@@ -96,7 +96,13 @@ const useDebounce = (value: string, delay: number) => {
 const EditLead: React.FC<EditLeadProps> = ({
   lead, onBack, onSave, onDelete, token, theme, fetchSubphases, selectedCity,
 }) => {
-  const [editedLead, setEditedLead] = useState<Lead>(lead);
+  // Separate primitive states to avoid object recreation
+  const [company, setCompany] = useState(lead.company || '');
+  const [status, setStatus] = useState(lead.status);
+  const [phase, setPhase] = useState(lead.phase);
+  const [subphase, setSubphase] = useState(lead.subphase);
+  const [assignedTo, setAssignedTo] = useState(lead.assigned_to);
+  
   const [editingEmails, setEditingEmails] = useState<string[]>(lead.emails.map(e => e.email));
   const [editingPhones, setEditingPhones] = useState<string[]>(lead.phone_numbers.map(p => p.number));
   const [newEmail, setNewEmail] = useState('');
@@ -107,7 +113,6 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [allEmployees, setAllEmployees] = useState<FilterOption[]>([]);
   const [collaborators, setCollaborators] = useState<Collaborator[]>(lead.collaborators || []);
-  const [loadingCollaborators, setLoadingCollaborators] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,11 +158,10 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [customFieldErrors, setCustomFieldErrors] = useState<{ [key: string]: string }>({});
 
   const initializationDoneRef = useRef(false);
-
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
 
-  const STATUS_CHOICES: FilterOptionWithColor[] = [
+  const STATUS_CHOICES: FilterOptionWithColor[] = useMemo(() => [
     { value: 'active', label: 'Active', color: THEME_COLORS.success },
     { value: 'hold', label: 'Hold', color: THEME_COLORS.warning },
     { value: 'mandate', label: 'Mandate', color: THEME_COLORS.info },
@@ -165,13 +169,13 @@ const EditLead: React.FC<EditLeadProps> = ({
     { value: 'no_requirement', label: 'No Requirement', color: THEME_COLORS.textTertiary },
     { value: 'transaction_complete', label: 'Transaction Complete', color: THEME_COLORS.success },
     { value: 'non_responsive', label: 'Non Responsive', color: THEME_COLORS.danger }
-  ];
+  ], []);
 
-  const OFFICE_TYPE_CHOICES: FilterOption[] = [
+  const OFFICE_TYPE_CHOICES: FilterOption[] = useMemo(() => [
     { value: 'conventional_office', label: 'Conventional Office' },
     { value: 'managed_office', label: 'Managed Office' },
     { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
-  ];
+  ], []);
 
   const fetchPhases = useCallback(async () => {
     try {
@@ -191,9 +195,13 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   }, []);
 
-  const fetchSubphasesForPhase = useCallback(async (phase: string) => {
+  const fetchSubphasesForPhase = useCallback(async (phaseValue: string) => {
+    if (!phaseValue) {
+      setAllSubphases([]);
+      return;
+    }
     try {
-      const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phaseValue)}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -232,7 +240,6 @@ const EditLead: React.FC<EditLeadProps> = ({
   const fetchCollaborators = useCallback(async () => {
     try {
       if (!token || !lead.id) return;
-      
       const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -311,25 +318,20 @@ const EditLead: React.FC<EditLeadProps> = ({
   }, [token]);
 
   useEffect(() => {
-  if (!initializationDoneRef.current) {
-    initializationDoneRef.current = true;
-    
-    const initialize = async () => {
-      await fetchPhases();
-      await fetchEmployees();
-      await fetchCollaborators();
-      
-      // Capture the initial phase value from props
-      const initialPhase = lead.phase;
-      if (initialPhase) {
-        await fetchSubphasesForPhase(initialPhase);
-      }
-    };
-    
-    initialize();
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []); // Empty dependency array - runs only once on mount
+    if (!initializationDoneRef.current) {
+      initializationDoneRef.current = true;
+      const initialize = async () => {
+        await fetchPhases();
+        await fetchEmployees();
+        await fetchCollaborators();
+        const initialPhase = lead.phase;
+        if (initialPhase) {
+          fetchSubphasesForPhase(initialPhase);
+        }
+      };
+      initialize();
+    }
+  }, []);
 
   useEffect(() => {
     if (debouncedSearchQuery.length >= 2) {
@@ -345,21 +347,36 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   }, [debouncedAssignedSearch, activeDropdown, searchAssignedToUsers]);
 
-  const ModernHeader = () => (
+  // CRITICAL FIX: Stable callbacks for TextInput
+  const handleCompanyChange = useCallback((text: string) => {
+    setCompany(text);
+  }, []);
+
+  const handleContactPersonNameChange = useCallback((text: string) => {
+    setContactPersonName(text);
+  }, []);
+
+  const handleAreaRequirementsChange = useCallback((text: string) => {
+    setAreaRequirements(text);
+  }, []);
+
+  const handleLocationChange = useCallback((text: string) => {
+    setLocation(text);
+  }, []);
+
+  const ModernHeader = useCallback(() => (
     <SafeAreaView style={s.header}>
       <View style={s.headerContent}>
         <TouchableOpacity onPress={onBack} style={s.backButton}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-
         <View style={s.headerTextContainer}>
           <Text style={s.headerTitle} numberOfLines={1}>Edit Lead</Text>
           <Text style={s.headerSubtitle} numberOfLines={1}>{lead.company || 'Lead Details'}</Text>
         </View>
-
         <View style={s.headerActions}>
-          <TouchableOpacity 
-            onPress={handleDelete} 
+          <TouchableOpacity
+            onPress={handleDelete}
             style={[s.deleteHeaderButton, { marginRight: 12 }]}
             disabled={deleteLoading || loading}
           >
@@ -369,7 +386,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
             )}
           </TouchableOpacity>
-          
           {loading ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
@@ -380,9 +396,9 @@ const EditLead: React.FC<EditLeadProps> = ({
         </View>
       </View>
     </SafeAreaView>
-  );
+  ), [onBack, lead.company, deleteLoading, loading]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     try {
       setDeleteLoading(true);
       Alert.alert(
@@ -408,7 +424,17 @@ const EditLead: React.FC<EditLeadProps> = ({
     } catch (error) {
       setDeleteLoading(false);
     }
-  };
+  }, [onDelete, onBack]);
+
+  const validateEmail = useCallback((email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }, []);
+
+  const validatePhone = useCallback((phone: string): boolean => {
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+  }, []);
 
   const addCollaborator = useCallback(async (email: string) => {
     try {
@@ -420,15 +446,11 @@ const EditLead: React.FC<EditLeadProps> = ({
         Alert.alert('Error', 'Please enter a valid email address');
         return;
       }
-      
-      // Find the collaborator being added to get their data
       const selectedEmployee = potentialCollaborators.find(emp => emp.value === email) as any;
       if (!selectedEmployee) {
         Alert.alert('Error', 'Employee data not found');
         return;
       }
-      
-      // Create optimistic collaborator object
       const optimisticCollaborator: Collaborator = {
         id: `temp-${Date.now()}`,
         user: {
@@ -441,37 +463,27 @@ const EditLead: React.FC<EditLeadProps> = ({
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      
-      // OPTIMISTIC: Add to state immediately without waiting for backend
-      setCollaborators([...collaborators, optimisticCollaborator]);
+      setCollaborators(prev => [...prev, optimisticCollaborator]);
       setSearchQuery('');
       setPotentialCollaborators([]);
-      
-      // Now send to backend (non-blocking)
       const response = await fetch(`${BACKEND_URL}/manager/addCollaborator`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: lead.id, email: email })
       });
-      
       const data = await response.json();
       if (!response.ok) {
-        // If backend fails, remove the optimistic entry
-        setCollaborators(prevCollab => prevCollab.filter(c => c.id !== optimisticCollaborator.id));
+        setCollaborators(prev => prev.filter(c => c.id !== optimisticCollaborator.id));
         Alert.alert('Error', data.message || 'Failed to add collaborator');
         return;
       }
-      
-      // Success - fetch fresh data from backend to replace optimistic entry with real data
       await fetchCollaborators();
-      
     } catch (error: any) {
       console.error('Error adding collaborator:', error);
-      // Remove optimistic entry on error
-      setCollaborators(prevCollab => prevCollab.filter(c => !c.id.toString().startsWith('temp-')));
+      setCollaborators(prev => prev.filter(c => !c.id.toString().startsWith('temp-')));
       Alert.alert('Error', error.message || 'Failed to add collaborator');
     }
-  }, [token, lead.id, potentialCollaborators, collaborators, fetchCollaborators]);
+  }, [token, lead.id, potentialCollaborators, fetchCollaborators, validateEmail]);
 
   const removeCollaborator = useCallback(async (collaboratorId: string | number) => {
     try {
@@ -485,9 +497,8 @@ const EditLead: React.FC<EditLeadProps> = ({
             text: 'Remove',
             style: 'destructive',
             onPress: async () => {
-              // OPTIMISTIC: Remove from state immediately
-              setCollaborators(collaborators.filter(c => c.id !== collaboratorId));
-              
+              const previousCollaborators = [...collaborators];
+              setCollaborators(prev => prev.filter(c => c.id !== collaboratorId));
               try {
                 const response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
                   method: 'POST',
@@ -496,11 +507,9 @@ const EditLead: React.FC<EditLeadProps> = ({
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.message || 'Failed to remove collaborator');
-                
                 Alert.alert('Success', data.message || 'Collaborator removed successfully');
               } catch (error: any) {
-                // If backend fails, add back to list
-                await fetchCollaborators();
+                setCollaborators(previousCollaborators);
                 Alert.alert('Error', error.message || 'Failed to remove collaborator');
               }
             }
@@ -511,28 +520,18 @@ const EditLead: React.FC<EditLeadProps> = ({
       console.error('Error removing collaborator:', error);
       Alert.alert('Error', error.message || 'Failed to remove collaborator');
     }
-  }, [token, lead.id, collaborators, fetchCollaborators]);
+  }, [token, lead.id, collaborators]);
 
   const handleAssignToUser = useCallback((user: AssignedTo) => {
-    setEditedLead(prev => ({ ...prev, assigned_to: user }));
+    setAssignedTo(user);
     setActiveDropdown(null);
     setAssignedToSearch('');
     setAssignedToResults([]);
   }, []);
 
-  const beautifyName = (name: string): string => {
+  const beautifyName = useCallback((name: string): string => {
     return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-  };
-
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  const validatePhone = (phone: string): boolean => {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
-  };
+  }, []);
 
   const handleAddEmail = useCallback(() => {
     const trimmedEmail = newEmail.trim();
@@ -548,14 +547,14 @@ const EditLead: React.FC<EditLeadProps> = ({
       setEmailError('This email already exists');
       return;
     }
-    setEditingEmails([...editingEmails, trimmedEmail]);
+    setEditingEmails(prev => [...prev, trimmedEmail]);
     setNewEmail('');
     setEmailError(null);
-  }, [newEmail, editingEmails]);
+  }, [newEmail, editingEmails, validateEmail]);
 
   const handleRemoveEmail = useCallback((index: number) => {
-    setEditingEmails(editingEmails.filter((_, i) => i !== index));
-  }, [editingEmails]);
+    setEditingEmails(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleAddPhone = useCallback(() => {
     const trimmedPhone = newPhone.trim();
@@ -571,103 +570,97 @@ const EditLead: React.FC<EditLeadProps> = ({
       setPhoneError('This phone number already exists');
       return;
     }
-    setEditingPhones([...editingPhones, trimmedPhone]);
+    setEditingPhones(prev => [...prev, trimmedPhone]);
     setNewPhone('');
     setPhoneError(null);
-  }, [newPhone, editingPhones]);
+  }, [newPhone, editingPhones, validatePhone]);
 
   const handleRemovePhone = useCallback((index: number) => {
-    setEditingPhones(editingPhones.filter((_, i) => i !== index));
-  }, [editingPhones]);
+    setEditingPhones(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleAddCustomField = useCallback(() => {
     const newId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setCustomFields([...customFields, { id: newId, key: '', value: '' }]);
-  }, [customFields]);
+    setCustomFields(prev => [...prev, { id: newId, key: '', value: '' }]);
+  }, []);
 
   const handleRemoveCustomField = useCallback((id: string) => {
-    setCustomFields(customFields.filter(field => field.id !== id));
+    setCustomFields(prev => prev.filter(field => field.id !== id));
     setCustomFieldErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[id];
       return newErrors;
     });
-  }, [customFields]);
+  }, []);
 
   const handleCustomFieldChange = useCallback((id: string, field: 'key' | 'value', text: string) => {
-    setCustomFields(customFields.map(fieldItem =>
+    setCustomFields(prev => prev.map(fieldItem =>
       fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem
     ));
-
-    if (customFieldErrors[id]) {
-      setCustomFieldErrors(prev => {
+    setCustomFieldErrors(prev => {
+      if (prev[id]) {
         const newErrors = { ...prev };
         delete newErrors[id];
         return newErrors;
-      });
-    }
-  }, [customFields, customFieldErrors]);
+      }
+      return prev;
+    });
+  }, []);
 
   const validateCustomFields = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};
     let isValid = true;
-
     customFields.forEach(field => {
       if (field.key.trim() === '' && field.value.trim() !== '') {
         errors[field.id] = 'Key is required when value is provided';
         isValid = false;
       }
     });
-
     setCustomFieldErrors(errors);
     return isValid;
   }, [customFields]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     try {
       if (!validateCustomFields()) {
         Alert.alert('Validation Error', 'Please check your custom fields. Key is required when value is provided.');
         return;
       }
-
       setLoading(true);
-
       const meta: { [key: string]: any } = {};
-
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
       if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
-      
       customFields.forEach(field => {
         if (field.key.trim() && field.value.trim()) {
           meta[field.key.trim()] = field.value.trim();
         }
       });
-
       const updatedLead: Lead = {
-        ...editedLead,
+        ...lead,
+        company,
+        status,
+        phase,
+        subphase,
+        assigned_to: assignedTo,
         meta: Object.keys(meta).length > 0 ? meta : null
       };
-
       await onSave(updatedLead, editingEmails, editingPhones);
     } catch (error) {
       Alert.alert('Error', 'Failed to update lead');
     } finally {
       setLoading(false);
     }
-  };
+  }, [validateCustomFields, areaRequirements, officeType, location, contactPersonName, customFields, lead, company, status, phase, subphase, assignedTo, onSave, editingEmails, editingPhones]);
 
-  const handlePhaseSelection = useCallback(async (phase: string) => {
-    setEditedLead(prev => ({ ...prev, phase: phase }));
-    await fetchSubphases(phase);
-    await fetchSubphasesForPhase(phase);
-    if (allSubphases.length > 0) {
-      setEditedLead(prev => ({ ...prev, subphase: '' }));
-    }
-  }, [fetchSubphases, fetchSubphasesForPhase, allSubphases.length]);
+  const handlePhaseSelection = useCallback(async (phaseValue: string) => {
+    setPhase(phaseValue);
+    setSubphase('');
+    await fetchSubphasesForPhase(phaseValue);
+  }, [fetchSubphasesForPhase]);
 
-  const getFilterLabel = (filterKey: string, value: string): string => {
+  const getFilterLabel = useCallback((filterKey: string, value: string): string => {
     let choices: FilterOption[] = [];
     switch (filterKey) {
       case 'status': choices = STATUS_CHOICES; break;
@@ -677,35 +670,36 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
     const option = choices.find(choice => choice.value === value);
     return option ? option.label : beautifyName(value);
-  };
+  }, [STATUS_CHOICES, allPhases, allSubphases, OFFICE_TYPE_CHOICES, beautifyName]);
 
-  const getAssignedToLabel = (): string => {
-    if (!editedLead.assigned_to) return 'Unassigned';
-    return editedLead.assigned_to.full_name || `${editedLead.assigned_to.first_name} ${editedLead.assigned_to.last_name}`;
-  };
+  const getAssignedToLabel = useCallback((): string => {
+    if (!assignedTo) return 'Unassigned';
+    return assignedTo.full_name || `${assignedTo.first_name} ${assignedTo.last_name}`;
+  }, [assignedTo]);
 
-  const getOfficeTypeLabel = (): string => {
+  const getOfficeTypeLabel = useCallback((): string => {
     const option = OFFICE_TYPE_CHOICES.find(choice => choice.value === officeType);
     return option ? option.label : 'Select office type...';
-  };
+  }, [OFFICE_TYPE_CHOICES, officeType]);
 
-  const getStatusColor = (status: string): string => {
-    const option = STATUS_CHOICES.find(choice => choice.value === status);
+  const getStatusColor = useCallback((statusValue: string): string => {
+    const option = STATUS_CHOICES.find(choice => choice.value === statusValue);
     return option?.color || THEME_COLORS.primary;
-  };
+  }, [STATUS_CHOICES]);
 
   return (
     <KeyboardAvoidingView
       style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      enabled={Platform.OS === 'ios'}
     >
       <ModernHeader />
-
-      <ScrollView 
-        style={s.scrollView} 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        style={s.scrollView}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Basic Information Card */}
         <View style={s.card}>
@@ -715,29 +709,26 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Basic Information</Text>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Company</Text>
             <TextInput
               style={s.input}
-              value={editedLead.company || ''}
-              onChangeText={(text) => setEditedLead({ ...editedLead, company: text })}
+              value={company}
+              onChangeText={handleCompanyChange}
               placeholder="Enter company name"
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Contact Person Name</Text>
             <TextInput
               style={s.input}
               value={contactPersonName}
-              onChangeText={setContactPersonName}
+              onChangeText={handleContactPersonNameChange}
               placeholder="Enter contact person name"
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>City</Text>
             <View style={s.readOnlyField}>
@@ -745,16 +736,15 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Text style={s.readOnlyText}>{selectedCity}</Text>
             </View>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Assigned To</Text>
-            <TouchableOpacity 
-              style={s.selector} 
+            <TouchableOpacity
+              style={s.selector}
               onPress={() => setActiveDropdown('assigned')}
               activeOpacity={0.7}
             >
               <View style={s.selectorContent}>
-                {editedLead.assigned_to ? (
+                {assignedTo ? (
                   <>
                     <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.accent }]}>
                       <Ionicons name="person" size={14} color={THEME_COLORS.primary} />
@@ -769,7 +759,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-
         {/* Lead Specific Information Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -778,24 +767,22 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Lead Specific Information</Text>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Area Requirements</Text>
             <TextInput
               style={[s.input, s.textArea]}
               value={areaRequirements}
-              onChangeText={setAreaRequirements}
+              onChangeText={handleAreaRequirementsChange}
               placeholder="e.g., 1000 sq ft, 5 desks, etc."
               placeholderTextColor={THEME_COLORS.textTertiary}
               multiline
               numberOfLines={2}
             />
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Office Type</Text>
-            <TouchableOpacity 
-              style={s.selector} 
+            <TouchableOpacity
+              style={s.selector}
               onPress={() => setActiveDropdown('officeType')}
               activeOpacity={0.7}
             >
@@ -810,18 +797,16 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Location Preference</Text>
             <TextInput
               style={s.input}
               value={location}
-              onChangeText={setLocation}
+              onChangeText={handleLocationChange}
               placeholder="e.g., Downtown, Business District, etc."
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
-
           {/* Custom Fields */}
           {customFields.length > 0 && (
             <View style={s.customFieldsSection}>
@@ -857,7 +842,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               ))}
             </View>
           )}
-
           <TouchableOpacity
             style={s.addCustomFieldBtn}
             onPress={handleAddCustomField}
@@ -867,7 +851,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             <Text style={s.addCustomFieldText}>Add Custom Field</Text>
           </TouchableOpacity>
         </View>
-
         {/* Email Addresses Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -876,15 +859,14 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Email Addresses ({editingEmails.length})</Text>
           </View>
-
           {editingEmails.map((email, idx) => (
             <View key={idx} style={s.listItem}>
               <View style={s.listItemContent}>
                 <Ionicons name="mail" size={16} color={THEME_COLORS.emailBorder} />
                 <Text style={s.listItemText}>{email}</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => handleRemoveEmail(idx)} 
+              <TouchableOpacity
+                onPress={() => handleRemoveEmail(idx)}
                 style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
@@ -892,7 +874,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               </TouchableOpacity>
             </View>
           ))}
-
           <View style={s.addRow}>
             <TextInput
               style={[s.input, emailError && s.inputError, { flex: 1 }]}
@@ -903,8 +884,8 @@ const EditLead: React.FC<EditLeadProps> = ({
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TouchableOpacity 
-              style={s.addBtn} 
+            <TouchableOpacity
+              style={s.addBtn}
               onPress={handleAddEmail}
               activeOpacity={0.7}
             >
@@ -913,7 +894,6 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
           {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
-
         {/* Phone Numbers Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -922,15 +902,14 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Phone Numbers ({editingPhones.length})</Text>
           </View>
-
           {editingPhones.map((phone, idx) => (
             <View key={idx} style={s.listItem}>
               <View style={s.listItemContent}>
                 <Ionicons name="call" size={16} color={THEME_COLORS.phoneBorder} />
                 <Text style={s.listItemText}>{phone}</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => handleRemovePhone(idx)} 
+              <TouchableOpacity
+                onPress={() => handleRemovePhone(idx)}
                 style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
@@ -938,7 +917,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               </TouchableOpacity>
             </View>
           ))}
-
           <View style={s.addRow}>
             <TextInput
               style={[s.input, phoneError && s.inputError, { flex: 1 }]}
@@ -948,8 +926,8 @@ const EditLead: React.FC<EditLeadProps> = ({
               placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="phone-pad"
             />
-            <TouchableOpacity 
-              style={s.addBtn} 
+            <TouchableOpacity
+              style={s.addBtn}
               onPress={handleAddPhone}
               activeOpacity={0.7}
             >
@@ -958,7 +936,6 @@ const EditLead: React.FC<EditLeadProps> = ({
           </View>
           {phoneError && <Text style={s.error}>{phoneError}</Text>}
         </View>
-
         {/* Collaborators Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -967,15 +944,14 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Colleagues ({collaborators.length})</Text>
           </View>
-
           {collaborators.map((collab) => (
             <View key={collab.id} style={s.listItem}>
               <View style={s.listItemContent}>
                 <Ionicons name="person" size={16} color={THEME_COLORS.collabBorder} />
                 <Text style={s.listItemText}>{collab.user.full_name}</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => removeCollaborator(collab.id)} 
+              <TouchableOpacity
+                onPress={() => removeCollaborator(collab.id)}
                 style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
@@ -983,7 +959,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               </TouchableOpacity>
             </View>
           ))}
-
           <View style={s.addRow}>
             <View style={s.searchContainer}>
               <TextInput
@@ -997,7 +972,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               {searchLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
             </View>
           </View>
-
           {potentialCollaborators.length > 0 && (
             <View style={s.resultsBox}>
               {potentialCollaborators
@@ -1022,7 +996,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
           )}
         </View>
-
         {/* Lead Management Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -1031,55 +1004,51 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Lead Management</Text>
           </View>
-
           <View style={s.row}>
             <View style={s.halfField}>
               <Text style={s.label}>Status</Text>
-              <TouchableOpacity 
-                style={[s.selector, { borderLeftWidth: 4, borderLeftColor: getStatusColor(editedLead.status) }]} 
+              <TouchableOpacity
+                style={[s.selector, { borderLeftWidth: 4, borderLeftColor: getStatusColor(status) }]}
                 onPress={() => setActiveDropdown('status')}
                 activeOpacity={0.7}
               >
                 <Text style={s.selectorText} numberOfLines={1}>
-                  {getFilterLabel('status', editedLead.status)}
+                  {getFilterLabel('status', status)}
                 </Text>
                 <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
-
             <View style={s.halfField}>
               <Text style={s.label}>Phase</Text>
-              <TouchableOpacity 
-                style={s.selector} 
+              <TouchableOpacity
+                style={s.selector}
                 onPress={() => setActiveDropdown('phase')}
                 activeOpacity={0.7}
               >
                 <Text style={s.selectorText} numberOfLines={1}>
-                  {getFilterLabel('phase', editedLead.phase)}
+                  {getFilterLabel('phase', phase)}
                 </Text>
                 <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Subphase</Text>
-            <TouchableOpacity 
-              style={s.selector} 
+            <TouchableOpacity
+              style={s.selector}
               onPress={() => setActiveDropdown('subphase')}
               activeOpacity={0.7}
             >
               <Text style={s.selectorText} numberOfLines={1}>
-                {getFilterLabel('subphase', editedLead.subphase)}
+                {getFilterLabel('subphase', subphase)}
               </Text>
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
-
         {/* Delete Button */}
-        <TouchableOpacity 
-          style={[s.deleteBtn, (deleteLoading || loading) && s.deleteBtnDisabled]} 
+        <TouchableOpacity
+          style={[s.deleteBtn, (deleteLoading || loading) && s.deleteBtnDisabled]}
           onPress={handleDelete}
           disabled={deleteLoading || loading}
           activeOpacity={0.8}
@@ -1093,11 +1062,10 @@ const EditLead: React.FC<EditLeadProps> = ({
             </>
           )}
         </TouchableOpacity>
-
         {/* Save Button */}
-        <TouchableOpacity 
-          style={[s.saveBtn, loading && s.saveBtnDisabled]} 
-          onPress={handleSave} 
+        <TouchableOpacity
+          style={[s.saveBtn, loading && s.saveBtnDisabled]}
+          onPress={handleSave}
           disabled={loading}
           activeOpacity={0.8}
         >
@@ -1110,16 +1078,14 @@ const EditLead: React.FC<EditLeadProps> = ({
             </>
           )}
         </TouchableOpacity>
-
         <View style={s.bottomSpacer} />
       </ScrollView>
-
       {/* Dropdown Modals */}
       <DropdownModal
         visible={activeDropdown === 'status'}
         onClose={() => setActiveDropdown(null)}
         options={STATUS_CHOICES}
-        onSelect={(value) => setEditedLead({ ...editedLead, status: value as Lead['status'] })}
+        onSelect={(value) => { setStatus(value as Lead['status']); setActiveDropdown(null); }}
         title="Select Status"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
@@ -1127,7 +1093,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         visible={activeDropdown === 'phase'}
         onClose={() => setActiveDropdown(null)}
         options={allPhases}
-        onSelect={handlePhaseSelection}
+        onSelect={(value) => { handlePhaseSelection(value); setActiveDropdown(null); }}
         title="Select Phase"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
@@ -1135,7 +1101,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         visible={activeDropdown === 'subphase'}
         onClose={() => setActiveDropdown(null)}
         options={allSubphases}
-        onSelect={(value) => setEditedLead({ ...editedLead, subphase: value })}
+        onSelect={(value) => { setSubphase(value); setActiveDropdown(null); }}
         title="Select Subphase"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
@@ -1143,11 +1109,10 @@ const EditLead: React.FC<EditLeadProps> = ({
         visible={activeDropdown === 'officeType'}
         onClose={() => setActiveDropdown(null)}
         options={OFFICE_TYPE_CHOICES}
-        onSelect={(value) => setOfficeType(value)}
+        onSelect={(value) => { setOfficeType(value); setActiveDropdown(null); }}
         title="Select Office Type"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
-
       {/* Assigned To Modal */}
       {activeDropdown === 'assigned' && (
         <Modal
@@ -1156,26 +1121,25 @@ const EditLead: React.FC<EditLeadProps> = ({
           animationType="fade"
           onRequestClose={() => setActiveDropdown(null)}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={s.modalOverlay}
-            activeOpacity={1} 
+            activeOpacity={1}
             onPress={() => setActiveDropdown(null)}
           >
-            <TouchableOpacity 
-              activeOpacity={1} 
+            <TouchableOpacity
+              activeOpacity={1}
               onPress={(e) => e.stopPropagation()}
               style={s.modalContent}
             >
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>Assign Lead To</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setActiveDropdown(null)}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>
-
               <View style={s.searchContainer}>
                 <TextInput
                   style={s.searchInput}
@@ -1186,35 +1150,34 @@ const EditLead: React.FC<EditLeadProps> = ({
                   autoCapitalize="none"
                 />
                 {assignedToLoading && (
-                  <ActivityIndicator 
-                    size="small" 
-                    color={THEME_COLORS.primary} 
-                    style={s.searchLoader} 
+                  <ActivityIndicator
+                    size="small"
+                    color={THEME_COLORS.primary}
+                    style={s.searchLoader}
                   />
                 )}
               </View>
-
               <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
                 {assignedToResults.length > 0 ? (
                   assignedToResults.map((user) => (
                     <TouchableOpacity
                       key={user.email}
                       style={[
-                        s.modalItem, 
-                        editedLead.assigned_to?.email === user.email && s.modalItemSelected
+                        s.modalItem,
+                        assignedTo?.email === user.email && s.modalItemSelected
                       ]}
                       onPress={() => handleAssignToUser(user)}
                       activeOpacity={0.7}
                     >
                       <View style={s.modalItemContent}>
-                        <Ionicons 
-                          name="person" 
-                          size={18} 
+                        <Ionicons
+                          name="person"
+                          size={18}
                           color={
-                            editedLead.assigned_to?.email === user.email 
-                              ? THEME_COLORS.primary 
+                            assignedTo?.email === user.email
+                              ? THEME_COLORS.primary
                               : THEME_COLORS.textSecondary
-                          } 
+                          }
                         />
                         <View style={s.modalItemInfo}>
                           <Text style={s.modalItemName} numberOfLines={1}>
@@ -1225,11 +1188,11 @@ const EditLead: React.FC<EditLeadProps> = ({
                           </Text>
                         </View>
                       </View>
-                      {editedLead.assigned_to?.email === user.email && (
-                        <Ionicons 
-                          name="checkmark-circle" 
-                          size={20} 
-                          color={THEME_COLORS.primary} 
+                      {assignedTo?.email === user.email && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color={THEME_COLORS.primary}
                         />
                       )}
                     </TouchableOpacity>
@@ -1252,23 +1215,23 @@ const EditLead: React.FC<EditLeadProps> = ({
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: THEME_COLORS.background },
-  header: { 
-    backgroundColor: '#075E54', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#128C7E', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 3, 
-    elevation: 3, 
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  header: {
+    backgroundColor: '#075E54',
+    borderBottomWidth: 1,
+    borderBottomColor: '#128C7E',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0
   },
-  headerContent: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    height: 60 
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    height: 60
   },
   backButton: { padding: 8, marginRight: 8 },
   headerTextContainer: { flex: 1 },
@@ -1347,7 +1310,7 @@ const s = StyleSheet.create({
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 12, backgroundColor: THEME_COLORS.primary, marginHorizontal: 16, marginTop: 8, marginBottom: 8, shadowColor: THEME_COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, fontWeight: '700', color: THEME_COLORS.white, letterSpacing: 0.3 },
-  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '90%', maxHeight: '70%', backgroundColor: THEME_COLORS.card, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 2, borderBottomColor: THEME_COLORS.divider },
   modalTitle: { fontSize: 18, fontWeight: '700', color: THEME_COLORS.textPrimary },
@@ -1363,4 +1326,4 @@ const s = StyleSheet.create({
   bottomSpacer: { height: 30 },
 });
 
-export default EditLead;
+export default React.memo(EditLead);

@@ -175,8 +175,8 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   };
 
   const openGoogleMaps = () => {
-    if (siteData?.latitude && siteData?.longitude) {
-      const url = `https://www.google.com/maps/search/?api=1&query=${siteData.latitude},${siteData.longitude}`;
+    if (siteData?.location_link){
+      const url = siteData.location_link;
       Linking.openURL(url).catch(err =>
         console.error('Failed to open Google Maps:', err)
       );
@@ -288,14 +288,12 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </View>
         )}
 
-        {(siteData?.location_link || (siteData?.latitude && siteData?.longitude)) && (
+        {siteData?.location_link && (
           <View style={styles.actionButtons}>
-            {siteData?.latitude && siteData?.longitude && (
               <TouchableOpacity style={styles.mapButton} onPress={openGoogleMaps}>
                 <Ionicons name="map" size={16} color={WHATSAPP_COLORS.white} />
                 <Text style={styles.mapButtonText}>View on Map</Text>
               </TouchableOpacity>
-            )}
           </View>
         )}
 

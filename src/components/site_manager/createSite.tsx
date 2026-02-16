@@ -203,19 +203,19 @@ const CreateSite: React.FC<CreateSiteProps> = ({
     setOtherAmenities(prev => prev.filter(amenity => amenity.id !== id));
   };
 
-  const captureLocation = async () => {
-    try {
-      const mockLat = 28.6139 + Math.random() * 0.01;
-      const mockLng = 77.2090 + Math.random() * 0.01;
-      return {
-        latitude: mockLat.toFixed(6),
-        longitude: mockLng.toFixed(6),
-      };
-    } catch (error) {
-      console.error('Location capture error:', error);
-      return null;
-    }
-  };
+  // const captureLocation = async () => {
+  //   try {
+  //     const mockLat = 28.6139 + Math.random() * 0.01;
+  //     const mockLng = 77.2090 + Math.random() * 0.01;
+  //     return {
+  //       latitude: mockLat.toFixed(6),
+  //       longitude: mockLng.toFixed(6),
+  //     };
+  //   } catch (error) {
+  //     console.error('Location capture error:', error);
+  //     return null;
+  //   }
+  // };
 
   const validateStep = (step: number): boolean => {
     if (step === 0) {
@@ -329,18 +329,18 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
     setCreatingSite(true);
     try {
-      const locationData = await captureLocation();
-      if (!locationData) {
-        Alert.alert('Error', 'Failed to capture location. Please try again.');
-        setCreatingSite(false);
-        return;
-      }
+      // const locationData = await captureLocation();
+      // if (!locationData) {
+      //   Alert.alert('Error', 'Failed to capture location. Please try again.');
+      //   setCreatingSite(false);
+      //   return;
+      // }
 
       const siteData: any = {
         token,
         building_name: newSite.building_name,
-        latitude: parseFloat(locationData.latitude),
-        longitude: parseFloat(locationData.longitude),
+        // latitude: parseFloat(locationData.latitude),
+        // longitude: parseFloat(locationData.longitude),
         managed_property: siteType === 'managed',
         conventional_property: siteType === 'conventional',
         for_sale_property: siteType === 'for_sale',

@@ -701,7 +701,36 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       console.error('❌ Failed to send error log to backend:', logError);
     }
   }, []);
-
+const debugPushTokenIssue = useCallback(async () => {
+  try {
+    console.log('=== PUSH TOKEN DEBUG START ===');
+    
+    // Check device
+    console.log('Device.isDevice:', Device.isDevice);
+    console.log('Platform.OS:', Platform.OS);
+    console.log('Constants.appOwnership:', Constants.appOwnership);
+    
+    // Check project ID
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+    console.log('Project ID:', projectId);
+    
+    // Check permissions
+    const { status } = await NotificationsExpo.getPermissionsAsync();
+    console.log('Current permission status:', status);
+    
+    // Try to get existing token
+    try {
+      const existingToken = await AsyncStorage.getItem('expo_push_token');
+      console.log('Existing stored token:', existingToken);
+    } catch (e) {
+      console.log('No existing token found');
+    }
+    
+    console.log('=== PUSH TOKEN DEBUG END ===');
+  } catch (error: any) {
+    console.error('Debug error:', error);
+  }
+}, []);
   // Setup push notifications
   useEffect(() => {
     let isMounted = true;
@@ -716,6 +745,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         await debugLog('Starting notification setup', { token: !!token });
 
         const pushToken = await registerForPushNotificationsAsync();
+        await debugPushTokenIssue();
         await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
 
         if (pushToken && isMounted) {
