@@ -84,9 +84,6 @@
       "expo-secure-store",
       "expo-dev-client",
       [
-        "@react-native-firebase/app"
-      ],
-      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow Citadel to access your location while using the app.",
