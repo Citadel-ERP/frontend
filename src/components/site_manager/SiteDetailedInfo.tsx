@@ -680,7 +680,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: WHATSAPP_COLORS.primary
+    backgroundColor: WHATSAPP_COLORS.primary,
+    marginTop:50,
   },
   modalBackButton: {
     padding: 8,
@@ -899,10 +900,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   metroStationName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
+  fontSize: 15,
+  fontWeight: '600',
+  color: WHATSAPP_COLORS.textPrimary,
+  flex: 1, 
+  flexWrap: 'wrap',  
+},
   metroStationCity: {
     fontSize: 13,
     color: WHATSAPP_COLORS.textSecondary,
