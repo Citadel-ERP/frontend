@@ -116,5 +116,3 @@ yarn-error.*
 
 web-build/
 # google-services.json
-/android
-/ios

@@ -119,7 +119,9 @@
         {
           "icon": "./assets/images/App-icon.png",
           "color": "#2D3748",
-          "useNextNotificationsApi": true
+          "useNextNotificationsApi": true,
+          "androidMode": "default",
+    "androidCollapsedTitle": "#{unread_notifications} new interactions"
         }
       ],
       "expo-task-manager",
