@@ -26,6 +26,17 @@ const BackIcon = () => (
     </View>
 );
 
+// Helper function to map backend status to frontend display
+const getDisplayStatus = (status: string): string => {
+    const statusMap: { [key: string]: string } = {
+        'in-progress': 'Start',
+        'completed': 'End',
+        'Assigned': 'Assigned',
+        'cancelled': 'Cancelled'
+    };
+    return statusMap[status] || status;
+};
+
 interface BookingsProps {
     token: string | null;
     onBack: () => void;
@@ -78,7 +89,7 @@ const BookingCard: React.FC<{
         // From Assigned: only allow in-progress or cancelled
         if (currentStatus === 'assigned') {
             if (newStatus !== 'in-progress' && newStatus !== 'cancelled') {
-                Alert.alert('Invalid Action', 'From Assigned, you can only move to In-Progress or Cancelled');
+                Alert.alert('Invalid Action', 'From Assigned, you can only move to Start or Cancelled');
                 return;
             }
         }
@@ -86,14 +97,14 @@ const BookingCard: React.FC<{
         // From in-progress: only allow completed or cancelled
         if (currentStatus === 'in-progress') {
             if (newStatus !== 'completed' && newStatus !== 'cancelled') {
-                Alert.alert('Invalid Action', 'From In-Progress, you can only move to Completed or Cancelled');
+                Alert.alert('Invalid Action', 'From Start, you can only move to End or Cancelled');
                 return;
             }
         }
 
         // From completed or cancelled: no changes allowed
         if (currentStatus === 'completed' || currentStatus === 'cancelled') {
-            Alert.alert('Invalid Action', 'Cannot change status from ' + booking.status);
+            Alert.alert('Invalid Action', 'Cannot change status from ' + getDisplayStatus(booking.status));
             return;
         }
 
@@ -156,7 +167,7 @@ const BookingCard: React.FC<{
         // Check if status is the same (excluding statuses that require additional input)
         if (selectedStatus === booking.status && selectedStatus !== 'cancelled' &&
             selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
-            Alert.alert('Info', 'Status is already set to ' + selectedStatus);
+            Alert.alert('Info', 'Status is already set to ' + getDisplayStatus(selectedStatus));
             return;
         }
 
@@ -218,7 +229,7 @@ const BookingCard: React.FC<{
                         color={getStatusColor(booking.status)}
                     />
                     <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
-                        {booking.status}
+                        {getDisplayStatus(booking.status)}
                     </Text>
                 </View>
             </View>
@@ -318,6 +329,8 @@ const BookingCard: React.FC<{
                         {['Assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
                             const statusColor = getStatusColor(status);
                             const isSelected = selectedStatus === status;
+                            const displayLabel = getDisplayStatus(status);
+                            
                             return (
                                 <TouchableOpacity
                                     key={status}
@@ -338,7 +351,7 @@ const BookingCard: React.FC<{
                                             { color: isSelected ? '#FFFFFF' : statusColor }
                                         ]}
                                     >
-                                        {status.toUpperCase()}
+                                        {displayLabel.toUpperCase()}
                                     </Text>
                                 </TouchableOpacity>
                             );
@@ -422,7 +435,7 @@ const BookingCard: React.FC<{
                             ) : (
                                 <>
                                     <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-                                    <Text style={styles.updateButtonText}>Update to {selectedStatus}</Text>
+                                    <Text style={styles.updateButtonText}>Update to {getDisplayStatus(selectedStatus)}</Text>
                                 </>
                             )}
                         </TouchableOpacity>
@@ -519,7 +532,7 @@ const Bookings: React.FC<BookingsProps> = ({
             const requestBody: any = {
                 token,
                 assignment_id: assignmentId,
-                status: status,
+                status: status, // Backend receives 'in-progress' and 'completed' as-is
             };
 
             // Add cancellation reason if applicable

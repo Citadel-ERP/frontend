@@ -1522,6 +1522,7 @@ export const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#FFFFFF',
         marginBottom: 2,
+        marginRight:20
     },
     updateVehicleHeaderSubtitle: {
         fontSize: 13,
