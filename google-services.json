@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "65688569916",
+    "project_id": "citadel-notifications",
+    "storage_bucket": "citadel-notifications.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:65688569916:android:73727401b8e03341db5b39",
+        "android_client_info": {
+          "package_name": "com.citadelnetinc.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvPU8uNn0B0kppAoJv8aLzFiAnDkCPF7c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
