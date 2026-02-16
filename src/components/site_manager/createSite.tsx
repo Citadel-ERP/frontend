@@ -10,6 +10,7 @@ import { BACKEND_URL } from '../../config/config';
 import { Ionicons } from '@expo/vector-icons';
 import MetroStationSelector from './metroStationSelector';
 
+
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface CreateSiteProps {
@@ -62,6 +63,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [creatingSite, setCreatingSite] = useState(false);
   const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
+  const [floorWiseAreaEntries, setFloorWiseAreaEntries] = useState<string[]>([]);
+const [currentFloorInput, setCurrentFloorInput] = useState('');
   const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
   const [siteType, setSiteType] = useState<'managed' | 'conventional' | 'for_sale' | null>(null);
@@ -202,6 +205,24 @@ const CreateSite: React.FC<CreateSiteProps> = ({
   const removeOtherAmenity = (id: string) => {
     setOtherAmenities(prev => prev.filter(amenity => amenity.id !== id));
   };
+
+  const addFloorWiseArea = () => {
+  if (currentFloorInput.trim()) {
+    setFloorWiseAreaEntries(prev => [...prev, currentFloorInput.trim()]);
+    setCurrentFloorInput('');
+  }
+};
+
+const removeFloorWiseArea = (index: number) => {
+  setFloorWiseAreaEntries(prev => prev.filter((_, i) => i !== index));
+};
+
+const handleFloorInputKeyPress = (e: any) => {
+  if (e.nativeEvent.key === 'Enter') {
+    e.preventDefault();
+    addFloorWiseArea();
+  }
+};
 
   // const captureLocation = async () => {
   //   try {
@@ -407,7 +428,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({
       // Property specs
       if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
       if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
-      if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
+      // Use floor-wise entries if available, otherwise use the old field
+if (floorWiseAreaEntries.length > 0) {
+  siteData.area_per_floor = floorWiseAreaEntries.join('\n');
+} else if (newSite.area_per_floor) {
+  siteData.area_per_floor = newSite.area_per_floor;
+}
       if (newSite.total_area) siteData.total_area = parseCurrency(newSite.total_area);
       if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
 
@@ -766,41 +792,48 @@ const CreateSite: React.FC<CreateSiteProps> = ({
 
       {(siteType === 'conventional' || siteType === 'for_sale') ? (
         <>
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <Text style={styles.formLabel}>Total Area (sq ft)</Text>
-              <TextInput
-                style={styles.input}
-                value={newSite.total_area}
-                onChangeText={(val) => setNewSite({ ...newSite, total_area: formatCurrency(val) })}
-                placeholder="50,000"
-                keyboardType="numeric"
-                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-              />
-            </View>
-            <View style={styles.halfWidth}>
-              <Text style={styles.formLabel}>Area/Floor (sq ft)</Text>
-              <TextInput
-                style={styles.input}
-                value={newSite.area_per_floor}
-                onChangeText={(val) => setNewSite({ ...newSite, area_per_floor: formatCurrency(val) })}
-                placeholder="5,000"
-                keyboardType="numeric"
-                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-              />
-            </View>
-          </View>
-
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Available Floors</Text>
-            <TextInput
-              style={styles.input}
-              value={newSite.availble_floors}
-              onChangeText={(val) => setNewSite({ ...newSite, availble_floors: val })}
-              placeholder="G+1 to G+5"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            />
-          </View>
+  <Text style={styles.formLabel}>Total Available Area (sq ft)</Text>
+  <TextInput
+    style={styles.input}
+    value={newSite.total_area}
+    onChangeText={(val) => setNewSite({ ...newSite, total_area: formatCurrency(val) })}
+    placeholder="50,000"
+    keyboardType="numeric"
+    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+  />
+</View>
+
+<View style={styles.formGroup}>
+  <Text style={styles.formLabel}>Floor-wise Area</Text>
+  <TextInput
+    style={styles.input}
+    value={currentFloorInput}
+    onChangeText={setCurrentFloorInput}
+    onKeyPress={handleFloorInputKeyPress}
+    placeholder="e.g., G- 10000 sq/ft (Press Enter to add)"
+    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+    onSubmitEditing={addFloorWiseArea}
+    returnKeyType="done"
+  />
+  
+  {/* Display added floor entries */}
+  {floorWiseAreaEntries.length > 0 && (
+    <View style={styles.floorEntriesContainer}>
+      {floorWiseAreaEntries.map((entry, index) => (
+        <View key={index} style={styles.floorEntryBox}>
+          <Text style={styles.floorEntryText}>{entry}</Text>
+          <TouchableOpacity
+            onPress={() => removeFloorWiseArea(index)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.danger} />
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  )}
+</View>
         </>
       ) : (
         <>
@@ -911,7 +944,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({
         <>
           <View style={styles.row}>
             <View style={styles.halfWidth}>
-              <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
+              <Text style={styles.formLabel}>Monthly Rent Per sqft (₹)</Text>
               <TextInput
                 style={styles.input}
                 value={newSite.rent}
@@ -2020,6 +2053,27 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
+  floorEntriesContainer: {
+  marginTop: 12,
+  gap: 8,
+},
+floorEntryBox: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderStyle: 'dashed',
+  borderColor: '#E5E7EB',
+  backgroundColor: '#FFFFFF',
+},
+floorEntryText: {
+  fontSize: 14,
+  color: '#1F2937',
+  flex: 1,
+},
   rentalEscalationInput: {
     flex: 1,
     textAlign: 'center',
