@@ -42,6 +42,7 @@ import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
 import { CitadelHub } from './citadel_hub/CitadelHub';
 import AssetModule from './assets/index';
+import OfficeModule from './office/index';
 // import {CitadelHubMobile} from './citadel_hub/CitadelHubMobile';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
@@ -121,17 +122,30 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#00d285', '#00b872'],
     displayName: 'Attendance'
   },
+  
+  'office': {
+    icon: 'business',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#003580', '#004d69'],
+    displayName: 'Offices'
+  },
+  'offices': {
+    icon: 'business',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#003580', '#004d69'],
+    displayName: 'Offices'
+  },
 
   'asset': {
   icon: 'hardware-chip',
   iconFamily: 'Ionicons',
-  gradientColors: ['#008069', '#006954'],
+  gradientColors: ['#80006b', '#4d0069'],
   displayName: 'Assets'
 },
 'assets': {
   icon: 'hardware-chip',
   iconFamily: 'Ionicons',
-  gradientColors: ['#008069', '#006954'],
+  gradientColors: ['#80006b', '#4d0069'],
   displayName: 'Assets'
 },
 
@@ -290,6 +304,12 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
   'asset': 'asset',
   'assets': 'asset',  
   'Asset': 'asset',
+
+  //office modules
+  'office': 'office',
+  'Office': 'office',
+  'offices': 'office',
+
   // HR modules
   'hr': 'hr',
   'HR': 'hr',
@@ -384,7 +404,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
   const [activeNavItem, setActiveNavItem] = useState('home');
-
+  
   // Theme state
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -392,6 +412,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // All modules modal
   const [allModulesVisible, setAllModulesVisible] = useState(false);
   const [showAsset, setShowAsset] = useState(false);
+  const [showOffice, setShowOffice] = useState(false); 
 
   // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
@@ -524,6 +545,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'chatRoom': () => setShowChatRoom(true),
         'assets': () => setShowAsset(true),
         'asset': () => setShowAsset(true), 
+        'office': () => setShowOffice(true),
+        'offices': () => setShowOffice(true) 
       };
 
       const action = navigationActions[targetPage];
@@ -1327,6 +1350,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowDriverManager,
       setShowHrManager,
       setShowAsset,
+      setShowOffice, 
       Alert
     });
   }, [modules, isWeb, setShowAsset]);
@@ -1337,6 +1361,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   } else {
     setShowAttendance(false);
     setShowAsset(false);
+    setShowOffice(false);
     setShowProfile(false);
     setShowHR(false);
     setShowCab(false);
@@ -1626,6 +1651,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         />
       );
     }
+    if (showOffice) {
+    return (
+      <OfficeModule
+        onBack={handleBackFromPage}
+        isDark={isDark}
+      />
+    );
+  }
 
     if (showHrManager) {
       return (
@@ -2116,6 +2149,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     )}
                     {activePage === 'asset' && (
                       <AssetModule 
+                        onBack={() => setActivePage('dashboard')}
+                        isDark={isDark}
+                      />
+                    )}
+                    {activePage === 'office' && (
+                      <OfficeModule
                         onBack={() => setActivePage('dashboard')}
                         isDark={isDark}
                       />

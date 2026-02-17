@@ -177,7 +177,8 @@ export type ActivePage =
   | 'chatRoom'
   | 'validation'
   | 'asset'  
-  | 'assets';
+  | 'assets'
+  | 'office'
 
 // Helper functions
 export const getInitials = (fullName: string): string => {

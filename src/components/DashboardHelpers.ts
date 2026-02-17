@@ -24,7 +24,9 @@ interface HandleModulePressParams {
   setShowHREmployeeManagement: (show: boolean) => void;
   setShowDriverManager: (show: boolean) => void;
   setShowHrManager: (show: boolean) => void;
-  setShowAsset: (show: boolean) => void;  // Keep only this one - make it required
+  setShowAsset: (show: boolean) => void; 
+  setShowOffice: (show: boolean) => void;
+  
   Alert: any;
 }
 
@@ -51,6 +53,7 @@ export const handleModulePress = ({
   setShowDriverManager,
   setShowHrManager,
   setShowAsset,
+  setShowOffice,
   Alert
 }: HandleModulePressParams) => {
   const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
@@ -105,7 +108,10 @@ export const handleModulePress = ({
       'hr_manager': 'hrManager',
       'hr manager': 'hrManager',
       'asset': 'asset',
-      'assets': 'asset'
+      'assets': 'asset',
+      'office': 'office',        
+      'offices': 'office'
+      
     };
 
     const targetPage = pageMap[key] || pageMap[moduleName.toLowerCase()];
@@ -139,8 +145,10 @@ export const handleModulePress = ({
       'driver manager': () => setShowDriverManager(true),
       'hr_manager': () => setShowHrManager(true),
       'hr manager': () => setShowHrManager(true),
-      'asset': () => setShowAsset(true),  // No need for null check since it's required
-      'assets': () => setShowAsset(true)  // No need for null check since it's required
+      'asset': () => setShowAsset(true),  
+      'assets': () => setShowAsset(true), 
+        'office': () => setShowOffice(true),
+        'offices': () => setShowOffice(true),
     };
 
     const handler = mobileHandlers[key] || mobileHandlers[moduleName.toLowerCase()];
