@@ -96,7 +96,7 @@ interface ModalContent {
 interface ProfileProps {
   onBack: () => void;
   userData?: UserData;
-  onProfileUpdate?: (updatedData: UserData) => void;
+  onProfileUpdate: (updatedData: UserData) => void;
   initialModalToOpen?: string | null; // Modal to open on mount (assets/payslips/documents)
 }
 

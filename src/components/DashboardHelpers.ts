@@ -24,6 +24,7 @@ interface HandleModulePressParams {
   setShowHREmployeeManagement: (show: boolean) => void;
   setShowDriverManager: (show: boolean) => void;
   setShowHrManager: (show: boolean) => void;
+  setShowAsset: (show: boolean) => void;  // Keep only this one - make it required
   Alert: any;
 }
 
@@ -49,6 +50,7 @@ export const handleModulePress = ({
   setShowHREmployeeManagement,
   setShowDriverManager,
   setShowHrManager,
+  setShowAsset,
   Alert
 }: HandleModulePressParams) => {
   const key = moduleUniqueName?.toLowerCase() || moduleName.toLowerCase();
@@ -57,7 +59,7 @@ export const handleModulePress = ({
   if (modules.length > 0) {
     const backendModule = modules.find(
       m => m.module_unique_name === moduleUniqueName ||
-        m.module_name.toLowerCase().replace('_', ' ') === moduleName.toLowerCase()
+        m.module_name?.toLowerCase().replace('_', ' ') === moduleName.toLowerCase()
     );
     if (backendModule) {
       moduleData = {
@@ -101,7 +103,9 @@ export const handleModulePress = ({
       'driver_manager': 'driverManager',
       'driver manager': 'driverManager',
       'hr_manager': 'hrManager',
-      'hr manager': 'hrManager'
+      'hr manager': 'hrManager',
+      'asset': 'asset',
+      'assets': 'asset'
     };
 
     const targetPage = pageMap[key] || pageMap[moduleName.toLowerCase()];
@@ -135,6 +139,8 @@ export const handleModulePress = ({
       'driver manager': () => setShowDriverManager(true),
       'hr_manager': () => setShowHrManager(true),
       'hr manager': () => setShowHrManager(true),
+      'asset': () => setShowAsset(true),  // No need for null check since it's required
+      'assets': () => setShowAsset(true)  // No need for null check since it's required
     };
 
     const handler = mobileHandlers[key] || mobileHandlers[moduleName.toLowerCase()];
@@ -160,7 +166,7 @@ export const saveLastOpenedModule = async (
     if (modules.length > 0) {
       const backendModule = modules.find(
         m => m.module_unique_name === module.module_unique_name ||
-          m.module_name.toLowerCase().replace('_', ' ') === module.title.toLowerCase()
+          m.module_name?.toLowerCase().replace('_', ' ') === module.title?.toLowerCase()
       );
       if (backendModule) {
         moduleData = {
@@ -219,7 +225,7 @@ export const getDisplayModules = (modules: any[]) => {
   return defaultLastOpened.map(item => {
     const backendModule = modules.find(m =>
       m.module_unique_name === item.module_unique_name ||
-      m.module_name.toLowerCase().replace('_', ' ') === item.name.toLowerCase()
+      m.module_name?.toLowerCase().replace('_', ' ') === item.name.toLowerCase()
     );
     return {
       title: item.name,

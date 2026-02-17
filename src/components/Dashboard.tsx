@@ -41,6 +41,7 @@ import SiteManager from './site_manager/SiteManager';
 import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
 import { CitadelHub } from './citadel_hub/CitadelHub';
+import AssetModule from './assets/index';
 // import {CitadelHubMobile} from './citadel_hub/CitadelHubMobile';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
@@ -120,6 +121,19 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#00d285', '#00b872'],
     displayName: 'Attendance'
   },
+
+  'asset': {
+  icon: 'hardware-chip',
+  iconFamily: 'Ionicons',
+  gradientColors: ['#008069', '#006954'],
+  displayName: 'Assets'
+},
+'assets': {
+  icon: 'hardware-chip',
+  iconFamily: 'Ionicons',
+  gradientColors: ['#008069', '#006954'],
+  displayName: 'Assets'
+},
 
   // Car/Cab modules
   'cab': {
@@ -272,6 +286,10 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
   'attendance': 'attendance',
   'Attendance': 'attendance',
 
+  //asset modules
+  'asset': 'asset',
+  'assets': 'asset',  
+  'Asset': 'asset',
   // HR modules
   'hr': 'hr',
   'HR': 'hr',
@@ -373,6 +391,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // All modules modal
   const [allModulesVisible, setAllModulesVisible] = useState(false);
+  const [showAsset, setShowAsset] = useState(false);
 
   // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
@@ -502,7 +521,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy'),
         'messages': () => Alert.alert('Coming Soon', 'Messages'),
         'chat': () => setShowChat(true),
-        'chatRoom': () => { /* Needs chat room data */ },
+        'chatRoom': () => setShowChatRoom(true),
+        'assets': () => setShowAsset(true),
+        'asset': () => setShowAsset(true), 
       };
 
       const action = navigationActions[targetPage];
@@ -1305,15 +1326,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowHREmployeeManagement,
       setShowDriverManager,
       setShowHrManager,
+      setShowAsset,
       Alert
     });
-  }, [modules, isWeb]);
+  }, [modules, isWeb, setShowAsset]);
 
   const handleBackFromPage = useCallback(() => {
   if (isWeb) {
     setActivePage('dashboard');
   } else {
     setShowAttendance(false);
+    setShowAsset(false);
     setShowProfile(false);
     setShowHR(false);
     setShowCab(false);
@@ -1388,7 +1411,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       } else {
         setShowHR(true);
       }
-    } else if (navItem === 'support') {
+    } else if (navItem === 'assets' || navItem === 'asset') {
+    if (isWeb) {
+      setActivePage('assets');
+    } else {
+      setShowAsset(true);
+    }
+  }
+    else if (navItem === 'support') {
       Alert.alert('Support', 'Support feature will be available soon!');
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
@@ -1454,7 +1484,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy feature will be available soon!'),
           'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
           'chat': () => { },
-          'chatRoom': () => { }
+          'chatRoom': () => { },
+          // 'asset': () => setShowAsset(true),  // Add this
+          'assets': () => setShowAsset(true),
         };
         mobileHandlers[targetPage]();
       }
@@ -1584,6 +1616,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (showDriverManager) {
       return (
         <DriverManager onBack={handleBackFromPage} />
+      );
+    }
+    if (showAsset) {
+      return (
+        <AssetModule 
+          onBack={handleBackFromPage}
+          isDark={isDark}
+        />
       );
     }
 
@@ -2072,6 +2112,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       <AttendanceWrapper
                         onBack={() => setActivePage('dashboard')}
                         attendanceKey={attendanceKey}
+                      />
+                    )}
+                    {activePage === 'asset' && (
+                      <AssetModule 
+                        onBack={() => setActivePage('dashboard')}
+                        isDark={isDark}
                       />
                     )}
                     {activePage === 'hr' && (

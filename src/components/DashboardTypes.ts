@@ -161,6 +161,7 @@ export type ActivePage =
   | 'attendance'
   | 'hr'
   | 'cab'
+  | 'assets'
   | 'driver'
   | 'bdt'
   | 'medical'
@@ -174,7 +175,9 @@ export type ActivePage =
   | 'hrManager'
   | 'chat'
   | 'chatRoom'
-  | 'validation';
+  | 'validation'
+  | 'asset'  
+  | 'assets';
 
 // Helper functions
 export const getInitials = (fullName: string): string => {
