@@ -17,6 +17,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { BACKEND_URL } from '../../config/config';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface Employee {
   employee_id: string;
@@ -96,11 +97,11 @@ const DocumentModal: React.FC<DocumentProps> = ({
         setDocuments(data.documents || []);
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to fetch documents');
+        alert('Error', errorData.message || 'Failed to fetch documents');
       }
     } catch (error) {
       console.error('Error fetching documents:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -120,7 +121,7 @@ const DocumentModal: React.FC<DocumentProps> = ({
       }
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document');
+      alert('Error', 'Failed to pick document');
     }
   };
 
@@ -131,12 +132,12 @@ const DocumentModal: React.FC<DocumentProps> = ({
 
   const uploadDocument = async () => {
     if (!selectedFile) {
-      Alert.alert('Error', 'Please select a file');
+      alert('Error', 'Please select a file');
       return;
     }
 
     if (selectedDocType === 'custom' && !customFileName.trim()) {
-      Alert.alert('Error', 'Please enter a document name');
+      alert('Error', 'Please enter a document name');
       return;
     }
 
@@ -187,23 +188,23 @@ const DocumentModal: React.FC<DocumentProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Document uploaded successfully');
+        alert('Success', 'Document uploaded successfully');
         setModalMode('list');
         fetchDocuments();
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to upload document');
+        alert('Error', errorData.message || 'Failed to upload document');
       }
     } catch (error) {
       console.error('Error uploading document:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setUploading(false);
     }
   };
 
   const handleDelete = async (documentId: string, docName: string) => {
-    Alert.alert(
+    alert(
       'Delete Document',
       `Are you sure you want to delete "${docName}"?`,
       [
@@ -223,15 +224,15 @@ const DocumentModal: React.FC<DocumentProps> = ({
               });
 
               if (response.ok) {
-                Alert.alert('Success', 'Document deleted successfully');
+                alert('Success', 'Document deleted successfully');
                 fetchDocuments();
               } else {
                 const errorData = await response.json();
-                Alert.alert('Error', errorData.message || 'Failed to delete document');
+                alert('Error', errorData.message || 'Failed to delete document');
               }
             } catch (error) {
               console.error('Error deleting document:', error);
-              Alert.alert('Error', 'Network error occurred');
+              alert('Error', 'Network error occurred');
             }
           }
         }
@@ -245,11 +246,11 @@ const DocumentModal: React.FC<DocumentProps> = ({
       if (supported) {
         await Linking.openURL(documentUrl);
       } else {
-        Alert.alert('Error', 'Cannot open this file');
+        alert('Error', 'Cannot open this file');
       }
     } catch (error) {
       console.error('Error downloading document:', error);
-      Alert.alert('Error', 'Failed to download document');
+      alert('Error', 'Failed to download document');
     }
   };
 

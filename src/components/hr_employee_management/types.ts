@@ -24,6 +24,7 @@ export interface Employee {
   city?: string;
   any_action?: boolean;
   action_type?: string;
+  birth_date?: string | null;        
 }
 
 export interface AttendanceRecord {

@@ -18,6 +18,7 @@ import { Picker } from '@react-native-picker/picker';
 import { BACKEND_URL } from '../../config/config';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface Employee {
   employee_id: string;
@@ -27,6 +28,10 @@ interface Employee {
   casual_leaves: number;
   birth_date?: string;
   joining_date?: string;
+  email?: string;
+  phone_number?: string;
+  first_name?: string;       
+  last_name?: string; 
 }
 
 interface Office {
@@ -94,7 +99,7 @@ const WebDateInput: React.FC<{
     }
     return value.toISOString().split('T')[0];
   };
-
+  
   const handleChange = (e: any) => {
     const inputValue = e.target.value;
     if (!inputValue) return;
@@ -143,7 +148,15 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
   const [earnedLeaves, setEarnedLeaves] = useState(employee.earned_leaves.toString());
   const [sickLeaves, setSickLeaves] = useState(employee.sick_leaves.toString());
   const [casualLeaves, setCasualLeaves] = useState(employee.casual_leaves.toString());
-
+  const [showOfficePicker, setShowOfficePicker] = useState(false);
+  
+  // Contact Information
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  
   // Work timings with Date objects for picker
   const [loginTime, setLoginTime] = useState<Date>(new Date());
   const [logoutTime, setLogoutTime] = useState<Date>(new Date());
@@ -219,6 +232,13 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     setSickLeaves(employee.sick_leaves.toString());
     setCasualLeaves(employee.casual_leaves.toString());
 
+    // Initialize contact information
+    setEmail(employee.email || '');
+    setPhoneNumber(employee.phone_number || '');
+    setNewEmployeeId(employee.employee_id || '');
+    setFirstName(employee.first_name || '');
+    setLastName(employee.last_name || '');
+
     // Initialize work timings - READ FROM employeeDetails
     if (employeeDetails?.login_time) {
       console.log('Setting login time from employeeDetails:', employeeDetails.login_time);
@@ -281,11 +301,11 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
         setOffices(data.offices || []);
       } else {
         console.error('Failed to fetch offices');
-        Alert.alert('Error', 'Failed to load offices');
+        alert('Error', 'Failed to load offices');
       }
     } catch (error) {
       console.error('Error fetching offices:', error);
-      Alert.alert('Error', 'Network error while loading offices');
+      alert('Error', 'Network error while loading offices');
     } finally {
       setLoadingOffices(false);
     }
@@ -298,26 +318,69 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     const casual = parseInt(casualLeaves);
 
     if (isNaN(earned) || earned < 0) {
-      Alert.alert('Invalid Input', 'Earned leaves must be a positive number');
+      alert('Invalid Input', 'Earned leaves must be a positive number');
       return false;
     }
     if (isNaN(sick) || sick < 0) {
-      Alert.alert('Invalid Input', 'Sick leaves must be a positive number');
+      alert('Invalid Input', 'Sick leaves must be a positive number');
       return false;
     }
     if (isNaN(casual) || casual < 0) {
-      Alert.alert('Invalid Input', 'Casual leaves must be a positive number');
+      alert('Invalid Input', 'Casual leaves must be a positive number');
       return false;
+    }
+    if (!firstName || !firstName.trim()) {
+      alert('Invalid Input', 'First name is required');
+      return false;
+    }
+
+    // First name must be at least 2 characters
+    if (firstName.trim().length < 2) {
+      alert('Invalid Input', 'First name must be at least 2 characters');
+      return false;
+    }
+
+    // Last name validation (optional but if provided, must be 2+ chars)
+    if (lastName && lastName.trim().length > 0 && lastName.trim().length < 2) {
+      alert('Invalid Input', 'Last name must be at least 2 characters if provided');
+      return false;
+    }
+
+
+    // Validate email if provided
+    if (email && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        alert('Invalid Input', 'Please enter a valid email address');
+        return false;
+      }
+    }
+
+    // Validate employee ID if changed
+    if (newEmployeeId && newEmployeeId.trim() !== employee.employee_id) {
+      if (newEmployeeId.trim().length < 3) {
+        alert('Invalid Input', 'Employee ID must be at least 3 characters');
+        return false;
+      }
+    }
+
+    // Validate phone number if provided
+    if (phoneNumber && phoneNumber.trim()) {
+      const phoneRegex = /^\+?[\d\s-]{10,}$/;
+      if (!phoneRegex.test(phoneNumber.trim())) {
+        alert('Invalid Input', 'Please enter a valid phone number (at least 10 digits)');
+        return false;
+      }
     }
 
     // Validate reset password if section is shown
     if (showResetSection) {
       if (!resetPassword || resetPassword.length < 6) {
-        Alert.alert('Invalid Input', 'Reset password must be at least 6 characters');
+        alert('Invalid Input', 'Reset password must be at least 6 characters');
         return false;
       }
       if (resetPassword !== confirmPassword) {
-        Alert.alert('Invalid Input', 'Passwords do not match');
+        alert('Invalid Input', 'Passwords do not match');
         return false;
       }
     }
@@ -434,7 +497,22 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
         casual_leaves: parseInt(casualLeaves),
         login_time: formatTimeToString(loginTime),
         logout_time: formatTimeToString(logoutTime),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
       };
+
+      // Add employee ID if changed
+      if (newEmployeeId && newEmployeeId.trim() !== employee.employee_id) {
+        payload.new_employee_id = newEmployeeId.trim();
+      }
+
+      // Add contact information if provided
+      if (email && email.trim()) {
+        payload.email = email.trim();
+      }
+      if (phoneNumber && phoneNumber.trim()) {
+        payload.phone_number = phoneNumber.trim();
+      }
 
       // Add office if selected
       if (selectedOfficeId) {
@@ -463,17 +541,35 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        Alert.alert('Success', 'Employee details updated successfully');
-        onSuccess();
-        onClose();
-      } else {
+     if (response.ok) {
+      const result = await response.json();
+      console.log('Update response:', result);
+      
+      // Update the employee object with ALL changed fields
+      if (result.employee) {
+        employee.email = result.employee.email || email;
+        employee.phone_number = result.employee.phone_number || phoneNumber;
+        employee.earned_leaves = result.employee.earned_leaves;
+        employee.sick_leaves = result.employee.sick_leaves;
+        employee.casual_leaves = result.employee.casual_leaves;
+        
+        // Update employee ID if changed
+        if (result.new_employee_id) {
+          employee.employee_id = result.new_employee_id;
+        }
+      }
+      
+      alert('Success', 'Employee details updated successfully');
+      onSuccess();  // This will trigger fetchEmployeeDetails() in parent
+      onClose();
+    }
+      else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to update employee');
+        alert('Error', errorData.message || 'Failed to update employee');
       }
     } catch (error) {
       console.error('Error updating employee:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -556,34 +652,133 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                   </Text>
                 </View>
 
+                {renderSection('Personal Information', 'person-outline', (
+                <View>
+                  <Text style={styles.editLabel}>First Name *</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    placeholder="Enter first name"
+                    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    autoCapitalize="words"
+                  />
+
+                  <Text style={styles.editLabel}>Last Name</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    placeholder="Enter last name (optional)"
+                    placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    autoCapitalize="words"
+                  />
+                </View>
+              ))}
+
+                {/* Employee Information Section - SEPARATE */}
+                {renderSection('Employee Information', 'person-outline', (
+                  <View>
+                    <Text style={styles.editLabel}>Employee ID</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={newEmployeeId}
+                      onChangeText={setNewEmployeeId}
+                      placeholder="Enter employee ID"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      autoCapitalize="characters"
+                    />
+                    <Text style={[styles.infoLabel, { color: WHATSAPP_COLORS.textTertiary, fontSize: 12, marginTop: 4 }]}>
+                      Current ID: {employee.employee_id}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Contact Information Section - SEPARATE */}
+                {renderSection('Contact Information', 'mail-outline', (
+                  <View>
+                    <Text style={styles.editLabel}>Email Address</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      placeholder="Enter email address"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      autoCapitalize="none"
+                    />
+
+                    <Text style={styles.editLabel}>Phone Number</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={phoneNumber}
+                      onChangeText={setPhoneNumber}
+                      keyboardType="phone-pad"
+                      placeholder="Enter phone number"
+                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                    />
+                  </View>
+                ))}
+
                 {/* Office Assignment Section */}
                 {renderSection('Office Assignment', 'business-outline', (
                   <View>
-                    <Text style={[styles.editLabel]}>Assigned Office</Text>
+                    <Text style={styles.editLabel}>Assigned Office</Text>
                     {loadingOffices ? (
                       <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
                     ) : (
-                      <View style={[styles.pickerContainer]}>
-                        <Picker
-                          selectedValue={selectedOfficeId}
-                          onValueChange={(itemValue) => setSelectedOfficeId(itemValue)}
-                          style={styles.picker}
+                      <>
+                        <TouchableOpacity
+                          style={[styles.editInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                          onPress={() => setShowOfficePicker(!showOfficePicker)}
                         >
-                          <Picker.Item label="Select Office" value={null} />
-                          {offices.map((office) => (
-                            <Picker.Item
-                              key={office.id}
-                              label={`${office.name}${office.address?.city ? ` - ${office.address.city}` : ''}`}
-                              value={office.id}
-                            />
-                          ))}
-                        </Picker>
-                      </View>
-                    )}
-                    {selectedOfficeId && (
-                      <Text style={styles.infoSubtext}>
-                        Current: {offices.find(o => o.id === selectedOfficeId)?.name || 'Unknown'}
-                      </Text>
+                          <Text style={{ 
+                            color: selectedOfficeId ? WHATSAPP_COLORS.textPrimary : WHATSAPP_COLORS.textTertiary,
+                            fontSize: 16 
+                          }}>
+                            {selectedOfficeId 
+                              ? offices.find(o => o.id === selectedOfficeId)?.name || 'Select Office'
+                              : 'Select Office'}
+                          </Text>
+                          <Ionicons 
+                            name={showOfficePicker ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color={WHATSAPP_COLORS.textSecondary} 
+                          />
+                        </TouchableOpacity>
+                        
+                        {showOfficePicker && (
+                          <View style={styles.pickerContainer}>
+                            <ScrollView style={{ maxHeight: 200 }}>
+                              {offices.map((office) => (
+                                <TouchableOpacity
+                                  key={office.id}
+                                  style={[
+                                    styles.officeOption,
+                                    selectedOfficeId === office.id && styles.officeOptionSelected
+                                  ]}
+                                  onPress={() => {
+                                    setSelectedOfficeId(office.id);
+                                    setShowOfficePicker(false);
+                                  }}
+                                >
+                                  <Text style={[
+                                    styles.officeName,
+                                    selectedOfficeId === office.id && styles.officeNameSelected
+                                  ]}>
+                                    {office.name}
+                                  </Text>
+                                  {office.address?.city && (
+                                    <Text style={styles.officeAddress}>
+                                      {office.address.city}
+                                    </Text>
+                                  )}
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                        )}
+                      </>
                     )}
                   </View>
                 ))}

@@ -20,6 +20,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import CreateCar from './createCar';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -839,41 +840,44 @@ const Vehicles: React.FC<VehiclesProps> = ({
         });
     };
 
+
     const pickImage = async (index: number) => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
-            return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
+        return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true, // ✅ ENABLES INTERACTIVE CROP/ZOOM
+        aspect: [16, 9], // ✅ SETS CROP BOX TO 16:9 RATIO
+        quality: 0.8, // Good quality with reasonable file size
+    });
+
+    if (!result.canceled && result.assets[0]) {
+        const newPhotos = [...updateVehicleForm.photos];
+
+        if (index < newPhotos.length) {
+            newPhotos[index] = {
+                id: newPhotos[index].id,
+                photo: result.assets[0].uri,
+                uri: result.assets[0].uri,
+                isNew: true,
+            };
+        } else {
+            newPhotos.push({
+                id: Date.now(),
+                photo: result.assets[0].uri,
+                uri: result.assets[0].uri,
+                isNew: true,
+            });
         }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 0.8,
-        });
+        setUpdateVehicleForm({ ...updateVehicleForm, photos: newPhotos });
+    }
+};
 
-        if (!result.canceled && result.assets[0]) {
-            const newPhotos = [...updateVehicleForm.photos];
-
-            if (index < newPhotos.length) {
-                newPhotos[index] = {
-                    id: newPhotos[index].id,
-                    photo: result.assets[0].uri,
-                    uri: result.assets[0].uri,
-                    isNew: true,
-                };
-            } else {
-                newPhotos.push({
-                    id: Date.now(),
-                    photo: result.assets[0].uri,
-                    uri: result.assets[0].uri,
-                    isNew: true,
-                });
-            }
-
-            setUpdateVehicleForm({ ...updateVehicleForm, photos: newPhotos });
-        }
-    };
 
     const removePhoto = (index: number) => {
         if (updateVehicleForm.photos.length <= 1) {

@@ -34,7 +34,7 @@
   "submit": {
     "production": {
       "android": {
-        "serviceAccountKeyPath": "./path-to-your-play-store-service-account.json"
+        "serviceAccountKeyPath": "./google-services.json"
       },
       "ios": {
         "appleId": "your-apple-id@example.com",

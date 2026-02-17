@@ -115,3 +115,6 @@ yarn-error.*
 # @end expo-cli.expo/
 
 web-build/
+google-services.json
+/android
+/ios

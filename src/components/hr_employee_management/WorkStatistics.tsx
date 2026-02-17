@@ -1,5 +1,5 @@
 // hr_employee_management/workStatistics.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Header } from './header';
 import WorkStatisticsDownloadModal from './WorkStatisticsDownloadModal';
 import { WHATSAPP_COLORS } from './constants';
@@ -43,6 +43,8 @@ interface SummaryData {
   total_not_logged_out: number;
 }
 
+type FilterType = 'all' | 'logged_in' | 'late_login' | 'not_logged_in';
+
 const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,6 +53,7 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
 
   const fetchWorkStats = async (targetDate?: string) => {
     if (!token) {
@@ -64,19 +67,20 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getWorkStats`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           token,
-          date: targetDate || date 
+          date: targetDate || date
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
         setSummary(data.summary);
+        console.log('Fetched user stats:', data.users);
         setUserStats(data.users);
         setDate(data.date);
       } else {
@@ -117,79 +121,113 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
     });
   };
 
-  const StatCard = ({ 
-    title, 
-    value, 
-    icon, 
+  // Memoize filtered users for better performance
+  const filteredUsers = useMemo(() => {
+    switch (selectedFilter) {
+      case 'logged_in':
+        return userStats.filter(user => user.has_logged_in);
+      case 'late_login':
+        return userStats.filter(user => user.is_late_login);
+      case 'not_logged_in':
+        return userStats.filter(user => !user.has_logged_in);
+      case 'all':
+      default:
+        return userStats;
+    }
+  }, [userStats, selectedFilter]);
+
+  const StatCard = ({
+    title,
+    value,
+    icon,
     color,
-    iconColor 
-  }: { 
-    title: string; 
-    value: number; 
-    icon: string; 
+    iconColor,
+    filterType,
+    isSelected
+  }: {
+    title: string;
+    value: number;
+    icon: string;
     color: string;
     iconColor: string;
+    filterType: FilterType;
+    isSelected: boolean;
   }) => (
-    <View style={[styles.statCard, { backgroundColor: color }]}>
+    <TouchableOpacity
+      style={[
+        styles.statCard,
+        { backgroundColor: color },
+        isSelected && styles.statCardSelected
+      ]}
+      onPress={() => setSelectedFilter(filterType)}
+      activeOpacity={0.7}
+    >
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
-    </View>
+      {isSelected && (
+        <View style={styles.selectedIndicator}>
+          <Ionicons name="checkmark-circle" size={16} color={WHATSAPP_COLORS.primary} />
+        </View>
+      )}
+    </TouchableOpacity>
   );
 
-  const renderTableRow = (user: UserStat, index: number) => (
-    <View 
-      key={user.employee_id} 
-      style={[
-        styles.tableRow,
-        index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd
-      ]}
-    >
-      <View style={[styles.tableCell, styles.nameCell]}>
-        <View>
-          <Text style={styles.nameText}>{user.name}</Text>
-          <Text style={styles.designationText}>{user.designation}</Text>
+  const renderTableRow = (user: UserStat, index: number) => {
+    return (
+      <View
+        key={user.employee_id}
+        style={[
+          styles.tableRow,
+          index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd
+        ]}
+      >
+        <View style={[styles.tableCell, styles.nameCell]}>
+          <View>
+            <Text style={styles.nameText}>{user.name}</Text>
+            <Text style={styles.designationText}>{user.designation}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.tableCell, styles.centerCell]}>
+          {user.has_logged_in ? (
+            <View style={styles.statusContainer}>
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              <Text style={styles.timeText}>{user.login_time || 'N/A'}</Text>
+            </View>
+          ) : (
+            <View style={styles.statusContainer}>
+              <Ionicons name="close-circle" size={20} color="#EF4444" />
+              <Text style={styles.absentText}>Absent</Text>
+            </View>
+          )}
+          {user.is_late_login && (
+            <View style={styles.lateBadge}>
+              <Text style={styles.lateBadgeText}>Late</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.tableCell, styles.centerCell]}>
+          {user.has_logged_out ? (
+            <View style={styles.statusContainer}>
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              <Text style={styles.timeText}>{user.logout_time || 'N/A'}</Text>
+            </View>
+          ) : user.has_logged_in ? (
+            <View style={styles.statusContainer}>
+              <Ionicons name="close-circle" size={20} color="#F59E0B" />
+              <Text style={styles.activeText}>Active</Text>
+            </View>
+          ) : (
+            <View style={styles.statusContainer}>
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
+              <Text style={styles.absentText}>-</Text>
+            </View>
+          )}
         </View>
       </View>
-      
-      <View style={[styles.tableCell, styles.centerCell]}>
-        {user.has_logged_in ? (
-          <View style={styles.statusContainer}>
-            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={styles.timeText}>{user.login_time || 'N/A'}</Text>
-          </View>
-        ) : (
-          <View style={styles.statusContainer}>
-            <Ionicons name="close-circle" size={20} color="#EF4444" />
-            <Text style={styles.absentText}>Absent</Text>
-          </View>
-        )}
-        {user.is_late_login && (
-          <View style={styles.lateBadge}>
-            <Text style={styles.lateBadgeText}>Late</Text>
-          </View>
-        )}
-      </View>
-      
-      <View style={[styles.tableCell, styles.centerCell]}>
-        {user.has_logged_out ? (
-          <View style={styles.statusContainer}>
-            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={styles.timeText}>{user.logout_time || 'N/A'}</Text>
-          </View>
-        ) : user.has_logged_in ? (
-          <View style={styles.statusContainer}>
-            <Ionicons name="close-circle" size={20} color="#F59E0B" />
-            <Text style={styles.activeText}>Active</Text>
-          </View>
-        ) : (
-          <View style={styles.statusContainer}>
-            <Ionicons name="close-circle" size={20} color="#6B7280" />
-            <Text style={styles.absentText}>-</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+    );
+  };
 
   if (loading && !refreshing && !summary) {
     return (
@@ -242,47 +280,94 @@ const WorkStatistics: React.FC<WorkStatisticsProps> = ({ token, onBack }) => {
           </View>
         ) : summary && (
           <>
-            {/* Summary Cards - Updated colors to match Attendance component */}
+            {/* Summary Cards - Now with 4 boxes including All */}
             <View style={styles.summaryContainer}>
+              <StatCard
+                title="All"
+                value={summary.total_users}
+                icon="account-group"
+                color="#bae7be"
+                iconColor="#6B7280"
+                filterType="all"
+                isSelected={selectedFilter === 'all'}
+              />
+
               <StatCard
                 title="Total Logged In"
                 value={summary.total_logged_in}
                 icon="account-check"
-                color="#E8F5E9" // Green background matching Attendance's Present
+                color="#f4e2bc"
                 iconColor="#2E7D32"
+                filterType="logged_in"
+                isSelected={selectedFilter === 'logged_in'}
               />
-              
+
               <StatCard
                 title="Late Logins"
                 value={summary.total_late_login}
                 icon="clock-alert"
-                color="#E8F4F8" // Light blue background
+                color="#bde6f3"
                 iconColor="#1976D2"
+                filterType="late_login"
+                isSelected={selectedFilter === 'late_login'}
               />
-              
+
               <StatCard
                 title="Not Logged In"
                 value={summary.total_not_logged_in}
                 icon="account-remove"
-                color="#FFEBEE" // Red background matching Attendance's Absent
+                color="#fdd3d9"
                 iconColor="#D32F2F"
+                filterType="not_logged_in"
+                isSelected={selectedFilter === 'not_logged_in'}
               />
             </View>
 
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, styles.nameHeader]}>Employee</Text>
-              <Text style={styles.tableHeaderText}>Login Status</Text>
-              <Text style={styles.tableHeaderText}>Logout Status</Text>
+            {/* Filter Info */}
+            <View style={styles.filterInfoContainer}>
+              <Text style={styles.filterInfoText}>
+                Showing {filteredUsers.length} of {summary.total_users} employees
+                {selectedFilter !== 'all' && (
+                  <Text style={styles.filterInfoBold}>
+                    {' '}• {selectedFilter === 'logged_in' ? 'Logged In' :
+                      selectedFilter === 'late_login' ? 'Late Login' :
+                      'Not Logged In'}
+                  </Text>
+                )}
+              </Text>
+              {selectedFilter !== 'all' && (
+                <TouchableOpacity
+                  onPress={() => setSelectedFilter('all')}
+                  style={styles.clearFilterButton}
+                >
+                  <Text style={styles.clearFilterText}>Clear</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {/* Table Container with internal scrolling - Shows 5 entries max */}
-            <View style={styles.tableContainer}>
-              <ScrollView 
-                style={styles.internalScrollView}
+            {/* Table Container with internal scrolling */}
+            <View style={styles.tableWrapper}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, styles.nameHeader]}>Employee</Text>
+                <Text style={styles.tableHeaderText}>Login Status</Text>
+                <Text style={styles.tableHeaderText}>Logout Status</Text>
+              </View>
+
+              <ScrollView
+                style={styles.tableScrollView}
                 showsVerticalScrollIndicator={true}
+                nestedScrollEnabled={true}
               >
-                {userStats.map((user, index) => renderTableRow(user, index))}
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((user, index) => renderTableRow(user, index))
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Ionicons name="people-outline" size={48} color="#9CA3AF" />
+                    <Text style={styles.emptyStateText}>
+                      No employees match this filter
+                    </Text>
+                  </View>
+                )}
               </ScrollView>
             </View>
 
@@ -368,12 +453,12 @@ const styles = StyleSheet.create({
   summaryContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 12,
+    marginBottom: 16,
+    gap: 8,
   },
   statCard: {
     flex: 1,
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -382,48 +467,87 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    minHeight: 100,
+    minHeight: 90,
+    position: 'relative',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  statCardSelected: {
+    borderColor: WHATSAPP_COLORS.primary,
+    elevation: 4,
+    shadowOpacity: 0.2,
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 4,
   },
   statTitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6B7280',
     textAlign: 'center',
     fontWeight: '600',
-    lineHeight: 14,
+    lineHeight: 13,
   },
-  tableContainer: {
+  selectedIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+  },
+  filterInfoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  filterInfoText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  filterInfoBold: {
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.primary,
+  },
+  clearFilterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 6,
+  },
+  clearFilterText: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.primary,
+    fontWeight: '600',
+  },
+  tableWrapper: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    maxHeight: 350, // Fixed height to show only 5 entries
     marginBottom: 16,
+    overflow: 'hidden',
   },
-  internalScrollView: {
-    flex: 1,
+  tableScrollView: {
+    maxHeight: 350,
   },
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#075E54',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
   },
   tableHeaderText: {
     flex: 1,
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
+    textAlign: 'center',
   },
   nameHeader: {
     flex: 2,
+    textAlign: 'left',
   },
   tableRow: {
     flexDirection: 'row',
@@ -493,6 +617,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#D97706',
     fontWeight: '600',
+  },
+  emptyStateContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
   },
   downloadButton: {
     flexDirection: 'row',

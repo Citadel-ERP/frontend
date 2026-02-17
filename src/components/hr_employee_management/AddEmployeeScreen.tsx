@@ -6,7 +6,6 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +16,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { Header } from './header';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 // ==================== TYPES ====================
 interface Office {
@@ -203,7 +203,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       setLoading(true);
       await Promise.all([fetchOffices(), fetchTags()]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load initial data');
+      alert('Error', 'Failed to load initial data');
       console.error('Error loading initial data:', error);
     } finally {
       setLoading(false);
@@ -227,7 +227,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching offices:', error);
-      Alert.alert('Error', error.message || 'Failed to fetch offices');
+      alert('Error', error.message || 'Failed to fetch offices');
     }
   };
 
@@ -248,7 +248,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching tags:', error);
-      Alert.alert('Error', error.message || 'Failed to fetch tags');
+      alert('Error', error.message || 'Failed to fetch tags');
     }
   };
 
@@ -310,7 +310,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       }
     } catch (error) {
       console.error('Error picking documents:', error);
-      Alert.alert('Error', 'Failed to pick documents');
+      alert('Error', 'Failed to pick documents');
     }
   };
 
@@ -420,7 +420,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     }
 
     if (!validationResult.isValid) {
-      Alert.alert('Validation Error', validationResult.errorMessage);
+      alert('Validation Error', validationResult.errorMessage);
       return;
     }
 
@@ -433,113 +433,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       setCurrentStep(prev => prev - 1);
     } else {
       onBack();
-    }
-  };
-
-  // ==================== SUBMISSION ====================
-  const handleSubmit = async () => {
-    try {
-      setSubmitting(true);
-
-      const formData = new FormData();
-      formData.append('token', token);
-
-      // Add basic info
-      Object.entries(basicInfo).forEach(([key, value]) => {
-        if (value) {
-          if (key.includes('leaves')) {
-            formData.append(key, parseInt(value) || 0);
-          } else {
-            formData.append(key, value);
-          }
-        }
-      });
-
-      // Add addresses
-      const homeAddressData = {
-        address: addressInfo.home_address.address || '',
-        street: addressInfo.home_address.street || '',
-        city: addressInfo.home_address.city || '',
-        state: addressInfo.home_address.state || '',
-        country: addressInfo.home_address.country || 'India',
-        pin_code: addressInfo.home_address.pin_code || '',
-      };
-      formData.append('home_address', JSON.stringify(homeAddressData));
-
-      const hasCurrentAddress = Object.values(addressInfo.current_address).some(val => val && val !== '');
-      if (hasCurrentAddress) {
-        const currentAddressData = {
-          address: addressInfo.current_address.address || '',
-          street: addressInfo.current_address.street || '',
-          city: addressInfo.current_address.city || '',
-          state: addressInfo.current_address.state || '',
-          country: addressInfo.current_address.country || 'India',
-          pin_code: addressInfo.current_address.pin_code || '',
-        };
-        formData.append('current_location', JSON.stringify(currentAddressData));
-      }
-
-      // Add office
-      formData.append('office_id', addressInfo.office_id);
-
-      // Add tags
-      selectedTags.forEach(tagId => {
-        formData.append('tag_ids', tagId);
-      });
-
-      // Add reporting tags
-      if (selectedReportingTag) {
-        formData.append('reporting_tag_ids', selectedReportingTag);
-      }
-
-      // Add documents - FIXED FOR WEB
-      // Add documents - FIXED FOR WEB
-      for (let index = 0; index < documents.length; index++) {
-        const doc = documents[index];
-        const fieldName = getDocumentFieldName(doc.name || `document_${index}`);
-
-        if (Platform.OS === 'web') {
-          // For web, we need to fetch the file and create a File object
-          try {
-            const response = await fetch(doc.uri);
-            const blob = await response.blob();
-            const file = new File([blob], doc.name || `document_${index}`, {
-              type: doc.type || 'application/octet-stream'
-            });
-            formData.append(fieldName, file);
-          } catch (error) {
-            console.error('Error fetching file for web upload:', error);
-            Alert.alert('Error', `Failed to prepare file ${doc.name} for upload`);
-            return;
-          }
-        } else {
-          // For mobile (iOS/Android)
-          formData.append(fieldName, {
-            uri: doc.uri,
-            name: doc.name || `document_${index}`,
-            type: doc.type || 'application/octet-stream',
-          } as any);
-        }
-      }
-
-      // Add joining date
-      formData.append('joining_date', new Date().toISOString().split('T')[0]);
-
-      // API call - Updated headers for web
-      const response = await fetch(`${BACKEND_URL}/manager/addEmployee`, {
-        method: 'POST',
-        headers: Platform.OS === 'web' ? {} : {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-
-      // ... rest of the code remains the same
-    } catch (error: any) {
-      console.error('Error creating employee:', error);
-      Alert.alert('Error', error.message || 'Failed to create employee');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -584,6 +477,157 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // ==================== SUBMISSION ====================
+  const handleSubmit = async () => {
+    try {
+      setSubmitting(true);
+
+      const formData = new FormData();
+      formData.append('token', token);
+
+      // Add basic info
+      Object.entries(basicInfo).forEach(([key, value]) => {
+        if (value) {
+          if (key.includes('leaves')) {
+            formData.append(key, String(parseInt(value) || 0));
+          } else {
+            formData.append(key, value);
+          }
+        }
+      });
+
+      // Add addresses
+      const homeAddressData = {
+        address: addressInfo.home_address.address || '',
+        street: addressInfo.home_address.street || '',
+        city: addressInfo.home_address.city || '',
+        state: addressInfo.home_address.state || '',
+        country: addressInfo.home_address.country || 'India',
+        pin_code: addressInfo.home_address.pin_code || '',
+      };
+      formData.append('home_address', JSON.stringify(homeAddressData));
+
+      const hasCurrentAddress = Object.values(addressInfo.current_address).some(val => val && val !== '');
+      if (hasCurrentAddress) {
+        const currentAddressData = {
+          address: addressInfo.current_address.address || '',
+          street: addressInfo.current_address.street || '',
+          city: addressInfo.current_address.city || '',
+          state: addressInfo.current_address.state || '',
+          country: addressInfo.current_address.country || 'India',
+          pin_code: addressInfo.current_address.pin_code || '',
+        };
+        formData.append('current_location', JSON.stringify(currentAddressData));
+      }
+
+      // Add office
+      formData.append('office_id', addressInfo.office_id);
+
+      // Add tags
+      selectedTags.forEach(tagId => {
+        formData.append('tag_ids', tagId);
+      });
+
+      // Add reporting tags
+      if (selectedReportingTag) {
+        formData.append('reporting_tag_ids', selectedReportingTag);
+      }
+
+      // Add documents - IMPROVED FOR WEB AND MOBILE
+      if (documents.length > 0) {
+        for (let index = 0; index < documents.length; index++) {
+          const doc = documents[index];
+          const fieldName = getDocumentFieldName(doc.name || `document_${index}`);
+
+          try {
+            if (Platform.OS === 'web') {
+              // For web, fetch the blob and create a File object
+              const response = await fetch(doc.uri);
+              
+              if (!response.ok) {
+                throw new Error(`Failed to fetch file: ${response.statusText}`);
+              }
+              
+              const blob = await response.blob();
+              const file = new File([blob], doc.name || `document_${index}`, {
+                type: doc.type || 'application/octet-stream'
+              });
+              
+              formData.append(fieldName, file);
+              console.log(`Web file prepared: ${fieldName} - ${doc.name}`);
+            } else {
+              // For mobile (iOS/Android)
+              formData.append(fieldName, {
+                uri: doc.uri,
+                name: doc.name || `document_${index}`,
+                type: doc.type || 'application/octet-stream',
+              } as any);
+              console.log(`Mobile file prepared: ${fieldName} - ${doc.name}`);
+            }
+          } catch (error) {
+            console.error('Error fetching file for web upload:', error);
+            alert('Error', `Failed to prepare file ${doc.name} for upload`);
+            setSubmitting(false);
+
+            return;
+          }
+        }
+      }
+
+      // Add joining date
+      formData.append('joining_date', new Date().toISOString().split('T')[0]);
+
+      console.log('Submitting employee data...');
+
+      // API call
+      const response = await fetch(`${BACKEND_URL}/manager/addEmployee`, {
+        method: 'POST',
+        headers: Platform.OS === 'web' ? {} : {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
+      });
+
+      // CRITICAL: Check response status FIRST before parsing JSON
+      if (!response.ok) {
+        // Parse error response
+        const errorData = await response.json();
+        const errorMessage = errorData.message || errorData.error || 'Failed to create employee. Please try again.';
+        
+        console.error('Server returned error:', response.status, errorMessage);
+        
+        alert('Error', errorMessage);
+        return; // Exit early on error
+      }
+
+      // Only parse success response if response.ok is true
+      const data = await response.json();
+      console.log('Success response:', data);
+
+      // Success case - show alert with OK button and navigation callback
+      alert(
+        'Success',
+        'Employee created successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              onEmployeeAdded(); // Callback to refresh employee list
+              onBack(); // Navigate back to previous screen
+            },
+          },
+        ]
+      );
+
+    } catch (error: any) {
+      console.error('Error creating employee:', error);
+      alert('Error', error.message || 'Failed to create employee');
+
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ==================== RENDER COMPONENTS ====================
@@ -632,26 +676,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           Documents
         </Text>
       </View>
-    </View>
-  );
-
-  const renderStepLabels = () => (
-    <View style={styles.stepLabelsContainer}>
-      <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive, { marginLeft: -15 }]}>
-        Basic Info
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>
-        Address
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
-        Tags
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 4 && styles.stepLabelActive]}>
-        Reporting
-      </Text>
-      <Text style={[styles.stepLabel, currentStep === 5 && styles.stepLabelActive, { marginRight: 25 }]}>
-        Documents
-      </Text>
     </View>
   );
 
@@ -824,7 +848,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const renderStep2 = () => (
     <ScrollView showsVerticalScrollIndicator={false}>
 
-      <View style={[styles.section, { marginTop: 10 }]}>
+      <View style={[styles.section, { marginTop: 10, zIndex: 10, position: 'relative' }]}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Office Assignment *
         </Text>
@@ -834,17 +858,17 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         ) : (
           <View style={[styles.formGroup, { marginBottom: 20 }]}>
             <TouchableOpacity
-              style={[
-                styles.input,
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingVertical: 12
-                }
-              ]}
-              onPress={() => setShowOfficePicker(true)}
-            >
+                style={[
+                  styles.input,
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 12
+                  }
+                ]}
+                onPress={() => setShowOfficePicker(!showOfficePicker)}
+              >
               <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
                 {addressInfo.office_id
                   ? selectedOffice?.name || 'Select Office'
@@ -1293,7 +1317,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
         <View style={styles.stepProgress}>
           {renderStepIndicator()}
-          {/* {renderStepLabels()} */}
         </View>
 
         <View style={styles.content}>

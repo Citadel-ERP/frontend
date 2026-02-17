@@ -24,6 +24,7 @@ import { Employee, AttendanceRecord } from './types';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 interface AttendanceProps {
   employee: Employee;
@@ -295,11 +296,11 @@ export const Attendance: React.FC<AttendanceProps> = ({
         setActivePicker(null);
         setPickerPosition(null);
       } else {
-        Alert.alert('Error', 'Failed to fetch day data');
+        alert('Error', 'Failed to fetch day data');
       }
     } catch (error) {
       console.error('Error fetching day data:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -407,7 +408,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
     // Validation: If login_time is provided, login_reason should be provided
     if (editData.login_time && editData.login_time.trim() !== '') {
       if (!loginReason.trim()) {
-        Alert.alert('Validation Error', 'Login reason is required when login time is provided');
+        alert('Validation Error', 'Login reason is required when login time is provided');
         return;
       }
     }
@@ -415,7 +416,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
     // Validation: If logout_time is provided, logout_reason should be provided
     if (editData.logout_time && editData.logout_time.trim() !== '') {
       if (!logoutReason.trim()) {
-        Alert.alert('Validation Error', 'Logout reason is required when logout time is provided');
+        alert('Validation Error', 'Logout reason is required when logout time is provided');
         return;
       }
     }
@@ -459,7 +460,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Attendance updated successfully', [{
+        alert('Success', 'Attendance updated successfully', [{
           text: 'OK',
           onPress: () => {
             setIsEditMode(false);
@@ -471,11 +472,11 @@ export const Attendance: React.FC<AttendanceProps> = ({
         }]);
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to update attendance');
+        alert('Error', errorData.message || 'Failed to update attendance');
       }
     } catch (error) {
       console.error('Error updating day data:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setActionLoading(false);
     }
@@ -587,7 +588,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       const fileUrl = data.file_url;
       const filename = data.filename || `attendance_report_${employee.employee_id}_${selectedMonth + 1}_${selectedYear}.pdf`;
 
-      Alert.alert(
+      alert(
         'Download Report',
         'Choose how you want to access the attendance report:',
         [
@@ -624,26 +625,26 @@ export const Attendance: React.FC<AttendanceProps> = ({
                         dialogTitle: 'Share Attendance Report',
                         UTI: 'com.adobe.pdf',
                       });
-                      Alert.alert('Success', 'Report downloaded successfully!');
+                      alert('Success', 'Report downloaded successfully!');
                     } else {
-                      Alert.alert('Info', 'File saved to app directory');
+                      alert('Info', 'File saved to app directory');
                     }
                   } catch (shareError) {
                     console.error('Share error:', shareError);
-                    Alert.alert('Error', 'Failed to share PDF');
+                    alert('Error', 'Failed to share PDF');
                   } finally {
                     setLoading(false);
                   }
                 };
                 reader.onerror = () => {
                   console.error('FileReader error');
-                  Alert.alert('Error', 'Failed to process PDF');
+                  alert('Error', 'Failed to process PDF');
                   setLoading(false);
                 };
                 reader.readAsDataURL(blob);
               } catch (err) {
                 console.error('Download error:', err);
-                Alert.alert('Error', 'Failed to download PDF');
+                alert('Error', 'Failed to download PDF');
                 setLoading(false);
               }
             },
@@ -656,7 +657,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       );
     } catch (error: any) {
       console.error('Error downloading report:', error);
-      Alert.alert('Error', error.message || 'Failed to generate report. Please try again.');
+      alert('Error', error.message || 'Failed to generate report. Please try again.');
     } finally {
       setLoading(false);
     }

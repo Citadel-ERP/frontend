@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface HeaderProps {
   title: string;

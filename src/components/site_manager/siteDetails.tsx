@@ -666,37 +666,10 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       return;
     }
 
-// <<<<<<< HEAD
     if (!site?.id) {
       Alert.alert('Error', 'Site information not found');
       return;
     }
-
-// =======
-//     // Get the latest visit ID from siteVisits, or create a default visit
-// let visitId;
-// let latestVisit;
-
-// if (siteVisits && siteVisits.length > 0) {
-//   latestVisit = siteVisits[0].visit;
-//   visitId = latestVisit.id;
-// }  else {
-//   // If no visits exist, use the site ID as a fallback or create a visit automatically
-//   // Option 1: Use site ID as visit context
-//   visitId = site.id;
-//   latestVisit = {
-//     id: site.id,
-//     status: 'active',
-//     assigned_to: {
-//       employee_id: currentUserEmployeeId || '',
-//       first_name: currentUserName.split(' ')[0] || '',
-//       last_name: currentUserName.split(' ')[1] || '',
-//     },
-//     created_at: new Date().toISOString(),
-//   };
-// }
-
-// >>>>>>> c0143d584040e9b2030d31e833d17c9d61b7752b
     try {
       setAddingComment(true);
 
@@ -744,33 +717,8 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           documents: data.comment.documents || [],
         };
 
-// <<<<<<< HEAD
         // Append the new comment to the comments array
         setComments(prevComments => [...prevComments, newCommentData]);
-// =======
-//         // Update the siteVisits state to include the new comment
-//         // Update the siteVisits state to include the new comment
-// setSiteVisits(prevVisits => {
-//   const updatedVisits = [...prevVisits];
-//   if (updatedVisits.length > 0) {
-//     updatedVisits[0] = {
-//       ...updatedVisits[0],
-//       comments: [...updatedVisits[0].comments, newCommentData],
-//       total_comments_in_visit: updatedVisits[0].total_comments_in_visit + 1,
-//       comments_shown: updatedVisits[0].comments_shown + 1,
-//     };
-//   } else {
-//     // Create a new visit entry with the comment
-//     updatedVisits.push({
-//       visit: latestVisit,
-//       comments: [newCommentData],
-//       total_comments_in_visit: 1,
-//       comments_shown: 1,
-//     });
-//   }
-//   return updatedVisits;
-// });
-// >>>>>>> c0143d584040e9b2030d31e833d17c9d61b7752b
 
         // Clear input and documents
         setNewComment('');

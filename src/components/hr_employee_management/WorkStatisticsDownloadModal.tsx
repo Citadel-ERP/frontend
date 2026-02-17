@@ -8,14 +8,16 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy'; // CHANGED: Use legacy API
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { WHATSAPP_COLORS } from './constants';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 interface WorkStatisticsDownloadModalProps {
   visible: boolean;
@@ -45,7 +47,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
   const downloadWorkStatsPDF = async () => {
     if (!token) {
-      Alert.alert('Error', 'Authentication required');
+      alert('Error', 'Authentication required');
       return;
     }
 
@@ -53,6 +55,8 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
+      
+      console.log('Requesting PDF for date:', dateStr);
       
       const response = await fetch(`${BACKEND_URL}/manager/downloadWorkStats`, {
         method: 'POST',
@@ -76,6 +80,8 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
       const data = await response.json();
       
+      console.log('Server response:', data);
+      
       if (!data.file_url) {
         throw new Error('Invalid response from server');
       }
@@ -83,7 +89,10 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
       const fileUrl = data.file_url;
       const filename = data.filename || `work_stats_${dateStr}.pdf`;
 
-      Alert.alert(
+      console.log('File URL:', fileUrl);
+      console.log('Filename:', filename);
+
+      alert(
         'Download Report',
         `Work statistics report for ${new Date(dateStr).toLocaleDateString('en-US', { 
           month: 'long', 
@@ -98,7 +107,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
                 await WebBrowser.openBrowserAsync(fileUrl);
               } catch (err) {
                 console.error('Failed to open browser:', err);
-                Alert.alert('Error', 'Could not open the file in browser');
+                alert('Error', 'Could not open the file in browser');
               }
             },
           },
@@ -106,50 +115,40 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
             text: 'Download & Share',
             onPress: async () => {
               try {
-                const pdfResponse = await fetch(fileUrl);
-                if (!pdfResponse.ok) {
-                  throw new Error('Failed to fetch PDF from server');
-                }
+                console.log('Starting download from:', fileUrl);
                 
-                const blob = await pdfResponse.blob();
-                const reader = new FileReader();
+                const fileUri = FileSystem.documentDirectory + filename;
+                console.log('Saving to:', fileUri);
                 
-                reader.onloadend = async () => {
-                  try {
-                    const base64data = reader.result as string;
-                    const base64Content = base64data.split(',')[1];
-                    
-                    const fileUri = FileSystem.documentDirectory + filename;
-                    await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-                      encoding: FileSystem.EncodingType.Base64,
-                    });
+                // Use FileSystem.downloadAsync from legacy API
+                const downloadResult = await FileSystem.downloadAsync(
+                  fileUrl,
+                  fileUri
+                );
 
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      await Sharing.shareAsync(fileUri, {
-                        mimeType: 'application/pdf',
-                        dialogTitle: 'Share Work Statistics Report',
-                        UTI: 'com.adobe.pdf',
-                      });
-                      Alert.alert('Success', 'Report downloaded successfully!');
-                    } else {
-                      Alert.alert('Info', 'File saved to app directory');
-                    }
-                  } catch (shareError) {
-                    console.error('Share error:', shareError);
-                    Alert.alert('Error', 'Failed to share PDF');
+                console.log('Download result:', downloadResult);
+
+                if (downloadResult.status === 200) {
+                  const canShare = await Sharing.isAvailableAsync();
+                  if (canShare) {
+                    await Sharing.shareAsync(downloadResult.uri, {
+                      mimeType: 'application/pdf',
+                      dialogTitle: 'Share Work Statistics Report',
+                      UTI: 'com.adobe.pdf',
+                    });
+                    alert('Success', 'Report downloaded successfully!');
+                  } else {
+                    alert('Info', `File saved to: ${fileUri}`);
                   }
-                };
-                
-                reader.onerror = () => {
-                  console.error('FileReader error');
-                  Alert.alert('Error', 'Failed to process PDF');
-                };
-                
-                reader.readAsDataURL(blob);
-              } catch (err) {
+                } else {
+                  throw new Error(`Download failed with status: ${downloadResult.status}`);
+                }
+              } catch (err: any) {
                 console.error('Download error:', err);
-                Alert.alert('Error', 'Failed to download PDF. Please try again.');
+                alert(
+                  'Download Error', 
+                  err.message || 'Failed to download PDF. Please try "Open in Browser" instead.'
+                );
               }
             },
           },
@@ -165,7 +164,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
     } catch (error: any) {
       console.error('Download work stats error:', error);
-      Alert.alert('Error', error.message || 'Failed to download work statistics');
+      alert('Error', error.message || 'Failed to download work statistics');
     } finally {
       setLoading(false);
     }
@@ -193,7 +192,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
             {/* Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Download Work Statistics</Text>
-              <TouchableOpacity onPress={onClose}>
+              <TouchableOpacity onPress={onClose} disabled={loading}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -205,6 +204,7 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
                 style={styles.datePickerButton}
                 onPress={() => setShowDatePicker(true)}
                 activeOpacity={0.7}
+                disabled={loading}
               >
                 <Ionicons name="calendar-outline" size={20} color={WHATSAPP_COLORS.primary} />
                 <Text style={styles.dateText}>
@@ -224,22 +224,14 @@ const WorkStatisticsDownloadModal: React.FC<WorkStatisticsDownloadModalProps> = 
 
             {/* Action Buttons */}
             <View style={styles.buttonContainer}>
-              {/* <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={onClose}
-                disabled={loading}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity> */}
-              
               <TouchableOpacity
-                style={[styles.button, styles.downloadButton]}
+                style={[styles.button, styles.downloadButton, loading && styles.buttonDisabled]}
                 onPress={downloadWorkStatsPDF}
                 disabled={loading}
               >
                 {loading ? (
                   <>
-                    <Ionicons name="refresh" size={20} color="#FFFFFF" />
+                    <ActivityIndicator size="small" color="#FFFFFF" />
                     <Text style={styles.downloadButtonText}>Processing...</Text>
                   </>
                 ) : (
@@ -352,18 +344,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
-  cancelButton: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  cancelButtonText: {
-    color: '#4B5563',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   downloadButton: {
     backgroundColor: WHATSAPP_COLORS.primary,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   downloadButtonText: {
     color: '#FFFFFF',

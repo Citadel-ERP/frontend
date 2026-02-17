@@ -1487,8 +1487,13 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pickerContainer: {
-    marginBottom: 16,
-  },
+  marginTop: 8,
+  backgroundColor: WHATSAPP_COLORS.surface,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: WHATSAPP_COLORS.border,
+  maxHeight: 200,
+},
   monthPicker: {
     flexDirection: 'row',
   },
@@ -1959,8 +1964,10 @@ export const styles = StyleSheet.create({
   },
 
   formGroup: {
-    marginBottom: 16,
-  },
+  marginBottom: 16,
+  position: 'relative', 
+  zIndex: 1,  
+},
 
   label: {
     fontSize: 14,
@@ -2046,11 +2053,11 @@ export const styles = StyleSheet.create({
   },
 
   officeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 2,
-  },
+  fontSize: 14,
+  fontWeight: '600',
+  color: WHATSAPP_COLORS.textPrimary,
+  marginBottom: 2,
+},
 
   officeNameSelected: {
     color: WHATSAPP_COLORS.primary,
@@ -2255,29 +2262,28 @@ export const styles = StyleSheet.create({
   },
 
   officePickerContainer: {
-    position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 12,
-    maxHeight: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 1000,
-    overflow: 'hidden',
-  },
-
+  position: 'absolute',
+  top: '100%',
+  left: 0,
+  right: 0,
+  backgroundColor: '#fff',
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: '#ddd',
+  maxHeight: 300,
+  zIndex: 9999,  
+  marginTop: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.1,
+  shadowRadius: 8,
+  elevation: 5,
+},
   officeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
-  },
+  padding: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: WHATSAPP_COLORS.border,
+},
 
   officeOptionSelected: {
     backgroundColor: WHATSAPP_COLORS.chatBubbleReceived,

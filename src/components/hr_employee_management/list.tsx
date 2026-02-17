@@ -16,6 +16,7 @@ import { Employee } from './types';
 import { WHATSAPP_COLORS, getAvatarColor, getInitials, calculateExperience } from './constants';
 import { styles } from './styles';
 
+
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -357,12 +358,24 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     );
   }
 
-  const employeesWithActions = getEmployeesWithActions();
-  
-  // Create a set of employee IDs that are in Quick Actions for easy lookup
-  const quickActionEmployeeIds = new Set(
-    employeesWithActions.map(emp => emp.employee_id)
-  );
+let employeesWithActions = getEmployeesWithActions();
+
+// Apply search filter to Quick Actions
+if (searchQuery.trim()) {
+  employeesWithActions = employeesWithActions.filter(emp => {
+    const query = searchQuery.toLowerCase();
+    return (
+      emp.full_name?.toLowerCase().includes(query) ||
+      emp.employee_id?.toLowerCase().includes(query) ||
+      emp.designation?.toLowerCase().includes(query)
+    );
+  });
+}
+
+// Create a set of employee IDs that are in Quick Actions for easy lookup
+const quickActionEmployeeIds = new Set(
+  employeesWithActions.map(emp => emp.employee_id)
+);
 
   // Filter city groups to exclude employees that are in Quick Actions
   const filteredEmployeesByCity = employeesByCity.map(cityGroup => ({
@@ -389,7 +402,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     >
       <View style={styles.employeesList}>
         {/* Quick Actions Section */}
-        {employeesWithActions.length > 0 && !searchQuery && (
+        {employeesWithActions.length > 0 && (
           <View style={additionalStyles.quickActionsSection}>
             <TouchableOpacity
               style={additionalStyles.quickActionsHeader}

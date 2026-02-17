@@ -296,6 +296,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
+  const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+
+  const getAvatarColor = (name: string | null): string => {
+  if (!name) return avatarColors[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
+
   const fetchIncentiveData = async (): Promise<void> => {
     try {
       if (!token || !lead.incentive_present) return;
@@ -799,7 +811,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <View style={s.containerBox}>
             <View style={s.leadInfoContainer}>
               <View style={s.leadAvatarSection}>
-                <View style={s.leadAvatar}>
+                <View style={[s.leadAvatar, { backgroundColor: getAvatarColor(lead.company) }]}>
                   <Text style={s.leadAvatarText}>
                     {getInitials(lead.company || 'L')}
                   </Text>
@@ -1066,12 +1078,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             onPress={() => setShowLeadDetailsModal(true)}
             activeOpacity={0.7}
           >
-            <View style={s.avatarContainer}>
-              <View style={s.avatarPlaceholder}>
-                <Text style={s.avatarText}>
-                  {getInitials(lead.company)}
-                </Text>
-              </View>
+            <View style={[s.avatarPlaceholder, { backgroundColor: getAvatarColor(lead.company) }]}>
+              <Text style={s.avatarText}>
+                {getInitials(lead.company)}
+              </Text>
             </View>
             <View style={s.headerTextContainer}>
               <Text style={s.headerTitle} numberOfLines={1}>
@@ -1151,7 +1161,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             }
             ListEmptyComponent={
               <View style={s.emptyChat}>
-                <MaterialIcons name="forum" size={64} color={C.border} />
+                <MaterialIcons name="forum" size={64} color={C.primary} />
                 <Text style={s.emptyChatTitle}>No conversations yet</Text>
                 <Text style={s.emptyChatText}>
                   Start by sending a message or quick reply
@@ -1162,8 +1172,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         )}
       </View>
 
-      {selectedDocuments.length > 0 && (
-        <View style={s.selectedFilesPreview}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={{ backgroundColor: C.surface }}
+      >
+        {selectedDocuments.length > 0 && (
+          <View style={s.selectedFilesPreview}>
           <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
           <FlatList
             horizontal
@@ -1241,6 +1256,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </View>
         </SafeAreaView>
       </View>
+      </KeyboardAvoidingView>
 
       {showDefaultComments && (
         <View style={s.defaultCommentsOverlay}>
@@ -1343,7 +1359,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <Incentive
             onBack={() => setShowIncentiveModal(false)}
             leadId={lead.id}
-            leadName={lead.company}
+            leadName={lead.company || ''}
             theme={theme}
           />
         </Modal>
@@ -1358,7 +1374,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         >
           <Invoice
             leadId={lead.id}
-            leadName={lead.company}
+            leadName={lead.company || ''}
             token={token}
             theme={theme}
             onBack={() => setShowInvoiceModal(false)}
@@ -1378,9 +1394,7 @@ const s = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
-  } : {
-    flexDirection: 'column',
-  }),
+  } : {}),
 },
 
   backIcon: {
@@ -1445,20 +1459,22 @@ headerWrapper: {
     marginRight: 10,
   },
   avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   avatarText: {
-    color: C.primary,
-    fontSize: 14,
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: '600',
   },
   headerTextContainer: {
     flex: 1,
+    marginLeft: 4,
   },
   headerTitle: {
     fontSize: 16,
@@ -1534,11 +1550,8 @@ headerWrapper: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: C.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: C.primary
   },
 
   leadAvatarText: {
@@ -1950,17 +1963,14 @@ chatContainer: {
   borderTopColor: C.border,
   paddingHorizontal: 12,
   paddingVertical: 8,
-  left: 0,
-  right: 0,
   zIndex: 9,
   maxHeight: 100,
   ...(Platform.OS === 'web' ? {
     position: 'fixed',
     bottom: 68,
-  } : {
-    position: 'absolute',
-    bottom: 68,
-  }),
+    left: 0,
+    right: 0,
+  } : {}),
 },
   selectedFilesTitle: {
     fontSize: 13,
@@ -1997,15 +2007,17 @@ chatContainer: {
     backgroundColor: C.surface,
   },
   inputContainer: {
-    backgroundColor: C.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
+  backgroundColor: C.surface,
+  paddingHorizontal: 12,
+  paddingTop: 8,
+  paddingBottom: 8,
+},
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  paddingHorizontal: 4,
+},
   attachmentButton: {
     padding: 6,
     position: 'relative',
@@ -2134,7 +2146,6 @@ chatContainer: {
     color: C.textPrimary,
     lineHeight: 20
   },
-
   inputContainerWrapper: {
   borderTopWidth: 1,
   borderTopColor: C.border,
@@ -2145,17 +2156,9 @@ chatContainer: {
     bottom: 0,
     left: 0,
     right: 0,
-  } : {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  }),
+  } : {}),
 },
   inputWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 8 : 8
   },
 
   modalOverlay: {

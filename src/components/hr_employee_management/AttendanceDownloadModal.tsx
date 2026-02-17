@@ -1,4 +1,3 @@
-// hr_employee_management/AttendanceDownloadModal.tsx
 import React, { useState } from 'react';
 import {
   Modal,
@@ -13,6 +12,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 
 interface AttendanceDownloadModalProps {
   visible: boolean;
@@ -59,18 +61,92 @@ const AttendanceDownloadModal: React.FC<AttendanceDownloadModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
+  const [downloadResult, setDownloadResult] = useState<{ fileUrl: string; filename: string } | null>(null);
 
   const years = generateYears();
 
   const handleDownload = async () => {
     setLoading(true);
     try {
-      // Call the download function - it will handle the Alert with options
-      await onDownload(selectedMonth, selectedYear, employeeId);
+      // This should now return file_url and filename from the backend
+      const result = await onDownload(selectedMonth, selectedYear, employeeId);
       
-      // Close modal after initiating download
-      // The parent function handles the user choice (Open in Browser, Download & Share, Cancel)
-      onClose();
+      // Assuming the backend returns file_url and filename
+      // If your current backend doesn't return this, you'll need to modify it
+      if (result && (result as any).file_url) {
+        const { file_url, filename } = result as any;
+        
+        const monthName = MONTHS.find(m => m.value === selectedMonth)?.label || selectedMonth.toString();
+        const dateStr = `${monthName} ${selectedYear}`;
+        
+        // Using React Native's Alert API instead of custom alert utility
+        Alert.alert(
+          'Download Report',
+          `Attendance report for ${dateStr}${employeeName ? ` - ${employeeName}` : ''} is ready.`,
+          [
+            {
+              text: 'Open in Browser',
+              onPress: async () => {
+                try {
+                  await WebBrowser.openBrowserAsync(file_url);
+                } catch (err) {
+                  console.error('Failed to open browser:', err);
+                  Alert.alert('Error', 'Could not open the file in browser');
+                }
+              },
+            },
+            {
+              text: 'Download & Share',
+              onPress: async () => {
+                try {
+                  console.log('Starting download from:', file_url);
+                  
+                  const fileUri = FileSystem.documentDirectory + filename;
+                  console.log('Saving to:', fileUri);
+                  
+                  const downloadResult = await FileSystem.downloadAsync(
+                    file_url,
+                    fileUri
+                  );
+
+                  console.log('Download result:', downloadResult);
+
+                  if (downloadResult.status === 200) {
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(downloadResult.uri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Share Attendance Report',
+                        UTI: 'com.adobe.pdf',
+                      });
+                      Alert.alert('Success', 'Report downloaded successfully!');
+                    } else {
+                      Alert.alert('Info', `File saved to: ${fileUri}`);
+                    }
+                  } else {
+                    throw new Error(`Download failed with status: ${downloadResult.status}`);
+                  }
+                } catch (err: any) {
+                  console.error('Download error:', err);
+                  Alert.alert(
+                    'Download Error', 
+                    err.message || 'Failed to download PDF. Please try "Open in Browser" instead.'
+                  );
+                }
+              },
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ],
+          { cancelable: true }
+        );
+      }
+      
+      // Don't close the modal immediately after showing alert
+      // The modal should be closed manually by the user or after action
+      
     } catch (error: any) {
       console.error('Download error in modal:', error);
       // Only show alert if error wasn't already handled by parent
@@ -90,6 +166,7 @@ const AttendanceDownloadModal: React.FC<AttendanceDownloadModalProps> = ({
     if (!loading) {
       setShowMonthPicker(false);
       setShowYearPicker(false);
+      setDownloadResult(null);
       onClose();
     }
   };
@@ -233,6 +310,14 @@ const AttendanceDownloadModal: React.FC<AttendanceDownloadModalProps> = ({
             )}
           </View>
 
+          {/* Info Section */}
+          <View style={styles.infoSection}>
+            <Ionicons name="information-circle-outline" size={20} color="#4B5563" />
+            <Text style={styles.infoText}>
+              The report will include detailed attendance statistics for {employeeName ? 'this employee' : 'all employees'} for the selected month and year.
+            </Text>
+          </View>
+
           {/* Buttons */}
           <View style={styles.modalButtons}>
             <TouchableOpacity
@@ -262,7 +347,7 @@ const AttendanceDownloadModal: React.FC<AttendanceDownloadModalProps> = ({
               ) : (
                 <>
                   <Ionicons name="download-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.downloadButtonText}>Generate</Text>
+                  <Text style={styles.downloadButtonText}>Generate Report</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -392,6 +477,21 @@ const styles = StyleSheet.create({
   pickerOptionTextSelected: {
     color: WHATSAPP_COLORS.primary,
     fontWeight: '600',
+  },
+  infoSection: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F9FF',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 24,
+    marginTop: 4,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#4B5563',
+    marginLeft: 12,
+    lineHeight: 20,
   },
   modalButtons: {
     flexDirection: 'row',

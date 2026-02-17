@@ -4,6 +4,7 @@
     "slug": "citadel",
     "owner": "ananyavishnoi",
     "version": "1.2.1",
+    "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f",
     "platforms": [
       "ios",
       "android",
@@ -51,6 +52,7 @@
     },
     "android": {
       "package": "com.citadelnetinc.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive_icon_android.png",
         "backgroundColor": "#FFFFFF"
@@ -81,6 +83,7 @@
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
+      
       [
         "expo-location",
         {
@@ -89,6 +92,12 @@
           "locationAlwaysPermission": "Allow Citadel to access your location even when the app is closed.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice messages."
         }
       ],
       [
@@ -110,7 +119,9 @@
         {
           "icon": "./assets/images/App-icon.png",
           "color": "#2D3748",
-          "useNextNotificationsApi": true
+          "useNextNotificationsApi": true,
+          "androidMode": "default",
+    "androidCollapsedTitle": "#{unread_notifications} new interactions"
         }
       ],
       "expo-task-manager",

@@ -18,6 +18,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { BACKEND_URL } from '../../config/config';
 import AddHoliday from './addHoliday';
 import EditHoliday from './editHoliday';
+import alert from '../../utils/Alert';
 
 interface Holiday {
   holiday_id: string | number;
@@ -83,12 +84,12 @@ const HolidayManagement: React.FC<HolidayManagementProps> = ({ token, onBack }) 
         }
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to fetch holidays');
+        alert('Error', errorData.message || 'Failed to fetch holidays');
         setHolidays([]);
       }
     } catch (error) {
       console.error('Error fetching holidays:', error);
-      Alert.alert('Error', 'Network error occurred while fetching holidays');
+      alert('Error', 'Network error occurred while fetching holidays');
       setHolidays([]);
     } finally {
       setLoading(false);
@@ -107,7 +108,7 @@ const HolidayManagement: React.FC<HolidayManagementProps> = ({ token, onBack }) 
     console.log('Holiday Name:', holiday.name);
     
     if (!holiday.holiday_id) {
-      Alert.alert('Error', 'Holiday ID is missing');
+      alert('Error', 'Holiday ID is missing');
       return;
     }
     

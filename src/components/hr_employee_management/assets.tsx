@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 // Mock types and constants for demo
 interface Employee {
@@ -84,11 +85,11 @@ const AssetsModal: React.FC<AssetsProps> = ({
 
   const assignAsset = async () => {
     if (!selectedAsset || !quantity || parseInt(quantity) <= 0) {
-      Alert.alert('Error', 'Please select asset and enter valid quantity');
+      alert('Error', 'Please select asset and enter valid quantity');
       return;
     }
     if (parseInt(quantity) > selectedAsset.available_count) {
-      Alert.alert('Error', 'Not enough assets available');
+      alert('Error', 'Not enough assets available');
       return;
     }
 
@@ -117,7 +118,7 @@ const AssetsModal: React.FC<AssetsProps> = ({
         setQuantity('1');
 
         // Show success alert with callback
-        Alert.alert(
+        alert(
           'Success',
           'Asset assigned successfully',
           [
@@ -137,16 +138,16 @@ const AssetsModal: React.FC<AssetsProps> = ({
           ]
         );
       } else {
-        Alert.alert('Error', responseData.message || 'Failed to assign asset');
+        alert('Error', responseData.message || 'Failed to assign asset');
       }
     } catch (error) {
       console.error('Error assigning asset:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
   const removeAsset = async (assetId: string) => {
-    Alert.alert(
+    alert(
       'Remove Asset',
       'Are you sure you want to remove this asset from the employee?',
       [
@@ -168,7 +169,7 @@ const AssetsModal: React.FC<AssetsProps> = ({
               const responseData = await response.json();
 
               if (response.ok) {
-                Alert.alert(
+                alert(
                   'Success',
                   'Asset removed successfully',
                   [
@@ -184,11 +185,11 @@ const AssetsModal: React.FC<AssetsProps> = ({
                   ]
                 );
               } else {
-                Alert.alert('Error', responseData.message || 'Failed to remove asset');
+                alert('Error', responseData.message || 'Failed to remove asset');
               }
             } catch (error) {
               console.error('Error removing asset:', error);
-              Alert.alert('Error', 'Network error occurred');
+              alert('Error', 'Network error occurred');
             }
           }
         }

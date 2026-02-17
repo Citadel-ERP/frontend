@@ -1,11 +1,9 @@
-// hr_employee_management/BulkUploadEmployees.tsx
 import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
@@ -17,6 +15,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
 import { Header } from './header';
+import alert from '../../utils/Alert';
 
 interface BulkUploadEmployeesProps {
   token: string;
@@ -31,8 +30,8 @@ interface SelectedFile {
   mimeType: string;
 }
 
-const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({ 
-  token, 
+const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
+  token,
   onBack,
   onEmployeesAdded,
 }) => {
@@ -42,7 +41,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
 
   const handleDownloadSample = async () => {
     if (!token) {
-      Alert.alert('Error', 'Authentication required');
+      alert('Error', 'Authentication required');
       return;
     }
 
@@ -68,16 +67,16 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       }
 
       const data = await response.json();
-      
+
       if (data.file_url) {
         await WebBrowser.openBrowserAsync(data.file_url);
-        Alert.alert('Success', 'Sample template downloaded successfully');
+        alert('Success', 'Sample template downloaded successfully');
       } else {
         throw new Error('Invalid response from server');
       }
     } catch (error: any) {
       console.error('Download sample error:', error);
-      Alert.alert('Error', error.message || 'Failed to download sample template');
+      alert('Error', error.message || 'Failed to download sample template');
     } finally {
       setDownloadingSample(false);
     }
@@ -123,7 +122,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       }
     } catch (error) {
       console.error('Error selecting file:', error);
-      Alert.alert('Error', 'Failed to select file');
+      alert('Error', 'Failed to select file');
     }
   };
 
@@ -145,12 +144,12 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
 
   const handleSubmit = async () => {
     if (!selectedFile) {
-      Alert.alert('Validation Error', 'Please select an Excel file');
+      alert('Validation Error', 'Please select an Excel file');
       return;
     }
 
     if (!validateExcelFile(selectedFile.name)) {
-      Alert.alert('Invalid File', 'Please select a valid Excel file (.xlsx or .xls)');
+      alert('Invalid File', 'Please select a valid Excel file (.xlsx or .xls)');
       return;
     }
 
@@ -159,7 +158,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       const formData = new FormData();
       formData.append('token', token);
 
-      // Handle file upload differently for web vs mobile
+      // Handle file upload for both web and mobile
       if (Platform.OS === 'web') {
         // For web, fetch the file and append it as a Blob
         const response = await fetch(selectedFile.uri);
@@ -177,10 +176,7 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       const response = await fetch(`${BACKEND_URL}/manager/bulkUploadEmployeeData`, {
         method: 'POST',
         body: formData,
-        // Don't set Content-Type header for FormData on web - let browser set it with boundary
-        headers: Platform.OS === 'web' ? {} : {
-          'Content-Type': 'multipart/form-data',
-        },
+        // Don't set Content-Type header - let browser/system handle it
       });
 
       if (!response.ok) {
@@ -195,43 +191,47 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
       }
 
       const data = await response.json();
-      
+
       // Create detailed success message
       let successMessage = `Successfully updated ${data.successful || 0} employee record${(data.successful || 0) !== 1 ? 's' : ''}`;
-      
+
       if (data.failed && data.failed > 0) {
         successMessage += `\n\n${data.failed} record${data.failed !== 1 ? 's' : ''} failed to update`;
-        
+
         if (data.failed_updates && data.failed_updates.length > 0) {
           successMessage += '\n\nFailed records:';
           data.failed_updates.slice(0, 5).forEach((failedUpdate: any) => {
             successMessage += `\n• Row ${failedUpdate.row}: ${failedUpdate.error}`;
           });
-          
+
           if (data.failed_updates.length > 5) {
             successMessage += `\n... and ${data.failed_updates.length - 5} more`;
           }
         }
       }
 
-      Alert.alert('Upload Complete', successMessage, [
-        {
-          text: 'OK',
-          onPress: () => {
-            setSelectedFile(null);
-            if (onEmployeesAdded) {
-              onEmployeesAdded();
-            }
-            // Optionally go back to employee list
-            if (data.successful > 0) {
-              onBack();
-            }
+      alert(
+        'Upload Complete',
+        successMessage,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setSelectedFile(null);
+              if (onEmployeesAdded) {
+                onEmployeesAdded();
+              }
+              // Optionally go back to employee list
+              if (data.successful > 0) {
+                onBack();
+              }
+            },
           },
-        },
-      ]);
+        ]
+      );
     } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Failed', error.message || 'Failed to upload employee data');
+      alert('Upload Failed', error.message || 'Failed to upload employee data');
     } finally {
       setUploading(false);
     }
@@ -286,38 +286,6 @@ const BulkUploadEmployees: React.FC<BulkUploadEmployeesProps> = ({
               </Text>
             </View>
           </View>
-
-          {/* <TouchableOpacity
-            style={[
-              styles.secondaryButton,
-              {
-                marginTop: 16,
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                justifyContent: 'center',
-                paddingTop: 10,
-                paddingBottom: 10,
-                borderRadius: 25,
-                backgroundColor: WHATSAPP_COLORS.primary,
-              },
-            ]}
-            onPress={handleDownloadSample}
-            disabled={downloadingSample}
-            activeOpacity={0.7}
-          >
-            {downloadingSample ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="download-outline" size={20} color="#FFFFFF" />
-                <Text style={[styles.secondaryButtonText, { color: '#FFFFFF' }]}>
-                  Download Sample Format
-                </Text>
-              </>
-            )}
-          </TouchableOpacity> */}
         </View>
 
         {/* Important Notes */}

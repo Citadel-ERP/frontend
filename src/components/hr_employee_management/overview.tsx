@@ -23,6 +23,7 @@ import OffboardingModal from './offboardingModal';
 import PayslipModal from './payslip';
 import DocumentModal from './document';
 import EditEmployeeModal from './editEmployee';
+import alert from '../../utils/Alert';
 
 interface OverviewProps {
   employee: Employee;
@@ -30,6 +31,7 @@ interface OverviewProps {
   token: string;
   onRefresh: () => void;
   onEditLeaves: () => void;
+  onEditEmployeeSuccess?: () => void;
 }
 
 export const Overview: React.FC<OverviewProps> = ({
@@ -37,7 +39,8 @@ export const Overview: React.FC<OverviewProps> = ({
   employeeDetails,
   token,
   onRefresh,
-  onEditLeaves
+  onEditLeaves,
+  onEditEmployeeSuccess 
 }) => {
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showMediclaimModal, setShowMediclaimModal] = useState(false);
@@ -52,9 +55,11 @@ export const Overview: React.FC<OverviewProps> = ({
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [showDocumentModal, setShowDocumentModal] = useState(false);
 
-  const getInitials = (firstName: string, lastName: string): string => {
-    return `${firstName.charAt(0).toUpperCase()}${lastName.charAt(0).toUpperCase()}`;
-  };
+  const getInitials = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
+  const first = firstName && firstName.trim() ? firstName.charAt(0).toUpperCase() : 'F';
+  const last = lastName && lastName.trim() ? lastName.charAt(0).toUpperCase() : '_';
+  return `${first}${last}`;
+};
 
   const markGiftBasketSent = async () => {
     try {
@@ -68,14 +73,14 @@ export const Overview: React.FC<OverviewProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Gift basket marked as sent');
+        alert('Success', 'Gift basket marked as sent');
         onRefresh();
       } else {
-        Alert.alert('Error', 'Failed to mark gift basket');
+        alert('Error', 'Failed to mark gift basket');
       }
     } catch (error) {
       console.error('Error marking gift basket:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
@@ -93,19 +98,19 @@ export const Overview: React.FC<OverviewProps> = ({
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Special attendance allowed');
+        alert('Success', 'Special attendance allowed');
         setShowSpecialAttendanceModal(false);
       } else {
-        Alert.alert('Error', 'Failed to allow special attendance');
+        alert('Error', 'Failed to allow special attendance');
       }
     } catch (error) {
       console.error('Error allowing special attendance:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
   const handleUnlockDevice = async () => {
-    Alert.alert(
+    alert(
       'Unlock Device',
       'If you unlock this device, the user will be able to log in from a new device. Are you sure?',
       [
@@ -125,14 +130,14 @@ export const Overview: React.FC<OverviewProps> = ({
               });
 
               if (response.ok) {
-                Alert.alert('Success', 'Device unlocked successfully');
+                alert('Success', 'Device unlocked successfully');
                 setShowUnlockDeviceModal(false);
               } else {
-                Alert.alert('Error', 'Failed to unlock device');
+                alert('Error', 'Failed to unlock device');
               }
             } catch (error) {
               console.error('Error unlocking device:', error);
-              Alert.alert('Error', 'Network error occurred');
+              alert('Error', 'Network error occurred');
             }
           }
         }
@@ -166,13 +171,13 @@ export const Overview: React.FC<OverviewProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        Alert.alert('Success', 'Attendance report downloaded');
+        alert('Success', 'Attendance report downloaded');
       } else {
-        Alert.alert('Error', 'Failed to download attendance');
+        alert('Error', 'Failed to download attendance');
       }
     } catch (error) {
       console.error('Error downloading attendance:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     }
   };
 
@@ -295,7 +300,13 @@ export const Overview: React.FC<OverviewProps> = ({
             </View>
 
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{employee.full_name}</Text>
+              <Text style={styles.profileName}>
+                {employee.first_name && employee.last_name 
+                  ? `${employee.first_name} ${employee.last_name}` 
+                  : employee.first_name 
+                  ? `${employee.first_name}   ` 
+                  : 'Employee'}
+              </Text>
               <Text style={styles.profileDesignation}>
                 {employee.designation || employee.designation}
               </Text>
@@ -648,7 +659,7 @@ export const Overview: React.FC<OverviewProps> = ({
         employee={employee}
         employeeDetails={employeeDetails}
         token={token}
-        onSuccess={handleEditEmployeeSuccess}
+        onSuccess={onEditEmployeeSuccess || onRefresh}
       />
     </View>
   );

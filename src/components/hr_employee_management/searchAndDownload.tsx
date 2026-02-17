@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
+import alert from '../../utils/Alert';
 
 interface SearchAndDownloadProps {
   searchQuery: string;
@@ -64,7 +65,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
           onBlur={() => setSearchFocused(false)}
           clearButtonMode="while-editing"
         />
-        {searchQuery.length > 0 && (
+        {/* {searchQuery.length > 0 && (
           <TouchableOpacity
             style={[styles.clearButton, { marginLeft: -40 }]}
             onPress={() => onSearchChange('')}
@@ -72,7 +73,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
           >
             <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.textTertiary} />
           </TouchableOpacity>
-        )}
+        )} */}
       </View>
       
       <TouchableOpacity

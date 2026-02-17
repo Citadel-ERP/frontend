@@ -14,6 +14,7 @@ import { Employee } from './types';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { BACKEND_URL } from '../../config/config';
+import alert from '../../utils/Alert';
 
 interface OffboardingModalProps {
   visible: boolean;
@@ -53,11 +54,11 @@ const OffboardingModal: React.FC<OffboardingModalProps> = ({
         setStep(2);
       } else {
         const errorData = await response.json();
-        Alert.alert('Validation Failed', errorData.message);
+        alert('Validation Failed', errorData.message);
       }
     } catch (error) {
       console.error('Error validating offboarding:', error);
-      Alert.alert('Error', 'Network error occurred');
+      alert('Error', 'Network error occurred');
     } finally {
       setLoading(false);
     }
