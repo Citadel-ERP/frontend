@@ -210,6 +210,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     messages: Message[];
     chatRoomId?: number;
   } | null>(null);
+  const searchCallbackRef = useRef<((results: Message[], hasMore: boolean) => void) | null>(null);
 
   // ============= REFS FOR WEBSOCKET HANDLERS =============
   const handlersRef = useRef({
@@ -1511,18 +1512,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [handleChatCleared]);
 
   const handleSearchResults = useCallback((data: any) => {
-    const { query, messages: results, offset, has_more } = data;
-
-    setSearchResults(prev => {
-      if (offset === 0) {
-        return results;
-      }
-      return [...prev, ...results];
-    });
-
-    setHasMoreSearchResults(has_more);
-    setIsSearching(false);
-  }, []);
+  const { messages: results, has_more } = data;
+  if (searchCallbackRef.current) {
+    searchCallbackRef.current(results || [], has_more || false);
+    searchCallbackRef.current = null;
+  }
+}, []);
 
   useEffect(() => {
     handlersRef.current.handleSearchResults = handleSearchResults;
@@ -2116,16 +2111,20 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [selectedChatRoom, hasMoreMessages, isLoadingMessages, messagesPage, loadMessages]);
 
-  const handleSearch = useCallback((query: string, offset: number) => {
-    if (!selectedChatRoom) return;
-
-    sendWebSocketMessage('search_messages', {
-      room_id: selectedChatRoom.id,
-      query,
-      offset,
-      limit: 100,
-    });
-  }, [selectedChatRoom, sendWebSocketMessage]);
+  const handleSearch = useCallback((
+  query: string,
+  offset: number,
+  onResult: (results: Message[], hasMore: boolean) => void
+) => {
+  if (!selectedChatRoom) return;
+  searchCallbackRef.current = onResult;
+  sendWebSocketMessage('search_messages', {
+    room_id: selectedChatRoom.id,
+    query,
+    offset,
+    limit: 20,
+  });
+}, [selectedChatRoom, sendWebSocketMessage]);
 
   // ============= EFFECTS =============
   useEffect(() => {
