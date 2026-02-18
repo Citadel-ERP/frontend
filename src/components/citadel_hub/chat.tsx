@@ -142,9 +142,7 @@ interface ChatProps {
 
 const QUICK_REACTIONS = ['😂', '👍', '😢', '❤️', '😮', '🙏', '👏'];
 
-// ============================================================
-// MessageStatusTick Component
-// ============================================================
+
 const MessageStatusTick: React.FC<{ status?: MessageStatus }> = ({ status }) => {
   if (status === 'sending') {
     // Single grey clock / pending tick
@@ -172,7 +170,6 @@ const MessageStatusTick: React.FC<{ status?: MessageStatus }> = ({ status }) => 
       />
     );
   }
-  // 'delivered' OR undefined (old message loaded from API/cache without status) → double grey tick
   if (status === 'delivered' || !status) {
     return (
       <Ionicons
@@ -184,7 +181,6 @@ const MessageStatusTick: React.FC<{ status?: MessageStatus }> = ({ status }) => 
     );
   }
   if (status === 'read') {
-    // Double blue tick
     return (
       <Ionicons
         name="checkmark-done"
@@ -196,23 +192,20 @@ const MessageStatusTick: React.FC<{ status?: MessageStatus }> = ({ status }) => 
   }
   return null;
 };
-  if (status === 'read') {
-    // Double blue tick
-    return (
-      <Ionicons
-        name="checkmark-done"
-        size={14}
-        color="#53bdeb"
-        style={styles.messageStatus}
-      />
-    );
-  }
-  return null;
-};
+//   if (status === 'read') {
+//     return (
+//       <Ionicons
+//         name="checkmark-done"
+//         size={14}
+//         color="#53bdeb"
+//         style={styles.messageStatus}
+//       />
+//     );
+//   }
+//   return null;
+// };
 
-// ============================================================
-// SwipeableMessage Component
-// ============================================================
+
 interface SwipeableMessageProps {
   children: React.ReactNode;
   isOwnMessage: boolean;

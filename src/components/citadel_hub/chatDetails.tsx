@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MediaLinksDocsScreen } from './MediaLinksDocsScreen'; // ✅ Import MediaLinksDocsScreen
 
 interface User {
   id?: number;
@@ -100,6 +101,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
   const [reportReason, setReportReason] = useState('');
   const [alsoExitGroup, setAlsoExitGroup] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [showMediaScreen, setShowMediaScreen] = useState(false); // ✅ Added for media screen
 
   // Helper function to extract user from member object
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
@@ -412,9 +414,25 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
     setAlsoExitGroup(false);
   };
 
+  // ✅ Updated: show internal media screen if no external handler provided
   const handleMediaPress = () => {
-    if (onViewMedia) onViewMedia();
+    if (onViewMedia) {
+      onViewMedia();
+    } else {
+      setShowMediaScreen(true);
+    }
   };
+
+  // ✅ Show MediaLinksDocsScreen if triggered
+  if (showMediaScreen && apiCall) {
+    return (
+      <MediaLinksDocsScreen
+        chatRoomId={chatRoom.id}
+        onBack={() => setShowMediaScreen(false)}
+        apiCall={apiCall}
+      />
+    );
+  }
 
   // ✅ Generic Confirmation Modal (fixed)
   const ConfirmationModal = ({
@@ -639,10 +657,10 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
           )}
         </View>
 
-        {/* Group Description */}
+        {/* ✅ Group Description — label on top, value below */}
         {chatRoom.room_type === 'group' && chatRoom.description && (
           <View style={styles.section}>
-            <View style={styles.sectionItem}>
+            <View style={styles.descriptionContainer}>
               <Text style={styles.descriptionLabel}>Description</Text>
               <Text style={styles.descriptionValue}>{chatRoom.description}</Text>
             </View>
@@ -1005,10 +1023,16 @@ const styles = StyleSheet.create({
     color: '#667781',
     marginTop: 2,
   },
+  // ✅ Updated: descriptionContainer replaces old sectionItem wrapper for description
+  descriptionContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'column',
+  },
   descriptionLabel: {
     fontSize: 14,
     color: '#00a884',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   descriptionValue: {
     fontSize: 14,
