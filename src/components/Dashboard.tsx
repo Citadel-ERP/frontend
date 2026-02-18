@@ -41,6 +41,8 @@ import SiteManager from './site_manager/SiteManager';
 import Reminder from './reminder/Reminder';
 import BUP from './bup/BUP';
 import { CitadelHub } from './citadel_hub/CitadelHub';
+import AssetModule from './assets/index';
+import OfficeModule from './office/index';
 // import {CitadelHubMobile} from './citadel_hub/CitadelHubMobile';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
@@ -120,6 +122,32 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#00d285', '#00b872'],
     displayName: 'Attendance'
   },
+  
+  'office': {
+    icon: 'business',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#003580', '#004d69'],
+    displayName: 'Offices'
+  },
+  'offices': {
+    icon: 'business',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#003580', '#004d69'],
+    displayName: 'Offices'
+  },
+
+  'asset': {
+  icon: 'hardware-chip',
+  iconFamily: 'Ionicons',
+  gradientColors: ['#80006b', '#4d0069'],
+  displayName: 'Assets'
+},
+'assets': {
+  icon: 'hardware-chip',
+  iconFamily: 'Ionicons',
+  gradientColors: ['#80006b', '#4d0069'],
+  displayName: 'Assets'
+},
 
   // Car/Cab modules
   'cab': {
@@ -272,6 +300,16 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
   'attendance': 'attendance',
   'Attendance': 'attendance',
 
+  //asset modules
+  'asset': 'asset',
+  'assets': 'asset',  
+  'Asset': 'asset',
+
+  //office modules
+  'office': 'office',
+  'Office': 'office',
+  'offices': 'office',
+
   // HR modules
   'hr': 'hr',
   'HR': 'hr',
@@ -366,13 +404,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
   const [activeNavItem, setActiveNavItem] = useState('home');
-
+  
   // Theme state
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
   // All modules modal
   const [allModulesVisible, setAllModulesVisible] = useState(false);
+  const [showAsset, setShowAsset] = useState(false);
+  const [showOffice, setShowOffice] = useState(false); 
 
   // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
@@ -502,7 +542,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy'),
         'messages': () => Alert.alert('Coming Soon', 'Messages'),
         'chat': () => setShowChat(true),
-        'chatRoom': () => { /* Needs chat room data */ },
+        'chatRoom': () => setShowChatRoom(true),
+        'assets': () => setShowAsset(true),
+        'asset': () => setShowAsset(true), 
+        'office': () => setShowOffice(true),
+        'offices': () => setShowOffice(true) 
       };
 
       const action = navigationActions[targetPage];
@@ -1305,15 +1349,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowHREmployeeManagement,
       setShowDriverManager,
       setShowHrManager,
+      setShowAsset,
+      setShowOffice, 
       Alert
     });
-  }, [modules, isWeb]);
+  }, [modules, isWeb, setShowAsset]);
 
   const handleBackFromPage = useCallback(() => {
   if (isWeb) {
     setActivePage('dashboard');
   } else {
     setShowAttendance(false);
+    setShowAsset(false);
+    setShowOffice(false);
     setShowProfile(false);
     setShowHR(false);
     setShowCab(false);
@@ -1388,7 +1436,14 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       } else {
         setShowHR(true);
       }
-    } else if (navItem === 'support') {
+    } else if (navItem === 'assets' || navItem === 'asset') {
+    if (isWeb) {
+      setActivePage('assets');
+    } else {
+      setShowAsset(true);
+    }
+  }
+    else if (navItem === 'support') {
       Alert.alert('Support', 'Support feature will be available soon!');
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
@@ -1454,7 +1509,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy feature will be available soon!'),
           'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
           'chat': () => { },
-          'chatRoom': () => { }
+          'chatRoom': () => { },
+          // 'asset': () => setShowAsset(true),  // Add this
+          'assets': () => setShowAsset(true),
         };
         mobileHandlers[targetPage]();
       }
@@ -1586,6 +1643,22 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         <DriverManager onBack={handleBackFromPage} />
       );
     }
+    if (showAsset) {
+      return (
+        <AssetModule 
+          onBack={handleBackFromPage}
+          isDark={isDark}
+        />
+      );
+    }
+    if (showOffice) {
+    return (
+      <OfficeModule
+        onBack={handleBackFromPage}
+        isDark={isDark}
+      />
+    );
+  }
 
     if (showHrManager) {
       return (
@@ -2072,6 +2145,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       <AttendanceWrapper
                         onBack={() => setActivePage('dashboard')}
                         attendanceKey={attendanceKey}
+                      />
+                    )}
+                    {activePage === 'asset' && (
+                      <AssetModule 
+                        onBack={() => setActivePage('dashboard')}
+                        isDark={isDark}
+                      />
+                    )}
+                    {activePage === 'office' && (
+                      <OfficeModule
+                        onBack={() => setActivePage('dashboard')}
+                        isDark={isDark}
                       />
                     )}
                     {activePage === 'hr' && (
