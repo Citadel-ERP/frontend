@@ -19,9 +19,9 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface CameraRecorderProps {
   visible: boolean;
-  mode: 'photo' | 'video';
+  mode: 'picture' | 'video';
   onClose: () => void;
-  onCapture: (uri: string, type: 'photo' | 'video') => void;
+  onCapture: (uri: string, type: 'picture' | 'video') => void;
 }
 
 export const CameraRecorder: React.FC<CameraRecorderProps> = ({
@@ -37,10 +37,10 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [isRecording, setIsRecording] = useState(false);
-  const [mode, setMode] = useState<'photo' | 'video'>(initialMode);
+  const [mode, setMode] = useState<'picture' | 'video'>('picture');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [previewType, setPreviewType] = useState<'photo' | 'video'>('photo');
+  const [previewType, setPreviewType] = useState<'picture' | 'video'>('picture');
   const recordingPromise = useRef<Promise<any> | null>(null);
   const [canStopRecording, setCanStopRecording] = useState(false);
   const recordingStarted = useRef(false);
@@ -332,7 +332,7 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
   };
 
   const takePhoto = async () => {
-    if (!cameraRef.current || mode !== 'photo') return;
+    if (!cameraRef.current || mode !== 'picture') return;
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -341,7 +341,7 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
 
       if (photo && photo.uri) {
         setPreviewUri(photo.uri);
-        setPreviewType('photo');
+        setPreviewType('picture');
       }
     } catch (error) {
       console.error('Photo capture error:', error);
@@ -432,7 +432,7 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
         {previewUri ? (
           // Preview mode
           <View style={styles.previewContainer}>
-            {previewType === 'photo' ? (
+            {previewType === 'picture' ? (
               <Image source={{ uri: previewUri }} style={styles.preview} resizeMode="contain" />
             ) : (
               <Video
@@ -446,14 +446,13 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
             )}
 
             <View style={styles.previewControls}>
-              <TouchableOpacity style={styles.previewButton} onPress={handleRetake}>
-                <Ionicons name="refresh" size={28} color="#ffffff" />
+              <TouchableOpacity style={[styles.previewButton, styles.retakeButton]} onPress={handleRetake}>
+                <Ionicons name="refresh" size={24} color="#ffffff" />
                 <Text style={styles.previewButtonText}>Retake</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={[styles.previewButton, styles.sendButton]} onPress={handleCapture}>
-                <Ionicons name="send" size={28} color="#ffffff" />
-                <Text style={styles.previewButtonText}>Send</Text>
+                <Ionicons name="checkmark-circle" size={24} color="#ffffff" />
+                <Text style={styles.previewButtonText}>Continue</Text>
               </TouchableOpacity>
             </View>
 
@@ -465,10 +464,13 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
           // Camera mode
           <>
             <CameraView
+              key={mode}
               ref={cameraRef}
               style={styles.camera}
               facing={facing}
               flash={flash}
+              mode={mode}
+
             />
 
             <View style={styles.topControls}>
@@ -498,10 +500,10 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
             <View style={styles.bottomControls}>
               <View style={styles.modeToggle}>
                 <TouchableOpacity
-                  style={[styles.modeButton, mode === 'photo' && styles.modeButtonActive]}
-                  onPress={() => setMode('photo')}
+                  style={[styles.modeButton, mode === 'picture' && styles.modeButtonActive]}
+                  onPress={() => setMode('picture')}
                 >
-                  <Text style={[styles.modeText, mode === 'photo' && styles.modeTextActive]}>
+                  <Text style={[styles.modeText, mode === 'picture' && styles.modeTextActive]}>
                     Photo
                   </Text>
                 </TouchableOpacity>
@@ -524,7 +526,7 @@ export const CameraRecorder: React.FC<CameraRecorderProps> = ({
                   style={styles.captureButtonContainer}
                   onPressIn={mode === 'video' ? startRecording : undefined}
                   onPressOut={mode === 'video' ? handleStopAttempt : undefined}
-                  onPress={mode === 'photo' ? takePhoto : undefined}
+                  onPress={mode === 'picture' ? takePhoto : undefined}
                   activeOpacity={0.8}
                 >
                   <Animated.View
@@ -677,22 +679,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   previewButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+  },
+  retakeButton: {
+    // backgroundColor: 'rgba(255,255,255,0.2)',
   },
   sendButton: {
-    backgroundColor: '#00a884',
+    // backgroundColor: '#00a884',
     borderRadius: 30,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   previewButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-    marginTop: 4,
   },
   closeButton: {
     position: 'absolute',
