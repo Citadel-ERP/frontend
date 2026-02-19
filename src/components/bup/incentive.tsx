@@ -444,14 +444,14 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         {/* BUP Input Section - Only show if status allows editing */}
         {(incentiveData.status === 'pending' || incentiveData.status === 'correction') && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Set BDT Share & TDS</Text>
+            <Text style={styles.cardTitle}>Set Transaction Team Share & TDS</Text>
             {/* <Text style={styles.infoCardText}>
               Calculate BDT share and TDS based on intercity amount: {formatCurrency(incentiveData.intercity_amount)}
             </Text> */}
 
             <View style={[{display:'flex', flexDirection:'row',justifyContent:'space-between'}]}>
               <View style={[styles.inputGroup,{width:'47%'}]}>
-                <Text style={styles.label}>BDT Share Percentage *</Text>
+                <Text style={styles.label}>Transaction Team Share Percentage *</Text>
                 <TextInput
                   style={styles.input}
                   value={bdtSharePercentage}
@@ -477,7 +477,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
               <View style={styles.calculationPreview}>
                 <Text style={styles.previewTitle}>Calculated Amounts:</Text>
                 <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>BDT Share:</Text>
+                  <Text style={styles.calculationLabel}>Transaction Team Share:</Text>
                   <Text style={styles.calculationValue}>{formatCurrency(calculated.bdtShare)}</Text>
                 </View>
                 <View style={styles.calculationRow}>
@@ -531,9 +531,9 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         {/* Display Final Amounts if already calculated */}
         {incentiveData.bdt_share !== null && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>BDT Earnings Breakdown</Text>
+            <Text style={styles.cardTitle}>Transaction Team Earnings Breakdown</Text>
             <View style={styles.calculationRow}>
-              <Text style={styles.calculationLabel}>BDT Share:</Text>
+              <Text style={styles.calculationLabel}>Transaction Team Share:</Text>
               <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
             </View>
             <View style={styles.calculationRow}>

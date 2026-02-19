@@ -253,14 +253,15 @@ const styles = StyleSheet.create({
   backgroundColor: 'transparent',  
   paddingHorizontal: 16,
   paddingVertical: 8,
-  gap: 6,
+  gap: 2,
   borderRadius: 8,
   whiteSpace: 'nowrap',
 },
   addButtonText: {
   color: '#fff',
   fontSize: 16,
-  fontWeight: '400',
+  fontWeight: '600',
+  letterSpacing: 0.5,
 },
   addIcon: {
     marginRight: 4,

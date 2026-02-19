@@ -686,7 +686,7 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
 
   const getHeaderTitle = () => {
     if (viewMode === 'city-selection') return 'Select City';
-    if (viewMode === 'bdt-selection') return `Select BDT - ${selectedCity}`;
+    if (viewMode === 'bdt-selection') return `Select Transaction Team - ${selectedCity}`;
     if (viewMode === 'create') return 'Create New Lead';
     if (viewMode === 'detail') return 'Lead Details';
     if (showLeadInfo) return 'Lead Information';
@@ -719,14 +719,28 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
     return avatarColors[index];
   };
 
-  // Render BDT Selection Screen
+  // ─── REDESIGNED BDT Selection Screen ──────────────────────────────────────
   const renderBDTSelection = () => {
     return (
-      <View style={styles.bdtContainer}>
+      <View style={[styles.bdtContainer, { backgroundColor: theme.background }]}>
+
         {/* Search Bar */}
         <View style={[styles.searchBox, { backgroundColor: theme.background }]}>
-          <View style={[styles.searchInputWrapper, { backgroundColor: theme.surface }]}>
-            <Ionicons name="search" size={20} color={theme.primary} style={styles.searchIcon} />
+          <View style={[
+            styles.searchInputWrapper,
+            {
+              backgroundColor: theme.surface,
+              borderColor: isDarkMode ? '#333' : '#E8ECF0',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.06,
+              shadowRadius: 6,
+              elevation: 2,
+            }
+          ]}>
+            <View style={styles.searchIconContainer}>
+              <Ionicons name="search" size={17} color={theme.primary} />
+            </View>
             <TextInput
               style={[styles.searchInput, { color: theme.text }]}
               placeholder="Search BDT by name or ID..."
@@ -735,8 +749,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
               placeholderTextColor={theme.textSecondary}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color={theme.textTertiary} />
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
             )}
           </View>
@@ -745,11 +759,13 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
         {loadingBDTs ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.primary} />
-            <Text style={[styles.loadingText, { color: theme.text }]}>Loading BDTs...</Text>
+            <Text style={[styles.loadingText, { color: theme.text }]}>Loading Transaction Team...</Text>
           </View>
         ) : filteredBDTs.length === 0 && searchQuery ? (
           <View style={styles.emptyState}>
-            <Ionicons name="people" size={64} color={theme.border} />
+            <View style={[styles.emptyIconWrap, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F0F4F8' }]}>
+              <Ionicons name="people-outline" size={38} color={theme.textSecondary} />
+            </View>
             <Text style={[styles.emptyStateText, { color: theme.text }]}>
               No BDTs match your search
             </Text>
@@ -761,12 +777,26 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
           <FlatList
             data={filteredBDTs}
             keyExtractor={(item) => item.employee_id}
+            ListHeaderComponent={() =>
+              filteredBDTs.length > 0 ? (
+                <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+                  {filteredBDTs.length} TEAM MEMBER{filteredBDTs.length !== 1 ? 'S' : ''}
+                </Text>
+              ) : null
+            }
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[styles.bdtItem, { backgroundColor: theme.surface }]}
+                style={[
+                  styles.bdtItem,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: isDarkMode ? '#2C2C2E' : '#F0F2F5',
+                  }
+                ]}
                 onPress={() => handleBDTSelection(item)}
-                activeOpacity={0.7}
+                activeOpacity={0.75}
               >
+                {/* Avatar */}
                 <View style={[styles.bdtAvatar, { backgroundColor: getAvatarColor(item.full_name) }]}>
                   {item.profile_picture ? (
                     <Image
@@ -779,6 +809,8 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                     </Text>
                   )}
                 </View>
+
+                {/* Content */}
                 <View style={styles.bdtContent}>
                   <View style={styles.bdtHeader}>
                     <Text style={[styles.bdtName, { color: theme.text }]} numberOfLines={1}>
@@ -797,19 +829,27 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                     </Text>
                   </View> */}
                 </View>
-                <View style={styles.bdtArrow}>
-                  <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+
+                {/* Arrow button */}
+                <View style={[styles.bdtArrowBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F4F6F9' }]}>
+                  <Ionicons name="chevron-forward" size={14} color={theme.primary} />
                 </View>
               </TouchableOpacity>
             )}
             ListFooterComponent={() => (
               <TouchableOpacity
-                style={[styles.unassignedItem, { backgroundColor: theme.surface, borderColor: theme.primary }]}
+                style={[
+                  styles.unassignedItem,
+                  {
+                    backgroundColor: isDarkMode ? theme.surface : '#F7FFFC',
+                    borderColor: theme.primary,
+                  }
+                ]}
                 onPress={handleUnassignedSelection}
-                activeOpacity={0.7}
+                activeOpacity={0.75}
               >
-                <View style={[styles.unassignedAvatar, { backgroundColor: theme.primary + '20' }]}>
-                  <Ionicons name="person-outline" size={28} color={theme.primary} />
+                <View style={[styles.unassignedAvatar, { backgroundColor: theme.primary + '18' }]}>
+                  <Ionicons name="person-outline" size={24} color={theme.primary} />
                 </View>
                 <View style={styles.bdtContent}>
                   <View style={styles.bdtHeader}>
@@ -819,12 +859,12 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                   </View>
                   <View style={styles.bdtInfo}>
                     <Text style={[styles.bdtId, { color: theme.textSecondary }]} numberOfLines={1}>
-                      View all leads without BDT assignment
+                      View all leads without Transaction Team assignment
                     </Text>
                   </View>
                 </View>
-                <View style={styles.bdtArrow}>
-                  <Ionicons name="chevron-forward" size={20} color={theme.primary} />
+                <View style={[styles.bdtArrowBtn, { backgroundColor: theme.primary + '18' }]}>
+                  <Ionicons name="chevron-forward" size={14} color={theme.primary} />
                 </View>
               </TouchableOpacity>
             )}
@@ -1162,31 +1202,54 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 0,
   },
+
+  // ─── BDT Selection ───────────────────────────────────────────
   bdtContainer: {
     flex: 1,
   },
+
+  // Search
   searchBox: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   searchInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+  },
+  searchIconContainer: {
+    width: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    paddingVertical: 4,
+    fontSize: 15,
+    paddingVertical: 0,
+    marginLeft: 2,
   },
+  clearButton: {
+    padding: 4,
+  },
+
+  // Section header
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    marginTop: 2,
+  },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -1194,111 +1257,136 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 14,
+    fontWeight: '500',
   },
+
+  // Empty state
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    marginTop: -150,
+    marginTop: -80,
+  },
+  emptyIconWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   emptyStateSubtext: {
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },
+
+  // List
   bdtListContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 24,
   },
+
+  // BDT card
   bdtItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingLeft: 14,
+    paddingRight: 12,
+    marginBottom: 10,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 2,
   },
+
+  // Unassigned card
   unassignedItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingLeft: 14,
+    paddingRight: 12,
+    marginTop: 6,
     marginBottom: 8,
-    borderWidth: 2,
+    borderWidth: 1.5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
+
+  // Avatars
   bdtAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
     overflow: 'hidden',
   },
   unassignedAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   bdtProfileImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 28,
+    borderRadius: 24,
   },
   bdtAvatarText: {
     color: '#FFF',
-    fontSize: 20,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 1, height: 1 },
+    fontSize: 18,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.15)',
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+
+  // Card body
   bdtContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   bdtHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   bdtName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     flex: 1,
     marginRight: 8,
   },
   bdtInfo: {
-    marginBottom: 4,
+    marginTop: 2,
   },
   bdtId: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '400',
+    lineHeight: 16,
   },
   bdtContact: {
     flexDirection: 'row',
@@ -1308,6 +1396,16 @@ const styles = StyleSheet.create({
   bdtEmail: {
     fontSize: 12,
     flex: 1,
+  },
+
+  // Arrow circle button
+  bdtArrowBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
   bdtArrow: {
     padding: 4,
