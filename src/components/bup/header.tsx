@@ -259,16 +259,11 @@ const styles = StyleSheet.create({
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: '#e9e9e959',
+  backgroundColor: 'transparent',  // overrides actionButton's background
   paddingHorizontal: 16,
   paddingVertical: 8,
   gap: 6,
   borderRadius: 8,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 3,
-  elevation: 3,
   whiteSpace: 'nowrap',
 },
 addButtonText: {

@@ -785,17 +785,17 @@ const BUP: React.FC<BUPProps> = ({ onBack }) => {
                       {item.full_name}
                     </Text>
                   </View>
-                  <View style={styles.bdtInfo}>
+                  {/* <View style={styles.bdtInfo}>
                     <Text style={[styles.bdtId, { color: theme.textSecondary }]} numberOfLines={1}>
                       ID: {item.employee_id}
                     </Text>
-                  </View>
-                  <View style={styles.bdtContact}>
+                  </View> */}
+                  {/* <View style={styles.bdtContact}>
                     <Ionicons name="mail" size={12} color={theme.textTertiary} />
                     <Text style={[styles.bdtEmail, { color: theme.textSecondary }]} numberOfLines={1}>
                       {item.email}
                     </Text>
-                  </View>
+                  </View> */}
                 </View>
                 <View style={styles.bdtArrow}>
                   <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
