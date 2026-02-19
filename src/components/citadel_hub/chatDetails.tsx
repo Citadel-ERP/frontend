@@ -693,7 +693,7 @@ export const ChatDetails: React.FC<ChatDetailsProps> = ({
             </View>
             <View style={styles.sectionText}>
               <Text style={styles.sectionLabel}>Media, links, and docs</Text>
-              <Text style={styles.sectionValue}>{chatRoom.media_count || 0}</Text>
+              {/* <Text style={styles.sectionValue}>{chatRoom.media_count || 0}</Text> */}
             </View>
             <Ionicons name="chevron-forward" size={20} color="#8696a0" />
           </TouchableOpacity>
