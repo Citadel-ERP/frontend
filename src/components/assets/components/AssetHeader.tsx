@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AssetHeaderProps {
   title: string;
@@ -34,9 +35,10 @@ export const AssetHeader: React.FC<AssetHeaderProps> = ({
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: '#008069',
   };
-
+  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.header, { backgroundColor: theme.accentBlue }]}>
+    // In JSX, replace the static style with:
+      <View style={[styles.header, { backgroundColor: theme.accentBlue, paddingTop: insets.top + 12 }]}>
       <View style={styles.topRow}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="white" />
@@ -75,7 +77,7 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: Platform.OS === 'ios' ? 70 : 20,
     paddingBottom: 16,
-    marginTop:-60,
+    marginTop:Platform.OS === 'ios' ? -60 :-10,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },

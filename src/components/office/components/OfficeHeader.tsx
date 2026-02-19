@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface OfficeHeaderProps {
   onBack: () => void;
@@ -26,9 +27,10 @@ export const OfficeHeader: React.FC<OfficeHeaderProps> = ({
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: '#008069',
   };
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.header, { backgroundColor: theme.accentBlue }]}>
+    <View style={[styles.header, { backgroundColor: theme.accentBlue, paddingTop: insets.top + 22 }]}>
       <StatusBar
         barStyle="light-content"
         backgroundColor="transparent"
@@ -54,7 +56,7 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: Platform.OS === 'ios' ? 70 : 20,
     paddingBottom: 16,
-    marginTop: -60,
+    marginTop:Platform.OS === 'ios' ? -60 :-10,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
