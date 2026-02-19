@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, TextInput, ActivityIndicator
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,8 @@ interface IncentiveProps {
   leadId: number;
   leadName: string;
   hideHeader?: boolean;
+  // Pass true only when lead.subphase === 'add_payment_record'
+  canCreate?: boolean;
 }
 
 interface BDTUser {
@@ -80,7 +82,7 @@ const INTERCITY_CITIES = [
   'Other',
 ];
 
-const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHeader }) => {
+const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHeader, canCreate = false }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -115,31 +117,21 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     return parts.join('.');
   };
 
-  const parseFormattedNumber = (value: string): string => {
-    return value.replace(/,/g, '');
-  };
+  const parseFormattedNumber = (value: string): string => value.replace(/,/g, '');
 
   const handleGrossIncomeChange = (text: string) => {
-    const formatted = formatNumberWithCommas(text);
-    setGrossIncome(formatted);
+    setGrossIncome(formatNumberWithCommas(text));
   };
 
   const handleExpenseChange = (key: string, text: string) => {
-    const formatted = formatNumberWithCommas(text);
-    setExpenseValues(prev => ({
-      ...prev,
-      [key]: formatted,
-    }));
+    setExpenseValues(prev => ({ ...prev, [key]: formatNumberWithCommas(text) }));
   };
 
   const toggleExpense = (key: string) => {
     const newSelected = new Set(selectedExpenses);
     if (newSelected.has(key)) {
       newSelected.delete(key);
-      setExpenseValues(prev => ({
-        ...prev,
-        [key]: '',
-      }));
+      setExpenseValues(prev => ({ ...prev, [key]: '' }));
     } else {
       newSelected.add(key);
     }
@@ -159,9 +151,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
   }, []);
 
   useEffect(() => {
-    if (token) {
-      fetchIncentive();
-    }
+    if (token) fetchIncentive();
   }, [token]);
 
   const fetchIncentive = async () => {
@@ -177,21 +167,18 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
 
       if (!contentType || !contentType.includes('application/json')) {
         console.error('Expected JSON but received:', contentType);
-        setIsEditMode(true);
+        // Do NOT auto-enter edit mode — only canCreate prop allows creation
+        setIncentiveData(null);
         return;
       }
+
       if (response.ok) {
         const data = await response.json();
         setIncentiveData(data.incentive);
         setGrossIncome(formatNumberWithCommas(data.incentive.gross_income_recieved.toString()));
 
-        // Set expense values and selected expenses based on what's available
         const newSelectedExpenses = new Set<string>();
-        const newExpenseValues: { [key: string]: string } = {
-          referral: '',
-          bd_expenses: '',
-          goodwill: '',
-        };
+        const newExpenseValues: { [key: string]: string } = { referral: '', bd_expenses: '', goodwill: '' };
 
         if (data.incentive.referral_amt > 0) {
           newSelectedExpenses.add('referral');
@@ -209,21 +196,30 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         setExpenseValues(newExpenseValues);
         setSelectedExpenses(newSelectedExpenses);
         setIntercityDeals(data.incentive.intercity_deals ? 'Yes' : 'No');
-        if (data.incentive.city) {
-          setSelectedCity(data.incentive.city);
-        }
+        if (data.incentive.city) setSelectedCity(data.incentive.city);
+
       } else {
         const errorData = await response.json();
         if (errorData.message?.includes('already paid')) {
           Alert.alert('Notice', 'This incentive has been paid and is no longer visible.');
           onBack();
         } else {
-          setIsEditMode(true);
+          // No incentive found — only enter edit mode if canCreate is true
+          if (canCreate) {
+            setIsEditMode(true);
+          } else {
+            setIncentiveData(null);
+          }
         }
       }
     } catch (error) {
       console.error('Error fetching incentive:', error);
-      setIsEditMode(true);
+      // On error, only enter edit mode if canCreate is true
+      if (canCreate) {
+        setIsEditMode(true);
+      } else {
+        setIncentiveData(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -232,10 +228,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
   const createIncentive = async () => {
     try {
       if (!token) return;
-      if (!grossIncome) {
-        Alert.alert('Error', 'Please enter gross income');
-        return;
-      }
+      if (!grossIncome) { Alert.alert('Error', 'Please enter gross income'); return; }
 
       for (const expense of selectedExpenses) {
         if (!expenseValues[expense]) {
@@ -248,7 +241,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         Alert.alert('Error', 'Please select a city for intercity deal');
         return;
       }
-
       if (selectedCity === 'Other' && !customCity.trim()) {
         Alert.alert('Error', 'Please enter city name for Other');
         return;
@@ -280,9 +272,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create incentive');
-      }
+      if (!response.ok) throw new Error('Failed to create incentive');
       const data = await response.json();
       setIncentiveData(data.incentive);
       setIsEditMode(false);
@@ -298,23 +288,14 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
 
   const addRemark = async () => {
     try {
-      if (!token || !newRemark.trim()) {
-        Alert.alert('Error', 'Please enter a remark');
-        return;
-      }
+      if (!token || !newRemark.trim()) { Alert.alert('Error', 'Please enter a remark'); return; }
       setAddingRemark(true);
       const response = await fetch(`${BACKEND_URL}/employee/addRemark`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          lead_id: leadId,
-          remark: newRemark.trim()
-        })
+        body: JSON.stringify({ token, lead_id: leadId, remark: newRemark.trim() })
       });
-      if (!response.ok) {
-        throw new Error('Failed to add remark');
-      }
+      if (!response.ok) throw new Error('Failed to add remark');
       const data = await response.json();
       setIncentiveData(data.incentive);
       setNewRemark('');
@@ -335,9 +316,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: leadId })
       });
-      if (!response.ok) {
-        throw new Error('Failed to accept incentive');
-      }
+      if (!response.ok) throw new Error('Failed to accept incentive');
       Alert.alert('Success', 'Incentive accepted successfully!');
       fetchIncentive();
     } catch (error) {
@@ -354,9 +333,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: leadId })
       });
-      if (!response.ok) {
-        throw new Error('Failed to accept payment confirmation');
-      }
+      if (!response.ok) throw new Error('Failed to accept payment confirmation');
       Alert.alert('Success', 'Payment confirmation accepted successfully!');
       fetchIncentive();
     } catch (error) {
@@ -370,58 +347,26 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     const referral = expenseValues.referral ? parseFloat(parseFormattedNumber(expenseValues.referral)) : 0;
     const bdExpenses = expenseValues.bd_expenses ? parseFloat(parseFormattedNumber(expenseValues.bd_expenses)) : 0;
     const goodwillAmt = expenseValues.goodwill ? parseFloat(parseFormattedNumber(expenseValues.goodwill)) : 0;
-
     const totalExpenses = referral + bdExpenses + goodwillAmt;
     const netCompanyEarning = gross - totalExpenses;
     const isIntercity = intercityDeals === 'Yes';
     const intercityAmount = isIntercity ? netCompanyEarning * 0.5 : netCompanyEarning;
-
-    return {
-      gross,
-      referral,
-      bdExpenses,
-      goodwillAmt,
-      totalExpenses,
-      netCompanyEarning,
-      intercityAmount
-    };
+    return { gross, referral, bdExpenses, goodwillAmt, totalExpenses, netCompanyEarning, intercityAmount };
   };
 
   const handleContinue = () => {
-    if (!grossIncome) {
-      Alert.alert('Missing Fields', 'Please enter gross income');
-      return;
-    }
-
+    if (!grossIncome) { Alert.alert('Missing Fields', 'Please enter gross income'); return; }
     for (const expense of selectedExpenses) {
-      if (!expenseValues[expense]) {
-        Alert.alert('Error', 'Please enter values for all selected expenses');
-        return;
-      }
+      if (!expenseValues[expense]) { Alert.alert('Error', 'Please enter values for all selected expenses'); return; }
     }
-
-    if (intercityDeals === 'Yes' && !selectedCity) {
-      Alert.alert('Error', 'Please select a city for intercity deal');
-      return;
-    }
-
-    if (selectedCity === 'Other' && !customCity.trim()) {
-      Alert.alert('Error', 'Please enter city name');
-      return;
-    }
-
+    if (intercityDeals === 'Yes' && !selectedCity) { Alert.alert('Error', 'Please select a city for intercity deal'); return; }
+    if (selectedCity === 'Other' && !customCity.trim()) { Alert.alert('Error', 'Please enter city name'); return; }
     setShowCalculation(true);
   };
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const formatCurrency = (amount: number | null): string => {
@@ -460,7 +405,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     </View>
   );
 
-  // ADDED: Green header component
   const GreenHeader = () => (
     <LinearGradient
       colors={['#075E54', '#075E54']}
@@ -468,11 +412,11 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
       end={{ x: 1, y: 0 }}
       style={styles.greenHeader}
     >
-      <View style={styles.greenHeaderContent}>
-      </View>
+      <View style={styles.greenHeaderContent} />
     </LinearGradient>
   );
 
+  // ─── Loading state ───────────────────────────────────────────────────────────
   if (loading && !incentiveData) {
     return (
       <View style={styles.container}>
@@ -496,7 +440,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     );
   }
 
-  if (isEditMode) {
+  // ─── Create mode — only available when canCreate === true ────────────────────
+  if (isEditMode && canCreate) {
     const calculated = calculateIncentive();
 
     if (showCalculation) {
@@ -593,17 +538,9 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
               colors={['#075E54', '#075E54']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[
-                styles.submitButton,
-                loading && styles.submitButtonDisabled
-              ]}
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
             >
-              <TouchableOpacity
-                onPress={createIncentive}
-                disabled={loading}
-                style={styles.submitButtonTouchable}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity onPress={createIncentive} disabled={loading} style={styles.submitButtonTouchable} activeOpacity={0.8}>
                 {loading ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
@@ -622,7 +559,6 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         {!hideHeader && (
           <>
             <StatusBar barStyle="light-content" backgroundColor="#075E54" />
-            {/* ADDED: Green Header */}
             <GreenHeader />
             <View style={[styles.header, styles.headerWithGreen]}>
               <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -654,15 +590,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
 
           <View style={styles.card}>
             <Text style={styles.label}>Select Expenses (Optional)</Text>
-            <Text style={styles.expenseInfoText}>
-              Check the expenses that apply and enter their amounts
-            </Text>
+            <Text style={styles.expenseInfoText}>Check the expenses that apply and enter their amounts</Text>
             {EXPENSE_OPTIONS.map((option) => (
               <View key={option.key} style={styles.expenseItem}>
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => toggleExpense(option.key)}
-                >
+                <TouchableOpacity style={styles.checkboxContainer} onPress={() => toggleExpense(option.key)}>
                   <View style={[styles.checkbox, selectedExpenses.has(option.key) && styles.checkboxChecked]}>
                     {selectedExpenses.has(option.key) && <Text style={styles.checkmark}>✓</Text>}
                   </View>
@@ -683,10 +614,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
 
           <View style={styles.card}>
             <Text style={styles.label}>Intercity Deal? *</Text>
-            <TouchableOpacity
-              style={styles.dropdown}
-              onPress={() => setShowIntercityDropdown(!showIntercityDropdown)}
-            >
+            <TouchableOpacity style={styles.dropdown} onPress={() => setShowIntercityDropdown(!showIntercityDropdown)}>
               <Text style={styles.dropdownText}>{intercityDeals}</Text>
               <Text style={styles.dropdownArrow}>{showIntercityDropdown ? '▲' : '▼'}</Text>
             </TouchableOpacity>
@@ -699,15 +627,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
                     onPress={() => {
                       setIntercityDeals(option);
                       setShowIntercityDropdown(false);
-                      if (option === 'No') {
-                        setSelectedCity('');
-                        setCustomCity('');
-                      }
+                      if (option === 'No') { setSelectedCity(''); setCustomCity(''); }
                     }}
                   >
-                    <Text style={[styles.dropdownItemText, intercityDeals === option && styles.selectedText]}>
-                      {option}
-                    </Text>
+                    <Text style={[styles.dropdownItemText, intercityDeals === option && styles.selectedText]}>{option}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -717,10 +640,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
           {intercityDeals === 'Yes' && (
             <View style={styles.card}>
               <Text style={styles.label}>Select City *</Text>
-              <TouchableOpacity
-                style={styles.dropdown}
-                onPress={() => setShowCityDropdown(!showCityDropdown)}
-              >
+              <TouchableOpacity style={styles.dropdown} onPress={() => setShowCityDropdown(!showCityDropdown)}>
                 <Text style={styles.dropdownText}>{selectedCity || 'Select a city'}</Text>
                 <Text style={styles.dropdownArrow}>{showCityDropdown ? '▲' : '▼'}</Text>
               </TouchableOpacity>
@@ -733,14 +653,10 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
                       onPress={() => {
                         setSelectedCity(city);
                         setShowCityDropdown(false);
-                        if (city !== 'Other') {
-                          setCustomCity('');
-                        }
+                        if (city !== 'Other') setCustomCity('');
                       }}
                     >
-                      <Text style={[styles.dropdownItemText, selectedCity === city && styles.selectedText]}>
-                        {city}
-                      </Text>
+                      <Text style={[styles.dropdownItemText, selectedCity === city && styles.selectedText]}>{city}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -762,11 +678,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             end={{ x: 1, y: 0 }}
             style={styles.continueButton}
           >
-            <TouchableOpacity
-              onPress={handleContinue}
-              style={styles.gradientTouchable}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity onPress={handleContinue} style={styles.gradientTouchable} activeOpacity={0.8}>
               <Text style={styles.continueButtonText}>Continue to Review</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -776,13 +688,13 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
     );
   }
 
+  // ─── No incentive and canCreate is false — show locked message ───────────────
   if (!incentiveData) {
     return (
       <View style={styles.container}>
         {!hideHeader && (
           <>
             <StatusBar barStyle="light-content" backgroundColor="#075E54" />
-            {/* ADDED: Green Header */}
             <GreenHeader />
             <View style={[styles.header, styles.headerWithGreen]}>
               <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -794,18 +706,22 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
           </>
         )}
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No incentive data found</Text>
+          <Text style={styles.emptyText}>
+            {canCreate
+              ? 'No incentive data found'
+              : 'Select "Add Payment Record" subphase to create an incentive'}
+          </Text>
         </View>
       </View>
     );
   }
 
+  // ─── Incentive detail view ───────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       {!hideHeader && (
         <>
           <StatusBar barStyle="light-content" backgroundColor="#075E54" />
-          {/* ADDED: Green Header */}
           <GreenHeader />
           <View style={[styles.header, styles.headerWithGreen]}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -817,6 +733,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         </>
       )}
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Status & dates */}
         <View style={styles.card}>
           <View style={styles.statusHeader}>
             <Text style={styles.cardTitle}>Lead: {leadName}</Text>
@@ -833,6 +750,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             <Text style={styles.infoValue}>{formatDate(incentiveData.updated_at)}</Text>
           </View>
         </View>
+
+        {/* Transaction details */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Transaction Details</Text>
           <View style={[styles.infoRow, styles.dividerRow]}>
@@ -872,6 +791,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             </View>
           )}
         </View>
+
+        {/* Earnings breakdown */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Earnings Breakdown</Text>
           <View style={styles.calculationRow}>
@@ -881,32 +802,24 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
           {incentiveData.referral_amt > 0 && (
             <View style={styles.calculationRow}>
               <Text style={styles.calculationLabel}>Less: Referral Fee</Text>
-              <Text style={[styles.calculationValue, styles.negativeValue]}>
-                - {formatCurrency(incentiveData.referral_amt)}
-              </Text>
+              <Text style={[styles.calculationValue, styles.negativeValue]}>- {formatCurrency(incentiveData.referral_amt)}</Text>
             </View>
           )}
           {incentiveData.bdt_expenses > 0 && (
             <View style={styles.calculationRow}>
               <Text style={styles.calculationLabel}>Less: BD Expenses</Text>
-              <Text style={[styles.calculationValue, styles.negativeValue]}>
-                - {formatCurrency(incentiveData.bdt_expenses)}
-              </Text>
+              <Text style={[styles.calculationValue, styles.negativeValue]}>- {formatCurrency(incentiveData.bdt_expenses)}</Text>
             </View>
           )}
           {incentiveData.goodwill > 0 && (
             <View style={styles.calculationRow}>
               <Text style={styles.calculationLabel}>Less: Goodwill</Text>
-              <Text style={[styles.calculationValue, styles.negativeValue]}>
-                - {formatCurrency(incentiveData.goodwill)}
-              </Text>
+              <Text style={[styles.calculationValue, styles.negativeValue]}>- {formatCurrency(incentiveData.goodwill)}</Text>
             </View>
           )}
           <View style={[styles.calculationRow, styles.highlightRow]}>
             <Text style={styles.calculationLabelBold}>Net Company Earnings</Text>
-            <Text style={styles.calculationValueBold}>
-              {formatCurrency(incentiveData.net_company_earning)}
-            </Text>
+            <Text style={styles.calculationValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
           </View>
           {incentiveData.intercity_deals && (
             <View style={styles.calculationRow}>
@@ -915,31 +828,31 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             </View>
           )}
           {incentiveData.bdt_share !== null && (
-  <>
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Transaction Team Share</Text>
-            <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
-          </View>
-          <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>Less: TDS</Text>
-            <Text style={[styles.calculationValue, styles.negativeValue]}>
-              - {formatCurrency(incentiveData.tds_deducted)}
-            </Text>
-          </View>
-          {incentiveData.final_amount_payable !== null && (
-            <View style={[styles.calculationRow, styles.finalRow]}>
-              <Text style={styles.finalLabel}>Final Amount Payable</Text>
-              <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
-            </View>
+            <>
+              <View style={styles.calculationRow}>
+                <Text style={styles.calculationLabel}>Transaction Team Share</Text>
+                <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
+              </View>
+              <View style={styles.calculationRow}>
+                <Text style={styles.calculationLabel}>Less: TDS</Text>
+                <Text style={[styles.calculationValue, styles.negativeValue]}>- {formatCurrency(incentiveData.tds_deducted)}</Text>
+              </View>
+              {incentiveData.final_amount_payable !== null && (
+                <View style={[styles.calculationRow, styles.finalRow]}>
+                  <Text style={styles.finalLabel}>Final Amount Payable</Text>
+                  <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
+                </View>
+              )}
+            </>
           )}
-        </>
-      )}
           {(incentiveData.bdt_share === null || incentiveData.final_amount_payable === null) && (
             <View style={[styles.calculationRow, styles.finalRow]}>
               <Text style={styles.finalLabel}>Your earning will be told by BUP</Text>
             </View>
           )}
         </View>
+
+        {/* Remarks */}
         {incentiveData.remarks.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Remarks ({incentiveData.remarks.length})</Text>
@@ -954,6 +867,8 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             ))}
           </View>
         )}
+
+        {/* Add remark for correction status */}
         {incentiveData.status === 'correction' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Add Remark</Text>
@@ -967,9 +882,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
               textAlignVertical="top"
             />
             <TouchableOpacity
-              style={[styles.submitButton, addingRemark && styles.submitButtonDisabled,{
-                backgroundColor: colors.success, width: '100%', marginLeft: 0
-              }]}
+              style={[styles.submitButton, addingRemark && styles.submitButtonDisabled, { backgroundColor: colors.success, width: '100%', marginLeft: 0 }]}
               onPress={addRemark}
               disabled={addingRemark}
             >
@@ -981,6 +894,7 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             </TouchableOpacity>
           </View>
         )}
+
         {incentiveData.status === 'correction' && (
           <TouchableOpacity style={styles.acceptButton} onPress={acceptIncentive}>
             <Text style={styles.acceptButtonText}>Accept Incentive</Text>
@@ -998,19 +912,15 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.primary,
-  },
+  container: { flex: 1, backgroundColor: colors.primary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    marginTop:30
+    marginTop: 30,
   },
-  // ADDED: Style for header when using green header
   headerWithGreen: {
     backgroundColor: 'transparent',
     position: 'absolute',
@@ -1018,512 +928,91 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-
   },
-  // ADDED: Green header styles
-  greenHeader: {
-    paddingTop: 80,
-    paddingBottom: 20,
-    paddingHorizontal: spacing.lg,
-  },
-  greenHeaderContent: {
-    marginTop: 0,
-  },
-  greenHeaderTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.white,
-    marginBottom: spacing.xs,
-  },
-  greenHeaderSubtitle: {
-    fontSize: fontSize.md,
-    color: colors.white,
-    opacity: 0.9,
-    fontWeight: '500',
-  },
-  backButton: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-  },
-  backIcon: {
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    display: 'flex',
-    flexDirection: 'row',
-    alignContent: 'center',
-  },
-  backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: colors.white,
-    transform: [{ rotate: '-45deg' }],
-  },
-  headerTitle: {
-    // fontSize: fontSize.xl,
-    fontWeight: '600',
-    color: colors.white,
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 20,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  card: {
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.xl,
-    ...shadows.md,
-  },
-  reviewTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
-  sectionTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
-  leadName: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  leadNameLarge: {
-    fontSize: fontSize.lg,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  cardTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  statusBadge: {
-    marginTop: -15,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-  },
-  statusText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  inputGroup: {
-    marginBottom: spacing.md,
-  },
-  label: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    backgroundColor: colors.white,
-  },
-  expenseInfoText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-    fontStyle: 'italic',
-  },
-  expenseItem: {
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
-  checkboxChecked: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  checkmark: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  expenseLabel: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  expenseInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    backgroundColor: colors.backgroundSecondary,
-    marginTop: spacing.xs,
-  },
-  dropdown: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-  },
-  dropdownText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  dropdownArrow: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  dropdownMenu: {
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.white,
-    ...shadows.sm,
-  },
-  dropdownItem: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  dropdownItemText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  selectedText: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  summaryValue: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  expenseSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  intercityBadgeYes: {
-    backgroundColor: colors.success + '20',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.success,
-  },
-  intercityBadgeNo: {
-    backgroundColor: colors.textSecondary + '20',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.textSecondary,
-  },
-  intercityTextYes: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.success,
-  },
-  intercityTextNo: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  backText: {
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 2,
-  },
-  calculationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  // ADDED: Divider row style for Transaction Details
-  dividerRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: spacing.sm,
-  },
-  calculationLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  calculationValue: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  negativeValue: {
-    color: colors.error,
-  },
-  tdsPlaceholder: {
-    color: colors.warning,
-    fontStyle: 'italic',
-  },
-  highlightRow: {
-    backgroundColor: colors.info + '10',
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
-    marginVertical: spacing.xs,
-  },
-  calculationLabelBold: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '600',
-    flex: 1,
-  },
-  calculationValueBold: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  finalRow: {
-    backgroundColor: colors.info + '15',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginTop: spacing.md,
-    borderWidth: 2,
-    borderColor: colors.info,
-  },
-  finalLabel: {
-    fontSize: fontSize.md,
-    color: colors.info,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
-  },
-  finalValue: {
-    fontSize: fontSize.xl,
-    color: colors.success,
-    fontWeight: '700',
-  },
-  infoCard: {
-    backgroundColor: colors.info + '15',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.info,
-  },
-  infoCardTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.info,
-    marginBottom: spacing.xs,
-  },
-  infoCardText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  continueButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    ...shadows.md,
-  },
-  gradientTouchable: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  continueButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  submitButton: {
-    // Remove backgroundColor property
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    ...shadows.md,
-    // Ensure gradient takes full height
-    minHeight: 50, // Adjust as needed
-  },
-  submitButtonTouchable: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Make touchable area match button size
-    paddingVertical: spacing.md,
-  },
-  submitButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  submitButtonDisabled: {
-    opacity: 0.7, // Adjust opacity for disabled state
-  },
-  acceptButton: {
-    backgroundColor: colors.success,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    ...shadows.md,
-  },
-  acceptButtonText: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  remarkItem: {
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-  },
-  remarkHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  remarkAuthor: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  remarkDate: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  remarkText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  remarkInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    backgroundColor: colors.white,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginBottom: spacing.md,
-    textAlignVertical: 'top',
-    minHeight: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-  },
+  greenHeader: { paddingTop: 80, paddingBottom: 20, paddingHorizontal: spacing.lg },
+  greenHeaderContent: { marginTop: 0 },
+  greenHeaderTitle: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginBottom: spacing.xs },
+  greenHeaderSubtitle: { fontSize: fontSize.md, color: colors.white, opacity: 0.9, fontWeight: '500' },
+  backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
+  backIcon: { height: 24, alignItems: 'center', justifyContent: 'center', display: 'flex', flexDirection: 'row', alignContent: 'center' },
+  backArrow: { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
+  headerTitle: { fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center', fontSize: 20 },
+  headerSpacer: { width: 40 },
+  scrollView: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  card: { backgroundColor: colors.white, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, ...shadows.md },
+  reviewTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
+  sectionTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
+  leadName: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500' },
+  leadNameLarge: { fontSize: fontSize.lg, color: colors.text, fontWeight: '600' },
+  cardTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  statusBadge: { marginTop: -15, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
+  statusText: { color: colors.white, fontSize: 12, fontWeight: '600' },
+  inputGroup: { marginBottom: spacing.md },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.white },
+  expenseInfoText: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md, fontStyle: 'italic' },
+  expenseItem: { marginBottom: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  checkbox: { width: 20, height: 20, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
+  checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
+  checkmark: { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
+  expenseLabel: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  expenseInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.backgroundSecondary, marginTop: spacing.xs },
+  dropdown: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white },
+  dropdownText: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  dropdownArrow: { fontSize: fontSize.sm, color: colors.textSecondary },
+  dropdownMenu: { marginTop: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, backgroundColor: colors.white, ...shadows.sm },
+  dropdownItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dropdownItemText: { fontSize: fontSize.md, color: colors.text },
+  selectedText: { color: colors.primary, fontWeight: '600' },
+  summaryGrid: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.backgroundSecondary, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs },
+  summaryValue: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
+  expenseSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  intercityBadgeYes: { backgroundColor: colors.success + '20', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.success },
+  intercityBadgeNo: { backgroundColor: colors.textSecondary + '20', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.textSecondary },
+  intercityTextYes: { fontSize: fontSize.sm, fontWeight: '600', color: colors.success },
+  intercityTextNo: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
+  backText: { color: '#fff', fontSize: 16, marginLeft: 2 },
+  calculationRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dividerRow: { borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: spacing.sm },
+  calculationLabel: { fontSize: fontSize.sm, color: colors.textSecondary, flex: 1 },
+  calculationValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  negativeValue: { color: colors.error },
+  tdsPlaceholder: { color: colors.warning, fontStyle: 'italic' },
+  highlightRow: { backgroundColor: colors.info + '10', paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, marginVertical: spacing.xs },
+  calculationLabelBold: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600', flex: 1 },
+  calculationValueBold: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
+  finalRow: { backgroundColor: colors.info + '15', paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, marginTop: spacing.md, borderWidth: 2, borderColor: colors.info },
+  finalLabel: { fontSize: fontSize.md, color: colors.info, fontWeight: '700', flex: 1, textAlign: 'center' },
+  finalValue: { fontSize: fontSize.xl, color: colors.success, fontWeight: '700' },
+  infoCard: { backgroundColor: colors.info + '15', marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.info },
+  infoCardTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.info, marginBottom: spacing.xs },
+  infoCardText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  continueButton: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
+  gradientTouchable: { width: '100%', alignItems: 'center', paddingVertical: 16 },
+  continueButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  submitButton: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, minHeight: 50 },
+  submitButtonTouchable: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md },
+  submitButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  submitButtonDisabled: { opacity: 0.7 },
+  acceptButton: { backgroundColor: colors.success, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
+  acceptButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs },
+  infoLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
+  infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  remarkItem: { backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.sm },
+  remarkHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
+  remarkAuthor: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  remarkDate: { fontSize: fontSize.xs, color: colors.textSecondary },
+  remarkText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  remarkInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, padding: spacing.md, backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md, textAlignVertical: 'top', minHeight: 100 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary },
+  loadingText: { marginTop: spacing.md, color: colors.textSecondary, fontSize: fontSize.md },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary, paddingHorizontal: spacing.lg },
+  emptyText: { color: colors.textSecondary, fontSize: fontSize.md, textAlign: 'center' },
 });
 
 export default Incentive;

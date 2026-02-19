@@ -18,39 +18,25 @@ import { ThemeColors, Lead, FilterOption } from './types';
 import DropdownModal from './dropdownModal';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// EXACT SAME COLORS AS THE PREVIOUS FILE
 const THEME_COLORS = {
-  // Primary Greens
   primary: '#0D9488',
   primaryLight: '#14B8A6',
   primaryDark: '#0F766E',
-  
-  // Secondary & Accent
   secondary: '#10B981',
   accent: '#A7F3D0',
-  
-  // Backgrounds
   background: '#F9FAFB',
   card: '#FFFFFF',
   surface: '#F8FAFC',
-  
-  // Text
   textPrimary: '#111827',
   textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
   white: '#FFFFFF',
-  
-  // Borders & Dividers
   border: '#E5E7EB',
   divider: '#F3F4F6',
-  
-  // Status Colors
   success: '#10B981',
   warning: '#F59E0B',
   danger: '#EF4444',
   info: '#3B82F6',
-  
-  // Category-specific backgrounds with green tints
   emailBg: '#F0F9FF',
   emailBorder: '#0EA5E9',
   phoneBg: '#FEF3C7',
@@ -63,8 +49,8 @@ const THEME_COLORS = {
   customFieldBorder: '#8B5CF6',
   managementBg: '#FFFBEB',
   managementBorder: '#F59E0B',
-  
-  // Interactive States
+  incentiveBg: '#FFFBEB',
+  incentiveBorder: '#F59E0B',
   hover: '#ECFDF5',
   active: '#D1FAE5',
   disabled: '#F3F4F6',
@@ -99,25 +85,29 @@ interface CustomField {
   value: string;
 }
 
-// Debounce hook for search optimization
+interface IncentiveData {
+  id: number;
+  bdt_share: number | null;
+  tds_deducted: number | null;
+  final_amount_payable: number | null;
+  gross_income_recieved: number;
+  net_company_earning: number | null;
+  intercity_amount: number | null;
+  intercity_deals: boolean;
+  status: string;
+  referral_amt: number;
+  bdt_expenses: number;
+  goodwill: number;
+}
+
 const useDebounce = (value: string, delay: number): string => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    timeoutRef.current = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setDebouncedValue(value), delay);
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [value, delay]);
 
   return debouncedValue;
@@ -132,12 +122,8 @@ const EditLead: React.FC<EditLeadProps> = ({
   fetchSubphases,
 }) => {
   const [editedLead, setEditedLead] = useState<Lead>(lead);
-  const [editingEmails, setEditingEmails] = useState<string[]>(
-    lead.emails.map(e => e.email)
-  );
-  const [editingPhones, setEditingPhones] = useState<string[]>(
-    lead.phone_numbers.map(p => p.number)
-  );
+  const [editingEmails, setEditingEmails] = useState<string[]>(lead.emails.map(e => e.email));
+  const [editingPhones, setEditingPhones] = useState<string[]>(lead.phone_numbers.map(p => p.number));
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -151,16 +137,16 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [potentialCollaborators, setPotentialCollaborators] = useState<FilterOption[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [incentiveData, setIncentiveData] = useState<IncentiveData | null>(null);
 
-  // Lead Specific Information States
   const [areaRequirements, setAreaRequirements] = useState(lead.meta?.area_requirements || '');
   const [officeType, setOfficeType] = useState(lead.meta?.office_type || '');
   const [location, setLocation] = useState(lead.meta?.location || '');
   const [contactPersonName, setContactPersonName] = useState<string>(
-  (lead.meta && typeof lead.meta === 'object' && lead.meta.contact_person_name)
-    ? String(lead.meta.contact_person_name)
-    : ''
-);
+    (lead.meta && typeof lead.meta === 'object' && lead.meta.contact_person_name)
+      ? String(lead.meta.contact_person_name)
+      : ''
+  );
   const [customFields, setCustomFields] = useState<CustomField[]>(() => {
     const fields: CustomField[] = [];
     if (lead.meta) {
@@ -180,7 +166,6 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  // Status choices without color property (to match FilterOption type)
   const STATUS_CHOICES: FilterOption[] = [
     { value: 'active', label: 'Active' },
     { value: 'hold', label: 'Hold' },
@@ -197,7 +182,6 @@ const EditLead: React.FC<EditLeadProps> = ({
     { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
   ];
 
-  // Status color mapping separate from FilterOption
   const STATUS_COLORS: Record<string, string> = {
     'active': THEME_COLORS.success,
     'hold': THEME_COLORS.warning,
@@ -210,10 +194,9 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   useEffect(() => {
     fetchPhases();
-    if (editedLead.phase) {
-      fetchSubphasesForPhase(editedLead.phase);
-    }
+    if (editedLead.phase) fetchSubphasesForPhase(editedLead.phase);
     fetchCollaborators();
+    fetchIncentiveSummary();
   }, []);
 
   useEffect(() => {
@@ -224,26 +207,34 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   }, [debouncedSearchQuery]);
 
+  const fetchIncentiveSummary = async () => {
+    try {
+      if (!token || !lead.id) return;
+      const response = await fetch(`${BACKEND_URL}/employee/getIncentive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, lead_id: lead.id })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setIncentiveData(data.incentive);
+      }
+      // If not ok (no incentive yet), incentiveData stays null — no error shown
+    } catch {
+      // silently ignore
+    }
+  };
+
   const fetchPhases = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getAllPhases`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
-      };
+      const beautifyName = (name: string) =>
+        name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
       setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
     } catch (error) {
       console.error('Error fetching phases:', error);
@@ -255,22 +246,12 @@ const EditLead: React.FC<EditLeadProps> = ({
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
-      };
+      const beautifyName = (name: string) =>
+        name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
       setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
     } catch (error) {
       console.error('Error fetching subphases:', error);
@@ -281,27 +262,15 @@ const EditLead: React.FC<EditLeadProps> = ({
   const fetchCollaborators = async () => {
     try {
       if (!token || !lead.id) return;
-      
       setLoadingCollaborators(true);
       const response = await fetch(`${BACKEND_URL}/employee/getCollaborators`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          lead_id: lead.id
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, lead_id: lead.id })
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      if (data.collaborators) {
-        setCollaborators(data.collaborators);
-      }
+      if (data.collaborators) setCollaborators(data.collaborators);
     } catch (error) {
       console.error('Error fetching collaborators:', error);
       Alert.alert('Error', 'Failed to fetch collaborators');
@@ -311,86 +280,48 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   const searchPotentialCollaborators = async (query: string) => {
-  try {
-    if (query.length < 2) {
-      setPotentialCollaborators([]);
-      return;
-    }
-
-    setSearchLoading(true);
-    const response = await fetch(
-      `${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
+    try {
+      if (query.length < 2) { setPotentialCollaborators([]); return; }
+      setSearchLoading(true);
+      const response = await fetch(
+        `${BACKEND_URL}/employee/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
         }
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Search error response:', errorData);
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(data)
-    if (!data.potential_collaborators) {
-      console.warn('No potential_collaborators in response');
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      if (!data.potential_collaborators) { setPotentialCollaborators([]); return; }
+      const options = data.potential_collaborators.map((user: any) => ({
+        value: user.email,
+        label: `${user.first_name} ${user.last_name} (${user.email})`,
+        userData: user
+      }));
+      setPotentialCollaborators(options);
+    } catch (error) {
+      console.error('Error searching collaborators:', error);
       setPotentialCollaborators([]);
-      return;
+    } finally {
+      setSearchLoading(false);
     }
-
-    const options = data.potential_collaborators.map((user: any) => ({
-      value: user.email,
-      label: `${user.first_name} ${user.last_name} (${user.email})`,
-      userData: user
-    }));
-
-    setPotentialCollaborators(options);
-  } catch (error) {
-    console.error('Error searching collaborators:', error);
-    setPotentialCollaborators([]);
-    // Optionally show a user-friendly message
-    // Alert.alert('Search Error', 'Unable to search for colleagues. Please try again.');
-  } finally {
-    setSearchLoading(false);
-  }
-};
+  };
 
   const addCollaborator = async (email: string) => {
     try {
-      if (!token || !lead.id) {
-        Alert.alert('Error', 'Missing required information');
-        return;
-      }
-      
-      if (!validateEmail(email)) {
-        Alert.alert('Error', 'Please enter a valid email address');
-        return;
-      }
-      
+      if (!token || !lead.id) { Alert.alert('Error', 'Missing required information'); return; }
+      if (!validateEmail(email)) { Alert.alert('Error', 'Please enter a valid email address'); return; }
       setLoadingCollaborators(true);
       const response = await fetch(`${BACKEND_URL}/employee/addCollaborators`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          lead_id: lead.id,
-          email: email
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, lead_id: lead.id, email })
       });
-
       const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to add collaborator');
-      }
-
+      if (!response.ok) throw new Error(data.message || 'Failed to add collaborator');
       await fetchCollaborators();
       setSearchQuery('');
       setPotentialCollaborators([]);
@@ -406,119 +337,66 @@ const EditLead: React.FC<EditLeadProps> = ({
   const removeCollaborator = async (collaboratorId: string | number) => {
     try {
       if (!token || !lead.id) return;
-      
-      Alert.alert(
-        'Remove Collaborator',
-        'Are you sure you want to remove this collaborator?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: async () => {
-              setLoadingCollaborators(true);
-              const response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  token,
-                  lead_id: lead.id,
-                  collaborator_id: collaboratorId
-                })
-              });
-              
-              const data = await response.json();
-              
-              if (!response.ok) {
-                throw new Error(data.message || 'Failed to remove collaborator');
-              }
-
-              await fetchCollaborators();
-              Alert.alert('Success', data.message || 'Collaborator removed successfully');
-              setLoadingCollaborators(false);
-            }
+      Alert.alert('Remove Collaborator', 'Are you sure you want to remove this collaborator?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingCollaborators(true);
+            const response = await fetch(`${BACKEND_URL}/employee/removeCollaborator`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token, lead_id: lead.id, collaborator_id: collaboratorId })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Failed to remove collaborator');
+            await fetchCollaborators();
+            Alert.alert('Success', data.message || 'Collaborator removed successfully');
+            setLoadingCollaborators(false);
           }
-        ]
-      );
+        }
+      ]);
     } catch (error: any) {
       console.error('Error removing collaborator:', error);
       Alert.alert('Error', error.message || 'Failed to remove collaborator');
       setLoadingCollaborators(false);
     }
   };
-  
-  const beautifyName = (name: string): string => {
-    return name
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-  };
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  const beautifyName = (name: string): string =>
+    name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
-  const validatePhone = (phone: string): boolean => {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
-  };
-  
+  const validateEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const validatePhone = (phone: string): boolean =>
+    /^[\+]?[1-9][\d]{0,15}$/.test(phone.replace(/[\s\-\(\)]/g, ''));
+
   const handleAddEmail = () => {
     const trimmedEmail = newEmail.trim();
-    
-    if (!trimmedEmail) {
-      setEmailError('Please enter an email address');
-      return;
-    }
-    
-    if (!validateEmail(trimmedEmail)) {
-      setEmailError('Please enter a valid email address');
-      return;
-    }
-    
-    if (editingEmails.includes(trimmedEmail)) {
-      setEmailError('This email already exists');
-      return;
-    }
-    
+    if (!trimmedEmail) { setEmailError('Please enter an email address'); return; }
+    if (!validateEmail(trimmedEmail)) { setEmailError('Please enter a valid email address'); return; }
+    if (editingEmails.includes(trimmedEmail)) { setEmailError('This email already exists'); return; }
     setEditingEmails([...editingEmails, trimmedEmail]);
     setNewEmail('');
     setEmailError(null);
   };
 
-  const handleRemoveEmail = (index: number) => {
+  const handleRemoveEmail = (index: number) =>
     setEditingEmails(editingEmails.filter((_, i) => i !== index));
-  };
 
   const handleAddPhone = () => {
     const trimmedPhone = newPhone.trim();
-    
-    if (!trimmedPhone) {
-      setPhoneError('Please enter a phone number');
-      return;
-    }
-    
-    if (!validatePhone(trimmedPhone)) {
-      setPhoneError('Please enter a valid phone number');
-      return;
-    }
-    
-    if (editingPhones.includes(trimmedPhone)) {
-      setPhoneError('This phone number already exists');
-      return;
-    }
-    
+    if (!trimmedPhone) { setPhoneError('Please enter a phone number'); return; }
+    if (!validatePhone(trimmedPhone)) { setPhoneError('Please enter a valid phone number'); return; }
+    if (editingPhones.includes(trimmedPhone)) { setPhoneError('This phone number already exists'); return; }
     setEditingPhones([...editingPhones, trimmedPhone]);
     setNewPhone('');
     setPhoneError(null);
   };
 
-  const handleRemovePhone = (index: number) => {
+  const handleRemovePhone = (index: number) =>
     setEditingPhones(editingPhones.filter((_, i) => i !== index));
-  };
 
   const handleAddCustomField = () => {
     const newId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -527,18 +405,17 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const handleRemoveCustomField = (id: string) => {
     setCustomFields(customFields.filter(field => field.id !== id));
-    const newErrors = {...customFieldErrors};
+    const newErrors = { ...customFieldErrors };
     delete newErrors[id];
     setCustomFieldErrors(newErrors);
   };
 
   const handleCustomFieldChange = (id: string, field: 'key' | 'value', text: string) => {
-    setCustomFields(customFields.map(fieldItem => 
+    setCustomFields(customFields.map(fieldItem =>
       fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem
     ));
-    
     if (customFieldErrors[id]) {
-      const newErrors = {...customFieldErrors};
+      const newErrors = { ...customFieldErrors };
       delete newErrors[id];
       setCustomFieldErrors(newErrors);
     }
@@ -547,14 +424,12 @@ const EditLead: React.FC<EditLeadProps> = ({
   const validateCustomFields = () => {
     const errors: {[key: string]: string} = {};
     let isValid = true;
-
     customFields.forEach(field => {
       if (field.key.trim() === '' && field.value.trim() !== '') {
         errors[field.id] = 'Key is required when value is provided';
         isValid = false;
       }
     });
-
     setCustomFieldErrors(errors);
     return isValid;
   };
@@ -565,30 +440,19 @@ const EditLead: React.FC<EditLeadProps> = ({
         Alert.alert('Validation Error', 'Please check your custom fields. Key is required when value is provided.');
         return;
       }
-
       setLoading(true);
-      
-      // Build meta object from lead specific information
       const meta: {[key: string]: any} = {};
-      
-      // Add lead specific information
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
       if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
-      // Add custom fields
       customFields.forEach(field => {
-        if (field.key.trim() && field.value.trim()) {
-          meta[field.key.trim()] = field.value.trim();
-        }
+        if (field.key.trim() && field.value.trim()) meta[field.key.trim()] = field.value.trim();
       });
-
-      // Update the lead with meta data
       const updatedLeadWithMeta = {
         ...editedLead,
         meta: Object.keys(meta).length > 0 ? meta : undefined
       };
-      
       await onSave(updatedLeadWithMeta, editingEmails, editingPhones);
     } catch (error) {
       Alert.alert('Error', 'Failed to update lead');
@@ -598,13 +462,10 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   const handlePhaseSelection = async (phase: string) => {
-    setEditedLead({...editedLead, phase: phase});
+    setEditedLead({ ...editedLead, phase });
     await fetchSubphases(phase);
     await fetchSubphasesForPhase(phase);
-    
-    if (allSubphases.length > 0) {
-      setEditedLead(prev => ({...prev, subphase: ''}));
-    }
+    if (allSubphases.length > 0) setEditedLead(prev => ({ ...prev, subphase: '' }));
   };
 
   const getFilterLabel = (filterKey: string, value: string): string => {
@@ -624,37 +485,52 @@ const EditLead: React.FC<EditLeadProps> = ({
     return option ? option.label : 'Select office type...';
   };
 
-  const getStatusColor = (status: string): string => {
-    return STATUS_COLORS[status] || THEME_COLORS.primary;
+  const getStatusColor = (status: string): string => STATUS_COLORS[status] || THEME_COLORS.primary;
+
+  const formatCurrency = (amount: number | null): string => {
+    if (amount === null) return '₹0.00';
+    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Keep your exact header as requested (unchanged)
+  const getIncentiveStatusColor = (status: string): string => {
+    switch (status) {
+      case 'pending': return THEME_COLORS.warning;
+      case 'correction': return THEME_COLORS.danger;
+      case 'accepted': return THEME_COLORS.success;
+      case 'accepted_by_bdt': return THEME_COLORS.success;
+      case 'payment_raised': return THEME_COLORS.info;
+      case 'paid': return THEME_COLORS.primary;
+      default: return THEME_COLORS.textSecondary;
+    }
+  };
+
+  const getIncentiveStatusText = (status: string): string => {
+    switch (status) {
+      case 'pending': return 'Under Review';
+      case 'correction': return 'Needs Correction';
+      case 'accepted': return 'Accepted';
+      case 'accepted_by_bdt': return 'Confirmed by BDT';
+      case 'payment_raised': return 'Payment Processing';
+      case 'paid': return 'Paid';
+      default: return status;
+    }
+  };
+
   const ModernHeader = () => (
-    <View style={[s.header, {paddingTop: Platform.OS === 'ios' ? 10 : 10}]}>
+    <View style={[s.header, { paddingTop: Platform.OS === 'ios' ? 10 : 10 }]}>
       <View style={s.headerContent}>
         <TouchableOpacity onPress={onBack} style={s.backButton}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        
         <View style={s.headerTextContainer}>
-          <Text style={s.headerTitle} numberOfLines={1}>
-            Edit Lead
-          </Text>
-          <Text style={s.headerSubtitle} numberOfLines={1}>
-            {lead.company || 'Lead Details'}
-          </Text>
+          <Text style={s.headerTitle} numberOfLines={1}>Edit Lead</Text>
+          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.company || 'Lead Details'}</Text>
         </View>
-        
         <View style={s.headerActions}>
           {loading ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <TouchableOpacity 
-              onPress={handleSave}
-              style={s.saveHeaderButton}
-              disabled={loading}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity onPress={handleSave} style={s.saveHeaderButton} disabled={loading} activeOpacity={0.7}>
               <Text style={s.saveHeaderText}>Save</Text>
             </TouchableOpacity>
           )}
@@ -670,16 +546,9 @@ const EditLead: React.FC<EditLeadProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ModernHeader />
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#075E54"
-        translucent={false}
-      />
-      <ScrollView 
-        style={s.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scrollContent}
-      >
+      <StatusBar barStyle="light-content" backgroundColor="#075E54" translucent={false} />
+      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+
         {/* Lead Specific Information Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -698,7 +567,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
-          
           <View style={s.field}>
             <Text style={s.label}>Area Requirements</Text>
             <TextInput
@@ -711,26 +579,18 @@ const EditLead: React.FC<EditLeadProps> = ({
               numberOfLines={2}
             />
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Office Type</Text>
-            <TouchableOpacity
-              style={s.selector}
-              onPress={() => setActiveDropdown('officeType')}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('officeType')} activeOpacity={0.7}>
               <View style={s.selectorContent}>
                 <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
                   <Ionicons name="business" size={14} color={THEME_COLORS.leadInfoBorder} />
                 </View>
-                <Text style={s.selectorText} numberOfLines={1}>
-                  {getOfficeTypeLabel()}
-                </Text>
+                <Text style={s.selectorText} numberOfLines={1}>{getOfficeTypeLabel()}</Text>
               </View>
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Location Preference</Text>
             <TextInput
@@ -741,11 +601,9 @@ const EditLead: React.FC<EditLeadProps> = ({
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
-          
-          {/* Custom Fields */}
           {customFields.length > 0 && (
             <View style={s.customFieldsSection}>
-              <Text style={[s.label, {marginBottom: 12}]}>Additional Information</Text>
+              <Text style={[s.label, { marginBottom: 12 }]}>Additional Information</Text>
               {customFields.map((field) => (
                 <View key={field.id} style={s.customFieldRow}>
                   <View style={s.customFieldInputs}>
@@ -763,27 +621,16 @@ const EditLead: React.FC<EditLeadProps> = ({
                       placeholder="Value"
                       placeholderTextColor={THEME_COLORS.textTertiary}
                     />
-                    <TouchableOpacity 
-                      style={s.removeCustomFieldBtn}
-                      onPress={() => handleRemoveCustomField(field.id)}
-                      activeOpacity={0.6}
-                    >
+                    <TouchableOpacity style={s.removeCustomFieldBtn} onPress={() => handleRemoveCustomField(field.id)} activeOpacity={0.6}>
                       <Ionicons name="trash-outline" size={18} color={THEME_COLORS.danger} />
                     </TouchableOpacity>
                   </View>
-                  {customFieldErrors[field.id] && (
-                    <Text style={s.error}>{customFieldErrors[field.id]}</Text>
-                  )}
+                  {customFieldErrors[field.id] && <Text style={s.error}>{customFieldErrors[field.id]}</Text>}
                 </View>
               ))}
             </View>
           )}
-
-          <TouchableOpacity 
-            style={s.addCustomFieldBtn}
-            onPress={handleAddCustomField}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={s.addCustomFieldBtn} onPress={handleAddCustomField} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={18} color={THEME_COLORS.primary} />
             <Text style={s.addCustomFieldText}>Add Custom Field</Text>
           </TouchableOpacity>
@@ -797,18 +644,13 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Email Addresses ({editingEmails.length})</Text>
           </View>
-          
           {editingEmails.length > 0 ? editingEmails.map((email, index) => (
             <View key={index} style={s.listItem}>
               <View style={s.listItemContent}>
                 <Ionicons name="mail" size={16} color={THEME_COLORS.emailBorder} />
                 <Text style={s.listItemText}>{email}</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => handleRemoveEmail(index)}
-                style={s.deleteBtn}
-                activeOpacity={0.6}
-              >
+              <TouchableOpacity onPress={() => handleRemoveEmail(index)} style={s.deleteBtn} activeOpacity={0.6}>
                 <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -818,25 +660,17 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Text style={s.emptyContactText}>No emails added yet</Text>
             </View>
           )}
-
           <View style={s.addRow}>
             <TextInput
               style={[s.input, emailError && s.inputError, { flex: 1 }]}
               value={newEmail}
-              onChangeText={(text) => {
-                setNewEmail(text);
-                setEmailError(null);
-              }}
+              onChangeText={(text) => { setNewEmail(text); setEmailError(null); }}
               placeholder="Add new email..."
               placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TouchableOpacity 
-              style={s.addBtn} 
-              onPress={handleAddEmail}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={s.addBtn} onPress={handleAddEmail} activeOpacity={0.7}>
               <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
@@ -851,18 +685,13 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Phone Numbers ({editingPhones.length})</Text>
           </View>
-          
           {editingPhones.length > 0 ? editingPhones.map((phone, index) => (
             <View key={index} style={s.listItem}>
               <View style={s.listItemContent}>
                 <Ionicons name="call" size={16} color={THEME_COLORS.phoneBorder} />
                 <Text style={s.listItemText}>{phone}</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => handleRemovePhone(index)}
-                style={s.deleteBtn}
-                activeOpacity={0.6}
-              >
+              <TouchableOpacity onPress={() => handleRemovePhone(index)} style={s.deleteBtn} activeOpacity={0.6}>
                 <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -872,24 +701,16 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Text style={s.emptyContactText}>No phone numbers added yet</Text>
             </View>
           )}
-
           <View style={s.addRow}>
             <TextInput
               style={[s.input, phoneError && s.inputError, { flex: 1 }]}
               value={newPhone}
-              onChangeText={(text) => {
-                setNewPhone(text);
-                setPhoneError(null);
-              }}
+              onChangeText={(text) => { setNewPhone(text); setPhoneError(null); }}
               placeholder="Add new phone number..."
               placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="phone-pad"
             />
-            <TouchableOpacity 
-              style={s.addBtn} 
-              onPress={handleAddPhone}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={s.addBtn} onPress={handleAddPhone} activeOpacity={0.7}>
               <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
@@ -907,7 +728,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               <ActivityIndicator size="small" color={THEME_COLORS.collabBorder} style={{ marginLeft: 8 }} />
             )}
           </View>
-          
           {collaborators.length === 0 ? (
             <View style={s.emptyContact}>
               <Text style={s.emptyContactText}>No colleagues added yet</Text>
@@ -917,11 +737,9 @@ const EditLead: React.FC<EditLeadProps> = ({
               <View key={collaborator.id} style={s.listItem}>
                 <View style={s.listItemContent}>
                   <Ionicons name="person" size={16} color={THEME_COLORS.collabBorder} />
-                  <Text style={s.listItemText}>
-                    {collaborator.user.full_name} 
-                  </Text>
+                  <Text style={s.listItemText}>{collaborator.user.full_name}</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => removeCollaborator(collaborator.id)}
                   disabled={loadingCollaborators}
                   style={s.deleteBtn}
@@ -936,15 +754,12 @@ const EditLead: React.FC<EditLeadProps> = ({
               </View>
             ))
           )}
-
           <View style={s.addRow}>
             <View style={s.searchContainer}>
               <TextInput
                 style={s.searchInput}
                 value={searchQuery}
-                onChangeText={(text) => {
-                  setSearchQuery(text);
-                }}
+                onChangeText={(text) => setSearchQuery(text)}
                 placeholder="Search colleagues..."
                 placeholderTextColor={THEME_COLORS.textTertiary}
                 autoCapitalize="none"
@@ -954,8 +769,6 @@ const EditLead: React.FC<EditLeadProps> = ({
               )}
             </View>
           </View>
-
-          {/* Search Results */}
           {potentialCollaborators.length > 0 && (
             <View style={s.resultsBox}>
               {potentialCollaborators
@@ -976,11 +789,113 @@ const EditLead: React.FC<EditLeadProps> = ({
                     </View>
                     <Ionicons name="add-circle" size={22} color={THEME_COLORS.success} />
                   </TouchableOpacity>
-                ))
-              }
+                ))}
             </View>
           )}
         </View>
+
+        {/* Incentive Summary Card — only shown after incentive is created */}
+        {incentiveData !== null && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.incentiveBg }]}>
+                <Ionicons name="cash-outline" size={20} color={THEME_COLORS.incentiveBorder} />
+              </View>
+              <Text style={s.cardTitle}>Incentive</Text>
+              <View style={[s.incentiveStatusBadge, { backgroundColor: getIncentiveStatusColor(incentiveData.status) }]}>
+                <Text style={s.incentiveStatusText}>{getIncentiveStatusText(incentiveData.status)}</Text>
+              </View>
+            </View>
+
+            {/* Always show gross & net */}
+            <View style={s.incentiveRow}>
+              <Text style={s.incentiveLabel}>Gross Income</Text>
+              <Text style={s.incentiveValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
+            </View>
+            {incentiveData.referral_amt > 0 && (
+              <View style={s.incentiveRow}>
+                <Text style={s.incentiveLabel}>Less: Referral</Text>
+                <Text style={[s.incentiveValue, { color: THEME_COLORS.danger }]}>- {formatCurrency(incentiveData.referral_amt)}</Text>
+              </View>
+            )}
+            {incentiveData.bdt_expenses > 0 && (
+              <View style={s.incentiveRow}>
+                <Text style={s.incentiveLabel}>Less: BD Expenses</Text>
+                <Text style={[s.incentiveValue, { color: THEME_COLORS.danger }]}>- {formatCurrency(incentiveData.bdt_expenses)}</Text>
+              </View>
+            )}
+            {incentiveData.goodwill > 0 && (
+              <View style={s.incentiveRow}>
+                <Text style={s.incentiveLabel}>Less: Goodwill</Text>
+                <Text style={[s.incentiveValue, { color: THEME_COLORS.danger }]}>- {formatCurrency(incentiveData.goodwill)}</Text>
+              </View>
+            )}
+            <View style={[s.incentiveRow, s.incentiveHighlightRow]}>
+              <Text style={s.incentiveLabelBold}>Net Company Earning</Text>
+              <Text style={s.incentiveValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
+            </View>
+
+            {incentiveData.intercity_deals && (
+              <View style={s.incentiveRow}>
+                <Text style={s.incentiveLabel}>Intercity Share (50%)</Text>
+                <Text style={s.incentiveValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
+              </View>
+            )}
+
+            {/* BUP has set the share — show breakdown and per-collaborator share */}
+            {incentiveData.bdt_share !== null ? (
+              <>
+                <View style={s.incentiveDivider} />
+                <View style={s.incentiveRow}>
+                  <Text style={s.incentiveLabel}>Transaction Team Share</Text>
+                  <Text style={s.incentiveValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
+                </View>
+                <View style={s.incentiveRow}>
+                  <Text style={s.incentiveLabel}>Less: TDS</Text>
+                  <Text style={[s.incentiveValue, { color: THEME_COLORS.danger }]}>- {formatCurrency(incentiveData.tds_deducted)}</Text>
+                </View>
+                <View style={[s.incentiveRow, s.incentiveFinalRow]}>
+                  <Text style={s.incentiveFinalLabel}>Final Amount Payable</Text>
+                  <Text style={s.incentiveFinalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
+                </View>
+
+                {/* Collaborator share breakdown */}
+                {collaborators.length > 0 && (
+                  <>
+                    <View style={s.incentiveDivider} />
+                    <Text style={[s.incentiveLabel, { marginBottom: 8, marginTop: 4 }]}>COLLEAGUE SHARES</Text>
+                    {collaborators.map((collab) => {
+                      // Each collaborator gets an equal split of the final amount
+                      const totalMembers = collaborators.length + 1; // +1 for the BDT lead
+                      const perPersonShare = incentiveData.final_amount_payable !== null
+                        ? incentiveData.final_amount_payable / totalMembers
+                        : null;
+                      const sharePercent = (1 / totalMembers * 100).toFixed(1);
+                      return (
+                        <View key={collab.id} style={s.collabShareRow}>
+                          <View style={s.collabShareLeft}>
+                            <Ionicons name="person-circle-outline" size={18} color={THEME_COLORS.collabBorder} />
+                            <Text style={s.collabShareName} numberOfLines={1}>{collab.user.full_name}</Text>
+                          </View>
+                          <View style={s.collabShareRight}>
+                            <Text style={s.collabSharePercent}>{sharePercent}%</Text>
+                            <Text style={s.collabShareAmount}>{formatCurrency(perPersonShare)}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                    <Text style={s.collabShareNote}>* Equal split among all team members including lead BDT</Text>
+                  </>
+                )}
+              </>
+            ) : (
+              <View style={s.incentivePendingBox}>
+                <Ionicons name="time-outline" size={16} color={THEME_COLORS.warning} />
+                <Text style={s.incentivePendingText}>Awaiting BUP to set transaction share & TDS</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Lead Management Card */}
         <View style={s.card}>
@@ -990,7 +905,6 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Lead Management</Text>
           </View>
-          
           <View style={s.row}>
             <View style={s.halfField}>
               <Text style={s.label}>Status</Text>
@@ -999,46 +913,30 @@ const EditLead: React.FC<EditLeadProps> = ({
                 onPress={() => setActiveDropdown('status')}
                 activeOpacity={0.7}
               >
-                <Text style={s.selectorText} numberOfLines={1}>
-                  {getFilterLabel('status', editedLead.status)}
-                </Text>
+                <Text style={s.selectorText} numberOfLines={1}>{getFilterLabel('status', editedLead.status)}</Text>
                 <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
-
             <View style={s.halfField}>
               <Text style={s.label}>Phase</Text>
-              <TouchableOpacity
-                style={s.selector}
-                onPress={() => setActiveDropdown('phase')}
-                activeOpacity={0.7}
-              >
-                <Text style={s.selectorText} numberOfLines={1}>
-                  {getFilterLabel('phase', editedLead.phase)}
-                </Text>
+              <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('phase')} activeOpacity={0.7}>
+                <Text style={s.selectorText} numberOfLines={1}>{getFilterLabel('phase', editedLead.phase)}</Text>
                 <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
-
           <View style={s.field}>
             <Text style={s.label}>Subphase</Text>
-            <TouchableOpacity
-              style={s.selector}
-              onPress={() => setActiveDropdown('subphase')}
-              activeOpacity={0.7}
-            >
-              <Text style={s.selectorText} numberOfLines={1}>
-                {getFilterLabel('subphase', editedLead.subphase)}
-              </Text>
+            <TouchableOpacity style={s.selector} onPress={() => setActiveDropdown('subphase')} activeOpacity={0.7}>
+              <Text style={s.selectorText} numberOfLines={1}>{getFilterLabel('subphase', editedLead.subphase)}</Text>
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Save Button */}
-        <TouchableOpacity 
-          style={[s.saveBtn, loading && s.saveBtnDisabled]} 
+        <TouchableOpacity
+          style={[s.saveBtn, loading && s.saveBtnDisabled]}
           onPress={handleSave}
           disabled={loading}
           activeOpacity={0.8}
@@ -1056,21 +954,13 @@ const EditLead: React.FC<EditLeadProps> = ({
         <View style={s.bottomSpacer} />
       </ScrollView>
 
-      {/* Dropdown Modals */}
       <DropdownModal
         visible={activeDropdown === 'status'}
         onClose={() => setActiveDropdown(null)}
         options={STATUS_CHOICES}
-        onSelect={(value) => setEditedLead({...editedLead, status: value as Lead['status']})}
+        onSelect={(value) => setEditedLead({ ...editedLead, status: value as Lead['status'] })}
         title="Select Status"
-        theme={{
-          ...theme,
-          primary: THEME_COLORS.primary,
-          background: THEME_COLORS.background,
-          cardBg: THEME_COLORS.card,
-          text: THEME_COLORS.textPrimary,
-          border: THEME_COLORS.border,
-        }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
       <DropdownModal
         visible={activeDropdown === 'phase'}
@@ -1078,29 +968,15 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={allPhases}
         onSelect={handlePhaseSelection}
         title="Select Phase"
-        theme={{
-          ...theme,
-          primary: THEME_COLORS.primary,
-          background: THEME_COLORS.background,
-          cardBg: THEME_COLORS.card,
-          text: THEME_COLORS.textPrimary,
-          border: THEME_COLORS.border,
-        }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
       <DropdownModal
         visible={activeDropdown === 'subphase'}
         onClose={() => setActiveDropdown(null)}
         options={allSubphases}
-        onSelect={(value) => setEditedLead({...editedLead, subphase: value})}
+        onSelect={(value) => setEditedLead({ ...editedLead, subphase: value })}
         title="Select Subphase"
-        theme={{
-          ...theme,
-          primary: THEME_COLORS.primary,
-          background: THEME_COLORS.background,
-          cardBg: THEME_COLORS.card,
-          text: THEME_COLORS.textPrimary,
-          border: THEME_COLORS.border,
-        }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
       <DropdownModal
         visible={activeDropdown === 'officeType'}
@@ -1108,26 +984,14 @@ const EditLead: React.FC<EditLeadProps> = ({
         options={OFFICE_TYPE_CHOICES}
         onSelect={(value) => setOfficeType(value)}
         title="Select Office Type"
-        theme={{
-          ...theme,
-          primary: THEME_COLORS.primary,
-          background: THEME_COLORS.background,
-          cardBg: THEME_COLORS.card,
-          text: THEME_COLORS.textPrimary,
-          border: THEME_COLORS.border,
-        }}
+        theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
     </KeyboardAvoidingView>
   );
 };
 
 const s = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: THEME_COLORS.background 
-  },
-  
-  // Header Styles (unchanged as requested)
+  container: { flex: 1, backgroundColor: THEME_COLORS.background },
   header: {
     backgroundColor: '#075E54',
     borderBottomWidth: 1,
@@ -1145,52 +1009,15 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     height: 100,
   },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
-    marginTop: 25
-  },
-  headerTextContainer: {
-    flex: 1,
-    marginTop: 25,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 25,
-  },
-  saveHeaderButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#25D366',
-    borderRadius: 20,
-  },
-  saveHeaderText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  
-  // Main Content
-  scrollView: { 
-    flex: 1 
-  },
-  scrollContent: { 
-    paddingTop: 16, 
-    paddingBottom: 32 
-  },
-  
-  // Cards
+  backButton: { padding: 8, marginRight: 8, marginTop: 25 },
+  headerTextContainer: { flex: 1, marginTop: 25 },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', marginBottom: 2 },
+  headerSubtitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', marginTop: 25 },
+  saveHeaderButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#25D366', borderRadius: 20 },
+  saveHeaderText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingTop: 16, paddingBottom: 32 },
   card: {
     marginHorizontal: 16,
     marginBottom: 16,
@@ -1205,38 +1032,11 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME_COLORS.border,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: THEME_COLORS.textPrimary,
-    letterSpacing: -0.3,
-  },
-  
-  // Form Fields
-  field: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME_COLORS.textSecondary,
-    marginBottom: 8,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
+  cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 17, fontWeight: '600', color: THEME_COLORS.textPrimary, letterSpacing: -0.3, flex: 1 },
+  field: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '600', color: THEME_COLORS.textSecondary, marginBottom: 8, letterSpacing: 0.2, textTransform: 'uppercase' },
   input: {
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
@@ -1247,16 +1047,8 @@ const s = StyleSheet.create({
     color: THEME_COLORS.textPrimary,
     backgroundColor: THEME_COLORS.surface,
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  inputError: {
-    borderColor: THEME_COLORS.danger,
-    backgroundColor: '#FEF2F2',
-  },
-  
-  // Selectors
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  inputError: { borderColor: THEME_COLORS.danger, backgroundColor: '#FEF2F2' },
   selector: {
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
@@ -1268,20 +1060,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: THEME_COLORS.surface,
   },
-  selectorContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  selectorText: {
-    fontSize: 15,
-    color: THEME_COLORS.textPrimary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  
-  // List Items
+  selectorContent: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  selectorText: { fontSize: 15, color: THEME_COLORS.textPrimary, flex: 1, fontWeight: '500' },
   listItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1293,24 +1073,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME_COLORS.border,
   },
-  listItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  listItemText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: THEME_COLORS.textPrimary,
-    flex: 1,
-  },
-  deleteBtn: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  
-  // Empty Contact
+  listItemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  listItemText: { fontSize: 14, fontWeight: '500', color: THEME_COLORS.textPrimary, flex: 1 },
+  deleteBtn: { padding: 4, marginLeft: 8 },
   emptyContact: {
     padding: 16,
     borderRadius: 12,
@@ -1323,12 +1088,7 @@ const s = StyleSheet.create({
     borderColor: THEME_COLORS.border,
     borderStyle: 'dashed',
   },
-  emptyContactText: {
-    fontSize: 14,
-    color: THEME_COLORS.textTertiary,
-  },
-  
-  // Add Rows
+  emptyContactText: { fontSize: 14, color: THEME_COLORS.textTertiary },
   addRow: {
     flexDirection: 'row',
     gap: 12,
@@ -1338,29 +1098,9 @@ const s = StyleSheet.create({
     borderTopWidth: 1.5,
     borderTopColor: THEME_COLORS.divider,
   },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME_COLORS.hover,
-  },
-  
-  // Error Messages
-  error: {
-    fontSize: 12,
-    color: THEME_COLORS.danger,
-    marginTop: 6,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  
-  // Search
-  searchContainer: {
-    flex: 1,
-    position: 'relative',
-  },
+  addBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: THEME_COLORS.hover },
+  error: { fontSize: 12, color: THEME_COLORS.danger, marginTop: 6, marginLeft: 4, fontWeight: '500' },
+  searchContainer: { flex: 1, position: 'relative' },
   searchInput: {
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
@@ -1372,19 +1112,8 @@ const s = StyleSheet.create({
     backgroundColor: THEME_COLORS.surface,
     paddingRight: 40,
   },
-  searchLoader: {
-    position: 'absolute',
-    right: 14,
-    top: 12,
-  },
-  
-  // Results
-  resultsBox: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1.5,
-    borderTopColor: THEME_COLORS.divider,
-  },
+  searchLoader: { position: 'absolute', right: 14, top: 12 },
+  resultsBox: { marginTop: 16, paddingTop: 16, borderTopWidth: 1.5, borderTopColor: THEME_COLORS.divider },
   resultItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1396,52 +1125,14 @@ const s = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
   },
-  resultContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  resultText: {
-    fontSize: 13,
-    color: THEME_COLORS.textPrimary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  
-  // Layout
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  halfField: {
-    flex: 1,
-  },
-  
-  // Icons
-  iconCircleSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  // Custom Fields
-  customFieldsSection: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  customFieldRow: {
-    marginBottom: 12,
-  },
-  customFieldInputs: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    marginBottom: 4,
-  },
+  resultContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  resultText: { fontSize: 13, color: THEME_COLORS.textPrimary, flex: 1, fontWeight: '500' },
+  row: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  halfField: { flex: 1 },
+  iconCircleSmall: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  customFieldsSection: { marginTop: 8, marginBottom: 16 },
+  customFieldRow: { marginBottom: 12 },
+  customFieldInputs: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 4 },
   customFieldInput: {
     flex: 1,
     borderWidth: 1.5,
@@ -1453,9 +1144,7 @@ const s = StyleSheet.create({
     color: THEME_COLORS.textPrimary,
     backgroundColor: THEME_COLORS.customFieldBg,
   },
-  removeCustomFieldBtn: {
-    padding: 10,
-  },
+  removeCustomFieldBtn: { padding: 10 },
   addCustomFieldBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1469,13 +1158,7 @@ const s = StyleSheet.create({
     borderColor: THEME_COLORS.border,
     borderStyle: 'dashed',
   },
-  addCustomFieldText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME_COLORS.primary,
-  },
-  
-  // Save Button
+  addCustomFieldText: { fontSize: 14, fontWeight: '600', color: THEME_COLORS.primary },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1494,20 +1177,81 @@ const s = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  saveBtnDisabled: {
-    opacity: 0.6,
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { fontSize: 16, fontWeight: '700', color: THEME_COLORS.white, letterSpacing: 0.3 },
+  bottomSpacer: { height: 30 },
+
+  // Incentive card styles
+  incentiveStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 'auto',
   },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: THEME_COLORS.white,
-    letterSpacing: 0.3,
+  incentiveStatusText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
+  incentiveRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME_COLORS.divider,
   },
-  
-  // Spacing
-  bottomSpacer: {
-    height: 30,
+  incentiveLabel: { fontSize: 13, color: THEME_COLORS.textSecondary, flex: 1 },
+  incentiveValue: { fontSize: 13, color: THEME_COLORS.textPrimary, fontWeight: '500' },
+  incentiveLabelBold: { fontSize: 13, color: THEME_COLORS.textPrimary, fontWeight: '600', flex: 1 },
+  incentiveValueBold: { fontSize: 13, color: THEME_COLORS.textPrimary, fontWeight: '700' },
+  incentiveHighlightRow: {
+    backgroundColor: THEME_COLORS.hover,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginVertical: 4,
   },
+  incentiveDivider: {
+    height: 1,
+    backgroundColor: THEME_COLORS.border,
+    marginVertical: 12,
+  },
+  incentiveFinalRow: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.success,
+    borderBottomWidth: 1.5,
+  },
+  incentiveFinalLabel: { fontSize: 14, color: THEME_COLORS.success, fontWeight: '700', flex: 1 },
+  incentiveFinalValue: { fontSize: 15, color: THEME_COLORS.success, fontWeight: '700' },
+  incentivePendingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.warning,
+  },
+  incentivePendingText: { fontSize: 13, color: THEME_COLORS.warning, fontWeight: '500', flex: 1 },
+  collabShareRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME_COLORS.divider,
+  },
+  collabShareLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  collabShareName: { fontSize: 13, color: THEME_COLORS.textPrimary, fontWeight: '500', flex: 1 },
+  collabShareRight: { alignItems: 'flex-end' },
+  collabSharePercent: { fontSize: 12, color: THEME_COLORS.primary, fontWeight: '700' },
+  collabShareAmount: { fontSize: 12, color: THEME_COLORS.textSecondary, fontWeight: '500' },
+  collabShareNote: { fontSize: 11, color: THEME_COLORS.textTertiary, marginTop: 8, fontStyle: 'italic' },
 });
 
 export default EditLead;
