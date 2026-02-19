@@ -257,13 +257,13 @@ const styles = StyleSheet.create({
   borderRadius: 8,
   whiteSpace: 'nowrap',
 },
+  addButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '400',
+},
   addIcon: {
     marginRight: 4,
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   saveButton: {
     backgroundColor: '#1DA1F2', // Blue color for Save button

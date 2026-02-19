@@ -203,7 +203,7 @@ export const AssetList: React.FC<AssetListProps> = ({
           </View>
 
           {/* Filter Icon Button */}
-          <TouchableOpacity
+          {/* <TouchableOpacity
             onPress={onFilterPress}
             style={[
               styles.filterButton,
@@ -223,8 +223,8 @@ export const AssetList: React.FC<AssetListProps> = ({
                 {selectedCity}
               </Text>
             ) : null}
-          </TouchableOpacity>
-        </View>
+          </TouchableOpacity>*/}
+        </View> 
 
         {/* Active Filter Badge */}
         {selectedCity ? (

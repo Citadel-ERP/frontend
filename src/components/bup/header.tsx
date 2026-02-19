@@ -259,17 +259,17 @@ const styles = StyleSheet.create({
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: 'transparent',  // overrides actionButton's background
+  backgroundColor: 'transparent',  
   paddingHorizontal: 16,
   paddingVertical: 8,
   gap: 6,
   borderRadius: 8,
   whiteSpace: 'nowrap',
 },
-addButtonText: {
-  fontSize: 14,
-  fontWeight: '700',
-  color: '#FFFFFF',
+  addButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '400',
 },
 addIcon: {
   marginRight: 4,
