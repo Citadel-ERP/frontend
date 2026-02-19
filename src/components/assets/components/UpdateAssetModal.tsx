@@ -39,6 +39,7 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
         asset_type: asset.asset_type,
         asset_description: asset.asset_description,
         asset_count: asset.asset_count.toString(),
+        asset_serial: asset.asset_serial ?? '', 
       });
     }
   }, [asset]);
@@ -86,6 +87,21 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
               <Ionicons name="close" size={24} color={theme.textSub} />
             </TouchableOpacity>
           </View>
+
+          <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: theme.textMain }]}>Serial Number</Text>
+              <TextInput
+                style={[styles.input, { 
+                  backgroundColor: theme.modalBg,
+                  color: theme.textMain,
+                  borderColor: theme.borderColor,
+                }]}
+                placeholder="e.g., SN-123456"
+                placeholderTextColor={theme.textSub}
+                value={formData.asset_serial}
+                onChangeText={(text) => setFormData({ ...formData, asset_serial: text })}
+              />
+            </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.formGroup}>

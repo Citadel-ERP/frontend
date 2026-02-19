@@ -32,6 +32,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
     asset_type: '',
     asset_description: '',
     asset_count: '',
+    asset_serial: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -60,6 +61,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
         asset_type: '',
         asset_description: '',
         asset_count: '',
+        asset_serial: '',
       });
       onClose();
     }
@@ -84,6 +86,23 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color={theme.textSub} />
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, { color: theme.textMain }]}>
+              Serial Number
+            </Text>
+            <TextInput
+              style={[styles.input, { 
+                backgroundColor: theme.modalBg,
+                color: theme.textMain,
+                borderColor: theme.borderColor,
+              }]}
+              placeholder="e.g., SN-123456"
+              placeholderTextColor={theme.textSub}
+              value={formData.asset_serial}
+              onChangeText={(text) => setFormData({ ...formData, asset_serial: text })}
+            />
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>

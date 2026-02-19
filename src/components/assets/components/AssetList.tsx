@@ -19,6 +19,8 @@ interface AssetListProps {
   onRefresh?: () => void;
   onAssetPress: (asset: Asset) => void;
   onDeletePress: (asset: Asset) => void;
+  onFilterPress?: () => void;
+  selectedCity?: string;
   isDark?: boolean;
 }
 
@@ -29,6 +31,8 @@ export const AssetList: React.FC<AssetListProps> = ({
   onRefresh,
   onAssetPress,
   onDeletePress,
+  onFilterPress,
+  selectedCity = '',
   isDark = false,
 }) => {
   const theme = {
@@ -67,7 +71,7 @@ export const AssetList: React.FC<AssetListProps> = ({
         <View style={[styles.assetIcon, { backgroundColor: theme.accentBlue + '20' }]}>
           <Ionicons name={iconName as any} size={32} color={theme.accentBlue} />
         </View>
-        
+
         <View style={styles.assetInfo}>
           <View style={styles.assetHeader}>
             <View style={styles.titleContainer}>
@@ -81,7 +85,7 @@ export const AssetList: React.FC<AssetListProps> = ({
                 </Text>
               </View>
             </View>
-            
+
             <TouchableOpacity
               onPress={() => onDeletePress(item)}
               style={[styles.deleteButton, { backgroundColor: theme.deleteBg }]}
@@ -89,14 +93,14 @@ export const AssetList: React.FC<AssetListProps> = ({
               <Ionicons name="trash-outline" size={18} color="#ff4444" />
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.typeContainer}>
             <Ionicons name="pricetag-outline" size={14} color={theme.textSub} />
             <Text style={[styles.assetType, { color: theme.textSub }]}>
               {item.asset_type}
             </Text>
           </View>
-          
+
           {item.asset_description ? (
             <View style={styles.descriptionContainer}>
               <Ionicons name="document-text-outline" size={14} color={theme.textSub} />
@@ -105,7 +109,7 @@ export const AssetList: React.FC<AssetListProps> = ({
               </Text>
             </View>
           ) : null}
-          
+
           <View style={styles.assetFooter}>
             <View style={styles.countContainer}>
               <Ionicons name="layers-outline" size={16} color={theme.accentBlue} />
@@ -113,7 +117,7 @@ export const AssetList: React.FC<AssetListProps> = ({
                 Count: <Text style={[styles.countNumber, { color: theme.accentBlue }]}>{item.asset_count}</Text>
               </Text>
             </View>
-            
+
             {item.created_at && (
               <View style={styles.dateContainer}>
                 <Ionicons name="time-outline" size={12} color={theme.textSub} />
@@ -172,31 +176,13 @@ export const AssetList: React.FC<AssetListProps> = ({
     return renderLoadingState();
   }
 
-  return (
-    <FlatList
-      data={assets}
-      renderItem={renderAssetItem}
-      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-      contentContainerStyle={[
-        styles.listContainer,
-        assets.length === 0 && styles.emptyListContainer
-      ]}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.accentBlue]}
-            tintColor={theme.accentBlue}
-            title="Pull to refresh"
-            titleColor={theme.textSub}
-          />
-        ) : undefined
-      }
-      ListEmptyComponent={!loading ? renderEmptyState : null}
-      ListHeaderComponent={
-        assets.length > 0 ? (
+  const renderListHeader = () => {
+    if (assets.length === 0) return null;
+
+    return (
+      <View>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
           <View style={styles.statsContainer}>
             <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
               <Text style={[styles.statNumber, { color: theme.accentBlue }]}>
@@ -215,8 +201,68 @@ export const AssetList: React.FC<AssetListProps> = ({
               </Text>
             </View>
           </View>
-        ) : null
+
+          {/* Filter Icon Button */}
+          <TouchableOpacity
+            onPress={onFilterPress}
+            style={[
+              styles.filterButton,
+              {
+                backgroundColor: selectedCity ? theme.accentBlue : theme.cardBg,
+                borderColor: theme.accentBlue,
+              },
+            ]}
+          >
+            <Ionicons
+              name="filter-outline"
+              size={20}
+              color={selectedCity ? '#ffffff' : theme.accentBlue}
+            />
+            {selectedCity ? (
+              <Text style={styles.filterActiveText} numberOfLines={1}>
+                {selectedCity}
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+        </View>
+
+        {/* Active Filter Badge */}
+        {selectedCity ? (
+          <View style={[styles.activeFilterBanner, { backgroundColor: theme.accentBlue + '15', borderColor: theme.accentBlue + '40' }]}>
+            <Ionicons name="location-outline" size={14} color={theme.accentBlue} />
+            <Text style={[styles.activeFilterText, { color: theme.accentBlue }]}>
+              Filtered by: <Text style={{ fontWeight: '700' }}>{selectedCity}</Text>
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  return (
+    <FlatList
+      data={assets}
+      renderItem={renderAssetItem}
+      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+      contentContainerStyle={[
+        styles.listContainer,
+        assets.length === 0 && styles.emptyListContainer,
+      ]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.accentBlue]}
+            tintColor={theme.accentBlue}
+            title="Pull to refresh"
+            titleColor={theme.textSub}
+          />
+        ) : undefined
       }
+      ListEmptyComponent={!loading ? renderEmptyState : null}
+      ListHeaderComponent={renderListHeader}
       stickyHeaderIndices={assets.length > 0 ? [0] : undefined}
     />
   );
@@ -231,10 +277,15 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
   },
-  statsContainer: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+    gap: 12,
+  },
+  statsContainer: {
+    flex: 1,
+    flexDirection: 'row',
     gap: 12,
   },
   statBox: {
@@ -256,6 +307,42 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 4,
+    minWidth: 48,
+    alignSelf: 'stretch',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterActiveText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    maxWidth: 70,
+  },
+  activeFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  activeFilterText: {
+    fontSize: 13,
   },
   assetCard: {
     flexDirection: 'row',

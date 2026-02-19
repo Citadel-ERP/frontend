@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -25,12 +25,12 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
     assets,
     filteredAssets,
     loading,
-    refreshing,        // Add this
+    refreshing,
     error,
     filters,
     setFilters,
-    fetchAssets,       // Add this
-    refreshAssets,     // Add this (if you want separate refresh function)
+    fetchAssets,
+    refreshAssets,
     createAsset,
     updateAsset,
     deleteAsset,
@@ -42,6 +42,7 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string>('');
 
   const theme = {
     bgColor: isDark ? '#050b18' : '#ece5dd',
@@ -89,13 +90,18 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
     fetchAssets();
   };
 
+  const handleCityFilter = (city: string) => {
+    setSelectedCity(city);
+    setFilters({ ...filters, city });
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bgColor }]}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor="#008069"
       />
-      
+
       <AssetHeader
         title="Asset Management"
         onBack={onBack}
@@ -103,6 +109,8 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
         searchQuery={filters.search || ''}
         onAddPress={() => setShowCreateModal(true)}
         onUploadPress={() => setShowUploadModal(true)}
+        selectedCity={selectedCity}
+        onCityFilter={handleCityFilter}
         isDark={isDark}
       />
 
