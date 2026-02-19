@@ -1,7 +1,10 @@
+//bup incentive
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  StatusBar, Alert, TextInput, ActivityIndicator
+  StatusBar, Alert, TextInput, ActivityIndicator,
+  Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontSize, borderRadius, shadows } from './theme';
@@ -444,14 +447,14 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
         {/* BUP Input Section - Only show if status allows editing */}
         {(incentiveData.status === 'pending' || incentiveData.status === 'correction') && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Set Transaction Team Share & TDS</Text>
+            <Text style={styles.cardTitle}>Set Transaction Share & TDS</Text>
             {/* <Text style={styles.infoCardText}>
               Calculate BDT share and TDS based on intercity amount: {formatCurrency(incentiveData.intercity_amount)}
             </Text> */}
 
             <View style={[{display:'flex', flexDirection:'row',justifyContent:'space-between'}]}>
               <View style={[styles.inputGroup,{width:'47%'}]}>
-                <Text style={styles.label}>Transaction Team Share Percentage *</Text>
+                <Text style={styles.label}>Transaction Share % *</Text>
                 <TextInput
                   style={styles.input}
                   value={bdtSharePercentage}
@@ -602,9 +605,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    // paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    marginTop: 10,
+    marginTop: Platform.OS === 'ios' ? -10 : 0,
+    paddingTop: Platform.OS === 'ios' ? 80 : 50,
     // height: 20
   },
   headerWithGreen: {
@@ -614,12 +618,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    
   },
   greenHeader: {
     paddingTop: 80,
     paddingBottom: 0,
     paddingHorizontal: 20,
-    height: 20
+    height: 130 
   },
   greenHeaderContent: {
     marginTop: 0,

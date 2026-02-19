@@ -1,3 +1,5 @@
+//bdt incentive
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
@@ -913,21 +915,25 @@ const Incentive: React.FC<IncentiveProps> = ({ onBack, leadId, leadName, hideHea
             </View>
           )}
           {incentiveData.bdt_share !== null && (
-            <>
-              {incentiveData.final_amount_payable !== null && (
-                <View style={[styles.calculationRow, styles.finalRow]}>
-                  <Text style={styles.finalLabel}>Net Amount (before TDS)</Text>
-                  <Text style={styles.finalValue}>To be Calculated</Text>
-                </View>
-              )}
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Less: TDS</Text>
-                <Text style={[styles.calculationValue, styles.tdsPlaceholder]}>
-                  - will be added
-                </Text>
-              </View>
-            </>
+  <>
+          <View style={styles.calculationRow}>
+            <Text style={styles.calculationLabel}>Transaction Team Share</Text>
+            <Text style={styles.calculationValue}>{formatCurrency(incentiveData.bdt_share)}</Text>
+          </View>
+          <View style={styles.calculationRow}>
+            <Text style={styles.calculationLabel}>Less: TDS</Text>
+            <Text style={[styles.calculationValue, styles.negativeValue]}>
+              - {formatCurrency(incentiveData.tds_deducted)}
+            </Text>
+          </View>
+          {incentiveData.final_amount_payable !== null && (
+            <View style={[styles.calculationRow, styles.finalRow]}>
+              <Text style={styles.finalLabel}>Final Amount Payable</Text>
+              <Text style={styles.finalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
+            </View>
           )}
+        </>
+      )}
           {(incentiveData.bdt_share === null || incentiveData.final_amount_payable === null) && (
             <View style={[styles.calculationRow, styles.finalRow]}>
               <Text style={styles.finalLabel}>Your earning will be told by BUP</Text>
