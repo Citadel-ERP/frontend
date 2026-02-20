@@ -19,14 +19,17 @@ interface HeaderProps {
   };
   unreadCount: number;
   onMenuClick: (action: string) => void;
-  onBack: () => void;  // Add this prop
+  onBack: () => void; 
+  onCameraClick: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
+  
   currentUser, 
   unreadCount, 
   onMenuClick,
-  onBack  // Add this
+  onBack,
+  onCameraClick 
 }) => {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -48,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Text style={styles.headerTitle}>Messages</Text>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={onCameraClick} activeOpacity={0.7}>
             <Ionicons name="camera" size={24} color="#ffffff" />
           </TouchableOpacity>
 

@@ -20,6 +20,7 @@ import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
 import { AddMember } from './addMember';
+import { CameraRecorder } from './cameraRecorder'; 
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -183,6 +184,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // ✅ NEW: Camera state
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'picture' | 'video'>('picture');
+
   // Cache & Optimistic Updates
   const [messageCache, setMessageCache] = useState<{ [roomId: number]: Message[] }>({});
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
@@ -235,6 +240,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   });
 
   const memberAddDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ NEW: Camera capture handler — sends captured photo/video as a message
+  const handleCameraCapture = useCallback((uri: string, type: 'picture' | 'video') => {
+    if (!selectedChatRoom) return;
+    const messageType = type === 'picture' ? 'image' : 'video';
+    const file = {
+      uri,
+      type: type === 'picture' ? 'image/jpeg' : 'video/mp4',
+      name: `${messageType}_${Date.now()}.${type === 'picture' ? 'jpg' : 'mp4'}`,
+    };
+    sendMessage('', messageType, file);
+  }, [selectedChatRoom]);
 
   const handleShare = useCallback((messageIds: number[], messages: Message[], chatRoomId?: number) => {
     setShareData({ messageIds, messages, chatRoomId });
@@ -603,11 +620,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     cachedMessages.forEach(msg => messageMap.set(msg.id, msg));
     newMessages.forEach(msg => messageMap.set(msg.id, msg));
     return Array.from(messageMap.values())
-      .filter(msg => !String(msg.id).startsWith('temp_')) // drop any stale temp messages on load
+      .filter(msg => !String(msg.id).startsWith('temp_'))
       .map(msg => {
-        // Old messages from API/cache have no status — assign 'delivered' as a safe default.
-        // We can't know if they were actually read, but 'delivered' is more accurate than
-        // showing a clock (sending) icon for messages that clearly already exist on the server.
         if (!msg.status) {
           const isOwn =
             (msg.sender?.id || msg.sender?.employee_id) ===
@@ -1110,7 +1124,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             return;
           }
 
-          // ✅ USE REFS TO ALWAYS CALL LATEST HANDLERS
           switch (data.type) {
             case 'message':
               handlersRef.current.handleNewMessage(data.message);
@@ -1263,14 +1276,11 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [isConnected, loadChatRooms, loadNotifications, connectWebSocket, sendWebSocketMessage]);
 
   // ============= WEBSOCKET MESSAGE HANDLERS =============
-
-  // ============= NEW: handleNewMessage with temp message replacement =============
   const handleNewMessage = useCallback((message: Message) => {
     console.log('🔥 HANDLE NEW MESSAGE CALLED:', message.id, 'temp_id:', (message as any).temp_id);
 
     if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
       setMessages(prev => {
-        // ── 1. Try exact temp_id match first (most reliable) ──
         const tempId = (message as any).temp_id;
         let tempIndex = -1;
 
@@ -1278,7 +1288,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           tempIndex = prev.findIndex(m => String(m.id) === String(tempId));
         }
 
-        // ── 2. Fallback: fuzzy match by content + sender + type within 10s ──
         if (tempIndex === -1) {
           tempIndex = prev.findIndex(m => {
             if (!String(m.id).startsWith('temp_')) return false;
@@ -1295,7 +1304,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         let updated: Message[];
 
         if (tempIndex !== -1) {
-          // Replace temp with real message, status = 'delivered'
           updated = [...prev];
           updated[tempIndex] = {
             ...message,
@@ -1303,7 +1311,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             isUploading: false,
           };
         } else {
-          // Check if real message already exists
           const exists = prev.some(m => m.id === message.id);
           if (exists) {
             updated = prev.map(m =>
@@ -1312,7 +1319,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
                 : m
             );
           } else {
-            // Check pending deletions
             const wasPendingDeletion = Array.from(pendingDeletions).some(pid => {
               const tempMsg = prev.find(m => String(m.id) === pid);
               if (!tempMsg) return false;
@@ -1512,12 +1518,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [handleChatCleared]);
 
   const handleSearchResults = useCallback((data: any) => {
-  const { messages: results, has_more } = data;
-  if (searchCallbackRef.current) {
-    searchCallbackRef.current(results || [], has_more || false);
-    searchCallbackRef.current = null;
-  }
-}, []);
+    const { messages: results, has_more } = data;
+    if (searchCallbackRef.current) {
+      searchCallbackRef.current(results || [], has_more || false);
+      searchCallbackRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     handlersRef.current.handleSearchResults = handleSearchResults;
@@ -1568,9 +1574,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handlersRef.current.handleStopTyping = handleStopTyping;
   }, [handleStopTyping]);
 
-  // ============= UPDATED handleMessagesRead: sets 'read' status =============
   const handleMessagesRead = useCallback((roomId: number, userId: number) => {
-    // Determine if the reader is the OTHER user (not current user)
     const currentUserId = currentUser.id || parseInt(currentUser.employee_id || '0');
     const readerIsOtherUser = userId !== currentUserId;
 
@@ -1890,7 +1894,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     setViewMode('addMember');
   }, []);
 
-  // ============= MESSAGE SENDING (UPDATED) =============
+  // ============= MESSAGE SENDING =============
   const sendMessage = async (
     content: string,
     messageType: string = 'text',
@@ -1899,7 +1903,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   ) => {
     if (!selectedChatRoom) return;
 
-    // ── Always create optimistic temp message first ──
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const tempMessage: Message = {
       id: tempId as any,
@@ -1912,7 +1915,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       chat_room: selectedChatRoom.id,
       status: 'sending',
       tempId,
-      // For media types show uploading loader until backend confirms
       isUploading: ['image', 'video', 'audio', 'file'].includes(messageType),
     };
 
@@ -1924,7 +1926,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
     try {
       if (file) {
-        // ── File upload via REST API ──
         console.log('📤 Starting file upload...');
 
         const formData = new FormData();
@@ -1950,7 +1951,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         console.log('✅ File uploaded successfully:', result);
 
         if (result.message_data) {
-          // Replace temp with real message, mark as sent (no uploading loader)
           setMessages(prev => {
             const updated = prev.map(m =>
               String(m.id) === tempId
@@ -1961,7 +1961,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             return updated;
           });
 
-          // Broadcast via WS so other users see it
           if (ws.current?.readyState === WebSocket.OPEN) {
             ws.current.send(JSON.stringify({
               action: 'broadcast_file_message',
@@ -1971,17 +1970,15 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           }
         }
       } else {
-        // ── Text message via WebSocket ──
         const sent = sendWebSocketMessage('send_message', {
           room_id: selectedChatRoom.id,
           content,
           message_type: messageType,
           parent_message_id: parentMessageId,
-          temp_id: tempId, // ← echo back so we can match
+          temp_id: tempId,
         });
 
         if (!sent) {
-          // Mark as failed if WS send failed
           setMessages(prev => {
             const updated = prev.map(m =>
               String(m.id) === tempId ? { ...m, status: 'failed' as MessageStatus } : m
@@ -1990,11 +1987,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             return updated;
           });
         }
-        // On WS echo: handleNewMessage will replace temp → real with status 'delivered'
       }
     } catch (error) {
       console.error('❌ Error sending message:', error);
-      // Mark temp message as failed
       setMessages(prev => {
         const updated = prev.map(m =>
           String(m.id) === tempId ? { ...m, status: 'failed' as MessageStatus, isUploading: false } : m
@@ -2014,7 +2009,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
     console.log('🔄 Retrying message:', tempId);
 
-    // Reset to sending state
     setMessages(prev => prev.map(m =>
       String(m.id) === tempId ? { ...m, status: 'sending' as MessageStatus } : m
     ));
@@ -2034,7 +2028,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         ));
       }
     } else {
-      // For media retries, show error — user must re-pick the file
       Alert.alert('Retry', 'Please re-select and resend the file.');
       setMessages(prev => prev.map(m =>
         String(m.id) === tempId ? { ...m, status: 'failed' as MessageStatus } : m
@@ -2112,19 +2105,19 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [selectedChatRoom, hasMoreMessages, isLoadingMessages, messagesPage, loadMessages]);
 
   const handleSearch = useCallback((
-  query: string,
-  offset: number,
-  onResult: (results: Message[], hasMore: boolean) => void
-) => {
-  if (!selectedChatRoom) return;
-  searchCallbackRef.current = onResult;
-  sendWebSocketMessage('search_messages', {
-    room_id: selectedChatRoom.id,
-    query,
-    offset,
-    limit: 20,
-  });
-}, [selectedChatRoom, sendWebSocketMessage]);
+    query: string,
+    offset: number,
+    onResult: (results: Message[], hasMore: boolean) => void
+  ) => {
+    if (!selectedChatRoom) return;
+    searchCallbackRef.current = onResult;
+    sendWebSocketMessage('search_messages', {
+      room_id: selectedChatRoom.id,
+      query,
+      offset,
+      limit: 20,
+    });
+  }, [selectedChatRoom, sendWebSocketMessage]);
 
   // ============= EFFECTS =============
   useEffect(() => {
@@ -2240,7 +2233,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [selectedChatRoom, apiCall]);
 
-  // Add WebSocket handlers
   const handleChatBlocked = useCallback((data: any) => {
     const { room_id, blocked_by_id } = data;
 
@@ -2380,6 +2372,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onBack={() => {
               if (onBack) onBack();
             }}
+            onCameraClick={() => { setCameraMode('picture'); setCameraVisible(true); }} // ✅ NEW
           />
           <SearchAndFilter
             searchQuery={searchQuery}
@@ -2566,6 +2559,14 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           }}
         />
       )}
+
+      {/* ✅ NEW: CameraRecorder — always mounted, shown/hidden via `visible` prop */}
+      <CameraRecorder
+        visible={cameraVisible}
+        mode={cameraMode}
+        onClose={() => setCameraVisible(false)}
+        onCapture={handleCameraCapture}
+      />
     </SafeAreaView>
   );
 };
