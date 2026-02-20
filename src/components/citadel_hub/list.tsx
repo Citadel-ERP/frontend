@@ -294,6 +294,8 @@ export const List: React.FC<ListProps> = ({
     </View>
   );
 
+  const contextRoom = chatRooms.find(r => r.id === contextMenuRoom);
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -326,6 +328,8 @@ export const List: React.FC<ListProps> = ({
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setContextMenuRoom(null)}>
           <View style={styles.contextMenu}>
+
+            {/* Mark as unread */}
             <TouchableOpacity
               style={styles.contextMenuItem}
               onPress={() => {
@@ -339,7 +343,8 @@ export const List: React.FC<ListProps> = ({
               <Text style={styles.contextMenuText}>Mark as unread</Text>
             </TouchableOpacity>
 
-            {contextMenuRoom && chatRooms.find(r => r.id === contextMenuRoom)?.is_pinned ? (
+            {/* Pin / Unpin */}
+            {contextRoom?.is_pinned ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => {
@@ -352,7 +357,7 @@ export const List: React.FC<ListProps> = ({
               >
                 <Text style={styles.contextMenuText}>Unpin chat</Text>
               </TouchableOpacity>
-            ) : pinnedCount < 5 && (
+            ) : pinnedCount < 5 ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => {
@@ -365,9 +370,10 @@ export const List: React.FC<ListProps> = ({
               >
                 <Text style={styles.contextMenuText}>Pin chat</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
 
-            {contextMenuRoom && chatRooms.find(r => r.id === contextMenuRoom)?.is_muted ? (
+            {/* Mute / Unmute */}
+            {contextRoom?.is_muted ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => {
@@ -395,17 +401,21 @@ export const List: React.FC<ListProps> = ({
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity
-              style={styles.contextMenuItem}
-              onPress={() => {
-                if (contextMenuRoom) {
-                  handleDeleteChat(contextMenuRoom);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.contextMenuText, styles.deleteText]}>Delete chat</Text>
-            </TouchableOpacity>
+            {/* Delete chat — only for direct chats */}
+            {contextRoom?.room_type === 'direct' && (
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                onPress={() => {
+                  if (contextMenuRoom) {
+                    handleDeleteChat(contextMenuRoom);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.contextMenuText, styles.deleteText]}>Delete chat</Text>
+              </TouchableOpacity>
+            )}
+
           </View>
         </Pressable>
       </Modal>
