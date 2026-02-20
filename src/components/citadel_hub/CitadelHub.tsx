@@ -2391,6 +2391,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onMarkAsUnread={markAsUnread}
             onRefresh={handleRefresh}
             isRefreshing={isRefreshing}
+            onStartChat={() => setViewMode('newChat')}
           />
           <TouchableOpacity
             style={styles.fab}

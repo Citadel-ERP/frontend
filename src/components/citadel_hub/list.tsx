@@ -45,7 +45,7 @@ interface ChatRoom {
   room_type: 'direct' | 'group';
   profile_picture?: string;
   admin?: User;
-  members: (User | ChatRoomMember)[]; // ✅ Updated to handle both types
+  members: (User | ChatRoomMember)[];
   last_message_at: string;
   created_at: string;
   is_muted?: boolean;
@@ -65,6 +65,7 @@ interface ListProps {
   onMarkAsUnread: (roomId: number) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  onStartChat?: () => void;
 }
 
 export const List: React.FC<ListProps> = ({
@@ -77,11 +78,11 @@ export const List: React.FC<ListProps> = ({
   onUnpin,
   onMarkAsUnread,
   onRefresh,
+  onStartChat,
   isRefreshing = false,
 }) => {
   const [contextMenuRoom, setContextMenuRoom] = useState<number | null>(null);
 
-  // ✅ Helper to extract User from ChatRoomMember or User
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
     if (!member) return null;
     if ('first_name' in member && 'last_name' in member) {
@@ -93,19 +94,17 @@ export const List: React.FC<ListProps> = ({
     return null;
   };
 
-  // ✅ FIXED: Properly filters out current user
   const getChatName = (room: ChatRoom) => {
     if (room.room_type === 'group') {
       return room.name || 'Unnamed Group';
     }
 
-    // Find the OTHER user (not current user)
     const currentUserId = currentUser.id || currentUser.employee_id;
 
     const otherMember = room.members.find(m => {
       const user = getUserFromMember(m);
       const userId = user?.id || user?.employee_id;
-      return user && userId !== currentUserId; // ✅ Exclude current user
+      return user && userId !== currentUserId;
     });
 
     const otherUser = getUserFromMember(otherMember!);
@@ -123,7 +122,6 @@ export const List: React.FC<ListProps> = ({
         );
       }
 
-      // ✅ Group placeholder with light background and dark icon
       const colors = getAvatarColor(room.id);
 
       return (
@@ -133,7 +131,6 @@ export const List: React.FC<ListProps> = ({
       );
     }
 
-    // Find the OTHER user (not current user)
     const currentUserId = currentUser.id || currentUser.employee_id;
 
     const otherMember = room.members.find(m => {
@@ -153,7 +150,6 @@ export const List: React.FC<ListProps> = ({
       );
     }
 
-    // ✅ User placeholder with light background and dark initials
     const initials = otherUser
       ? `${otherUser.first_name?.[0] || ''}${otherUser.last_name?.[0] || ''}`.toUpperCase()
       : '?';
@@ -257,6 +253,28 @@ export const List: React.FC<ListProps> = ({
     );
   };
 
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconCircle}>
+        <View style={styles.emptyIconInner}>
+          <Ionicons name="chatbubbles-outline" size={52} color="#00a884" />
+        </View>
+      </View>
+      <Text style={styles.emptyTitle}>No chats yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Start a new conversation with your colleagues
+      </Text>
+      <TouchableOpacity
+        style={styles.startChatButton}
+        onPress={onStartChat}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+        <Text style={styles.startChatButtonText}>Start Chat</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -264,16 +282,17 @@ export const List: React.FC<ListProps> = ({
         renderItem={renderChatItem}
         keyExtractor={(item) => item.id.toString()}
         style={styles.list}
-        // ✅ ADD REFRESHCONTROL:
+        contentContainerStyle={chatRooms.length === 0 ? styles.emptyListContent : undefined}
+        ListEmptyComponent={renderEmptyState}
         refreshControl={
           onRefresh ? (
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
-              colors={['#00a884']} // Android
-              tintColor="#00a884" // iOS
-              title="Pull to refresh" // iOS
-              titleColor="#00a884" // iOS
+              colors={['#00a884']}
+              tintColor="#00a884"
+              title="Pull to refresh"
+              titleColor="#00a884"
             />
           ) : undefined
         }
@@ -378,6 +397,66 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 80,
+  },
+  emptyIconCircle: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(0, 168, 132, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  emptyIconInner: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(0, 168, 132, 0.14)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#111b21',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#8696a0',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 32,
+  },
+  startChatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00a884',
+    paddingVertical: 13,
+    paddingHorizontal: 32,
+    borderRadius: 28,
+    shadowColor: '#00a884',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  startChatButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -399,14 +478,12 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   avatarPlaceholder: {
-    // backgroundColor: '#e9edef',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 18,
     fontWeight: '600',
-    // color: '#ffffff',
   },
   chatInfo: {
     flex: 1,
