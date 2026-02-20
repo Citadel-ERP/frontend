@@ -8,7 +8,8 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  RefreshControl
+  RefreshControl,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAvatarColor } from './avatarColors';
@@ -63,6 +64,7 @@ interface ListProps {
   onPin: (roomId: number) => void;
   onUnpin: (roomId: number) => void;
   onMarkAsUnread: (roomId: number) => void;
+  onDeleteChat: (roomId: number) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
   onStartChat?: () => void;
@@ -77,6 +79,7 @@ export const List: React.FC<ListProps> = ({
   onPin,
   onUnpin,
   onMarkAsUnread,
+  onDeleteChat,
   onRefresh,
   onStartChat,
   isRefreshing = false,
@@ -191,6 +194,22 @@ export const List: React.FC<ListProps> = ({
     if (message_type === 'video') return `${senderName}: 🎥 Video`;
 
     return `${senderName}: ${content}`;
+  };
+
+  const handleDeleteChat = (roomId: number) => {
+    setContextMenuRoom(null);
+    Alert.alert(
+      'Delete Chat',
+      'Are you sure you want to delete this chat? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => onDeleteChat(roomId),
+        },
+      ]
+    );
   };
 
   const pinnedCount = chatRooms.filter(r => r.is_pinned).length;
@@ -378,10 +397,14 @@ export const List: React.FC<ListProps> = ({
 
             <TouchableOpacity
               style={styles.contextMenuItem}
-              onPress={() => setContextMenuRoom(null)}
+              onPress={() => {
+                if (contextMenuRoom) {
+                  handleDeleteChat(contextMenuRoom);
+                }
+              }}
               activeOpacity={0.7}
             >
-              <Text style={styles.contextMenuText}>Delete chat</Text>
+              <Text style={[styles.contextMenuText, styles.deleteText]}>Delete chat</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -569,5 +592,8 @@ const styles = StyleSheet.create({
   contextMenuText: {
     fontSize: 14,
     color: '#111b21',
+  },
+  deleteText: {
+    color: '#ef4444',
   },
 });

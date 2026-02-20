@@ -239,6 +239,16 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handleChatUnblocked: (data: any) => { },
   });
 
+  const handleDeleteChat = useCallback(async (roomId: number) => {
+  try {
+    await apiCall('deleteChat', { chat_room_id: roomId });
+    setChatRooms(prev => prev.filter(room => room.id !== roomId));
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    Alert.alert('Error', 'Failed to delete chat. Please try again.');
+  }
+}, [apiCall]);
+
   const memberAddDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // ✅ NEW: Camera capture handler — sends captured photo/video as a message
@@ -2392,6 +2402,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onRefresh={handleRefresh}
             isRefreshing={isRefreshing}
             onStartChat={() => setViewMode('newChat')}
+            onDeleteChat={handleDeleteChat}
           />
           <TouchableOpacity
             style={styles.fab}
