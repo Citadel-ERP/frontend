@@ -239,17 +239,54 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handleChatUnblocked: (data: any) => { },
   });
 
-  const handleDeleteChat = useCallback(async (roomId: number) => {
-  try {
-    await apiCall('deleteChat', { chat_room_id: roomId });
-    setChatRooms(prev => prev.filter(room => room.id !== roomId));
-  } catch (error) {
-    console.error('Error deleting chat:', error);
-    Alert.alert('Error', 'Failed to delete chat. Please try again.');
-  }
-}, [apiCall]);
-
   const memberAddDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ============= API FUNCTIONS =============
+  const apiCall = async (endpoint: string, data: any): Promise<any> => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/citadel_hub/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, ...data }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`API call error (${endpoint}):`, error);
+      throw error;
+    }
+  };
+
+  const handleDeleteChat = useCallback(async (roomId: number) => {
+    try {
+      await apiCall('deleteChat', { chat_room_id: roomId });
+      setChatRooms(prev => prev.filter(room => room.id !== roomId));
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      Alert.alert('Error', 'Failed to delete chat. Please try again.');
+    }
+  }, []);
+
+  // ============= MARK AS UNREAD (single declaration, async with API call) =============
+  const markAsUnread = useCallback(async (roomId: number) => {
+    // Optimistic update: show dot immediately
+    setChatRooms(prev => prev.map(room =>
+      room.id === roomId
+        ? { ...room, unread_count: (room.unread_count || 0) + 1 }
+        : room
+    ));
+    try {
+      await apiCall('markAsUnread', { chat_room_id: roomId });
+    } catch (error) {
+      console.error('Error marking as unread:', error);
+    }
+  }, []);
 
   // ✅ NEW: Camera capture handler — sends captured photo/video as a message
   const handleCameraCapture = useCallback((uri: string, type: 'picture' | 'video') => {
@@ -539,28 +576,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     });
   }, [savePendingActions]);
 
-  // ============= API FUNCTIONS =============
-  const apiCall = async (endpoint: string, data: any): Promise<any> => {
-    try {
-      const response = await fetch(`${apiBaseUrl}/citadel_hub/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token, ...data }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`API call failed: ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      console.error(`API call error (${endpoint}):`, error);
-      throw error;
-    }
-  };
-
   const handleExitGroup = useCallback(async () => {
     if (!selectedChatRoom) return;
 
@@ -580,7 +595,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error exiting group:', error);
       Alert.alert('Error', 'Failed to exit group. you are the Only Admin');
     }
-  }, [selectedChatRoom, apiCall]);
+  }, [selectedChatRoom]);
 
   // ============= DATA LOADING FUNCTIONS =============
   const loadMessages = useCallback(async (roomId: number, page: number = 1, useCache: boolean = true) => {
@@ -1539,6 +1554,19 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handlersRef.current.handleSearchResults = handleSearchResults;
   }, [handleSearchResults]);
 
+  const handleStopTyping = useCallback((roomId: number, userId: number) => {
+    setTypingUsers(prev => ({
+      ...prev,
+      [roomId]: (prev[roomId] || []).filter(u =>
+        (u.id || parseInt(u.employee_id || '0')) !== userId
+      ),
+    }));
+  }, []);
+
+  useEffect(() => {
+    handlersRef.current.handleStopTyping = handleStopTyping;
+  }, [handleStopTyping]);
+
   const handleTyping = useCallback((roomId: number, userId: number, userName: string) => {
     const user: User = {
       id: userId,
@@ -1570,19 +1598,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   useEffect(() => {
     handlersRef.current.handleTyping = handleTyping;
   }, [handleTyping]);
-
-  const handleStopTyping = useCallback((roomId: number, userId: number) => {
-    setTypingUsers(prev => ({
-      ...prev,
-      [roomId]: (prev[roomId] || []).filter(u =>
-        (u.id || parseInt(u.employee_id || '0')) !== userId
-      ),
-    }));
-  }, []);
-
-  useEffect(() => {
-    handlersRef.current.handleStopTyping = handleStopTyping;
-  }, [handleStopTyping]);
 
   const handleMessagesRead = useCallback((roomId: number, userId: number) => {
     const currentUserId = currentUser.id || parseInt(currentUser.employee_id || '0');
@@ -1892,14 +1907,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     ));
   }, []);
 
-  const markAsUnread = useCallback((roomId: number) => {
-    setChatRooms(prev => prev.map(room =>
-      room.id === roomId
-        ? { ...room, unread_count: (room.unread_count || 0) + 1 }
-        : room
-    ));
-  }, []);
-
   const handleAddMember = useCallback(() => {
     setViewMode('addMember');
   }, []);
@@ -2102,9 +2109,13 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
   // ============= EVENT HANDLERS =============
   const handleChatSelect = useCallback((room: ChatRoom) => {
-    setSelectedChatRoom(room);
-    setViewMode('chat');
-  }, []);
+  // Clear unread dot when opening chat
+  setChatRooms(prev => prev.map(r =>
+    r.id === room.id ? { ...r, unread_count: 0 } : r
+  ));
+  setSelectedChatRoom({ ...room, unread_count: 0 });
+  setViewMode('chat');
+}, []);
 
   const loadMoreMessages = useCallback(() => {
     if (selectedChatRoom && hasMoreMessages && !isLoadingMessages) {
@@ -2179,7 +2190,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error reporting group:', error);
       Alert.alert('Error', 'Failed to report group. Please try again.');
     }
-  }, [selectedChatRoom, apiCall]);
+  }, [selectedChatRoom]);
 
   useEffect(() => {
     if (selectedChatRoom && isInitialCacheLoaded) {
@@ -2218,7 +2229,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error blocking chat:', error);
       Alert.alert('Error', 'Failed to block contact. Please try again.');
     }
-  }, [selectedChatRoom, apiCall]);
+  }, [selectedChatRoom]);
 
   const handleUnblockChat = useCallback(async () => {
     if (!selectedChatRoom) return;
@@ -2241,7 +2252,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error unblocking chat:', error);
       Alert.alert('Error', 'Failed to unblock contact. Please try again.');
     }
-  }, [selectedChatRoom, apiCall]);
+  }, [selectedChatRoom]);
 
   const handleChatBlocked = useCallback((data: any) => {
     const { room_id, blocked_by_id } = data;
@@ -2350,7 +2361,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error removing member:', error);
       Alert.alert('Error', 'Failed to remove member. Please try again.');
     }
-  }, [selectedChatRoom, apiCall, currentUser]);
+  }, [selectedChatRoom, currentUser]);
 
   useEffect(() => {
     handlersRef.current.handleChatBlocked = handleChatBlocked;
@@ -2382,7 +2393,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onBack={() => {
               if (onBack) onBack();
             }}
-            onCameraClick={() => { setCameraMode('picture'); setCameraVisible(true); }} // ✅ NEW
+            onCameraClick={() => { setCameraMode('picture'); setCameraVisible(true); }}
           />
           <SearchAndFilter
             searchQuery={searchQuery}

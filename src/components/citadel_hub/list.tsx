@@ -257,12 +257,9 @@ export const List: React.FC<ListProps> = ({
                 {isPinned && (
                   <Ionicons name="pin" size={16} color="#8696a0" />
                 )}
+                {/* ✅ CHANGED: Show dot only, no count number */}
                 {(room.unread_count || 0) > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>
-                      {room.unread_count}
-                    </Text>
-                  </View>
+                  <View style={styles.unreadDot} />
                 )}
               </View>
             </View>
@@ -555,18 +552,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  unreadBadge: {
+  // ✅ CHANGED: Replaced unreadBadge + unreadBadgeText with a simple dot
+  unreadDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#00a884',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  unreadBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ffffff',
   },
   pinnedDivider: {
     height: 8,
