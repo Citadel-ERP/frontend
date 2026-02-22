@@ -7,6 +7,7 @@ import {
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors, Lead, FilterOption, AssignedTo } from './types';
 import DropdownModal from './dropdownModal';
+
 import { Ionicons } from '@expo/vector-icons';
 
 interface FilterOptionWithColor extends FilterOption {
@@ -96,13 +97,12 @@ const useDebounce = (value: string, delay: number) => {
 const EditLead: React.FC<EditLeadProps> = ({
   lead, onBack, onSave, onDelete, token, theme, fetchSubphases, selectedCity,
 }) => {
-  // Separate primitive states to avoid object recreation
   const [company, setCompany] = useState(lead.company || '');
   const [status, setStatus] = useState(lead.status);
   const [phase, setPhase] = useState(lead.phase);
   const [subphase, setSubphase] = useState(lead.subphase);
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to);
-  
+
   const [editingEmails, setEditingEmails] = useState<string[]>(lead.emails.map(e => e.email));
   const [editingPhones, setEditingPhones] = useState<string[]>(lead.phone_numbers.map(p => p.number));
   const [newEmail, setNewEmail] = useState('');
@@ -146,20 +146,25 @@ const EditLead: React.FC<EditLeadProps> = ({
   const [customFields, setCustomFields] = useState<CustomField[]>(() => {
     if (!lead.meta || typeof lead.meta !== 'object') return [];
     const defaultKeys = ['area_requirements', 'office_type', 'location', 'contact_person_name'];
-    const customEntries = Object.entries(lead.meta)
+    return Object.entries(lead.meta)
       .filter(([key]) => !defaultKeys.includes(key))
       .map(([key, value], index) => ({
         id: `custom-${index}`,
         key,
-        value: String(value)
+        value: String(value),
       }));
-    return customEntries;
   });
   const [customFieldErrors, setCustomFieldErrors] = useState<{ [key: string]: string }>({});
 
   const initializationDoneRef = useRef(false);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const debouncedAssignedSearch = useDebounce(assignedToSearch, 300);
+
+  // ─── FIX: Stable refs for handleSave and handleDelete ───────────────────
+  // These refs always point to the latest version of each function,
+  // so ModernHeader never captures a stale closure.
+  const handleSaveRef = useRef<() => void>(() => {});
+  const handleDeleteRef = useRef<() => void>(() => {});
 
   const STATUS_CHOICES: FilterOptionWithColor[] = useMemo(() => [
     { value: 'active', label: 'Active', color: THEME_COLORS.success },
@@ -168,27 +173,26 @@ const EditLead: React.FC<EditLeadProps> = ({
     { value: 'closed', label: 'Closed', color: THEME_COLORS.textSecondary },
     { value: 'no_requirement', label: 'No Requirement', color: THEME_COLORS.textTertiary },
     { value: 'transaction_complete', label: 'Transaction Complete', color: THEME_COLORS.success },
-    { value: 'non_responsive', label: 'Non Responsive', color: THEME_COLORS.danger }
+    { value: 'non_responsive', label: 'Non Responsive', color: THEME_COLORS.danger },
   ], []);
 
   const OFFICE_TYPE_CHOICES: FilterOption[] = useMemo(() => [
     { value: 'conventional_office', label: 'Conventional Office' },
     { value: 'managed_office', label: 'Managed Office' },
-    { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
+    { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' },
   ], []);
 
   const fetchPhases = useCallback(async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getAllPhases`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-      };
-      setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
+      const beautifyName = (name: string): string =>
+        name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      setAllPhases(data.phases.map((p: string) => ({ value: p, label: beautifyName(p) })));
     } catch (error) {
       console.error('Error fetching phases:', error);
       setAllPhases([]);
@@ -196,21 +200,17 @@ const EditLead: React.FC<EditLeadProps> = ({
   }, []);
 
   const fetchSubphasesForPhase = useCallback(async (phaseValue: string) => {
-    if (!phaseValue) {
-      setAllSubphases([]);
-      return;
-    }
+    if (!phaseValue) { setAllSubphases([]); return; }
     try {
-      const response = await fetch(`${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phaseValue)}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const response = await fetch(
+        `${BACKEND_URL}/manager/getAllSubphases?phase=${encodeURIComponent(phaseValue)}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-      };
-      setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
+      const beautifyName = (name: string): string =>
+        name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      setAllSubphases(data.subphases.map((s: string) => ({ value: s, label: beautifyName(s) })));
     } catch (error) {
       console.error('Error fetching subphases:', error);
       setAllSubphases([]);
@@ -221,16 +221,17 @@ const EditLead: React.FC<EditLeadProps> = ({
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getPotentialCollaborators?query=`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      const employeeOptions = data.potential_collaborators.map((emp: any) => ({
-        value: emp.email,
-        label: `${emp.first_name} ${emp.last_name} (${emp.email})`,
-        employeeData: emp
-      }));
-      setAllEmployees(employeeOptions);
+      setAllEmployees(
+        data.potential_collaborators.map((emp: any) => ({
+          value: emp.email,
+          label: `${emp.first_name} ${emp.last_name} (${emp.email})`,
+          employeeData: emp,
+        }))
+      );
     } catch (error) {
       console.error('Error fetching employees:', error);
       setAllEmployees([]);
@@ -243,7 +244,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, lead_id: lead.id })
+        body: JSON.stringify({ token, lead_id: lead.id }),
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
@@ -255,10 +256,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const searchPotentialCollaborators = useCallback(async (query: string) => {
     try {
-      if (!token || query.length < 2) {
-        setPotentialCollaborators([]);
-        return;
-      }
+      if (!token || query.length < 2) { setPotentialCollaborators([]); return; }
       setSearchLoading(true);
       const response = await fetch(
         `${BACKEND_URL}/manager/getPotentialCollaborators?query=${encodeURIComponent(query)}`,
@@ -266,12 +264,13 @@ const EditLead: React.FC<EditLeadProps> = ({
       );
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      const options = data.potential_collaborators.map((user: any) => ({
-        value: user.email,
-        label: `${user.first_name} ${user.last_name} (${user.email})`,
-        userData: user
-      }));
-      setPotentialCollaborators(options);
+      setPotentialCollaborators(
+        data.potential_collaborators.map((user: any) => ({
+          value: user.email,
+          label: `${user.first_name} ${user.last_name} (${user.email})`,
+          userData: user,
+        }))
+      );
     } catch (error) {
       console.error('Error searching collaborators:', error);
       setPotentialCollaborators([]);
@@ -282,16 +281,13 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const searchAssignedToUsers = useCallback(async (query: string) => {
     try {
-      if (!token) {
-        setAssignedToResults([]);
-        return;
-      }
+      if (!token) { setAssignedToResults([]); return; }
       setAssignedToLoading(true);
       if (query.length === 0) {
         const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token })
+          body: JSON.stringify({ token }),
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
@@ -324,10 +320,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         await fetchPhases();
         await fetchEmployees();
         await fetchCollaborators();
-        const initialPhase = lead.phase;
-        if (initialPhase) {
-          fetchSubphasesForPhase(initialPhase);
-        }
+        if (lead.phase) fetchSubphasesForPhase(lead.phase);
       };
       initialize();
     }
@@ -347,58 +340,76 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
   }, [debouncedAssignedSearch, activeDropdown, searchAssignedToUsers]);
 
-  // CRITICAL FIX: Stable callbacks for TextInput
-  const handleCompanyChange = useCallback((text: string) => {
-    setCompany(text);
+  const handleCompanyChange = useCallback((text: string) => setCompany(text), []);
+  const handleContactPersonNameChange = useCallback((text: string) => setContactPersonName(text), []);
+  const handleAreaRequirementsChange = useCallback((text: string) => setAreaRequirements(text), []);
+  const handleLocationChange = useCallback((text: string) => setLocation(text), []);
+
+  const validateEmail = useCallback((email: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }, []);
 
-  const handleContactPersonNameChange = useCallback((text: string) => {
-    setContactPersonName(text);
+  const validatePhone = useCallback((phone: string): boolean => {
+    return /^[\+]?[1-9][\d]{0,15}$/.test(phone.replace(/[\s\-\(\)]/g, ''));
   }, []);
 
-  const handleAreaRequirementsChange = useCallback((text: string) => {
-    setAreaRequirements(text);
+  const beautifyName = useCallback((name: string): string => {
+    return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
   }, []);
 
-  const handleLocationChange = useCallback((text: string) => {
-    setLocation(text);
-  }, []);
+  const validateCustomFields = useCallback((): boolean => {
+    const errors: { [key: string]: string } = {};
+    let isValid = true;
+    customFields.forEach(field => {
+      if (field.key.trim() === '' && field.value.trim() !== '') {
+        errors[field.id] = 'Key is required when value is provided';
+        isValid = false;
+      }
+    });
+    setCustomFieldErrors(errors);
+    return isValid;
+  }, [customFields]);
 
-  const ModernHeader = useCallback(() => (
-    <SafeAreaView style={s.header}>
-      <View style={s.headerContent}>
-        <TouchableOpacity onPress={onBack} style={s.backButton}>
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={s.headerTextContainer}>
-          <Text style={s.headerTitle} numberOfLines={1}>Edit Lead</Text>
-          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.company || 'Lead Details'}</Text>
-        </View>
-        <View style={s.headerActions}>
-          <TouchableOpacity
-            onPress={handleDelete}
-            style={[s.deleteHeaderButton, { marginRight: 12 }]}
-            disabled={deleteLoading || loading}
-          >
-            {deleteLoading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-            )}
-          </TouchableOpacity>
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <TouchableOpacity onPress={handleSave} style={s.saveHeaderButton} disabled={loading}>
-              <Text style={s.saveHeaderText}>Save</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </SafeAreaView>
-  ), [onBack, lead.company, deleteLoading, loading]);
+  // ─── handleSave ────────────────────────────────────────────────────────────
+  // Defined as a plain function (not useCallback) so it always reads the very
+  // latest state.  We assign it to handleSaveRef on every render so the header
+  // always calls the fresh version.
+  const handleSave = async () => {
+    try {
+      if (!validateCustomFields()) {
+        Alert.alert('Validation Error', 'Please check your custom fields. Key is required when value is provided.');
+        return;
+      }
+      setLoading(true);
+      const meta: { [key: string]: any } = {};
+      if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
+      if (officeType) meta.office_type = officeType;
+      if (location.trim()) meta.location = location.trim();
+      if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
+      customFields.forEach(field => {
+        if (field.key.trim() && field.value.trim()) {
+          meta[field.key.trim()] = field.value.trim();
+        }
+      });
+      const updatedLead: Lead = {
+        ...lead,
+        company,
+        status,
+        phase,
+        subphase,
+        assigned_to: assignedTo,
+        meta: Object.keys(meta).length > 0 ? meta : null,
+      };
+      await onSave(updatedLead, editingEmails, editingPhones);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update lead');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleDelete = useCallback(async () => {
+  // ─── handleDelete ──────────────────────────────────────────────────────────
+  const handleDelete = async () => {
     try {
       setDeleteLoading(true);
       Alert.alert(
@@ -417,44 +428,72 @@ const EditLead: React.FC<EditLeadProps> = ({
                 Alert.alert('Error', 'Failed to delete lead');
                 setDeleteLoading(false);
               }
-            }
-          }
+            },
+          },
         ]
       );
     } catch (error) {
       setDeleteLoading(false);
     }
-  }, [onDelete, onBack]);
+  };
 
-  const validateEmail = useCallback((email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }, []);
+  // ─── Keep refs in sync on every render ─────────────────────────────────────
+  // This is the key fix: refs are always up-to-date, so ModernHeader's
+  // onPress={() => handleSaveRef.current()} always calls the latest handleSave
+  // with the latest state — no stale closures possible.
+  handleSaveRef.current = handleSave;
+  handleDeleteRef.current = handleDelete;
 
-  const validatePhone = useCallback((phone: string): boolean => {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
-  }, []);
+  // ─── ModernHeader ──────────────────────────────────────────────────────────
+  // Uses refs for save/delete so it never suffers from stale closures.
+  // Its own deps (deleteLoading, loading) still trigger re-renders for the
+  // spinner/disabled state — that part is unaffected.
+  const ModernHeader = useCallback(() => (
+    <SafeAreaView style={s.header}>
+      <View style={s.headerContent}>
+        <TouchableOpacity onPress={onBack} style={s.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={s.headerTextContainer}>
+          <Text style={s.headerTitle} numberOfLines={1}>Edit Lead</Text>
+          <Text style={s.headerSubtitle} numberOfLines={1}>{lead.company || 'Lead Details'}</Text>
+        </View>
+        <View style={s.headerActions}>
+          <TouchableOpacity
+            onPress={() => handleDeleteRef.current()}
+            style={[s.deleteHeaderButton, { marginRight: 12 }]}
+            disabled={deleteLoading || loading}
+          >
+            {deleteLoading
+              ? <ActivityIndicator color="#FFFFFF" size="small" />
+              : <Ionicons name="trash-outline" size={20} color="#FFFFFF" />}
+          </TouchableOpacity>
+          {loading
+            ? <ActivityIndicator color="#FFFFFF" size="small" />
+            : (
+              <TouchableOpacity
+                onPress={() => handleSaveRef.current()}
+                style={s.saveHeaderButton}
+                disabled={loading}
+              >
+                <Text style={s.saveHeaderText}>Save</Text>
+              </TouchableOpacity>
+            )}
+        </View>
+      </View>
+    </SafeAreaView>
+  ), [onBack, lead.company, deleteLoading, loading]);
 
   const addCollaborator = useCallback(async (email: string) => {
     try {
-      if (!token || !lead.id) {
-        Alert.alert('Error', 'Missing required information');
-        return;
-      }
-      if (!validateEmail(email)) {
-        Alert.alert('Error', 'Please enter a valid email address');
-        return;
-      }
+      if (!token || !lead.id) { Alert.alert('Error', 'Missing required information'); return; }
+      if (!validateEmail(email)) { Alert.alert('Error', 'Please enter a valid email address'); return; }
       const selectedEmployee = potentialCollaborators.find(emp => emp.value === email) as any;
-      if (!selectedEmployee) {
-        Alert.alert('Error', 'Employee data not found');
-        return;
-      }
+      if (!selectedEmployee) { Alert.alert('Error', 'Employee data not found'); return; }
       const optimisticCollaborator: Collaborator = {
         id: `temp-${Date.now()}`,
         user: {
-          email: email,
+          email,
           first_name: selectedEmployee.userData?.first_name || email.split('@')[0],
           last_name: selectedEmployee.userData?.last_name || '',
           full_name: selectedEmployee.label.split('(')[0].trim(),
@@ -469,7 +508,7 @@ const EditLead: React.FC<EditLeadProps> = ({
       const response = await fetch(`${BACKEND_URL}/manager/addCollaborator`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, lead_id: lead.id, email: email })
+        body: JSON.stringify({ token, lead_id: lead.id, email }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -503,7 +542,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                 const response = await fetch(`${BACKEND_URL}/manager/removeCollaborator`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token, lead_id: lead.id, collaborator_id: collaboratorId })
+                  body: JSON.stringify({ token, lead_id: lead.id, collaborator_id: collaboratorId }),
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.message || 'Failed to remove collaborator');
@@ -512,8 +551,8 @@ const EditLead: React.FC<EditLeadProps> = ({
                 setCollaborators(previousCollaborators);
                 Alert.alert('Error', error.message || 'Failed to remove collaborator');
               }
-            }
-          }
+            },
+          },
         ]
       );
     } catch (error: any) {
@@ -529,24 +568,11 @@ const EditLead: React.FC<EditLeadProps> = ({
     setAssignedToResults([]);
   }, []);
 
-  const beautifyName = useCallback((name: string): string => {
-    return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-  }, []);
-
   const handleAddEmail = useCallback(() => {
     const trimmedEmail = newEmail.trim();
-    if (!trimmedEmail) {
-      setEmailError('Please enter an email address');
-      return;
-    }
-    if (!validateEmail(trimmedEmail)) {
-      setEmailError('Please enter a valid email address');
-      return;
-    }
-    if (editingEmails.includes(trimmedEmail)) {
-      setEmailError('This email already exists');
-      return;
-    }
+    if (!trimmedEmail) { setEmailError('Please enter an email address'); return; }
+    if (!validateEmail(trimmedEmail)) { setEmailError('Please enter a valid email address'); return; }
+    if (editingEmails.includes(trimmedEmail)) { setEmailError('This email already exists'); return; }
     setEditingEmails(prev => [...prev, trimmedEmail]);
     setNewEmail('');
     setEmailError(null);
@@ -558,18 +584,9 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const handleAddPhone = useCallback(() => {
     const trimmedPhone = newPhone.trim();
-    if (!trimmedPhone) {
-      setPhoneError('Please enter a phone number');
-      return;
-    }
-    if (!validatePhone(trimmedPhone)) {
-      setPhoneError('Please enter a valid phone number');
-      return;
-    }
-    if (editingPhones.includes(trimmedPhone)) {
-      setPhoneError('This phone number already exists');
-      return;
-    }
+    if (!trimmedPhone) { setPhoneError('Please enter a phone number'); return; }
+    if (!validatePhone(trimmedPhone)) { setPhoneError('Please enter a valid phone number'); return; }
+    if (editingPhones.includes(trimmedPhone)) { setPhoneError('This phone number already exists'); return; }
     setEditingPhones(prev => [...prev, trimmedPhone]);
     setNewPhone('');
     setPhoneError(null);
@@ -594,9 +611,9 @@ const EditLead: React.FC<EditLeadProps> = ({
   }, []);
 
   const handleCustomFieldChange = useCallback((id: string, field: 'key' | 'value', text: string) => {
-    setCustomFields(prev => prev.map(fieldItem =>
-      fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem
-    ));
+    setCustomFields(prev =>
+      prev.map(fieldItem => fieldItem.id === id ? { ...fieldItem, [field]: text } : fieldItem)
+    );
     setCustomFieldErrors(prev => {
       if (prev[id]) {
         const newErrors = { ...prev };
@@ -606,53 +623,6 @@ const EditLead: React.FC<EditLeadProps> = ({
       return prev;
     });
   }, []);
-
-  const validateCustomFields = useCallback((): boolean => {
-    const errors: { [key: string]: string } = {};
-    let isValid = true;
-    customFields.forEach(field => {
-      if (field.key.trim() === '' && field.value.trim() !== '') {
-        errors[field.id] = 'Key is required when value is provided';
-        isValid = false;
-      }
-    });
-    setCustomFieldErrors(errors);
-    return isValid;
-  }, [customFields]);
-
-  const handleSave = useCallback(async () => {
-    try {
-      if (!validateCustomFields()) {
-        Alert.alert('Validation Error', 'Please check your custom fields. Key is required when value is provided.');
-        return;
-      }
-      setLoading(true);
-      const meta: { [key: string]: any } = {};
-      if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
-      if (officeType) meta.office_type = officeType;
-      if (location.trim()) meta.location = location.trim();
-      if (contactPersonName.trim()) meta.contact_person_name = contactPersonName.trim();
-      customFields.forEach(field => {
-        if (field.key.trim() && field.value.trim()) {
-          meta[field.key.trim()] = field.value.trim();
-        }
-      });
-      const updatedLead: Lead = {
-        ...lead,
-        company,
-        status,
-        phase,
-        subphase,
-        assigned_to: assignedTo,
-        meta: Object.keys(meta).length > 0 ? meta : null
-      };
-      await onSave(updatedLead, editingEmails, editingPhones);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update lead');
-    } finally {
-      setLoading(false);
-    }
-  }, [validateCustomFields, areaRequirements, officeType, location, contactPersonName, customFields, lead, company, status, phase, subphase, assignedTo, onSave, editingEmails, editingPhones]);
 
   const handlePhaseSelection = useCallback(async (phaseValue: string) => {
     setPhase(phaseValue);
@@ -684,7 +654,7 @@ const EditLead: React.FC<EditLeadProps> = ({
 
   const getStatusColor = useCallback((statusValue: string): string => {
     const option = STATUS_CHOICES.find(choice => choice.value === statusValue);
-    return option?.color || THEME_COLORS.primary;
+    return (option as FilterOptionWithColor)?.color || THEME_COLORS.primary;
   }, [STATUS_CHOICES]);
 
   return (
@@ -701,7 +671,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Basic Information Card */}
+        {/* Basic Information */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.primary + '15' }]}>
@@ -759,7 +729,8 @@ const EditLead: React.FC<EditLeadProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-        {/* Lead Specific Information Card */}
+
+        {/* Lead Specific Information */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
@@ -790,9 +761,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                 <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
                   <Ionicons name="business" size={14} color={THEME_COLORS.leadInfoBorder} />
                 </View>
-                <Text style={s.selectorText} numberOfLines={1}>
-                  {getOfficeTypeLabel()}
-                </Text>
+                <Text style={s.selectorText} numberOfLines={1}>{getOfficeTypeLabel()}</Text>
               </View>
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
@@ -807,24 +776,23 @@ const EditLead: React.FC<EditLeadProps> = ({
               placeholderTextColor={THEME_COLORS.textTertiary}
             />
           </View>
-          {/* Custom Fields */}
           {customFields.length > 0 && (
             <View style={s.customFieldsSection}>
               <Text style={[s.label, { marginBottom: 12 }]}>Additional Information</Text>
-              {customFields.map((field) => (
+              {customFields.map(field => (
                 <View key={field.id} style={s.customFieldRow}>
                   <View style={s.customFieldInputs}>
                     <TextInput
                       style={[s.customFieldInput, customFieldErrors[field.id] && s.inputError]}
                       value={field.key}
-                      onChangeText={(text) => handleCustomFieldChange(field.id, 'key', text)}
+                      onChangeText={text => handleCustomFieldChange(field.id, 'key', text)}
                       placeholder="Field name"
                       placeholderTextColor={THEME_COLORS.textTertiary}
                     />
                     <TextInput
                       style={[s.customFieldInput, customFieldErrors[field.id] && s.inputError]}
                       value={field.value}
-                      onChangeText={(text) => handleCustomFieldChange(field.id, 'value', text)}
+                      onChangeText={text => handleCustomFieldChange(field.id, 'value', text)}
                       placeholder="Value"
                       placeholderTextColor={THEME_COLORS.textTertiary}
                     />
@@ -842,16 +810,13 @@ const EditLead: React.FC<EditLeadProps> = ({
               ))}
             </View>
           )}
-          <TouchableOpacity
-            style={s.addCustomFieldBtn}
-            onPress={handleAddCustomField}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={s.addCustomFieldBtn} onPress={handleAddCustomField} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={18} color={THEME_COLORS.primary} />
             <Text style={s.addCustomFieldText}>Add Custom Field</Text>
           </TouchableOpacity>
         </View>
-        {/* Email Addresses Card */}
+
+        {/* Email Addresses */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.emailBg }]}>
@@ -865,11 +830,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                 <Ionicons name="mail" size={16} color={THEME_COLORS.emailBorder} />
                 <Text style={s.listItemText}>{email}</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => handleRemoveEmail(idx)}
-                style={s.listItemDeleteBtn}
-                activeOpacity={0.6}
-              >
+              <TouchableOpacity onPress={() => handleRemoveEmail(idx)} style={s.listItemDeleteBtn} activeOpacity={0.6}>
                 <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -878,23 +839,20 @@ const EditLead: React.FC<EditLeadProps> = ({
             <TextInput
               style={[s.input, emailError && s.inputError, { flex: 1 }]}
               value={newEmail}
-              onChangeText={(text) => { setNewEmail(text); setEmailError(null); }}
+              onChangeText={text => { setNewEmail(text); setEmailError(null); }}
               placeholder="Add new email..."
               placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TouchableOpacity
-              style={s.addBtn}
-              onPress={handleAddEmail}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={s.addBtn} onPress={handleAddEmail} activeOpacity={0.7}>
               <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
           {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
-        {/* Phone Numbers Card */}
+
+        {/* Phone Numbers */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.phoneBg }]}>
@@ -908,11 +866,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                 <Ionicons name="call" size={16} color={THEME_COLORS.phoneBorder} />
                 <Text style={s.listItemText}>{phone}</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => handleRemovePhone(idx)}
-                style={s.listItemDeleteBtn}
-                activeOpacity={0.6}
-              >
+              <TouchableOpacity onPress={() => handleRemovePhone(idx)} style={s.listItemDeleteBtn} activeOpacity={0.6}>
                 <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -921,22 +875,19 @@ const EditLead: React.FC<EditLeadProps> = ({
             <TextInput
               style={[s.input, phoneError && s.inputError, { flex: 1 }]}
               value={newPhone}
-              onChangeText={(text) => { setNewPhone(text); setPhoneError(null); }}
+              onChangeText={text => { setNewPhone(text); setPhoneError(null); }}
               placeholder="Add new phone number..."
               placeholderTextColor={THEME_COLORS.textTertiary}
               keyboardType="phone-pad"
             />
-            <TouchableOpacity
-              style={s.addBtn}
-              onPress={handleAddPhone}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={s.addBtn} onPress={handleAddPhone} activeOpacity={0.7}>
               <Ionicons name="add-circle" size={24} color={THEME_COLORS.primary} />
             </TouchableOpacity>
           </View>
           {phoneError && <Text style={s.error}>{phoneError}</Text>}
         </View>
-        {/* Collaborators Card */}
+
+        {/* Collaborators */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.collabBg }]}>
@@ -944,17 +895,13 @@ const EditLead: React.FC<EditLeadProps> = ({
             </View>
             <Text style={s.cardTitle}>Colleagues ({collaborators.length})</Text>
           </View>
-          {collaborators.map((collab) => (
+          {collaborators.map(collab => (
             <View key={collab.id} style={s.listItem}>
               <View style={s.listItemContent}>
                 <Ionicons name="person" size={16} color={THEME_COLORS.collabBorder} />
                 <Text style={s.listItemText}>{collab.user.full_name}</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => removeCollaborator(collab.id)}
-                style={s.listItemDeleteBtn}
-                activeOpacity={0.6}
-              >
+              <TouchableOpacity onPress={() => removeCollaborator(collab.id)} style={s.listItemDeleteBtn} activeOpacity={0.6}>
                 <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -975,8 +922,8 @@ const EditLead: React.FC<EditLeadProps> = ({
           {potentialCollaborators.length > 0 && (
             <View style={s.resultsBox}>
               {potentialCollaborators
-                .filter(emp => !collaborators.some(collab => collab.user.email === emp.value))
-                .map((employee) => (
+                .filter(emp => !collaborators.some(c => c.user.email === emp.value))
+                .map(employee => (
                   <TouchableOpacity
                     key={employee.value}
                     style={s.resultItem}
@@ -991,12 +938,12 @@ const EditLead: React.FC<EditLeadProps> = ({
                     </View>
                     <Ionicons name="add-circle" size={22} color={THEME_COLORS.success} />
                   </TouchableOpacity>
-                ))
-              }
+                ))}
             </View>
           )}
         </View>
-        {/* Lead Management Card */}
+
+        {/* Lead Management */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.managementBg }]}>
@@ -1012,9 +959,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                 onPress={() => setActiveDropdown('status')}
                 activeOpacity={0.7}
               >
-                <Text style={s.selectorText} numberOfLines={1}>
-                  {getFilterLabel('status', status)}
-                </Text>
+                <Text style={s.selectorText} numberOfLines={1}>{getFilterLabel('status', status)}</Text>
                 <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1025,9 +970,7 @@ const EditLead: React.FC<EditLeadProps> = ({
                 onPress={() => setActiveDropdown('phase')}
                 activeOpacity={0.7}
               >
-                <Text style={s.selectorText} numberOfLines={1}>
-                  {getFilterLabel('phase', phase)}
-                </Text>
+                <Text style={s.selectorText} numberOfLines={1}>{getFilterLabel('phase', phase)}</Text>
                 <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1039,53 +982,55 @@ const EditLead: React.FC<EditLeadProps> = ({
               onPress={() => setActiveDropdown('subphase')}
               activeOpacity={0.7}
             >
-              <Text style={s.selectorText} numberOfLines={1}>
-                {getFilterLabel('subphase', subphase)}
-              </Text>
+              <Text style={s.selectorText} numberOfLines={1}>{getFilterLabel('subphase', subphase)}</Text>
               <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
+
         {/* Delete Button */}
         <TouchableOpacity
           style={[s.deleteBtn, (deleteLoading || loading) && s.deleteBtnDisabled]}
-          onPress={handleDelete}
+          onPress={() => handleDeleteRef.current()}
           disabled={deleteLoading || loading}
           activeOpacity={0.8}
         >
-          {deleteLoading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <>
-              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-              <Text style={s.deleteBtnText}>Delete Lead</Text>
-            </>
-          )}
+          {deleteLoading
+            ? <ActivityIndicator color="#FFFFFF" size="small" />
+            : (
+              <>
+                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                <Text style={s.deleteBtnText}>Delete Lead</Text>
+              </>
+            )}
         </TouchableOpacity>
+
         {/* Save Button */}
         <TouchableOpacity
           style={[s.saveBtn, loading && s.saveBtnDisabled]}
-          onPress={handleSave}
+          onPress={() => handleSaveRef.current()}
           disabled={loading}
           activeOpacity={0.8}
         >
-          {loading ? (
-            <ActivityIndicator color={THEME_COLORS.white} size="small" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.white} />
-              <Text style={s.saveBtnText}>Save Changes</Text>
-            </>
-          )}
+          {loading
+            ? <ActivityIndicator color={THEME_COLORS.white} size="small" />
+            : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.white} />
+                <Text style={s.saveBtnText}>Save Changes</Text>
+              </>
+            )}
         </TouchableOpacity>
+
         <View style={s.bottomSpacer} />
       </ScrollView>
+
       {/* Dropdown Modals */}
       <DropdownModal
         visible={activeDropdown === 'status'}
         onClose={() => setActiveDropdown(null)}
         options={STATUS_CHOICES}
-        onSelect={(value) => { setStatus(value as Lead['status']); setActiveDropdown(null); }}
+        onSelect={value => { setStatus(value as Lead['status']); setActiveDropdown(null); }}
         title="Select Status"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
@@ -1093,7 +1038,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         visible={activeDropdown === 'phase'}
         onClose={() => setActiveDropdown(null)}
         options={allPhases}
-        onSelect={(value) => { handlePhaseSelection(value); setActiveDropdown(null); }}
+        onSelect={value => { handlePhaseSelection(value); setActiveDropdown(null); }}
         title="Select Phase"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
@@ -1101,7 +1046,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         visible={activeDropdown === 'subphase'}
         onClose={() => setActiveDropdown(null)}
         options={allSubphases}
-        onSelect={(value) => { setSubphase(value); setActiveDropdown(null); }}
+        onSelect={value => { setSubphase(value); setActiveDropdown(null); }}
         title="Select Subphase"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
@@ -1109,34 +1054,24 @@ const EditLead: React.FC<EditLeadProps> = ({
         visible={activeDropdown === 'officeType'}
         onClose={() => setActiveDropdown(null)}
         options={OFFICE_TYPE_CHOICES}
-        onSelect={(value) => { setOfficeType(value); setActiveDropdown(null); }}
+        onSelect={value => { setOfficeType(value); setActiveDropdown(null); }}
         title="Select Office Type"
         theme={{ ...theme, primary: THEME_COLORS.primary, background: THEME_COLORS.background, cardBg: THEME_COLORS.card, text: THEME_COLORS.textPrimary, border: THEME_COLORS.border }}
       />
+
       {/* Assigned To Modal */}
       {activeDropdown === 'assigned' && (
         <Modal
-          visible={true}
-          transparent={true}
+          visible
+          transparent
           animationType="fade"
           onRequestClose={() => setActiveDropdown(null)}
         >
-          <TouchableOpacity
-            style={s.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setActiveDropdown(null)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-              style={s.modalContent}
-            >
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setActiveDropdown(null)}>
+            <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()} style={s.modalContent}>
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>Assign Lead To</Text>
-                <TouchableOpacity
-                  onPress={() => setActiveDropdown(null)}
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity onPress={() => setActiveDropdown(null)} activeOpacity={0.7}>
                   <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>
@@ -1150,22 +1085,15 @@ const EditLead: React.FC<EditLeadProps> = ({
                   autoCapitalize="none"
                 />
                 {assignedToLoading && (
-                  <ActivityIndicator
-                    size="small"
-                    color={THEME_COLORS.primary}
-                    style={s.searchLoader}
-                  />
+                  <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />
                 )}
               </View>
               <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-                {assignedToResults.length > 0 ? (
-                  assignedToResults.map((user) => (
+                {assignedToResults.length > 0
+                  ? assignedToResults.map(user => (
                     <TouchableOpacity
                       key={user.email}
-                      style={[
-                        s.modalItem,
-                        assignedTo?.email === user.email && s.modalItemSelected
-                      ]}
+                      style={[s.modalItem, assignedTo?.email === user.email && s.modalItemSelected]}
                       onPress={() => handleAssignToUser(user)}
                       activeOpacity={0.7}
                     >
@@ -1173,37 +1101,25 @@ const EditLead: React.FC<EditLeadProps> = ({
                         <Ionicons
                           name="person"
                           size={18}
-                          color={
-                            assignedTo?.email === user.email
-                              ? THEME_COLORS.primary
-                              : THEME_COLORS.textSecondary
-                          }
+                          color={assignedTo?.email === user.email ? THEME_COLORS.primary : THEME_COLORS.textSecondary}
                         />
                         <View style={s.modalItemInfo}>
                           <Text style={s.modalItemName} numberOfLines={1}>
                             {user.full_name || `${user.first_name} ${user.last_name}`}
                           </Text>
-                          <Text style={s.modalItemEmail} numberOfLines={1}>
-                            {user.email}
-                          </Text>
+                          <Text style={s.modalItemEmail} numberOfLines={1}>{user.email}</Text>
                         </View>
                       </View>
                       {assignedTo?.email === user.email && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color={THEME_COLORS.primary}
-                        />
+                        <Ionicons name="checkmark-circle" size={20} color={THEME_COLORS.primary} />
                       )}
                     </TouchableOpacity>
                   ))
-                ) : (
-                  !assignedToLoading && (
+                  : !assignedToLoading && (
                     <View style={s.emptyState}>
                       <Text style={s.emptyText}>No users found</Text>
                     </View>
-                  )
-                )}
+                  )}
               </ScrollView>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -1224,14 +1140,14 @@ const s = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    height: 60
+    height: 60,
   },
   backButton: { padding: 8, marginRight: 8 },
   headerTextContainer: { flex: 1 },

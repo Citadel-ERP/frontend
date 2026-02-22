@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+// cab.tsx  — orchestrator for the new Browse-First flow
+import React, { useState, useEffect } from 'react';
 import {
-    SafeAreaView, StatusBar, Alert, Modal, ActivityIndicator,
-    Platform, Dimensions, View, TouchableOpacity, Text
+    SafeAreaView, StatusBar, Alert, View, TouchableOpacity, Text
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 
@@ -17,35 +15,39 @@ import CancelBookingModal from './cancelBookingModal';
 import ConfirmationModal from './confirmationModal';
 
 import {
-    CabProps, ScreenType, BookingStep, BookingFormData,
+    CabProps, ScreenType, BookingFormData,
     Vehicle, Booking, Driver
 } from './types';
 
-import {
-    formatTimeForAPI, formatTimeForDisplay, formatDateForDisplay
-} from './utils';
-
+import { formatTimeForAPI } from './utils';
 import { styles } from './styles';
 
 const TOKEN_KEY = 'token_2';
 
 const Cab: React.FC<CabProps> = ({ onBack }) => {
-    const insets = useSafeAreaInsets();
     const [currentScreen, setCurrentScreen] = useState<ScreenType>('booking');
-    const [bookingStep, setBookingStep] = useState<BookingStep>(1);
     const [selectedCity, setSelectedCity] = useState('');
     const [token, setToken] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+
+    // Vehicles & drivers in the city (not time-filtered, loaded once on browse)
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
+
+    const [loading, setLoading] = useState(false);
+    const [cityLoading, setCityLoading] = useState(false);
+
+    // My bookings
     const [myBookings, setMyBookings] = useState<Booking[]>([]);
-    const [selectedVehicles, setSelectedVehicles] = useState<Array<{ vehicle: Vehicle, driver: Driver | null }>>([]);
+
+    // Selection
+    const [selectedVehicles, setSelectedVehicles] = useState<Array<{ vehicle: Vehicle; driver: Driver | null }>>([]);
+
+    // Modals
     const [isBookingModalVisible, setIsBookingModalVisible] = useState(false);
     const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
     const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
-    const [activePickerType, setActivePickerType] = useState<string | null>(null);
-    const [tempPickerValue, setTempPickerValue] = useState<Date | null>(null);
 
+    // Booking form — dates default to sensible values
     const [bookingForm, setBookingForm] = useState<BookingFormData>({
         fromLocation: '',
         toLocation: '',
@@ -61,16 +63,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     const [cancelReason, setCancelReason] = useState('');
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
+    // ─── Init ──────────────────────────────────────────────────────────────────
     useEffect(() => {
         const initialize = async () => {
             try {
                 const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
                 const savedCity = await AsyncStorage.getItem('city');
-
                 setToken(storedToken);
-                if (savedCity) {
-                    setSelectedCity(savedCity);
-                }
+                if (savedCity) setSelectedCity(savedCity);
             } catch (error) {
                 console.error('Error initializing:', error);
             }
@@ -78,69 +78,52 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         initialize();
     }, []);
 
-    const searchCabs = async () => {
-        if (!bookingForm.fromLocation.trim() || !bookingForm.toLocation.trim()) {
-            Alert.alert('Error', 'Please complete all location fields');
-            return;
-        }
-
-        setLoading(true);
+    // ─── Load city fleet (no time filter) ─────────────────────────────────────
+    const loadCityFleet = async () => {
+        if (!token) return;
+        setCityLoading(true);
         try {
-            const startDateTime = `${bookingForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(bookingForm.startTime)}:00`;
-            const endDateTime = `${bookingForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(bookingForm.endTime)}:00`;
-            const data = {
-                token,
-                start_date: startDateTime,
-                end_date: endDateTime
-            };
-            // Fetch available vehicles
-            const vehiclesResponse = await fetch(
-                `${BACKEND_URL}/core/getAvailableVehicles`,
-                {
+            const body = JSON.stringify({ token });
+
+            const [vehiclesRes, driversRes] = await Promise.all([
+                fetch(`${BACKEND_URL}/core/getCityVehicles`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data),
-                }
-            );
-
-            // Fetch available drivers
-            const driversResponse = await fetch(
-                `${BACKEND_URL}/core/getAvailableDrivers`,
-                {
+                    body,
+                }),
+                fetch(`${BACKEND_URL}/core/getCityDrivers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data),
-                }
-            );
+                    body,
+                }),
+            ]);
 
-            if (vehiclesResponse.ok && driversResponse.ok) {
-                const vehiclesData = await vehiclesResponse.json();
-                const driversData = await driversResponse.json();
-
-                setVehicles(vehiclesData.vehicles || []);
-                setAvailableDrivers(driversData.drivers || []);
-                setCurrentScreen('cabs');
-
-                if (vehiclesData.vehicles.length === 0) {
-                    Alert.alert('No Vehicles', 'No vehicles available for the selected time period');
-                } else if (driversData.drivers.length === 0) {
-                    Alert.alert('No Drivers', 'No drivers available for the selected time period. You can still select vehicles but drivers will need to be assigned later.');
-                }
-            } else {
-                const error = await vehiclesResponse.json();
-                Alert.alert('Error', error.message || 'Failed to search vehicles');
+            if (vehiclesRes.ok) {
+                const data = await vehiclesRes.json();
+                setVehicles(data.vehicles || []);
+            }
+            if (driversRes.ok) {
+                const data = await driversRes.json();
+                setAvailableDrivers(data.drivers || []);
             }
         } catch (error) {
-            console.error('Error searching vehicles:', error);
-            Alert.alert('Error', 'Network error occurred');
+            console.error('Error loading city fleet:', error);
+            Alert.alert('Error', 'Failed to load vehicles. Please try again.');
         } finally {
-            setLoading(false);
+            setCityLoading(false);
         }
     };
 
+    // ─── Navigate to cabs screen ───────────────────────────────────────────────
+    const handleBrowseVehicles = async () => {
+        setSelectedVehicles([]);
+        await loadCityFleet();
+        setCurrentScreen('cabs');
+    };
+
+    // ─── Fetch my bookings ─────────────────────────────────────────────────────
     const fetchMyBookings = async () => {
         if (!token) return;
-
         setLoading(true);
         try {
             const response = await fetch(`${BACKEND_URL}/core/getMyBookings`, {
@@ -148,7 +131,6 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token }),
             });
-
             if (response.ok) {
                 const data = await response.json();
                 setMyBookings(data.vehicle_bookings || []);
@@ -160,9 +142,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         }
     };
 
+    // ─── Book vehicles ─────────────────────────────────────────────────────────
     const bookVehicles = async () => {
         if (selectedVehicles.length === 0 || !bookingForm.purpose.trim()) {
             Alert.alert('Error', 'Please select at least one vehicle and provide a purpose');
+            return;
+        }
+        if (!bookingForm.fromLocation.trim() || !bookingForm.toLocation.trim()) {
+            Alert.alert('Error', 'Please enter pickup and destination locations');
             return;
         }
 
@@ -171,15 +158,24 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
             const startDateTime = `${bookingForm.startDate.toISOString().split('T')[0]}T${formatTimeForAPI(bookingForm.startTime)}:00`;
             const endDateTime = `${bookingForm.endDate.toISOString().split('T')[0]}T${formatTimeForAPI(bookingForm.endTime)}:00`;
 
+            // Basic date validation
+            if (new Date(startDateTime) >= new Date(endDateTime)) {
+                Alert.alert('Invalid Time', 'End time must be after start time');
+                setLoading(false);
+                return;
+            }
+
             const requestData: any = {
                 token,
                 vehicle_ids: selectedVehicles.map(sv => sv.vehicle.id),
-                driver_ids: selectedVehicles.map(sv => sv.driver?.employee_id).filter(Boolean),
+                driver_ids: selectedVehicles
+                    .map(sv => sv.driver?.employee_id)
+                    .filter(Boolean),
                 start_time: startDateTime,
                 end_time: endDateTime,
                 purpose: bookingForm.purpose,
                 start_location: bookingForm.fromLocation,
-                end_location: bookingForm.toLocation
+                end_location: bookingForm.toLocation,
             };
 
             if (bookingForm.gracePeriod && bookingForm.gracePeriod.trim() !== '') {
@@ -196,29 +192,50 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 body: JSON.stringify(requestData),
             });
 
+            const responseData = await response.json();
+
             if (response.ok) {
                 setIsBookingModalVisible(false);
                 setIsConfirmationVisible(true);
                 setSelectedVehicles([]);
+                // Reset form for next booking
+                setBookingForm({
+                    fromLocation: '',
+                    toLocation: '',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    startTime: new Date(new Date().setHours(9, 0, 0, 0)),
+                    endTime: new Date(new Date().setHours(18, 0, 0, 0)),
+                    purpose: '',
+                    gracePeriod: '1',
+                    bookingFor: null,
+                });
                 fetchMyBookings();
             } else {
-                const error = await response.json();
-                Alert.alert('Error', error.message || 'Failed to book vehicles');
+                // Backend returned an error — typically a conflict
+                const message = responseData.message || 'Failed to book vehicles';
+                Alert.alert(
+                    'Booking Failed',
+                    message.includes('already booked')
+                        ? `${message}\n\nPlease choose a different time or select another vehicle.`
+                        : message,
+                    [{ text: 'OK' }]
+                );
             }
         } catch (error) {
             console.error('Error booking vehicles:', error);
-            Alert.alert('Error', 'Network error occurred');
+            Alert.alert('Error', 'Network error occurred. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
+    // ─── Cancel booking ────────────────────────────────────────────────────────
     const cancelBooking = async () => {
         if (!selectedBooking || !cancelReason.trim()) {
             Alert.alert('Error', 'Please provide a reason for cancellation');
             return;
         }
-
         setLoading(true);
         try {
             const response = await fetch(`${BACKEND_URL}/core/cancelbooking`, {
@@ -227,13 +244,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 body: JSON.stringify({
                     token,
                     booking_id: selectedBooking.id,
-                    reason_of_cancellation: cancelReason
+                    reason_of_cancellation: cancelReason,
                 }),
             });
-
             if (response.ok) {
                 Alert.alert('Success', 'Booking cancelled successfully!');
                 setIsCancelModalVisible(false);
+                setCancelReason('');
+                setSelectedBooking(null);
                 fetchMyBookings();
             } else {
                 const error = await response.json();
@@ -247,70 +265,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         }
     };
 
-    // iOS: Update temp value as user scrolls
-    const handlePickerChange = (event: any, selectedDate?: Date) => {
-        if (Platform.OS === 'ios') {
-            // On iOS, just update the temporary value
-            if (selectedDate) {
-                setTempPickerValue(selectedDate);
-            }
-        } else {
-            // On Android, apply immediately and close
-            if (selectedDate && activePickerType) {
-                setBookingForm(prev => ({
-                    ...prev,
-                    [activePickerType]: selectedDate
-                }));
-            }
-            setActivePickerType(null);
-            setTempPickerValue(null);
-        }
-    };
-
-    // iOS: Confirm selection when user presses "Done"
-    const handlePickerConfirm = () => {
-        if (tempPickerValue && activePickerType) {
-            setBookingForm(prev => ({
-                ...prev,
-                [activePickerType]: tempPickerValue
-            }));
-        }
-        setActivePickerType(null);
-        setTempPickerValue(null);
-    };
-
-    // iOS: Cancel selection
-    const handlePickerCancel = () => {
-        setActivePickerType(null);
-        setTempPickerValue(null);
-    };
-
-    // Open picker and initialize temp value
-    const openPicker = (pickerType: string) => {
-        setActivePickerType(pickerType);
-        setTempPickerValue(bookingForm[pickerType as keyof typeof bookingForm] as Date);
-    };
-
-    const Container = SafeAreaView;
     const showBottomNav = currentScreen === 'booking' || currentScreen === 'myBookings';
 
     return (
-        <Container style={styles.appContainer}>
+        <SafeAreaView style={styles.appContainer}>
             <StatusBar translucent barStyle="light-content" backgroundColor="#017bf9" />
 
             {currentScreen === 'booking' && (
                 <BookingScreen
-                    bookingStep={bookingStep}
-                    setBookingStep={setBookingStep}
-                    bookingForm={bookingForm}
-                    setBookingForm={setBookingForm}
                     selectedCity={selectedCity}
-                    loading={loading}
                     onBack={onBack}
-                    onSearchCabs={searchCabs}
-                    onSetActivePickerType={openPicker}
-                    formatTimeForDisplay={formatTimeForDisplay}
-                    formatDateForDisplay={formatDateForDisplay}
+                    onBrowseVehicles={handleBrowseVehicles}
                     token={token}
                 />
             )}
@@ -320,7 +285,10 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                     vehicles={vehicles}
                     availableDrivers={availableDrivers}
                     selectedVehicles={selectedVehicles}
-                    onBack={() => setCurrentScreen('booking')}
+                    onBack={() => {
+                        setCurrentScreen('booking');
+                        setSelectedVehicles([]);
+                    }}
                     onUpdateSelection={setSelectedVehicles}
                     onProceedToBooking={() => setIsBookingModalVisible(true)}
                 />
@@ -339,13 +307,13 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 />
             )}
 
+            {/* Bottom Nav */}
             {showBottomNav && (
                 <View style={styles.bottomNav}>
                     <TouchableOpacity
                         style={[styles.navItem, currentScreen === 'booking' && styles.activeNavItem]}
                         onPress={() => {
                             setCurrentScreen('booking');
-                            setBookingStep(1);
                         }}
                         activeOpacity={0.7}
                     >
@@ -359,10 +327,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                                 color={currentScreen === 'booking' ? '#fff' : '#666'}
                             />
                         </View>
-                        <Text style={[
-                            styles.navLabel,
-                            currentScreen === 'booking' && styles.activeNavLabel
-                        ]}>
+                        <Text style={[styles.navLabel, currentScreen === 'booking' && styles.activeNavLabel]}>
                             Book
                         </Text>
                     </TouchableOpacity>
@@ -385,16 +350,14 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                                 color={currentScreen === 'myBookings' ? '#fff' : '#666'}
                             />
                         </View>
-                        <Text style={[
-                            styles.navLabel,
-                            currentScreen === 'myBookings' && styles.activeNavLabel
-                        ]}>
+                        <Text style={[styles.navLabel, currentScreen === 'myBookings' && styles.activeNavLabel]}>
                             My Bookings
                         </Text>
                     </TouchableOpacity>
                 </View>
             )}
 
+            {/* Booking Details Modal */}
             <BookVehicleModal
                 visible={isBookingModalVisible}
                 onClose={() => setIsBookingModalVisible(false)}
@@ -405,9 +368,13 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 selectedVehicles={selectedVehicles}
             />
 
+            {/* Cancel Modal */}
             <CancelBookingModal
                 visible={isCancelModalVisible}
-                onClose={() => setIsCancelModalVisible(false)}
+                onClose={() => {
+                    setIsCancelModalVisible(false);
+                    setCancelReason('');
+                }}
                 selectedBooking={selectedBooking}
                 cancelReason={cancelReason}
                 setCancelReason={setCancelReason}
@@ -415,59 +382,17 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 onCancelBooking={cancelBooking}
             />
 
+            {/* Confirmation Modal */}
             <ConfirmationModal
                 visible={isConfirmationVisible}
                 onClose={() => setIsConfirmationVisible(false)}
                 onDone={() => {
                     setIsConfirmationVisible(false);
                     setCurrentScreen('myBookings');
+                    fetchMyBookings();
                 }}
             />
-
-            {activePickerType && Platform.OS === 'ios' && (
-                <Modal
-                    visible={true}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={handlePickerCancel}
-                >
-                    <View style={styles.pickerModalOverlay}>
-                        <View style={styles.pickerModalContent}>
-                            <View style={styles.pickerHeader}>
-                                <TouchableOpacity onPress={handlePickerCancel}>
-                                    <Text style={styles.pickerCancelText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <Text style={styles.pickerTitle}>
-                                    {activePickerType.includes('Date') ? 'Select Date' : 'Select Time'}
-                                </Text>
-                                <TouchableOpacity onPress={handlePickerConfirm}>
-                                    <Text style={styles.pickerDoneText}>Done</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <DateTimePicker
-                                value={tempPickerValue || bookingForm[activePickerType as keyof typeof bookingForm] as Date}
-                                mode={activePickerType.includes('Date') ? 'date' : 'time'}
-                                display="spinner"
-                                onChange={handlePickerChange}
-                                minimumDate={activePickerType.includes('Date') ? new Date() : undefined}
-                                style={styles.dateTimePicker}
-                                textColor="#000"
-                            />
-                        </View>
-                    </View>
-                </Modal>
-            )}
-
-            {activePickerType && Platform.OS === 'android' && (
-                <DateTimePicker
-                    value={bookingForm[activePickerType as keyof typeof bookingForm] as Date}
-                    mode={activePickerType.includes('Date') ? 'date' : 'time'}
-                    display="default"
-                    onChange={handlePickerChange}
-                    minimumDate={activePickerType.includes('Date') ? new Date() : undefined}
-                />
-            )}
-        </Container>
+        </SafeAreaView>
     );
 };
 

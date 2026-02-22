@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Animated,
-  Dimensions, Platform, RefreshControl, Modal, Alert,
+  Dimensions, Platform, RefreshControl, Modal, Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +24,7 @@ const { width, height } = Dimensions.get('window');
 // ============================================================================
 // DEBUG LOGGER
 // ============================================================================
-const DEBUG = true; // Set to false to disable logging
+const DEBUG = true;
 const log = {
   render: (component: string, props?: any) => {
     if (!DEBUG) return;
@@ -53,8 +53,17 @@ const log = {
   interaction: (action: string, data?: any) => {
     if (!DEBUG) return;
     console.log(`👆 [INTERACTION] ${action}`, data || '');
-  }
+  },
+  pagination: (action: string, data?: any) => {
+    if (!DEBUG) return;
+    console.log(`📄 [PAGINATION] ${action}`, data || '');
+  },
 };
+
+const PAGE_SIZE = 50;
+// How many pixels from the bottom of the ScrollView to trigger the next page load.
+// Using 300px gives a comfortable buffer so the user never sees a hard stop.
+const LOAD_MORE_THRESHOLD = 300;
 
 const whatsappColors = {
   dark: {
@@ -87,6 +96,14 @@ interface Notification {
   created_at?: string;
 }
 
+interface PaginationState {
+  currentPage: number;
+  hasMore: boolean;
+  totalCount: number;
+  totalPages: number;
+  isLoadingMore: boolean;
+}
+
 interface NotificationsProps {
   onBack: () => void;
   isDark?: boolean;
@@ -95,7 +112,7 @@ interface NotificationsProps {
 }
 
 // ============================================================================
-// NOTIFICATION ITEM COMPONENT - MUST BE OUTSIDE PARENT (FIXED!)
+// NOTIFICATION ITEM COMPONENT
 // ============================================================================
 const NotificationItem = React.memo(({
   notification,
@@ -107,7 +124,7 @@ const NotificationItem = React.memo(({
   selectionMode,
   notificationColor,
   notificationsEnabled,
-  currentColors, // Add this prop
+  currentColors,
 }: {
   notification: Notification;
   index: number;
@@ -124,13 +141,6 @@ const NotificationItem = React.memo(({
   const renderCountRef = useRef(0);
   renderCountRef.current++;
 
-  log.render(`NotificationItem-${notification.id}`, {
-    renderCount: renderCountRef.current,
-    instanceId: instanceIdRef.current,
-    isSelected,
-    selectionMode
-  });
-
   const itemOpacity = useRef(new Animated.Value(0)).current;
   const itemScale = useRef(new Animated.Value(0.95)).current;
   const [isDeleting, setIsDeleting] = useState(false);
@@ -146,25 +156,23 @@ const NotificationItem = React.memo(({
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
-      log.animation(`NotificationItem-${notification.id}`, 'Starting enter animation');
-
+      // Cap delay so items deep in the list don't have enormous delays
+      const delay = Math.min(index * 50, 400);
       Animated.parallel([
         Animated.timing(itemOpacity, {
           toValue: 1,
           duration: 300,
-          delay: index * 50,
+          delay,
           useNativeDriver: true,
         }),
         Animated.spring(itemScale, {
           toValue: 1,
-          delay: index * 50,
+          delay,
           tension: 50,
           friction: 7,
           useNativeDriver: true,
         })
-      ]).start(() => {
-        log.animation(`NotificationItem-${notification.id}`, 'Enter animation complete');
-      });
+      ]).start();
     }
   }, []);
 
@@ -184,7 +192,6 @@ const NotificationItem = React.memo(({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      log.animation(`NotificationItem-${notification.id}`, 'Exit animation complete');
       onDelete(notification.id);
     });
   }, [notification.id, onDelete, itemOpacity, itemScale]);
@@ -272,7 +279,7 @@ const NotificationItem = React.memo(({
     </Animated.View>
   );
 }, (prevProps, nextProps) => {
-  const shouldNotRerender = (
+  return (
     prevProps.notification.id === nextProps.notification.id &&
     prevProps.notification.Read === nextProps.notification.Read &&
     prevProps.isSelected === nextProps.isSelected &&
@@ -280,22 +287,37 @@ const NotificationItem = React.memo(({
     prevProps.notificationsEnabled === nextProps.notificationsEnabled &&
     prevProps.notificationColor === nextProps.notificationColor
   );
+});
 
-  if (!shouldNotRerender) {
-    log.render(`NotificationItem-${nextProps.notification.id} memo check`, {
-      willRerender: true,
-      changes: {
-        id: prevProps.notification.id !== nextProps.notification.id,
-        read: prevProps.notification.Read !== nextProps.notification.Read,
-        selected: prevProps.isSelected !== nextProps.isSelected,
-        selectionMode: prevProps.selectionMode !== nextProps.selectionMode,
-        enabled: prevProps.notificationsEnabled !== nextProps.notificationsEnabled,
-        color: prevProps.notificationColor !== nextProps.notificationColor,
-      }
-    });
-  }
+// ============================================================================
+// LOAD MORE FOOTER COMPONENT
+// ============================================================================
+const LoadMoreFooter = React.memo(({
+  isLoadingMore,
+  hasMore,
+  currentColors,
+}: {
+  isLoadingMore: boolean;
+  hasMore: boolean;
+  currentColors: typeof whatsappColors.dark;
+}) => {
+  if (!hasMore && !isLoadingMore) return null;
 
-  return shouldNotRerender;
+  return (
+    <View style={s.loadMoreFooter}>
+      {isLoadingMore ? (
+        <>
+          <ActivityIndicator size="small" color={currentColors.primary} />
+          <Text style={[s.loadMoreText, { color: currentColors.textSecondary }]}>
+            Loading more notifications...
+          </Text>
+        </>
+      ) : (
+        // Spacer so the user knows there's more below (visible briefly before auto-load kicks in)
+        <View style={s.loadMoreSpacer} />
+      )}
+    </View>
+  );
 });
 
 // ============================================================================
@@ -307,12 +329,6 @@ const Notifications: React.FC<NotificationsProps> = ({
   onBadgeUpdate,
   onNavigateToModule
 }) => {
-  log.render('Notifications (Parent)', { isDark, hasOnNavigate: !!onNavigateToModule });
-
-  const renderCountRef = useRef(0);
-  renderCountRef.current++;
-  log.render('Notifications render count', renderCountRef.current);
-
   const insets = useSafeAreaInsets();
   const currentColors = useMemo(() => isDark ? whatsappColors.dark : whatsappColors.light, [isDark]);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -324,6 +340,15 @@ const Notifications: React.FC<NotificationsProps> = ({
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
+  // Pagination state — kept in a single object to avoid waterfall re-renders
+  const [pagination, setPagination] = useState<PaginationState>({
+    currentPage: 1,
+    hasMore: false,
+    totalCount: 0,
+    totalPages: 1,
+    isLoadingMore: false,
+  });
+
   // UI state
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -331,6 +356,9 @@ const Notifications: React.FC<NotificationsProps> = ({
   const [showDisabledMessage, setShowDisabledMessage] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // When user is in selection mode and taps "Select All", we need to know
+  // whether ALL backend notifications are selected (not just the loaded ones).
+  const [allSelected, setAllSelected] = useState(false);
 
   // Refs
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -338,99 +366,83 @@ const Notifications: React.FC<NotificationsProps> = ({
   const previousUnreadCountRef = useRef(0);
   const hasLoadedRef = useRef(false);
   const isMountedRef = useRef(true);
+  // Guard against concurrent "load more" calls
+  const isLoadingMoreRef = useRef(false);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(height)).current;
 
   // ============================================================================
-  // MOUNT/UNMOUNT TRACKING
+  // MOUNT / UNMOUNT
   // ============================================================================
   useEffect(() => {
     log.mount('Notifications (Parent)');
-    return () => {
-      log.unmount('Notifications (Parent)');
-    };
-  }, []);
-
-  // ============================================================================
-  // STATE CHANGE TRACKING
-  // ============================================================================
-  useEffect(() => {
-    log.state('selectionMode changed', {
-      selectionMode,
-      selectedCount: selectedIds.size
-    });
-  }, [selectionMode]);
-
-  useEffect(() => {
-    log.state('selectedIds changed', {
-      count: selectedIds.size,
-      ids: Array.from(selectedIds)
-    });
-  }, [selectedIds]);
-
-  useEffect(() => {
-    log.state('notifications changed', {
-      count: notifications.length,
-      unread: notifications.filter(n => !n.Read).length
-    });
-  }, [notifications]);
-
-  // ============================================================================
-  // SIMPLIFIED NAVIGATION HANDLER
-  // ============================================================================
-  const handleNavigateToModule = useCallback((go_to: string | null | undefined) => {
-    if (!go_to) {
-      log.interaction('Navigation attempted with no target');
-      return;
-    }
-    log.interaction('Navigation requested', { go_to });
-    if (onNavigateToModule) {
-      onNavigateToModule(go_to);
-    } else {
-      log.interaction('onNavigateToModule prop not provided - WARNING');
-    }
-  }, [onNavigateToModule]);
-
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
-  useEffect(() => {
     isMountedRef.current = true;
 
     const initialize = async () => {
-      log.effect('Notifications', 'Initialize start');
       await loadNotificationSetting();
-
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
-      }).start(() => {
-        log.animation('Notifications', 'Fade in complete');
-      });
+      }).start();
     };
     initialize();
 
     return () => {
-      log.effect('Notifications', 'Cleanup');
+      log.unmount('Notifications (Parent)');
       isMountedRef.current = false;
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
 
+  // ============================================================================
+  // BADGE + SAVE SIDE-EFFECTS
+  // ============================================================================
+  useEffect(() => {
+    if (!isMountedRef.current) return;
+
+    if (!notificationsEnabled || notifications.length === 0) {
+      if (previousUnreadCountRef.current !== 0 && onBadgeUpdate) {
+        onBadgeUpdate(0);
+        previousUnreadCountRef.current = 0;
+      }
+      updateIOSBadgeCount(0);
+      return;
+    }
+
+    // Use totalCount from server for badge so it accounts for all pages
+    const currentUnreadCount = notifications.filter(n => !n.Read).length;
+
+    if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
+      onBadgeUpdate(currentUnreadCount);
+      previousUnreadCountRef.current = currentUnreadCount;
+    }
+
+    updateIOSBadgeCount(currentUnreadCount);
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      const currentReadStatus = notifications.map(n => ({ id: n.id, read: n.Read }));
+      const lastReadStatus = lastSavedNotificationsRef.current.map(n => ({ id: n.id, read: n.Read }));
+      if (JSON.stringify(currentReadStatus) !== JSON.stringify(lastReadStatus)) {
+        saveReadStatusLocally();
+        lastSavedNotificationsRef.current = [...notifications];
+      }
+    }, 300);
+  }, [notifications, notificationsEnabled, onBadgeUpdate]);
+
+  // ============================================================================
+  // SETTINGS
+  // ============================================================================
   const loadNotificationSetting = useCallback(async () => {
-    log.effect('Notifications', 'Loading notification settings');
     try {
       const storedSetting = await AsyncStorage.getItem('notifications_enabled');
       const enabled = storedSetting !== null ? storedSetting === 'true' : true;
-
       if (!isMountedRef.current) return;
 
-      log.state('Notification settings loaded', { enabled });
       setNotificationsEnabled(enabled);
       setShowDisabledMessage(!enabled);
 
@@ -449,7 +461,7 @@ const Notifications: React.FC<NotificationsProps> = ({
       if (enabled && !hasLoadedRef.current) {
         hasLoadedRef.current = true;
         await requestNotificationPermissions();
-        await fetchNotifications();
+        await fetchNotifications(1, false);
       } else if (!enabled) {
         setLoading(false);
         await updateIOSBadgeCount(0);
@@ -461,96 +473,44 @@ const Notifications: React.FC<NotificationsProps> = ({
         hasLoadedRef.current = true;
         setNotificationsEnabled(true);
         await requestNotificationPermissions();
-        await fetchNotifications();
+        await fetchNotifications(1, false);
       }
     }
   }, [onBadgeUpdate]);
 
   const requestNotificationPermissions = useCallback(async () => {
-    if (Platform.OS === 'ios' && notificationsEnabled) {
+    if (Platform.OS === 'ios') {
       try {
         const { status } = await ExpoNotifications.requestPermissionsAsync({
           ios: { allowAlert: true, allowBadge: true, allowSound: true },
         });
-        log.state('Notification permissions', { status });
-        if (status !== 'granted') {
-          console.warn('⚠️ Notification permissions not granted');
-        }
+        if (status !== 'granted') console.warn('⚠️ Notification permissions not granted');
       } catch (error) {
         console.error('❌ Error requesting notification permissions:', error);
       }
     }
-  }, [notificationsEnabled]);
+  }, []);
 
   const updateIOSBadgeCount = useCallback(async (count: number) => {
-    if (Platform.OS === 'ios' && notificationsEnabled) {
-      try {
-        await ExpoNotifications.setBadgeCountAsync(count);
-        log.state('iOS badge count updated', { count });
-        if (count === 0) {
-          await ExpoNotifications.dismissAllNotificationsAsync();
-        }
-      } catch (error) {
-        console.error('❌ Error updating iOS badge count:', error);
-      }
-    } else if (Platform.OS === 'ios' && !notificationsEnabled) {
-      try {
-        await ExpoNotifications.setBadgeCountAsync(0);
+    if (Platform.OS !== 'ios') return;
+    try {
+      await ExpoNotifications.setBadgeCountAsync(notificationsEnabled ? count : 0);
+      if (count === 0 || !notificationsEnabled) {
         await ExpoNotifications.dismissAllNotificationsAsync();
-      } catch (error) {
-        console.error('Error clearing iOS badge:', error);
       }
+    } catch (error) {
+      console.error('❌ Error updating iOS badge count:', error);
     }
   }, [notificationsEnabled]);
 
-  useEffect(() => {
-    if (!isMountedRef.current) return;
-
-    if (!notificationsEnabled || notifications.length === 0) {
-      const currentUnreadCount = 0;
-      if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
-        onBadgeUpdate(currentUnreadCount);
-        previousUnreadCountRef.current = currentUnreadCount;
-      }
-      updateIOSBadgeCount(0);
-      return;
-    }
-
-    const currentUnreadCount = notifications.filter(n => !n.Read).length;
-
-    if (previousUnreadCountRef.current !== currentUnreadCount && onBadgeUpdate) {
-      onBadgeUpdate(currentUnreadCount);
-      previousUnreadCountRef.current = currentUnreadCount;
-    }
-
-    updateIOSBadgeCount(currentUnreadCount);
-
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      if (!isMountedRef.current) return;
-
-      const currentReadStatus = notifications.map(n => ({ id: n.id, read: n.Read }));
-      const lastReadStatus = lastSavedNotificationsRef.current.map(n => ({ id: n.id, read: n.Read }));
-
-      const hasChanged = JSON.stringify(currentReadStatus) !== JSON.stringify(lastReadStatus);
-      if (hasChanged) {
-        saveReadStatusLocally();
-        lastSavedNotificationsRef.current = [...notifications];
-      }
-    }, 300);
-  }, [notifications, notificationsEnabled, onBadgeUpdate]);
-
+  // ============================================================================
+  // LOCAL PERSISTENCE HELPERS
+  // ============================================================================
   const saveReadStatusLocally = useCallback(async () => {
     try {
       const readStatusMap: { [key: string]: boolean } = {};
-      notifications.forEach(notif => {
-        readStatusMap[notif.id] = notif.Read;
-      });
+      notifications.forEach(notif => { readStatusMap[notif.id] = notif.Read; });
       await AsyncStorage.setItem('notification_read_status', JSON.stringify(readStatusMap));
-      log.state('Read status saved locally', { count: Object.keys(readStatusMap).length });
     } catch (error) {
       console.error('❌ Error saving read status locally:', error);
     }
@@ -569,7 +529,6 @@ const Notifications: React.FC<NotificationsProps> = ({
   const saveDeletedIds = useCallback(async (ids: Set<string>) => {
     try {
       await AsyncStorage.setItem('deleted_notification_ids', JSON.stringify([...ids]));
-      log.state('Deleted IDs saved', { count: ids.size });
     } catch (error) {
       console.error('❌ Error saving deleted IDs:', error);
     }
@@ -578,53 +537,77 @@ const Notifications: React.FC<NotificationsProps> = ({
   const loadDeletedIds = useCallback(async () => {
     try {
       const saved = await AsyncStorage.getItem('deleted_notification_ids');
-      if (saved) {
-        const ids = JSON.parse(saved);
-        return new Set<string>(ids);
-      }
+      if (saved) return new Set<string>(JSON.parse(saved));
     } catch (error) {
       console.error('❌ Error loading deleted IDs:', error);
     }
     return new Set<string>();
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
+  // ============================================================================
+  // FETCH — supports both initial load and incremental page loads
+  // ============================================================================
+  /**
+   * @param page          Page number to fetch (1-indexed)
+   * @param append        If true, append results to existing list (pagination).
+   *                      If false, replace list (initial load / pull-to-refresh).
+   */
+  const fetchNotifications = useCallback(async (page: number = 1, append: boolean = false) => {
+    // Prevent duplicate in-flight requests
+    if (append && isLoadingMoreRef.current) {
+      log.pagination('Skipping duplicate load-more request');
+      return;
+    }
+
+    log.pagination('Fetching notifications', { page, append });
+
     try {
-      log.effect('Notifications', 'Fetching notifications from backend');
-      setLoading(true);
+      if (append) {
+        isLoadingMoreRef.current = true;
+        setPagination(prev => ({ ...prev, isLoadingMore: true }));
+      } else {
+        setLoading(true);
+      }
+
       const token = await AsyncStorage.getItem('token_2');
       if (!token) {
         console.error('❌ No authentication token found');
-        setLoading(false);
         return;
       }
 
       const response = await fetch(`${BACKEND_URL}/core/getNotifications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, page, page_size: PAGE_SIZE }),
       });
 
       if (!isMountedRef.current) return;
 
       if (response.ok) {
         const data = await response.json();
-        log.state('Notifications fetched from backend', { count: data.notifications?.length || 0 });
+        log.pagination('Response received', {
+          page: data.page,
+          total: data.total_count,
+          has_next: data.has_next,
+          received: data.notifications?.length || 0,
+        });
 
         const localReadStatus = await loadLocalReadStatus();
         const localDeletedIds = await loadDeletedIds();
 
-        const formattedNotifications = data.notifications
+        const formatted: Notification[] = data.notifications
           .filter((notif: any) => !localDeletedIds.has(notif.id.toString()))
           .map((notif: any) => {
-            const formatted = formatNotification(notif);
-            if (!formatted.Read && localReadStatus[formatted.id] === true) {
-              return { ...formatted, Read: true };
+            const f = formatNotification(notif);
+            // Merge any locally-cached read status
+            if (!f.Read && localReadStatus[f.id] === true) {
+              return { ...f, Read: true };
             }
-            return formatted;
+            return f;
           });
 
-        formattedNotifications.sort((a: Notification, b: Notification) => {
+        // Sort: unread first, then newest
+        formatted.sort((a, b) => {
           if (a.Read !== b.Read) return a.Read ? 1 : -1;
           if (a.created_at && b.created_at) {
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -632,23 +615,73 @@ const Notifications: React.FC<NotificationsProps> = ({
           return 0;
         });
 
-        if (isMountedRef.current) {
-          setNotifications(formattedNotifications);
-          lastSavedNotificationsRef.current = [...formattedNotifications];
+        if (!isMountedRef.current) return;
+
+        if (append) {
+          // Deduplicate by id in case backend returns overlapping items
+          setNotifications(prev => {
+            const existingIds = new Set(prev.map(n => n.id));
+            const newItems = formatted.filter(n => !existingIds.has(n.id));
+            return [...prev, ...newItems];
+          });
+        } else {
+          setNotifications(formatted);
+          lastSavedNotificationsRef.current = [...formatted];
           setDeletedIds(localDeletedIds);
         }
+
+        setPagination({
+          currentPage: data.page,
+          hasMore: data.has_next,
+          totalCount: data.total_count,
+          totalPages: data.total_pages,
+          isLoadingMore: false,
+        });
       } else {
         console.error(`❌ Failed to fetch notifications, status: ${response.status}`);
+        if (isMountedRef.current) {
+          setPagination(prev => ({ ...prev, isLoadingMore: false }));
+        }
       }
     } catch (error) {
       console.error('❌ Error fetching notifications:', error);
+      if (isMountedRef.current) {
+        setPagination(prev => ({ ...prev, isLoadingMore: false }));
+      }
     } finally {
+      isLoadingMoreRef.current = false;
       if (isMountedRef.current) {
         setLoading(false);
+        if (!append) setRefreshing(false);
       }
     }
-  }, []);
+  }, [loadLocalReadStatus, loadDeletedIds]);
 
+  // ============================================================================
+  // SCROLL HANDLER — triggers pagination when user nears the bottom
+  // ============================================================================
+  const handleScroll = useCallback((event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+
+    if (
+      distanceFromBottom < LOAD_MORE_THRESHOLD &&
+      pagination.hasMore &&
+      !pagination.isLoadingMore &&
+      !isLoadingMoreRef.current &&
+      !loading
+    ) {
+      log.pagination('Threshold reached, loading next page', {
+        distanceFromBottom,
+        nextPage: pagination.currentPage + 1,
+      });
+      fetchNotifications(pagination.currentPage + 1, true);
+    }
+  }, [pagination.hasMore, pagination.isLoadingMore, pagination.currentPage, loading, fetchNotifications]);
+
+  // ============================================================================
+  // FORMAT HELPERS
+  // ============================================================================
   const formatNotification = useCallback((notif: any): Notification => {
     const now = new Date();
     const createdAt = new Date(notif.created_at);
@@ -660,22 +693,12 @@ const Notifications: React.FC<NotificationsProps> = ({
     let timeText = '';
     let category: 'today' | 'week' | 'earlier' = 'earlier';
 
-    if (diffMins < 1) {
-      timeText = 'Just now';
-      category = 'today';
-    } else if (diffMins < 60) {
-      timeText = `${diffMins}m`;
-      category = 'today';
-    } else if (diffHours < 24) {
-      timeText = `${diffHours}h`;
-      category = 'today';
-    } else if (diffDays === 1) {
-      timeText = 'Yesterday';
-      category = 'week';
-    } else if (diffDays < 7) {
-      timeText = `${diffDays}d`;
-      category = 'week';
-    } else {
+    if (diffMins < 1) { timeText = 'Just now'; category = 'today'; }
+    else if (diffMins < 60) { timeText = `${diffMins}m`; category = 'today'; }
+    else if (diffHours < 24) { timeText = `${diffHours}h`; category = 'today'; }
+    else if (diffDays === 1) { timeText = 'Yesterday'; category = 'week'; }
+    else if (diffDays < 7) { timeText = `${diffDays}d`; category = 'week'; }
+    else {
       timeText = createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       category = 'earlier';
     }
@@ -715,18 +738,16 @@ const Notifications: React.FC<NotificationsProps> = ({
     return colorMap[type] || currentColors.primary;
   }, [currentColors.primary]);
 
+  // ============================================================================
+  // MARK AS READ
+  // ============================================================================
   const handleMarkAsRead = useCallback(async (id: string) => {
     if (!notificationsEnabled) return;
-
-    log.interaction('Mark as read', { id });
-
     try {
       const token = await AsyncStorage.getItem('token_2');
       if (!token) return;
 
-      setNotifications(prev => prev.map(notif =>
-        notif.id === id ? { ...notif, Read: true } : notif
-      ));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, Read: true } : n));
 
       const response = await fetch(`${BACKEND_URL}/core/markNotificationAsRead`, {
         method: 'POST',
@@ -735,38 +756,33 @@ const Notifications: React.FC<NotificationsProps> = ({
       });
 
       if (!response.ok && isMountedRef.current) {
-        console.error('❌ Failed to mark notification as read on backend');
-        setNotifications(prev => prev.map(notif =>
-          notif.id === id ? { ...notif, Read: false } : notif
-        ));
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, Read: false } : n));
       }
     } catch (error) {
       console.error('❌ Error marking notification as read:', error);
       if (isMountedRef.current) {
-        setNotifications(prev => prev.map(notif =>
-          notif.id === id ? { ...notif, Read: false } : notif
-        ));
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, Read: false } : n));
       }
     }
   }, [notificationsEnabled]);
 
+  /**
+   * Mark ALL read — backend marks ALL notifications for the user (regardless of
+   * pagination), then we update local state to reflect the change.
+   */
   const markAllNotificationsAsRead = useCallback(async () => {
     if (!notificationsEnabled) return;
-
-    log.interaction('Mark all as read');
-
-    const unreadNotifications = notifications.filter(n => !n.Read);
-    if (unreadNotifications.length === 0) {
-      return;
-    }
+    const unreadCount = notifications.filter(n => !n.Read).length;
+    // Even if unreadCount === 0 locally, there may be unread on unloaded pages.
+    // We still proceed but skip if we're confident there's nothing to do.
+    if (unreadCount === 0 && pagination.currentPage >= pagination.totalPages) return;
 
     try {
       const token = await AsyncStorage.getItem('token_2');
       if (!token) return;
 
-      const originalNotifications = [...notifications];
-
-      setNotifications(prev => prev.map(notif => ({ ...notif, Read: true })));
+      // Optimistically update all loaded notifications
+      setNotifications(prev => prev.map(n => ({ ...n, Read: true })));
       await updateIOSBadgeCount(0);
 
       const response = await fetch(`${BACKEND_URL}/core/markAllRead`, {
@@ -776,47 +792,39 @@ const Notifications: React.FC<NotificationsProps> = ({
       });
 
       if (!response.ok && isMountedRef.current) {
-        console.error('❌ Failed to mark all as read on backend');
-        setNotifications(originalNotifications);
+        console.error('❌ Failed to mark all as read on backend — reverting');
+        // Re-fetch to restore correct state
+        await fetchNotifications(1, false);
       }
     } catch (error) {
       console.error('❌ Error marking all notifications as read:', error);
       Alert.alert('Error', 'Failed to mark all as read. Please try again.');
     }
-  }, [notificationsEnabled, notifications, updateIOSBadgeCount]);
+  }, [notificationsEnabled, notifications, pagination, updateIOSBadgeCount, fetchNotifications]);
 
+  // ============================================================================
+  // DELETE — single item
+  // ============================================================================
   const handleDelete = useCallback(async (id: string) => {
     if (deletingIds.has(id)) return;
-
-    log.interaction('Delete notification', { id });
     setDeletingIds(prev => new Set(prev).add(id));
 
     try {
       const token = await AsyncStorage.getItem('token_2');
-      if (!token) {
-        setDeletingIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(id);
-          return newSet;
-        });
-        return;
-      }
+      if (!token) return;
 
       const newDeletedIds = new Set(deletedIds).add(id);
       setDeletedIds(newDeletedIds);
       await saveDeletedIds(newDeletedIds);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      // Update total count optimistically
+      setPagination(prev => ({ ...prev, totalCount: Math.max(0, prev.totalCount - 1) }));
 
-      setNotifications(prev => prev.filter(notif => notif.id !== id));
-
-      const response = await fetch(`${BACKEND_URL}/core/deleteNotification`, {
+      await fetch(`${BACKEND_URL}/core/deleteNotification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, notification_id: id }),
       });
-
-      if (!response.ok) {
-        console.error('❌ Failed to delete notification on backend');
-      }
     } catch (error) {
       console.error('❌ Error deleting notification:', error);
     } finally {
@@ -828,133 +836,174 @@ const Notifications: React.FC<NotificationsProps> = ({
     }
   }, [deletingIds, deletedIds, saveDeletedIds]);
 
+  // ============================================================================
+  // DELETE — selected / all
+  //
+  // KEY DESIGN DECISION:
+  //   If `allSelected` is true (user tapped "Select All" which semantically means
+  //   "all notifications on the server, not just loaded ones"), we call the
+  //   deleteAll endpoint with NO ids → backend deletes everything for this user.
+  //
+  //   If `allSelected` is false, the user only selected specific visible items,
+  //   so we pass their IDs to deleteAll (which also accepts a subset of IDs).
+  // ============================================================================
   const handleDeleteSelected = useCallback(async () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0 && !allSelected) return;
 
-    log.interaction('Delete selected', { count: selectedIds.size });
+    const label = allSelected
+      ? `all ${pagination.totalCount} notifications`
+      : `${selectedIds.size} notification${selectedIds.size > 1 ? 's' : ''}`;
 
     Alert.alert(
       'Delete Notifications',
-      `Are you sure you want to delete ${selectedIds.size} notification${selectedIds.size > 1 ? 's' : ''}?`,
+      `Are you sure you want to delete ${label}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const idsToDelete = Array.from(selectedIds);
-
             try {
               const token = await AsyncStorage.getItem('token_2');
               if (!token) return;
 
-              const newDeletedIds = new Set(deletedIds);
-              idsToDelete.forEach(id => newDeletedIds.add(id));
-              setDeletedIds(newDeletedIds);
-              await saveDeletedIds(newDeletedIds);
-
-              setNotifications(prev => prev.filter(notif => !selectedIds.has(notif.id)));
-              setSelectedIds(new Set());
-              setSelectionMode(false);
-
-              for (const id of idsToDelete) {
-                fetch(`${BACKEND_URL}/core/deleteNotification`, {
+              if (allSelected) {
+                // Delete ALL — backend call without ids
+                log.interaction('Delete ALL notifications (backend)');
+                const response = await fetch(`${BACKEND_URL}/core/deleteAllNotifications`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token, notification_id: id }),
-                }).catch(err => console.error(`❌ Failed to delete ${id}:`, err));
+                  body: JSON.stringify({ token }),
+                });
+                if (response.ok) {
+                  setNotifications([]);
+                  setDeletedIds(new Set());
+                  await AsyncStorage.removeItem('deleted_notification_ids');
+                  await AsyncStorage.removeItem('notification_read_status');
+                  setPagination({ currentPage: 1, hasMore: false, totalCount: 0, totalPages: 1, isLoadingMore: false });
+                } else {
+                  console.error('❌ Failed to delete all notifications');
+                  Alert.alert('Error', 'Failed to delete all notifications. Please try again.');
+                }
+              } else {
+                // Delete a specific subset
+                const idsToDelete = Array.from(selectedIds);
+                log.interaction('Delete selected notifications', { count: idsToDelete.length });
+
+                const newDeletedIds = new Set(deletedIds);
+                idsToDelete.forEach(id => newDeletedIds.add(id));
+                setDeletedIds(newDeletedIds);
+                await saveDeletedIds(newDeletedIds);
+
+                setNotifications(prev => prev.filter(n => !selectedIds.has(n.id)));
+                setPagination(prev => ({
+                  ...prev,
+                  totalCount: Math.max(0, prev.totalCount - idsToDelete.length),
+                }));
+
+                // Fire-and-forget batch delete via the deleteAll endpoint with ids
+                fetch(`${BACKEND_URL}/core/deleteAllNotifications`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token, ids: idsToDelete }),
+                }).catch(err => console.error('❌ Batch delete failed:', err));
               }
+
+              setSelectedIds(new Set());
+              setAllSelected(false);
+              setSelectionMode(false);
             } catch (error) {
               console.error('❌ Error deleting selected notifications:', error);
+              Alert.alert('Error', 'Something went wrong. Please try again.');
             }
           }
         }
       ]
     );
-  }, [selectedIds, deletedIds, saveDeletedIds]);
+  }, [selectedIds, allSelected, deletedIds, saveDeletedIds, pagination.totalCount]);
 
   // ============================================================================
-  // CRITICAL: OPTIMIZED SELECTION MODE TOGGLE WITH BATCHED STATE UPDATE
+  // SELECTION MODE
   // ============================================================================
   const toggleSelectionMode = useCallback(() => {
-    log.interaction('Toggle selection mode', { currentMode: selectionMode });
-
-    // BATCH THE STATE UPDATES
     React.startTransition(() => {
       setSelectionMode(prev => !prev);
       setSelectedIds(new Set());
+      setAllSelected(false);
     });
-  }, [selectionMode]);
+  }, []);
 
+  /**
+   * "Select All" in pagination context means two things:
+   *   1. Select all LOADED notifications in the UI (for visual feedback)
+   *   2. Set `allSelected = true` so the delete handler knows to call deleteAll
+   *      on the backend (which covers unloaded pages too)
+   *
+   * Tapping again deselects all.
+   */
   const toggleSelectAll = useCallback(() => {
-    log.interaction('Toggle select all', {
-      currentCount: selectedIds.size,
-      totalCount: notifications.length
-    });
+    if (allSelected || selectedIds.size === notifications.length) {
+      // Deselect everything
+      setSelectedIds(new Set());
+      setAllSelected(false);
+    } else {
+      // Select all loaded notifications AND flag that we mean "all on server"
+      setSelectedIds(new Set(notifications.map(n => n.id)));
+      setAllSelected(true);
+    }
+  }, [notifications, selectedIds.size, allSelected]);
 
-    setSelectedIds(prev => {
-      if (prev.size === notifications.length) {
-        return new Set();
-      }
-      return new Set(notifications.map(n => n.id));
-    });
-  }, [notifications, selectedIds.size]);
-
-  // ============================================================================
-  // CRITICAL FIX: STABLE toggleSelectItem THAT WON'T CAUSE RE-RENDERS
-  // ============================================================================
   const toggleSelectItem = useCallback((id: string) => {
-    log.interaction('Toggle select item', { id });
-
     setSelectedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
-        log.state('Deselecting item', { id });
         newSet.delete(id);
       } else {
-        log.state('Selecting item', { id });
         newSet.add(id);
       }
       return newSet;
     });
-  }, []); // EMPTY DEPS - completely stable
+    // If user manually deselects an item, they're no longer selecting "all"
+    setAllSelected(false);
+  }, []);
 
+  // ============================================================================
+  // PULL TO REFRESH — resets to page 1
+  // ============================================================================
   const onRefresh = useCallback(async () => {
     if (!notificationsEnabled) {
       setRefreshing(false);
       return;
     }
-
-    log.interaction('Pull to refresh');
     setRefreshing(true);
-    await fetchNotifications();
-    setRefreshing(false);
+    setAllSelected(false);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    await fetchNotifications(1, false);
   }, [notificationsEnabled, fetchNotifications]);
+
+  // ============================================================================
+  // PRESS HANDLERS
+  // ============================================================================
+  const handleNavigateToModule = useCallback((go_to: string | null | undefined) => {
+    if (!go_to) return;
+    if (onNavigateToModule) onNavigateToModule(go_to);
+  }, [onNavigateToModule]);
 
   const handleNotificationPress = useCallback((notification: Notification) => {
     if (!notificationsEnabled) return;
-
-    log.interaction('Notification pressed', {
-      id: notification.id,
-      selectionMode,
-      go_to: notification.go_to
-    });
 
     if (selectionMode) {
       toggleSelectItem(notification.id);
       return;
     }
 
-    if (!notification.Read) {
-      handleMarkAsRead(notification.id);
-    }
+    if (!notification.Read) handleMarkAsRead(notification.id);
 
     if (notification.go_to) {
       setModalVisible(false);
       onBack();
-      setTimeout(() => {
-        handleNavigateToModule(notification.go_to);
-      }, 150);
+      setTimeout(() => handleNavigateToModule(notification.go_to), 150);
       return;
     }
 
@@ -965,35 +1014,18 @@ const Notifications: React.FC<NotificationsProps> = ({
       useNativeDriver: true,
       tension: 65,
       friction: 11,
-    }).start(() => {
-      log.animation('Modal', 'Spring animation complete');
-    });
+    }).start();
   }, [notificationsEnabled, selectionMode, toggleSelectItem, handleMarkAsRead, handleNavigateToModule, modalAnim, onBack]);
 
-  // ============================================================================
-  // CRITICAL FIX: BATCHED STATE UPDATE FOR LONG PRESS
-  // ============================================================================
   const handleNotificationLongPress = useCallback((notification: Notification) => {
     if (!notificationsEnabled) return;
-
-    log.interaction('Notification long pressed', {
-      id: notification.id,
-      currentSelectionMode: selectionMode
-    });
-
-    // BATCH THE STATE UPDATES TO PREVENT DOUBLE RENDER
     React.startTransition(() => {
-      if (!selectionMode) {
-        log.state('Enabling selection mode');
-        setSelectionMode(true);
-      }
-      log.state('Adding to selection', { id: notification.id });
+      if (!selectionMode) setSelectionMode(true);
       toggleSelectItem(notification.id);
     });
   }, [notificationsEnabled, selectionMode, toggleSelectItem]);
 
   const closeModal = useCallback(() => {
-    log.interaction('Close modal');
     Animated.timing(modalAnim, {
       toValue: height,
       duration: 250,
@@ -1002,58 +1034,55 @@ const Notifications: React.FC<NotificationsProps> = ({
       setModalVisible(false);
       setSelectedNotification(null);
       modalAnim.setValue(height);
-      log.animation('Modal', 'Close animation complete');
     });
   }, [modalAnim]);
 
   const handleModalActionPress = useCallback(() => {
-    log.interaction('Modal action pressed', { go_to: selectedNotification?.go_to });
-
     if (selectedNotification?.go_to) {
       closeModal();
       setTimeout(() => {
         onBack();
-        setTimeout(() => {
-          handleNavigateToModule(selectedNotification.go_to);
-        }, 150);
+        setTimeout(() => handleNavigateToModule(selectedNotification.go_to), 150);
       }, 300);
     } else {
       closeModal();
     }
   }, [selectedNotification, closeModal, handleNavigateToModule, onBack]);
 
-  const groupedNotifications = useMemo(() => {
-    const grouped = {
-      today: notifications.filter(n => n.category === 'today'),
-      week: notifications.filter(n => n.category === 'week'),
-      earlier: notifications.filter(n => n.category === 'earlier'),
-    };
-    log.state('Notifications grouped', {
-      today: grouped.today.length,
-      week: grouped.week.length,
-      earlier: grouped.earlier.length
-    });
-    return grouped;
-  }, [notifications]);
+  // ============================================================================
+  // DERIVED STATE
+  // ============================================================================
+  const groupedNotifications = useMemo(() => ({
+    today: notifications.filter(n => n.category === 'today'),
+    week: notifications.filter(n => n.category === 'week'),
+    earlier: notifications.filter(n => n.category === 'earlier'),
+  }), [notifications]);
 
-  const unreadCount = useMemo(() =>
-    notifications.filter(n => !n.Read).length,
-    [notifications]
-  );
+  const unreadCount = useMemo(() => notifications.filter(n => !n.Read).length, [notifications]);
 
-  const SectionHeader = React.memo(({ title, count }: { title: string; count: number }) => (
+  // The "Select All" button label changes based on whether everything is selected
+  const selectAllLabel = useMemo(() => {
+    if (allSelected) return 'Deselect All';
+    if (selectedIds.size === notifications.length && notifications.length > 0) return 'Deselect All';
+    return pagination.hasMore ? `Select All (${pagination.totalCount})` : 'Select All';
+  }, [allSelected, selectedIds.size, notifications.length, pagination.hasMore, pagination.totalCount]);
+
+  const SectionHeader = React.memo(({ title, count }: { title: string; count: number }) =>
     count > 0 ? (
       <View style={s.sectionHdr}>
         <Text style={[s.sectionTitle, { color: currentColors.textSecondary }]}>{title}</Text>
       </View>
     ) : null
-  ));
+  );
 
+  // ============================================================================
+  // RENDER
+  // ============================================================================
   return (
     <View style={[s.container, { backgroundColor: currentColors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={currentColors.header} />
 
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={[s.header, {
         backgroundColor: currentColors.header,
         paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
@@ -1068,36 +1097,32 @@ const Notifications: React.FC<NotificationsProps> = ({
             </View>
           </TouchableOpacity>
 
-          <View style={[s.hdrTitleBox, selectionMode && { left: 90, right: 140 }]}>
+          <View style={[s.hdrTitleBox, selectionMode && { left: 90, right: 160 }]}>
             <Text style={[s.hdrTitle, { color: "#FFFFFF" }]} numberOfLines={1}>
-              {selectionMode ? `${selectedIds.size} Selected` : 'Notifications'}
+              {selectionMode
+                ? (allSelected
+                  ? `All ${pagination.totalCount} Selected`
+                  : `${selectedIds.size} Selected`)
+                : 'Notifications'}
             </Text>
           </View>
 
           {selectionMode ? (
             <View style={s.selectionActions}>
-              <TouchableOpacity
-                style={s.selectAllBtn}
-                onPress={toggleSelectAll}
-                activeOpacity={0.6}
-              >
-                <Text style={[s.selectAllText, { color: "#FFFFFF" }]}>
-                  {selectedIds.size === notifications.length ? 'Deselect' : 'Select All'}
+              <TouchableOpacity style={s.selectAllBtn} onPress={toggleSelectAll} activeOpacity={0.6}>
+                <Text style={[s.selectAllText, { color: "#FFFFFF" }]} numberOfLines={1}>
+                  {selectAllLabel}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[s.deleteSelectedBtn, { opacity: selectedIds.size === 0 ? 0.4 : 1 }]}
+                style={[s.deleteSelectedBtn, { opacity: (selectedIds.size === 0 && !allSelected) ? 0.4 : 1 }]}
                 onPress={handleDeleteSelected}
-                disabled={selectedIds.size === 0}
+                disabled={selectedIds.size === 0 && !allSelected}
                 activeOpacity={0.6}
               >
                 <Ionicons name="trash" size={22} color="#FFFFFF" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={s.cancelBtn}
-                onPress={toggleSelectionMode}
-                activeOpacity={0.6}
-              >
+              <TouchableOpacity style={s.cancelBtn} onPress={toggleSelectionMode} activeOpacity={0.6}>
                 <Ionicons name="close" size={26} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -1115,10 +1140,10 @@ const Notifications: React.FC<NotificationsProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.markAllBtn, {
-                  opacity: unreadCount === 0 || !notificationsEnabled ? 0.4 : 1
+                  opacity: !notificationsEnabled ? 0.4 : 1
                 }]}
                 onPress={markAllNotificationsAsRead}
-                disabled={unreadCount === 0 || !notificationsEnabled}
+                disabled={!notificationsEnabled}
                 activeOpacity={0.6}
               >
                 <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
@@ -1126,19 +1151,21 @@ const Notifications: React.FC<NotificationsProps> = ({
             </View>
           )}
         </View>
+
         {notifications.length > 0 && (
           <View style={s.hdrStats}>
             <Text style={[s.hdrStatsText, { color: isDark ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.85)" }]}>
               {notificationsEnabled
                 ? (unreadCount > 0 ? `${unreadCount} new` : 'All caught up')
                 : 'Notifications disabled'}
-              {' • '}{notifications.length} total
+              {' • '}{pagination.totalCount > 0 ? pagination.totalCount : notifications.length} total
+              {pagination.hasMore ? ` (${notifications.length} loaded)` : ''}
             </Text>
           </View>
         )}
       </View>
 
-      {/* Content */}
+      {/* ── Content ────────────────────────────────────────────────────────── */}
       <SafeAreaView style={s.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView
           ref={scrollViewRef}
@@ -1146,6 +1173,7 @@ const Notifications: React.FC<NotificationsProps> = ({
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
+          onScroll={handleScroll}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1168,24 +1196,17 @@ const Notifications: React.FC<NotificationsProps> = ({
               </View>
               <Text style={[s.emptyTitle, { color: currentColors.text }]}>Notifications Disabled</Text>
               <Text style={[s.emptyMsg, {
-                color: currentColors.textSecondary,
-                textAlign: 'center',
-                marginHorizontal: 20
+                color: currentColors.textSecondary, textAlign: 'center', marginHorizontal: 20
               }]}>
                 Notifications are currently turned off in your settings.{'\n\n'}
                 You can enable them in Settings → Notifications to receive alerts and updates.
               </Text>
               <TouchableOpacity
-                style={[s.enableButton, {
-                  backgroundColor: currentColors.primary,
-                  marginTop: 20
-                }]}
+                style={[s.enableButton, { backgroundColor: currentColors.primary, marginTop: 20 }]}
                 onPress={onBack}
                 activeOpacity={0.7}
               >
-                <Text style={[s.enableButtonText, { color: '#FFFFFF' }]}>
-                  Go to Settings
-                </Text>
+                <Text style={[s.enableButtonText, { color: '#FFFFFF' }]}>Go to Settings</Text>
               </TouchableOpacity>
             </Animated.View>
           ) : loading ? (
@@ -1217,14 +1238,14 @@ const Notifications: React.FC<NotificationsProps> = ({
                       key={n.id}
                       notification={n}
                       index={i}
-                      isSelected={selectedIds.has(n.id)}
+                      isSelected={allSelected || selectedIds.has(n.id)}
                       onPress={handleNotificationPress}
                       onLongPress={handleNotificationLongPress}
                       onDelete={handleDelete}
                       selectionMode={selectionMode}
                       notificationColor={getNotificationColor(n.type)}
                       notificationsEnabled={notificationsEnabled}
-                      currentColors={currentColors} // ADD THIS!
+                      currentColors={currentColors}
                     />
                   ))}
                 </>
@@ -1237,14 +1258,14 @@ const Notifications: React.FC<NotificationsProps> = ({
                       key={n.id}
                       notification={n}
                       index={i + groupedNotifications.today.length}
-                      isSelected={selectedIds.has(n.id)}
+                      isSelected={allSelected || selectedIds.has(n.id)}
                       onPress={handleNotificationPress}
                       onLongPress={handleNotificationLongPress}
                       onDelete={handleDelete}
                       selectionMode={selectionMode}
                       notificationColor={getNotificationColor(n.type)}
                       notificationsEnabled={notificationsEnabled}
-                      currentColors={currentColors} // ADD THIS!
+                      currentColors={currentColors}
                     />
                   ))}
                 </>
@@ -1259,25 +1280,32 @@ const Notifications: React.FC<NotificationsProps> = ({
                       key={n.id}
                       notification={n}
                       index={i + groupedNotifications.today.length + groupedNotifications.week.length}
-                      isSelected={selectedIds.has(n.id)}
+                      isSelected={allSelected || selectedIds.has(n.id)}
                       onPress={handleNotificationPress}
                       onLongPress={handleNotificationLongPress}
                       onDelete={handleDelete}
                       selectionMode={selectionMode}
                       notificationColor={getNotificationColor(n.type)}
                       notificationsEnabled={notificationsEnabled}
-                      currentColors={currentColors} // ADD THIS!
+                      currentColors={currentColors}
                     />
                   ))}
                 </>
               )}
+
+              {/* Load-more footer (spinner or blank spacer) */}
+              <LoadMoreFooter
+                isLoadingMore={pagination.isLoadingMore}
+                hasMore={pagination.hasMore}
+                currentColors={currentColors}
+              />
             </Animated.View>
           )}
           <View style={s.bottomSpace} />
         </ScrollView>
       </SafeAreaView>
 
-      {/* Modal */}
+      {/* ── Detail Modal ───────────────────────────────────────────────────── */}
       <Modal
         animationType="none"
         transparent={true}
@@ -1287,23 +1315,12 @@ const Notifications: React.FC<NotificationsProps> = ({
         hardwareAccelerated
       >
         <View style={[s.modalOverlay, { backgroundColor: currentColors.overlay }]}>
-          <TouchableOpacity
-            style={s.modalOverlayTouch}
-            activeOpacity={1}
-            onPress={closeModal}
-          >
+          <TouchableOpacity style={s.modalOverlayTouch} activeOpacity={1} onPress={closeModal}>
             <Animated.View style={[
               s.modalBox,
-              {
-                backgroundColor: currentColors.card,
-                transform: [{ translateY: modalAnim }]
-              }
+              { backgroundColor: currentColors.card, transform: [{ translateY: modalAnim }] }
             ]}>
-              <TouchableOpacity
-                style={s.modalDrag}
-                activeOpacity={1}
-                onPress={closeModal}
-              >
+              <TouchableOpacity style={s.modalDrag} activeOpacity={1} onPress={closeModal}>
                 <View style={[s.dragHandle, { backgroundColor: currentColors.textTertiary }]} />
               </TouchableOpacity>
 
@@ -1360,10 +1377,7 @@ const Notifications: React.FC<NotificationsProps> = ({
 
                     <View style={[s.modalDivider, { backgroundColor: currentColors.divider }]} />
 
-                    <View style={[
-                      s.modalMsgCard,
-                      { backgroundColor: currentColors.background }
-                    ]}>
+                    <View style={[s.modalMsgCard, { backgroundColor: currentColors.background }]}>
                       <Text style={[s.modalMsg, { color: currentColors.text }]}>
                         {selectedNotification.message}
                       </Text>
@@ -1381,7 +1395,7 @@ const Notifications: React.FC<NotificationsProps> = ({
                     )}
 
                     <View style={s.modalActions}>
-                      {selectedNotification.go_to ? (
+                      {selectedNotification.go_to && (
                         <TouchableOpacity
                           style={[s.modalActionBtn, { backgroundColor: currentColors.primary }]}
                           onPress={handleModalActionPress}
@@ -1392,19 +1406,13 @@ const Notifications: React.FC<NotificationsProps> = ({
                             Go to {selectedNotification.page || 'Module'}
                           </Text>
                         </TouchableOpacity>
-                      ) : null}
-
+                      )}
                       <TouchableOpacity
-                        style={[
-                          s.modalActionBtn2,
-                          { backgroundColor: currentColors.cardHover }
-                        ]}
+                        style={[s.modalActionBtn2, { backgroundColor: currentColors.cardHover }]}
                         onPress={closeModal}
                         activeOpacity={0.7}
                       >
-                        <Text style={[s.modalActionBtn2Text, { color: currentColors.text }]}>
-                          Close
-                        </Text>
+                        <Text style={[s.modalActionBtn2Text, { color: currentColors.text }]}>Close</Text>
                       </TouchableOpacity>
                     </View>
                   </>
@@ -1418,7 +1426,6 @@ const Notifications: React.FC<NotificationsProps> = ({
   );
 };
 
-// Styles remain exactly the same
 const s = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -1433,8 +1440,8 @@ const s = StyleSheet.create({
   selectionModeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   markAllBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   selectionActions: { flexDirection: 'row', alignItems: 'center', gap: 2, zIndex: 1 },
-  selectAllBtn: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.15)' },
-  selectAllText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  selectAllBtn: { paddingHorizontal: 6, paddingVertical: 5, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.15)', maxWidth: 130 },
+  selectAllText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
   deleteSelectedBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   cancelBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   hdrStats: { marginTop: 4, marginBottom: 4, alignItems: 'center' },
@@ -1466,6 +1473,9 @@ const s = StyleSheet.create({
   bottomSpace: { height: 40 },
   enableButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, marginTop: 20 },
   enableButtonText: { fontSize: 16, fontWeight: '600' },
+  loadMoreFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 20 },
+  loadMoreText: { fontSize: 14 },
+  loadMoreSpacer: { height: 20 },
   modalOverlay: { flex: 1 },
   modalOverlayTouch: { flex: 1, justifyContent: 'flex-end' },
   modalBox: { maxHeight: height * 0.75, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 24 },

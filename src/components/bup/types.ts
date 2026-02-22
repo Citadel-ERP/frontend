@@ -208,7 +208,7 @@ export interface AddCommentResponse {
   lead_comment: ApiComment;
 }
 
-export type ViewMode = 'city-selection' | 'list' | 'detail' | 'create';
+export type ViewMode = 'city-selection' | 'list' | 'detail' | 'create' | 'incentive' | 'bdt-selection';
 
 export interface ThemeColors {
   primary: string;

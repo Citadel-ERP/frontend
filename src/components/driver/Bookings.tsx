@@ -19,6 +19,41 @@ import { Booking, VehicleAssignment } from './types';
 import { BACKEND_URL } from '../../config/config';
 import { formatDate, formatDateTime, getStatusColor, getStatusIconBooking } from './utils';
 
+// ─── Status helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Human-readable labels for each status.
+ * "in-progress" shows as "Started", "completed" as "Ended".
+ */
+const STATUS_LABELS: Record<string, string> = {
+    pending:      'Pending',
+    assigned:     'Assigned',
+    accepted:     'Accepted',
+    'in-progress':'Started',
+    completed:    'Ended',
+    cancelled:    'Cancelled',
+};
+
+const getDisplayStatus = (s: string) => STATUS_LABELS[s.toLowerCase()] ?? s;
+
+/**
+ * Valid next states per current state (driver perspective).
+ * Terminal states return an empty set.
+ */
+const NEXT_STATES: Record<string, string[]> = {
+    pending:      ['assigned', 'cancelled'],
+    assigned:     ['accepted', 'cancelled'],
+    accepted:     ['in-progress', 'cancelled'],
+    'in-progress':['completed'],
+    completed:    [],
+    cancelled:    [],
+};
+
+/** Whether a status requires extra input */
+const needsCancellationReason = (s: string) => s === 'cancelled';
+const needsOdometerStart      = (s: string) => s === 'in-progress';
+const needsOdometerEnd        = (s: string) => s === 'completed';
+
 const BackIcon = () => (
     <View style={styles.backIcon}>
         <View style={styles.backArrow} />
@@ -26,16 +61,7 @@ const BackIcon = () => (
     </View>
 );
 
-// Helper function to map backend status to frontend display
-const getDisplayStatus = (status: string): string => {
-    const statusMap: { [key: string]: string } = {
-        'in-progress': 'Start',
-        'completed': 'End',
-        'Assigned': 'Assigned',
-        'cancelled': 'Cancelled'
-    };
-    return statusMap[status] || status;
-};
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface BookingsProps {
     token: string | null;
@@ -50,196 +76,161 @@ type ExtendedBooking = Booking & {
     vehicle_assignments?: VehicleAssignment[];
 };
 
+// ─── BookingCard ─────────────────────────────────────────────────────────────
+
 const BookingCard: React.FC<{
     booking: ExtendedBooking;
     index: number;
-    onUpdateStatus: (assignmentId: number, status: string, reason?: string, odometerStartReading?: string, odometerEndReading?: string) => void;
+    onUpdateStatus: (
+        assignmentId: number,
+        status: string,
+        reason?: string,
+        odometerStart?: string,
+        odometerEnd?: string,
+    ) => Promise<void>;
     updating: boolean;
 }> = ({ booking, index, onUpdateStatus, updating }) => {
     const slideAnim = useRef(new Animated.Value(30)).current;
-    const [selectedStatus, setSelectedStatus] = useState(booking.status);
-    const [showCancellationInput, setShowCancellationInput] = useState(false);
-    const [showOdometerStartInput, setShowOdometerStartInput] = useState(false);
-    const [showOdometerEndInput, setShowOdometerEndInput] = useState(false);
-    const [cancellationReason, setCancellationReason] = useState('');
-    const [odometerStartReading, setOdometerStartReading] = useState('');
-    const [odometerEndReading, setOdometerEndReading] = useState('');
-    const [isUpdating, setIsUpdating] = useState(false);
+
+    const currentStatus = booking.status.toLowerCase();
+    const nextStates    = NEXT_STATES[currentStatus] ?? [];
+    const isTerminal    = nextStates.length === 0;
+
+    const [selectedStatus,      setSelectedStatus]      = useState('');
+    const [cancellationReason,  setCancellationReason]  = useState('');
+    const [odometerStart,       setOdometerStart]       = useState('');
+    const [odometerEnd,         setOdometerEnd]         = useState('');
+    const [isUpdating,          setIsUpdating]          = useState(false);
 
     useEffect(() => {
         Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 400,
-            delay: index * 100,
-            useNativeDriver: true,
+            toValue: 0, duration: 400, delay: index * 100, useNativeDriver: true,
         }).start();
     }, []);
 
-    const handleStatusChange = (status: string) => {
-        // Never allow updating to 'Assigned' status
-        if (status === 'Assigned') {
-            Alert.alert('Invalid Action', 'Cannot manually set status to Assigned');
-            return;
-        }
-
-        // Normalize current status to lowercase for comparison
-        const currentStatus = booking.status.toLowerCase();
-        const newStatus = status.toLowerCase();
-
-        // From Assigned: only allow in-progress or cancelled
-        if (currentStatus === 'assigned') {
-            if (newStatus !== 'in-progress' && newStatus !== 'cancelled') {
-                Alert.alert('Invalid Action', 'From Assigned, you can only move to Start or Cancelled');
-                return;
-            }
-        }
-
-        // From in-progress: only allow completed or cancelled
-        if (currentStatus === 'in-progress') {
-            if (newStatus !== 'completed' && newStatus !== 'cancelled') {
-                Alert.alert('Invalid Action', 'From Start, you can only move to End or Cancelled');
-                return;
-            }
-        }
-
-        // From completed or cancelled: no changes allowed
-        if (currentStatus === 'completed' || currentStatus === 'cancelled') {
-            Alert.alert('Invalid Action', 'Cannot change status from ' + getDisplayStatus(booking.status));
-            return;
-        }
-
-        setSelectedStatus(status);
-
-        // Reset all input states
-        setShowCancellationInput(false);
-        setShowOdometerStartInput(false);
-        setShowOdometerEndInput(false);
+    // Reset extra-input state whenever selected status changes
+    const handleSelectStatus = (s: string) => {
+        setSelectedStatus(prev => prev === s ? '' : s); // toggle
         setCancellationReason('');
-        setOdometerStartReading('');
-        setOdometerEndReading('');
-
-        // Show appropriate input based on status - only if changing FROM a different status
-        if (status === 'cancelled' && booking.status !== 'cancelled') {
-            setShowCancellationInput(true);
-        } else if (status === 'in-progress' && booking.status !== 'in-progress') {
-            setShowOdometerStartInput(true);
-        } else if (status === 'completed' && booking.status !== 'completed') {
-            setShowOdometerEndInput(true);
-        }
+        setOdometerStart('');
+        setOdometerEnd('');
     };
 
-    const validateOdometerReading = (reading: string) => {
-        const numReading = parseInt(reading);
-        return !isNaN(numReading) && numReading >= 0;
+    const validateNumericOdometer = (val: string) => {
+        const n = parseInt(val, 10);
+        return !isNaN(n) && n >= 0;
     };
 
-    const handleUpdateStatus = async () => {
-        // Validation for cancellation
-        if (selectedStatus === 'cancelled' && !cancellationReason.trim()) {
-            Alert.alert('Error', 'Please provide a reason for cancellation');
+    const handleUpdate = async () => {
+        if (!selectedStatus) return;
+
+        if (needsCancellationReason(selectedStatus) && !cancellationReason.trim()) {
+            Alert.alert('Required', 'Please enter a cancellation reason.');
             return;
         }
-
-        // Validation for in-progress status
-        if (selectedStatus === 'in-progress') {
-            if (!odometerStartReading.trim()) {
-                Alert.alert('Error', 'Please enter odometer start reading');
+        if (needsOdometerStart(selectedStatus)) {
+            if (!odometerStart.trim() || !validateNumericOdometer(odometerStart)) {
+                Alert.alert('Required', 'Please enter a valid odometer start reading.');
                 return;
             }
-            if (!validateOdometerReading(odometerStartReading)) {
-                Alert.alert('Error', 'Please enter a valid odometer reading (non-negative number)');
+        }
+        if (needsOdometerEnd(selectedStatus)) {
+            if (!odometerEnd.trim() || !validateNumericOdometer(odometerEnd)) {
+                Alert.alert('Required', 'Please enter a valid odometer end reading.');
                 return;
             }
         }
 
-        // Validation for completed status
-        if (selectedStatus === 'completed') {
-            if (!odometerEndReading.trim()) {
-                Alert.alert('Error', 'Please enter odometer end reading');
-                return;
-            }
-            if (!validateOdometerReading(odometerEndReading)) {
-                Alert.alert('Error', 'Please enter a valid odometer reading (non-negative number)');
-                return;
-            }
-        }
-
-        // Check if status is the same (excluding statuses that require additional input)
-        if (selectedStatus === booking.status && selectedStatus !== 'cancelled' &&
-            selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
-            Alert.alert('Info', 'Status is already set to ' + getDisplayStatus(selectedStatus));
-            return;
-        }
-
-        // Get the assignment ID from the first vehicle assignment
-        const assignmentId = booking.vehicle_assignments?.[0]?.id;
-        if (!assignmentId) {
-            Alert.alert('Error', 'Assignment ID not found');
+        const assignment = booking.vehicle_assignments?.[0];
+        if (!assignment) {
+            Alert.alert('Error', 'Assignment not found.');
             return;
         }
 
         setIsUpdating(true);
         await onUpdateStatus(
-            assignmentId,
+            assignment.id,
             selectedStatus,
-            cancellationReason,
-            selectedStatus === 'in-progress' ? odometerStartReading : undefined,
-            selectedStatus === 'completed' ? odometerEndReading : undefined
+            cancellationReason || undefined,
+            needsOdometerStart(selectedStatus)  ? odometerStart : undefined,
+            needsOdometerEnd(selectedStatus)    ? odometerEnd   : undefined,
         );
         setIsUpdating(false);
-
-        // Reset all inputs
-        setShowCancellationInput(false);
-        setShowOdometerStartInput(false);
-        setShowOdometerEndInput(false);
+        setSelectedStatus('');
         setCancellationReason('');
-        setOdometerStartReading('');
-        setOdometerEndReading('');
+        setOdometerStart('');
+        setOdometerEnd('');
     };
 
-    const assignments = booking.vehicle_assignments || [];
-    const hasMultipleVehicles = assignments.length > 1;
-    const firstVehicle = assignments.length > 0 ? assignments[0].vehicle : null;
+    const assignments     = booking.vehicle_assignments ?? [];
+    const firstVehicle    = assignments[0]?.vehicle ?? null;
+
+    // ── colour for the status pill ────────────────────────────────────────
+    const statusColor = getStatusColor(booking.status);
 
     return (
-        <Animated.View style={[styles.bookingCard, { transform: [{ translateY: slideAnim }] }]}>
-            {/* Header */}
+        <Animated.View
+            style={[
+                styles.bookingCard,
+                { transform: [{ translateY: slideAnim }] },
+            ]}
+        >
+            {/* ── Header ───────────────────────────────────────────────── */}
             <View style={styles.bookingCardHeader}>
                 <View style={styles.vehicleInfo}>
                     {booking.vehicle && <VehicleImage vehicle={booking.vehicle} size="small" />}
                     <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text style={styles.vehicleName}>
-                            {hasMultipleVehicles
+                            {assignments.length > 1
                                 ? `${assignments.length} Vehicles`
                                 : firstVehicle
-                                    ? `${firstVehicle.make} ${firstVehicle.model}`
-                                    : booking.vehicle
-                                        ? `${booking.vehicle.make} ${booking.vehicle.model}`
-                                        : 'Vehicle'}
+                                ? `${firstVehicle.make} ${firstVehicle.model}`
+                                : booking.vehicle
+                                ? `${booking.vehicle.make} ${booking.vehicle.model}`
+                                : 'Vehicle'}
                         </Text>
                         <Text style={styles.plateText}>
-                            {booking.vehicle_assignments?.[0]?.vehicle.license_plate || 'N/A'}
+                            {booking.vehicle_assignments?.[0]?.vehicle.license_plate ?? 'N/A'}
                         </Text>
                     </View>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(booking.status)}20` }]}>
+                <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
                     <MaterialCommunityIcons
                         name={getStatusIconBooking(booking.status)}
                         size={14}
-                        color={getStatusColor(booking.status)}
+                        color={statusColor}
                     />
-                    <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
+                    <Text style={[styles.statusText, { color: statusColor }]}>
                         {getDisplayStatus(booking.status)}
                     </Text>
                 </View>
             </View>
 
-            {/* Body */}
+            {/* ── Accepted acknowledgement banner ──────────────────────── */}
+            {currentStatus === 'accepted' && (
+                <View style={{
+                    marginHorizontal: 0,
+                    marginBottom: 8,
+                    backgroundColor: '#05c5ff',
+                    borderRadius: 8,
+                    padding: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                }}>
+                    <MaterialCommunityIcons name="check-decagram" size={18} color="#2E7D32" />
+                    <Text style={{ color: '#2E7D32', fontSize: 13, fontWeight: '600', flex: 1 }}>
+                        You've accepted this booking. Enter the odometer reading when you start the trip.
+                    </Text>
+                </View>
+            )}
+
+            {/* ── Body ─────────────────────────────────────────────────── */}
             <View style={styles.bookingCardBody}>
                 <View style={styles.locationRow}>
                     <MaterialCommunityIcons name="account" size={16} color="#666" />
                     <Text style={styles.locationText}>
-                        {booking.booked_for?.full_name || 'Unknown'}
+                        {booking.booked_for?.full_name ?? 'Unknown'}
                     </Text>
                 </View>
                 <View style={styles.locationRow}>
@@ -261,20 +252,16 @@ const BookingCard: React.FC<{
                 )}
             </View>
 
-            {/* Footer - Date & Time */}
+            {/* ── Time footer ──────────────────────────────────────────── */}
             <View style={styles.bookingCardFooter}>
-                <View>
-                    <Text>
-                        Start:
-                    </Text>
+                <View style={{ marginRight: 6 }}>
+                    <Text style={{ fontSize: 12, color: '#888', fontWeight: '500' }}>Start:</Text>
                 </View>
                 <View style={styles.dateTimeInfo}>
                     <MaterialCommunityIcons name="calendar" size={16} color="#666" />
                     <Text style={styles.dateTimeInfoText}>
                         {new Date(booking.start_time).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
+                            month: 'short', day: 'numeric', year: 'numeric',
                         })}
                     </Text>
                 </View>
@@ -282,28 +269,22 @@ const BookingCard: React.FC<{
                     <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
                     <Text style={styles.dateTimeInfoText}>
                         {new Date(booking.start_time).toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit'
+                            hour: '2-digit', minute: '2-digit',
                         })}
                     </Text>
                 </View>
             </View>
 
-            {/* End Date & Time Section */}
             {booking.end_time && (
                 <View style={[styles.bookingCardFooter, { paddingTop: 8, borderTopWidth: 0 }]}>
                     <View style={{ marginRight: 6 }}>
-                        <Text>
-                            End:
-                        </Text>
+                        <Text style={{ fontSize: 12, color: '#888', fontWeight: '500' }}>End:</Text>
                     </View>
                     <View style={styles.dateTimeInfo}>
                         <MaterialCommunityIcons name="calendar" size={16} color="#666" />
                         <Text style={styles.dateTimeInfoText}>
                             {new Date(booking.end_time).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
+                                month: 'short', day: 'numeric', year: 'numeric',
                             })}
                         </Text>
                     </View>
@@ -311,58 +292,109 @@ const BookingCard: React.FC<{
                         <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
                         <Text style={styles.dateTimeInfoText}>
                             {new Date(booking.end_time).toLocaleTimeString('en-US', {
-                                hour: '2-digit',
-                                minute: '2-digit'
+                                hour: '2-digit', minute: '2-digit',
                             })}
                         </Text>
                     </View>
                 </View>
             )}
 
-            {/* Status Update Section */}
-            {booking.status !== 'completed' && booking.status !== 'cancelled' && (
-                <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
+            {/* ── Odometer summary (completed bookings) ────────────────── */}
+            {currentStatus === 'completed' && assignments.length > 0 && (
+                <View style={{
+                    marginTop: 12,
+                    padding: 12,
+                    backgroundColor: '#F1F8FF',
+                    borderRadius: 10,
+                    gap: 6,
+                }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#1565C0', marginBottom: 4 }}>
+                        Trip Summary
+                    </Text>
+                    {assignments.map(a => {
+                        const dist = (a.odometer_start_reading && a.odometer_end_reading)
+                            ? parseInt(a.odometer_end_reading) - parseInt(a.odometer_start_reading)
+                            : null;
+                        return (
+                            <View key={a.id} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <MaterialCommunityIcons name="speedometer" size={14} color="#43A047" />
+                                    <Text style={{ fontSize: 12, color: '#333' }}>
+                                        Start: {a.odometer_start_reading ?? 'N/A'}
+                                    </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <MaterialCommunityIcons name="speedometer" size={14} color="#E53935" />
+                                    <Text style={{ fontSize: 12, color: '#333' }}>
+                                        End: {a.odometer_end_reading ?? 'N/A'}
+                                    </Text>
+                                </View>
+                                {dist !== null && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <MaterialCommunityIcons name="map-marker-distance" size={14} color="#666" />
+                                        <Text style={{ fontSize: 12, color: '#555', fontWeight: '600' }}>
+                                            {dist.toLocaleString()} km
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })}
+                </View>
+            )}
+
+            {/* ── Status update section (hidden for terminal states) ────── */}
+            {!isTerminal && (
+                <View style={{
+                    marginTop: 16,
+                    paddingTop: 16,
+                    borderTopWidth: 1,
+                    borderTopColor: '#f0f0f0',
+                }}>
                     <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>
                         Update Status
                     </Text>
+
+                    {/* ── Status pills (only valid next states) ────────── */}
                     <View style={styles.statusOptions}>
-                        {['Assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
-                            const statusColor = getStatusColor(status);
-                            const isSelected = selectedStatus === status;
-                            const displayLabel = getDisplayStatus(status);
-                            
+                        {nextStates.map(s => {
+                            const color     = getStatusColor(s);
+                            const isSelected = selectedStatus === s;
                             return (
                                 <TouchableOpacity
-                                    key={status}
+                                    key={s}
                                     style={[
                                         styles.statusOption,
-                                        isSelected && { backgroundColor: statusColor, borderColor: statusColor }
+                                        isSelected && { backgroundColor: color, borderColor: color },
                                     ]}
-                                    onPress={() => handleStatusChange(status)}
+                                    onPress={() => handleSelectStatus(s)}
                                 >
                                     <MaterialCommunityIcons
-                                        name={getStatusIconBooking(status)}
+                                        name={getStatusIconBooking(s)}
                                         size={16}
-                                        color={isSelected ? '#FFFFFF' : statusColor}
+                                        color={isSelected ? '#FFF' : color}
                                     />
-                                    <Text
-                                        style={[
-                                            styles.statusOptionText,
-                                            { color: isSelected ? '#FFFFFF' : statusColor }
-                                        ]}
-                                    >
-                                        {displayLabel.toUpperCase()}
+                                    <Text style={[
+                                        styles.statusOptionText,
+                                        { color: isSelected ? '#FFF' : color },
+                                    ]}>
+                                        {getDisplayStatus(s).toUpperCase()}
                                     </Text>
                                 </TouchableOpacity>
                             );
                         })}
                     </View>
 
-                    {/* Cancellation Reason Input */}
-                    {showCancellationInput && (
+                    {/* ── Cancellation reason ──────────────────────────── */}
+                    {selectedStatus === 'cancelled' && (
                         <View style={{ marginTop: 12 }}>
                             <View style={styles.inputContainer}>
-                                <MaterialIcons name="warning" size={20} color="#FF3B30" style={styles.inputIcon} />
+                                <MaterialIcons
+                                    name="warning"
+                                    size={20}
+                                    color="#FF3B30"
+                                    style={styles.inputIcon}
+                                />
                                 <TextInput
                                     style={[styles.textInput, { minHeight: 80 }]}
                                     value={cancellationReason}
@@ -377,101 +409,131 @@ const BookingCard: React.FC<{
                         </View>
                     )}
 
-                    {/* Odometer Start Reading Input (for in-progress status) */}
-                    {showOdometerStartInput && (
+                    {/* ── Odometer start (for accepted → in-progress) ──── */}
+                    {selectedStatus === 'in-progress' && (
                         <View style={{ marginTop: 12 }}>
                             <View style={styles.inputContainer}>
-                                <MaterialCommunityIcons name="speedometer" size={20} color="#00d285" style={styles.inputIcon} />
+                                <MaterialCommunityIcons
+                                    name="speedometer"
+                                    size={20}
+                                    color="#00d285"
+                                    style={styles.inputIcon}
+                                />
                                 <TextInput
                                     style={styles.textInput}
-                                    value={odometerStartReading}
-                                    onChangeText={setOdometerStartReading}
-                                    placeholder="Enter odometer start reading (km/miles)"
+                                    value={odometerStart}
+                                    onChangeText={setOdometerStart}
+                                    placeholder="Odometer start reading (km)"
                                     placeholderTextColor="#888"
                                     keyboardType="numeric"
                                     maxLength={10}
                                 />
                             </View>
                             <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
-                                Enter the current odometer reading when starting the trip
+                                Current odometer reading before starting the trip
                             </Text>
                         </View>
                     )}
 
-                    {/* Odometer End Reading Input (for completed status) */}
-                    {showOdometerEndInput && (
+                    {/* ── Odometer end (for in-progress → completed) ───── */}
+                    {selectedStatus === 'completed' && (
                         <View style={{ marginTop: 12 }}>
                             <View style={styles.inputContainer}>
-                                <MaterialCommunityIcons name="speedometer" size={20} color="#4A90E2" style={styles.inputIcon} />
+                                <MaterialCommunityIcons
+                                    name="speedometer"
+                                    size={20}
+                                    color="#4A90E2"
+                                    style={styles.inputIcon}
+                                />
                                 <TextInput
                                     style={styles.textInput}
-                                    value={odometerEndReading}
-                                    onChangeText={setOdometerEndReading}
-                                    placeholder="Enter odometer end reading (km/miles)"
+                                    value={odometerEnd}
+                                    onChangeText={setOdometerEnd}
+                                    placeholder="Odometer end reading (km)"
                                     placeholderTextColor="#888"
                                     keyboardType="numeric"
                                     maxLength={10}
                                 />
                             </View>
                             <Text style={{ fontSize: 12, color: '#666', marginTop: 4, marginLeft: 40 }}>
-                                Enter the odometer reading when completing the trip
+                                Current odometer reading at end of trip
                             </Text>
                         </View>
                     )}
 
-                    {/* Update Button */}
-                    {selectedStatus !== booking.status && (
+                    {/* ── Confirm button ───────────────────────────────── */}
+                    {selectedStatus && (
                         <TouchableOpacity
                             style={[
                                 styles.updateButton,
                                 { marginTop: 12 },
-                                (isUpdating || updating) && { backgroundColor: '#ccc' }
+                                (isUpdating || updating) && { backgroundColor: '#ccc' },
                             ]}
-                            onPress={handleUpdateStatus}
+                            onPress={handleUpdate}
                             disabled={isUpdating || updating}
                         >
                             {isUpdating || updating ? (
-                                <ActivityIndicator color="#FFFFFF" size="small" />
+                                <ActivityIndicator color="#FFF" size="small" />
                             ) : (
                                 <>
-                                    <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-                                    <Text style={styles.updateButtonText}>Update to {getDisplayStatus(selectedStatus)}</Text>
+                                    <MaterialCommunityIcons name="check-circle" size={20} color="#FFF" />
+                                    <Text style={styles.updateButtonText}>
+                                        {selectedStatus === 'accepted'     ? 'Accept Booking'
+                                        : selectedStatus === 'in-progress' ? 'Start Trip'
+                                        : selectedStatus === 'completed'   ? 'End Trip'
+                                        : selectedStatus === 'cancelled'   ? 'Cancel Booking'
+                                        : `Update to ${getDisplayStatus(selectedStatus)}`}
+                                    </Text>
                                 </>
                             )}
                         </TouchableOpacity>
                     )}
+                </View>
+            )}
 
+            {/* ── Terminal state note ───────────────────────────────────── */}
+            {isTerminal && (
+                <View style={{
+                    marginTop: 12,
+                    paddingTop: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: '#f0f0f0',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                }}>
+                    <MaterialCommunityIcons
+                        name={currentStatus === 'completed' ? 'check-circle' : 'cancel'}
+                        size={16}
+                        color={currentStatus === 'completed' ? '#43A047' : '#E53935'}
+                    />
+                    <Text style={{ fontSize: 12, color: '#888' }}>
+                        {currentStatus === 'completed'
+                            ? 'This trip has been completed.'
+                            : 'This booking has been cancelled.'}
+                    </Text>
                 </View>
             )}
         </Animated.View>
     );
 };
 
+// ─── Bookings screen ─────────────────────────────────────────────────────────
+
 const Bookings: React.FC<BookingsProps> = ({
-    token,
-    onBack,
-    setActiveTab,
-    activeTab,
-    setLoading,
-    loading,
+    token, onBack, setActiveTab, activeTab, setLoading, loading,
 }) => {
     const [bookings, setBookings] = useState<ExtendedBooking[]>([]);
     const [updating, setUpdating] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        if (token) {
-            fetchBookings();
-        }
+        if (token) fetchBookings();
     }, [token]);
 
     useEffect(() => {
         if (!loading && bookings.length > 0) {
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }).start();
+            Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
         }
     }, [loading, bookings]);
 
@@ -480,40 +542,26 @@ const Bookings: React.FC<BookingsProps> = ({
         try {
             const response = await fetch(`${BACKEND_URL}/employee/getCarBookings`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 body: JSON.stringify({ token }),
             });
-
             const text = await response.text();
-
             if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-                try {
-                    const data = JSON.parse(text);
-                    if (response.ok) {
-                        const bookingsData = data.bookings || [];
-                        if (Array.isArray(bookingsData)) {
-                            const sortedBookings = [...bookingsData].sort((a: ExtendedBooking, b: ExtendedBooking) =>
-                                new Date(b.created_at || b.start_time || 0).getTime() - new Date(a.created_at || a.start_time || 0).getTime()
-                            );
-                            setBookings(sortedBookings);
-                        } else {
-                            setBookings([]);
-                        }
-                    } else {
-                        setBookings([]);
-                    }
-                } catch (parseError) {
-                    console.error('Failed to parse bookings JSON:', parseError);
+                const data = JSON.parse(text);
+                if (response.ok) {
+                    const sorted = [...(data.bookings ?? [])].sort(
+                        (a: ExtendedBooking, b: ExtendedBooking) =>
+                            new Date(b.created_at ?? b.start_time ?? 0).getTime() -
+                            new Date(a.created_at ?? a.start_time ?? 0).getTime()
+                    );
+                    setBookings(sorted);
+                } else {
                     setBookings([]);
                 }
             } else {
                 setBookings([]);
             }
-        } catch (error) {
-            console.error('Error fetching bookings:', error);
+        } catch {
             setBookings([]);
         } finally {
             setLoading(false);
@@ -522,62 +570,36 @@ const Bookings: React.FC<BookingsProps> = ({
 
     const updateBookingStatus = async (
         assignmentId: number,
-        status: string,
+        newStatus: string,
         reason?: string,
-        odometerStartReading?: string,
-        odometerEndReading?: string
+        odometerStart?: string,
+        odometerEnd?: string,
     ) => {
         setUpdating(true);
         try {
-            const requestBody: any = {
-                token,
-                assignment_id: assignmentId,
-                status: status, // Backend receives 'in-progress' and 'completed' as-is
-            };
-
-            // Add cancellation reason if applicable
-            if (status === 'cancelled' && reason) {
-                requestBody.reason_of_cancellation = reason;
-            }
-
-            // Add odometer start reading for in-progress status
-            if (status === 'in-progress' && odometerStartReading) {
-                requestBody.odometer_start_reading = odometerStartReading;
-            }
-
-            // Add odometer end reading for completed status
-            if (status === 'completed' && odometerEndReading) {
-                requestBody.odometer_end_reading = odometerEndReading;
-            }
+            const body: Record<string, unknown> = { token, assignment_id: assignmentId, status: newStatus };
+            if (reason)         body.reason_of_cancellation = reason;
+            if (odometerStart)  body.odometer_start_reading = odometerStart;
+            if (odometerEnd)    body.odometer_end_reading   = odometerEnd;
 
             const response = await fetch(`${BACKEND_URL}/employee/updateCarBookings`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(requestBody),
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify(body),
             });
-
             const text = await response.text();
             if (text.trim().startsWith('{')) {
-                try {
-                    const data = JSON.parse(text);
-                    if (response.ok) {
-                        Alert.alert('Success', 'Booking status updated successfully!');
-                        fetchBookings();
-                    } else {
-                        Alert.alert('Error', data.message || 'Failed to update booking status');
-                    }
-                } catch (parseError) {
-                    console.error('Failed to parse update booking response:', parseError);
-                    Alert.alert('Error', 'Invalid response from server');
+                const data = JSON.parse(text);
+                if (response.ok) {
+                    Alert.alert('Success', 'Booking status updated successfully!');
+                    fetchBookings();
+                } else {
+                    Alert.alert('Error', data.message ?? 'Failed to update booking status');
                 }
             } else {
                 Alert.alert('Error', 'Invalid response from server');
             }
-        } catch (error) {
-            console.error('Error updating booking status:', error);
+        } catch {
             Alert.alert('Error', 'Network error occurred');
         } finally {
             setUpdating(false);
@@ -591,6 +613,7 @@ const Bookings: React.FC<BookingsProps> = ({
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
+                {/* ── Header banner ──────────────────────────────────── */}
                 <View style={[styles.header, styles.headerBanner]}>
                     <LinearGradient
                         colors={['#4A5568', '#2D3748']}
@@ -604,11 +627,13 @@ const Bookings: React.FC<BookingsProps> = ({
                             resizeMode="cover"
                         />
                         <View style={styles.headerOverlay} />
-
                         <View style={styles.headerContent}>
                             <View style={styles.headerTopRow}>
                                 <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                                    <BackIcon />
+                                    <View style={styles.backIcon}>
+                                        <View style={styles.backArrow} />
+                                        <Text style={styles.backText}>Back</Text>
+                                    </View>
                                 </TouchableOpacity>
                                 <View style={styles.headerCenter}>
                                     <Text style={styles.logoText}>CITADEL</Text>
@@ -616,9 +641,8 @@ const Bookings: React.FC<BookingsProps> = ({
                                 <View style={{ width: 2 }} />
                             </View>
                         </View>
-
-                        <View style={[styles.titleSection]}>
-                            <Text style={styles.sectionTitle}>Manage Bookings</Text>
+                        <View style={styles.titleSection}>
+                            <Text style={styles.sectionTitle}>My Bookings</Text>
                             <Text style={styles.sectionSubtitle}>
                                 {bookings.length} booking{bookings.length !== 1 ? 's' : ''} found
                             </Text>
@@ -626,6 +650,7 @@ const Bookings: React.FC<BookingsProps> = ({
                     </LinearGradient>
                 </View>
 
+                {/* ── Tab bar ────────────────────────────────────────── */}
                 <View style={styles.tabContainer}>
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'vehicles' && styles.activeTabButton]}
@@ -655,10 +680,11 @@ const Bookings: React.FC<BookingsProps> = ({
                     </TouchableOpacity>
                 </View>
 
+                {/* ── Content ────────────────────────────────────────── */}
                 {loading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color="#00d285" />
-                        <Text style={styles.loadingText}>Loading bookings...</Text>
+                        <Text style={styles.loadingText}>Loading bookings…</Text>
                     </View>
                 ) : bookings.length === 0 ? (
                     <View style={styles.emptyStateContainer}>
@@ -666,20 +692,18 @@ const Bookings: React.FC<BookingsProps> = ({
                             <MaterialCommunityIcons name="calendar-blank" size={40} color="#ccc" />
                         </View>
                         <Text style={styles.emptyStateTitle}>No Bookings Found</Text>
-                        <Text style={styles.emptyStateText}>
-                            Your booking history will appear here
-                        </Text>
+                        <Text style={styles.emptyStateText}>Your booking history will appear here</Text>
                     </View>
                 ) : (
-                    <Animated.View style={[{ opacity: fadeAnim, paddingHorizontal: 16, paddingBottom: 20 }]}>
+                    <Animated.View style={{ opacity: fadeAnim, paddingHorizontal: 16, paddingBottom: 20 }}>
                         {bookings.map((booking, index) => {
-                            // Extract the assignment ID from the first vehicle assignment
                             const assignmentId = booking.vehicle_assignments?.[0]?.id;
-                            const uniqueKey = assignmentId ? `assignment-${assignmentId}` : `booking-${booking.id}`;
-
+                            const key = assignmentId
+                                ? `assignment-${assignmentId}`
+                                : `booking-${booking.id}`;
                             return (
                                 <BookingCard
-                                    key={uniqueKey}
+                                    key={key}
                                     booking={booking}
                                     index={index}
                                     onUpdateStatus={updateBookingStatus}

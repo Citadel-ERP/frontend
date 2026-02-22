@@ -827,9 +827,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = React.memo(({
           </TouchableOpacity>
 
           <View style={s.headerActions}>
-            <TouchableOpacity onPress={onIncentivePress} style={[s.headerActionButton, s.incentiveButton]}>
-              <MaterialIcons name="monetization-on" size={22} color="#FFF" />
-            </TouchableOpacity>
+            {lead.subphase === 'payment_received' && (
+              <TouchableOpacity onPress={onIncentivePress} style={[s.headerActionButton, s.incentiveButton]}>
+                <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
               <MaterialIcons name="edit" size={22} color="#FFF" />
             </TouchableOpacity>

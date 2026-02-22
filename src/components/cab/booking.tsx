@@ -1,13 +1,13 @@
+// booking.tsx
 import React, { useRef, useState, useEffect } from 'react';
-import { 
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, TextInput, 
-    ActivityIndicator, Alert, StatusBar, SafeAreaView, Platform, Animated, 
-    useWindowDimensions 
+import {
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, Image,
+    ActivityIndicator, StatusBar, SafeAreaView, Platform, Animated,
+    useWindowDimensions
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BookingStep, PreviousBookingsSectionProps, Booking, BookingScreenProps } from './types';
-import { formatDateForDisplay, formatTimeForDisplay } from './utils';
+import { PreviousBookingsSectionProps, Booking, BookingScreenProps } from './types';
 import { colors } from '../../styles/theme';
 import { BACKEND_URL } from '../../config/config';
 
@@ -21,8 +21,6 @@ const BackIcon = () => (
 const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, index }) => {
     const { width } = useWindowDimensions();
     const isLargeScreen = width >= 1024;
-    const isTablet = width >= 768;
-    
     const slideAnim = useRef(new Animated.Value(30)).current;
 
     useEffect(() => {
@@ -66,7 +64,6 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
         }
     };
 
-    // Get vehicle information from vehicle_assignments
     const assignments = booking.vehicle_assignments || [];
     const hasMultipleVehicles = assignments.length > 1;
     const firstVehicle = assignments.length > 0 ? assignments[0].vehicle : null;
@@ -80,16 +77,12 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
             <View style={styles.bookingCardHeader}>
                 <View style={styles.vehicleInfo}>
                     <MaterialCommunityIcons name="car" size={20} color="#008069" />
-                    <Text style={[
-                        styles.vehicleName,
-                        isLargeScreen && styles.vehicleNameDesktop
-                    ]}>
-                        {hasMultipleVehicles 
+                    <Text style={[styles.vehicleName, isLargeScreen && styles.vehicleNameDesktop]}>
+                        {hasMultipleVehicles
                             ? `${assignments.length} Vehicles`
-                            : firstVehicle 
+                            : firstVehicle
                                 ? `${firstVehicle.make} ${firstVehicle.model}`
-                                : 'Vehicle'
-                        }
+                                : 'Vehicle'}
                     </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(booking.status)}20` }]}>
@@ -107,30 +100,25 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
             <View style={styles.bookingCardBody}>
                 <View style={styles.locationRow}>
                     <MaterialCommunityIcons name="map-marker" size={16} color="#00d285" />
-                    <Text style={[
-                        styles.locationText,
-                        isLargeScreen && styles.locationTextDesktop
-                    ]}>{booking.start_location}</Text>
+                    <Text style={[styles.locationText, isLargeScreen && styles.locationTextDesktop]}>
+                        {booking.start_location}
+                    </Text>
                 </View>
                 <View style={styles.arrowContainer}>
                     <MaterialCommunityIcons name="arrow-down" size={16} color="#ccc" />
                 </View>
                 <View style={styles.locationRow}>
                     <MaterialCommunityIcons name="map-marker" size={16} color="#ff5e7a" />
-                    <Text style={[
-                        styles.locationText,
-                        isLargeScreen && styles.locationTextDesktop
-                    ]}>{booking.end_location}</Text>
+                    <Text style={[styles.locationText, isLargeScreen && styles.locationTextDesktop]}>
+                        {booking.end_location}
+                    </Text>
                 </View>
             </View>
 
             <View style={styles.bookingCardFooter}>
                 <View style={styles.dateTimeInfo}>
                     <MaterialCommunityIcons name="calendar" size={16} color="#666" />
-                    <Text style={[
-                        styles.dateTimeInfoText,
-                        isLargeScreen && styles.dateTimeInfoTextDesktop
-                    ]}>
+                    <Text style={[styles.dateTimeInfoText, isLargeScreen && styles.dateTimeInfoTextDesktop]}>
                         {new Date(booking.start_time).toLocaleDateString('en-US', {
                             month: 'short',
                             day: 'numeric'
@@ -139,10 +127,7 @@ const BookingCard: React.FC<{ booking: Booking; index: number }> = ({ booking, i
                 </View>
                 <View style={styles.dateTimeInfo}>
                     <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
-                    <Text style={[
-                        styles.dateTimeInfoText,
-                        isLargeScreen && styles.dateTimeInfoTextDesktop
-                    ]}>
+                    <Text style={[styles.dateTimeInfoText, isLargeScreen && styles.dateTimeInfoTextDesktop]}>
                         {new Date(booking.start_time).toLocaleTimeString('en-US', {
                             hour: '2-digit',
                             minute: '2-digit'
@@ -161,21 +146,16 @@ const PreviousBookingsSection: React.FC<PreviousBookingsSectionProps> = ({ booki
 
     useEffect(() => {
         if (!loading) {
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }).start();
+            Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
         }
     }, [loading]);
 
     if (loading) {
         return (
             <View style={styles.previousBookingsContainer}>
-                <Text style={[
-                    styles.sectionTitle,
-                    isLargeScreen && styles.sectionTitleDesktop
-                ]}>Previous Bookings</Text>
+                <Text style={[styles.sectionTitle, isLargeScreen && styles.sectionTitleDesktop]}>
+                    Recent Bookings
+                </Text>
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#00d285" />
                 </View>
@@ -183,104 +163,57 @@ const PreviousBookingsSection: React.FC<PreviousBookingsSectionProps> = ({ booki
         );
     }
 
-    if (bookings.length === 0) {
-        return (
-            <View style={styles.previousBookingsContainer}>
-                <Text style={[
-                    styles.sectionTitle,
-                    isLargeScreen && styles.sectionTitleDesktop
-                ]}>Previous Bookings</Text>
-                <View style={[
-                    styles.emptyStateContainer,
-                    isLargeScreen && styles.emptyStateContainerDesktop
-                ]}>
-                    <View style={styles.emptyIconCircle}>
-                        <MaterialCommunityIcons name="calendar-blank" size={40} color="#ccc" />
-                    </View>
-                    <Text style={[
-                        styles.emptyStateTitle,
-                        isLargeScreen && styles.emptyStateTitleDesktop
-                    ]}>No Previous Bookings</Text>
-                    <Text style={[
-                        styles.emptyStateText,
-                        isLargeScreen && styles.emptyStateTextDesktop
-                    ]}>
-                        Your booking history will appear here once you make your first reservation
-                    </Text>
-                </View>
-            </View>
-        );
-    }
+    if (bookings.length === 0) return null;
 
     return (
-        <Animated.View style={[
-            styles.previousBookingsContainer,
-            { opacity: fadeAnim }
-        ]}>
-            <Text style={[
-                styles.sectionTitle,
-                isLargeScreen && styles.sectionTitleDesktop
-            ]}>Previous Bookings</Text>
+        <Animated.View style={[styles.previousBookingsContainer, { opacity: fadeAnim }]}>
+            <Text style={[styles.sectionTitle, isLargeScreen && styles.sectionTitleDesktop]}>
+                Recent Bookings
+            </Text>
             {bookings.map((booking, index) => (
-                <BookingCard 
-                    key={booking.id || index} 
-                    booking={booking} 
-                    index={index} 
-                />
+                <BookingCard key={booking.id || index} booking={booking} index={index} />
             ))}
         </Animated.View>
     );
 };
 
 const BookingScreen: React.FC<BookingScreenProps> = ({
-    bookingStep,
-    setBookingStep,
-    bookingForm,
-    setBookingForm,
     selectedCity,
-    loading,
     onBack,
-    onSearchCabs,
-    onSetActivePickerType,
-    formatTimeForDisplay,
-    formatDateForDisplay,
+    onBrowseVehicles,
     token
 }) => {
     const { width } = useWindowDimensions();
     const isWeb = Platform.OS === 'web';
     const isLargeScreen = width >= 1024;
-    const isTablet = width >= 768;
-    
-    const fromInputRef = useRef<TextInput>(null);
-    const toInputRef = useRef<TextInput>(null);
-    
-    // State for previous bookings
+
     const [previousBookings, setPreviousBookings] = useState<Booking[]>([]);
     const [bookingsLoading, setBookingsLoading] = useState<boolean>(true);
 
-    // Fetch previous bookings once when component mounts or token changes
+    const heroAnim = useRef(new Animated.Value(0)).current;
+    const cardAnim = useRef(new Animated.Value(40)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(heroAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.timing(cardAnim, { toValue: 0, duration: 500, delay: 200, useNativeDriver: true }),
+        ]).start();
+    }, []);
+
     useEffect(() => {
         const fetchPreviousBookings = async () => {
-            if (!token) {
-                setBookingsLoading(false);
-                return;
-            }
-
+            if (!token) { setBookingsLoading(false); return; }
             try {
                 const response = await fetch(`${BACKEND_URL}/core/getMyBookings`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token }),
                 });
-
                 if (response.ok) {
                     const data = await response.json();
                     const recentBookings = (data.vehicle_bookings || [])
                         .sort((a: Booking, b: Booking) =>
-                            new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
-                        )
+                            new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
                         .slice(0, 3);
                     setPreviousBookings(recentBookings);
                 }
@@ -290,44 +223,12 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
                 setBookingsLoading(false);
             }
         };
-
         fetchPreviousBookings();
     }, [token]);
 
-    const handleNextStep = (nextStep: BookingStep) => {
-        if (bookingStep === 1 && !bookingForm.fromLocation.trim()) {
-            Alert.alert('Error', 'Please enter pickup location');
-            return;
-        }
-        if (bookingStep === 2 && !bookingForm.toLocation.trim()) {
-            Alert.alert('Error', 'Please enter destination');
-            return;
-        }
-        setBookingStep(nextStep);
-        if (nextStep === 2) {
-            setTimeout(() => {
-                toInputRef.current?.focus();
-            }, 100);
-        }
-    };
-
-    const handleBack = () => {
-        if (bookingStep === 2) {
-            setBookingStep(1);
-        } else if (bookingStep === 3) {
-            setBookingStep(2);
-        } else {
-            onBack();
-        }
-    };
-
     return (
         <View style={styles.container}>
-            <StatusBar 
-                translucent 
-                backgroundColor="transparent" 
-                barStyle="light-content" 
-            />
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             <SafeAreaView style={styles.safeArea}>
                 <ScrollView
                     style={[styles.scrollContainer, { marginTop: Platform.OS === 'ios' ? -60 : 0 }]}
@@ -341,306 +242,115 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
                                 colors={['#4A5568', '#2D3748']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
-                                style={[
-                                    styles.headerBanner,
-                                    isLargeScreen && styles.headerBannerDesktop
-                                ]}
+                                style={[styles.headerBanner, isLargeScreen && styles.headerBannerDesktop]}
                             >
                                 <Image
                                     source={require('../../assets/cars.jpeg')}
-                                    style={[
-                                        styles.headerImage,
-                                        isLargeScreen && styles.headerImageDesktop
-                                    ]}
+                                    style={[styles.headerImage, isLargeScreen && styles.headerImageDesktop]}
                                     resizeMode="cover"
                                 />
                                 <View style={styles.headerOverlay} />
 
-                                <View style={[
-                                    styles.headerContent,
-                                    { paddingTop: Platform.OS === 'ios' ? 50 : 40 }
-                                ]}>
+                                <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 50 : 40 }]}>
                                     <View style={styles.headerTopRow}>
                                         <TouchableOpacity style={styles.backButton} onPress={onBack}>
                                             <BackIcon />
                                         </TouchableOpacity>
                                         <View style={styles.headerCenter}>
-                                            <Text style={[
-                                                styles.logoText,
-                                                isLargeScreen && styles.logoTextDesktop
-                                            ]}>CITADEL</Text>
+                                            <Text style={[styles.logoText, isLargeScreen && styles.logoTextDesktop]}>
+                                                CITADEL
+                                            </Text>
                                         </View>
                                         <View style={{ width: 80 }} />
                                     </View>
                                 </View>
 
-                                <View style={[
-                                    styles.titleSection,
-                                    isLargeScreen && styles.titleSectionDesktop
-                                ]}>
-                                    <Text style={[
-                                        styles.headerTitle,
-                                        isLargeScreen && styles.headerTitleDesktop
-                                    ]}>{selectedCity}</Text>
-                                </View>
+                                <Animated.View
+                                    style={[
+                                        styles.titleSection,
+                                        isLargeScreen && styles.titleSectionDesktop,
+                                        { opacity: heroAnim }
+                                    ]}
+                                >
+                                    <Text style={[styles.headerTitle, isLargeScreen && styles.headerTitleDesktop]}>
+                                        {selectedCity || 'Book a Ride'}
+                                    </Text>
+                                    <Text style={styles.headerSubtitle}>
+                                        Select your vehicle and driver
+                                    </Text>
+                                </Animated.View>
                             </LinearGradient>
                         </View>
                     </View>
 
-                    {/* Main Content Area with Fixed Width */}
+                    {/* Main Content */}
                     <View style={styles.contentWrapper}>
-                        <View style={[
-                            styles.bookingFormContent,
-                            isWeb && styles.bookingFormContentWeb
-                        ]}>
-                            {/* Step 1: From Location */}
-                            {bookingStep === 1 && (
-                                <View style={[
-                                    styles.formStep,
-                                    isLargeScreen && styles.formStepDesktop
-                                ]}>
-                                    <View style={styles.stepHeader}>
-                                        <View style={styles.stepIcon}>
-                                            <MaterialCommunityIcons name="map-marker" size={24} color="#fff" />
-                                        </View>
-                                        <View>
-                                            <Text style={[
-                                                styles.stepTitle,
-                                                isLargeScreen && styles.stepTitleDesktop
-                                            ]}>Where from?</Text>
-                                            <Text style={[
-                                                styles.stepSubtitle,
-                                                isLargeScreen && styles.stepSubtitleDesktop
-                                            ]}>Enter your pickup location</Text>
-                                        </View>
-                                    </View>
+                        <View style={[styles.bookingContent, isWeb && styles.bookingContentWeb]}>
 
-                                    <View style={styles.formGroup}>
-                                        <TextInput
-                                            ref={fromInputRef}
-                                            style={[
-                                                styles.formInput,
-                                                isLargeScreen && styles.formInputDesktop
-                                            ]}
-                                            value={bookingForm.fromLocation}
-                                            onChangeText={(text) => setBookingForm({ ...bookingForm, fromLocation: text })}
-                                            placeholder="Enter pickup location"
-                                            placeholderTextColor="#999"
-                                            autoFocus={bookingStep === 1}
-                                        />
-                                    </View>
-
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.searchBtn, 
-                                            !bookingForm.fromLocation.trim() && styles.disabledBtn,
-                                            isLargeScreen && styles.searchBtnDesktop
-                                        ]}
-                                        onPress={() => handleNextStep(2)}
-                                        disabled={!bookingForm.fromLocation.trim()}
+                            {/* Browse Vehicles CTA */}
+                            <Animated.View style={{ transform: [{ translateY: cardAnim }] }}>
+                                <TouchableOpacity
+                                    style={[styles.browseCard, isLargeScreen && styles.browseCardDesktop]}
+                                    onPress={onBrowseVehicles}
+                                    activeOpacity={0.85}
+                                >
+                                    <LinearGradient
+                                        colors={['#00d285', '#008069']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.browseCardGradient}
                                     >
-                                        <Text style={styles.searchBtnText}>Next →</Text>
-                                    </TouchableOpacity>
-
-                                    {/* Previous Bookings in Step 1 */}
-                                    <PreviousBookingsSection 
-                                        bookings={previousBookings} 
-                                        loading={bookingsLoading} 
-                                    />
-                                </View>
-                            )}
-
-                            {/* Step 2: To Location */}
-                            {bookingStep === 2 && (
-                                <>
-                                    <View style={[
-                                        styles.formStep,
-                                        isLargeScreen && styles.formStepDesktop
-                                    ]}>
-                                        <View style={styles.stepHeader}>
-                                            <View style={styles.stepIcon}>
-                                                <MaterialCommunityIcons name="map-marker-check" size={24} color="#fff" />
+                                        <View style={styles.browseCardContent}>
+                                            <View style={styles.browseIconContainer}>
+                                                <MaterialCommunityIcons name="car-multiple" size={36} color="#fff" />
                                             </View>
-                                            <View>
-                                                <Text style={[
-                                                    styles.stepTitle,
-                                                    isLargeScreen && styles.stepTitleDesktop
-                                                ]}>Where to?</Text>
-                                                <Text style={[
-                                                    styles.stepSubtitle,
-                                                    isLargeScreen && styles.stepSubtitleDesktop
-                                                ]}>Enter your destination</Text>
+                                            <View style={styles.browseTextContainer}>
+                                                <Text style={styles.browseTitle}>Browse Vehicles</Text>
+                                                <Text style={styles.browseSubtitle}>
+                                                    View all available cars and drivers in {selectedCity || 'your city'}
+                                                </Text>
                                             </View>
+                                            <MaterialCommunityIcons name="arrow-right-circle" size={32} color="rgba(255,255,255,0.8)" />
                                         </View>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </Animated.View>
 
-                                        <View style={styles.formGroup}>
-                                            <TextInput
-                                                ref={toInputRef}
-                                                style={[
-                                                    styles.formInput,
-                                                    isLargeScreen && styles.formInputDesktop
-                                                ]}
-                                                value={bookingForm.toLocation}
-                                                onChangeText={(text) => setBookingForm({ ...bookingForm, toLocation: text })}
-                                                placeholder="Enter destination"
-                                                placeholderTextColor="#999"
-                                                autoFocus={bookingStep === 2}
-                                            />
-                                        </View>
-
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.searchBtn, 
-                                                !bookingForm.toLocation.trim() && styles.disabledBtn,
-                                                isLargeScreen && styles.searchBtnDesktop
-                                            ]}
-                                            onPress={() => handleNextStep(3)}
-                                            disabled={!bookingForm.toLocation.trim()}
-                                        >
-                                            <Text style={styles.searchBtnText}>Next →</Text>
-                                        </TouchableOpacity>
+                            {/* Info Cards */}
+                            <Animated.View
+                                style={[
+                                    styles.infoCardsRow,
+                                    { opacity: heroAnim, transform: [{ translateY: cardAnim }] }
+                                ]}
+                            >
+                                <View style={styles.infoCard}>
+                                    <View style={[styles.infoIconBg, { backgroundColor: 'rgba(0,210,133,0.1)' }]}>
+                                        <MaterialCommunityIcons name="car" size={24} color="#00d285" />
                                     </View>
-
-                                    {/* Show Previous Bookings after entering locations */}
-                                    <PreviousBookingsSection 
-                                        bookings={previousBookings} 
-                                        loading={bookingsLoading} 
-                                    />
-                                </>
-                            )}
-
-                            {/* Step 3: Schedule */}
-                            {bookingStep === 3 && (
-                                <View style={[
-                                    styles.formStep,
-                                    isLargeScreen && styles.formStepDesktop
-                                ]}>
-                                    <View style={styles.stepHeader}>
-                                        <View style={styles.stepIcon}>
-                                            <MaterialCommunityIcons name="clock-outline" size={24} color="#fff" />
-                                        </View>
-                                        <View>
-                                            <Text style={[
-                                                styles.stepTitle,
-                                                isLargeScreen && styles.stepTitleDesktop
-                                            ]}>When?</Text>
-                                            <Text style={[
-                                                styles.stepSubtitle,
-                                                isLargeScreen && styles.stepSubtitleDesktop
-                                            ]}>Select date and time</Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.formGroup}>
-                                        <Text style={[
-                                            styles.formLabel,
-                                            isLargeScreen && styles.formLabelDesktop
-                                        ]}>Start Date & Time</Text>
-                                        <View style={[
-                                            styles.dateTimeRow,
-                                            isLargeScreen && styles.dateTimeRowDesktop
-                                        ]}>
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.dateTimeInput,
-                                                    isLargeScreen && styles.dateTimeInputDesktop
-                                                ]}
-                                                onPress={() => onSetActivePickerType('startDate')}
-                                            >
-                                                <MaterialCommunityIcons name="calendar" size={20} color="#00d285" />
-                                                <Text style={[
-                                                    styles.dateTimeText,
-                                                    isLargeScreen && styles.dateTimeTextDesktop
-                                                ]}>
-                                                    {formatDateForDisplay(bookingForm.startDate)}
-                                                </Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.dateTimeInput,
-                                                    isLargeScreen && styles.dateTimeInputDesktop
-                                                ]}
-                                                onPress={() => onSetActivePickerType('startTime')}
-                                            >
-                                                <MaterialCommunityIcons name="clock-outline" size={20} color="#00d285" />
-                                                <Text style={[
-                                                    styles.dateTimeText,
-                                                    isLargeScreen && styles.dateTimeTextDesktop
-                                                ]}>
-                                                    {formatTimeForDisplay(bookingForm.startTime)}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.formGroup}>
-                                        <Text style={[
-                                            styles.formLabel,
-                                            isLargeScreen && styles.formLabelDesktop
-                                        ]}>End Date & Time</Text>
-                                        <View style={[
-                                            styles.dateTimeRow,
-                                            isLargeScreen && styles.dateTimeRowDesktop
-                                        ]}>
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.dateTimeInput,
-                                                    isLargeScreen && styles.dateTimeInputDesktop
-                                                ]}
-                                                onPress={() => onSetActivePickerType('endDate')}
-                                            >
-                                                <MaterialCommunityIcons name="calendar" size={20} color="#ff5e7a" />
-                                                <Text style={[
-                                                    styles.dateTimeText,
-                                                    isLargeScreen && styles.dateTimeTextDesktop
-                                                ]}>
-                                                    {formatDateForDisplay(bookingForm.endDate)}
-                                                </Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.dateTimeInput,
-                                                    isLargeScreen && styles.dateTimeInputDesktop
-                                                ]}
-                                                onPress={() => onSetActivePickerType('endTime')}
-                                            >
-                                                <MaterialCommunityIcons name="clock-outline" size={20} color="#ff5e7a" />
-                                                <Text style={[
-                                                    styles.dateTimeText,
-                                                    isLargeScreen && styles.dateTimeTextDesktop
-                                                ]}>
-                                                    {formatTimeForDisplay(bookingForm.endTime)}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-
-                                    {loading ? (
-                                        <View style={[
-                                            styles.searchBtn,
-                                            isLargeScreen && styles.searchBtnDesktop
-                                        ]}>
-                                            <ActivityIndicator color="#fff" />
-                                        </View>
-                                    ) : (
-                                        <TouchableOpacity 
-                                            style={[
-                                                styles.searchBtn,
-                                                isLargeScreen && styles.searchBtnDesktop
-                                            ]} 
-                                            onPress={onSearchCabs}
-                                        >
-                                            <Text style={styles.searchBtnText}>Search Available Cabs</Text>
-                                        </TouchableOpacity>
-                                    )}
-
-                                    {/* Previous Bookings in Step 3 */}
-                                    <PreviousBookingsSection 
-                                        bookings={previousBookings} 
-                                        loading={bookingsLoading} 
-                                    />
+                                    <Text style={styles.infoCardTitle}>Select Vehicle</Text>
+                                    {/* <Text style={styles.infoCardText}>Choose from available fleet</Text> */}
                                 </View>
-                            )}
+                                <View style={styles.infoCard}>
+                                    <View style={[styles.infoIconBg, { backgroundColor: 'rgba(255,94,122,0.1)' }]}>
+                                        <MaterialCommunityIcons name="account-check" size={24} color="#ff5e7a" />
+                                    </View>
+                                    <Text style={styles.infoCardTitle}>Pick Driver</Text>
+                                    {/* <Text style={styles.infoCardText}>Pick your driver</Text> */}
+                                </View>
+                                <View style={styles.infoCard}>
+                                    <View style={[styles.infoIconBg, { backgroundColor: 'rgba(1,123,249,0.1)' }]}>
+                                        <MaterialCommunityIcons name="clipboard-check" size={24} color="#017bf9" />
+                                    </View>
+                                    <Text style={styles.infoCardTitle}>Confirm</Text>
+                                    {/* <Text style={styles.infoCardText}>Set trip details and book</Text> */}
+                                </View>
+                            </Animated.View>
+
+                            {/* Previous Bookings */}
+                            <PreviousBookingsSection
+                                bookings={previousBookings}
+                                loading={bookingsLoading}
+                            />
                         </View>
                     </View>
                 </ScrollView>
@@ -650,433 +360,163 @@ const BookingScreen: React.FC<BookingScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F5F5',
-    },
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#4A5568',
-    },
-    scrollContainer: {
-        flex: 1,
-        backgroundColor: '#e7e6e5',
-    },
-    scrollContent: {
-        flexGrow: 1,
-    },
-    headerWrapper: {
-        width: '100%',
-        alignItems: 'center',
-    },
-    header: {
-        width: '100%',
-        maxWidth: 1100,
-        position: 'relative',
-        overflow: 'hidden',
-    },
+    container: { flex: 1, backgroundColor: '#F5F5F5' },
+    safeArea: { flex: 1, backgroundColor: '#4A5568' },
+    scrollContainer: { flex: 1, backgroundColor: '#e7e6e5' },
+    scrollContent: { flexGrow: 1 },
+    headerWrapper: { width: '100%', alignItems: 'center' },
+    header: { width: '100%', maxWidth: 1100, position: 'relative', overflow: 'hidden' },
     headerBanner: {
-        height: 250,
+        height: 270,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
         overflow: 'hidden',
         position: 'relative',
     },
-    headerBannerDesktop: {
-        height: 280,
-    },
+    headerBannerDesktop: { height: 300 },
     headerImage: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
-        height: '100%',
-        opacity: 1,
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        width: '100%', height: '100%', opacity: 1,
     },
-    headerImageDesktop: {
-        height: 280,
-    },
+    headerImageDesktop: { height: 300 },
     headerOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        width: '100%', height: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
     },
     headerContent: {
-        flex: 1,
-        paddingHorizontal: 20,
-        paddingVertical: 20,
-        position: 'relative',
-        zIndex: 1,
+        flex: 1, paddingHorizontal: 20, paddingVertical: 20,
+        position: 'relative', zIndex: 1,
     },
-    headerTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    headerCenter: {
-        flex: 1,
-        alignItems: 'center',
-    },
+    headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    headerCenter: { flex: 1, alignItems: 'center' },
     titleSection: {
-        paddingHorizontal: 20,
-        paddingVertical: 25,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        position: 'relative',
-        zIndex: 1,
+        paddingHorizontal: 20, paddingVertical: 25,
+        borderBottomLeftRadius: 30, borderBottomRightRadius: 30,
+        position: 'relative', zIndex: 1,
     },
-    titleSectionDesktop: {
-        paddingHorizontal: 40,
-        paddingVertical: 35,
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: '600',
-        color: '#fff',
-    },
-    headerTitleDesktop: {
-        fontSize: 28,
-    },
-    contentWrapper: {
-        width: '100%',
-        alignItems: 'center',
-    },
-    bookingFormContent: {
-        width: '100%',
-        padding: 20,
-        paddingBottom: 100,
-    },
-    bookingFormContentWeb: {
-        maxWidth: 1100,
-        alignSelf: 'center',
-    },
-    formStep: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        padding: 20,
-        marginBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 15,
-        elevation: 2,
-        minHeight: 300,
-    },
-    formStepDesktop: {
-        padding: 28,
+    titleSectionDesktop: { paddingHorizontal: 40, paddingVertical: 35 },
+    headerTitle: { fontSize: 28, fontWeight: '700', color: '#fff' },
+    headerTitleDesktop: { fontSize: 34 },
+    headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+    contentWrapper: { width: '100%', alignItems: 'center' },
+    bookingContent: { width: '100%', padding: 20, paddingBottom: 100 },
+    bookingContentWeb: { maxWidth: 1100, alignSelf: 'center' },
+
+    // Browse CTA Card
+    browseCard: {
         borderRadius: 20,
-        marginBottom: 24,
-        minHeight: 350,
+        marginBottom: 20,
+        shadowColor: '#00d285',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 8,
     },
-    stepHeader: {
+    browseCardDesktop: { marginBottom: 24 },
+    browseCardGradient: { borderRadius: 20, padding: 24 },
+    browseCardContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        gap: 16,
     },
-    stepIcon: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#00d285',
+    browseIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 15,
     },
-    stepTitle: {
-        fontSize: 20,
-        color: '#333',
-        fontWeight: '600',
-    },
-    stepTitleDesktop: {
-        fontSize: 22,
-    },
-    stepSubtitle: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 4,
-    },
-    stepSubtitleDesktop: {
-        fontSize: 15,
-    },
-    formGroup: {
-        marginBottom: 20,
-    },
-    formLabel: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#333',
-        marginBottom: 8,
-    },
-    formLabelDesktop: {
-        fontSize: 15,
-    },
-    formInput: {
-        backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#e0e0e0',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 15,
-        fontSize: 16,
-        color: '#333',
-    },
-    formInputDesktop: {
-        paddingVertical: 16,
-        fontSize: 16,
-    },
-    dateTimeRow: {
+    browseTextContainer: { flex: 1 },
+    browseTitle: { fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 4 },
+    browseSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 18 },
+
+    // Info Cards
+    infoCardsRow: {
         flexDirection: 'row',
-        gap: 10,
-    },
-    dateTimeRowDesktop: {
         gap: 12,
+        marginBottom: 24,
     },
-    dateTimeInput: {
+    infoCard: {
         flex: 1,
         backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#e0e0e0',
-        borderRadius: 12,
-        paddingHorizontal: 10,
-        paddingVertical: 10,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    dateTimeInputDesktop: {
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-    },
-    dateTimeText: {
-        fontSize: 13,
-        color: '#333',
-        marginLeft: 10,
-    },
-    dateTimeTextDesktop: {
-        fontSize: 14,
-    },
-    searchBtn: {
-        backgroundColor: '#00d285',
+        borderRadius: 16,
         padding: 16,
-        borderRadius: 12,
         alignItems: 'center',
-        marginTop: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    searchBtnDesktop: {
-        padding: 18,
-        borderRadius: 14,
-    },
-    searchBtnText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    disabledBtn: {
-        opacity: 0.5,
-    },
-    logoText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '800',
-        letterSpacing: 1,
-        textAlign: 'center',
-    },
-    logoTextDesktop: {
-        fontSize: 18,
-        letterSpacing: 1.5,
-    },
-    backIcon: {
-        height: 24,
+    infoIconBg: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        display: 'flex',
-        flexDirection: 'row',
-        alignContent: 'center'
+        marginBottom: 10,
     },
-    backArrow: {
-        width: 12,
-        height: 12,
-        borderLeftWidth: 2,
-        borderTopWidth: 2,
-        borderColor: '#fff',
-        transform: [{ rotate: '-45deg' }],
-    },
-    backButton: {
-        padding: 8,
-    },
-    backText: {
-        color: colors.white,
-        fontSize: 16,
-        marginLeft: 2,
-    },
-    // Previous Bookings Styles
-    previousBookingsContainer: {
-        marginTop: 24,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 15,
-    },
-    sectionTitleDesktop: {
-        fontSize: 20,
-        marginBottom: 18,
-    },
+    infoCardTitle: { fontSize: 13, fontWeight: '600', color: '#333', marginBottom: 4, textAlign: 'center' },
+    infoCardText: { fontSize: 11, color: '#999', textAlign: 'center', lineHeight: 16 },
+
+    // Previous Bookings
+    previousBookingsContainer: { marginTop: 8 },
+    sectionTitle: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 15 },
+    sectionTitleDesktop: { fontSize: 20, marginBottom: 18 },
     loadingContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        padding: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 15,
-        elevation: 2,
-    },
-    emptyStateContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        padding: 40,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 15,
-        elevation: 2,
-    },
-    emptyStateContainerDesktop: {
-        padding: 48,
-        borderRadius: 18,
-    },
-    emptyIconCircle: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#f5f5f5',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-    },
-    emptyStateTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 8,
-    },
-    emptyStateTitleDesktop: {
-        fontSize: 20,
-    },
-    emptyStateText: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    emptyStateTextDesktop: {
-        fontSize: 15,
-        lineHeight: 22,
+        backgroundColor: '#fff', borderRadius: 15, padding: 40,
+        alignItems: 'center', justifyContent: 'center',
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08, shadowRadius: 15, elevation: 2,
     },
     bookingCard: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-        elevation: 2,
-        borderLeftWidth: 3,
-        borderLeftColor: '#008069',
+        backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06, shadowRadius: 10, elevation: 2,
+        borderLeftWidth: 3, borderLeftColor: '#008069',
     },
-    bookingCardDesktop: {
-        padding: 18,
-        borderRadius: 14,
-        marginBottom: 14,
-    },
+    bookingCardDesktop: { padding: 18, borderRadius: 14, marginBottom: 14 },
     bookingCardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
+        flexDirection: 'row', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: 12,
     },
-    vehicleInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    vehicleName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-        marginLeft: 8,
-        flexShrink: 1,
-    },
-    vehicleNameDesktop: {
-        fontSize: 17,
-    },
+    vehicleInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    vehicleName: { fontSize: 16, fontWeight: '600', color: '#333', marginLeft: 8, flexShrink: 1 },
+    vehicleNameDesktop: { fontSize: 17 },
     statusBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 12,
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
     },
-    statusText: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginLeft: 4,
-        textTransform: 'capitalize',
-    },
-    bookingCardBody: {
-        marginBottom: 12,
-    },
-    locationRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    locationText: {
-        fontSize: 14,
-        color: '#666',
-        marginLeft: 8,
-        flex: 1,
-    },
-    locationTextDesktop: {
-        fontSize: 15,
-    },
-    arrowContainer: {
-        marginLeft: 8,
-        marginBottom: 6,
-    },
+    statusText: { fontSize: 12, fontWeight: '600', marginLeft: 4, textTransform: 'capitalize' },
+    bookingCardBody: { marginBottom: 12 },
+    locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+    locationText: { fontSize: 14, color: '#666', marginLeft: 8, flex: 1 },
+    locationTextDesktop: { fontSize: 15 },
+    arrowContainer: { marginLeft: 8, marginBottom: 6 },
     bookingCardFooter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
-        gap: 20,
+        flexDirection: 'row', alignItems: 'center', paddingTop: 12,
+        borderTopWidth: 1, borderTopColor: '#f0f0f0', gap: 20,
     },
-    dateTimeInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
+    dateTimeInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    dateTimeInfoText: { fontSize: 14, color: '#666' },
+    dateTimeInfoTextDesktop: { fontSize: 15 },
+
+    // Misc
+    logoText: { color: 'white', fontSize: 16, fontWeight: '800', letterSpacing: 1, textAlign: 'center' },
+    logoTextDesktop: { fontSize: 18, letterSpacing: 1.5 },
+    backIcon: {
+        height: 24, alignItems: 'center', justifyContent: 'center',
+        display: 'flex', flexDirection: 'row', alignContent: 'center',
     },
-    dateTimeInfoText: {
-        fontSize: 14,
-        color: '#666',
+    backArrow: {
+        width: 12, height: 12,
+        borderLeftWidth: 2, borderTopWidth: 2,
+        borderColor: '#fff', transform: [{ rotate: '-45deg' }],
     },
-    dateTimeInfoTextDesktop: {
-        fontSize: 15,
-    },
+    backButton: { padding: 8 },
+    backText: { color: colors.white, fontSize: 16, marginLeft: 2 },
 });
 
 export default BookingScreen;

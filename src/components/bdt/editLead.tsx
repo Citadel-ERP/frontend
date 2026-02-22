@@ -162,7 +162,7 @@ const EditLead: React.FC<EditLeadProps> = ({
     }
     return fields;
   });
-  const [customFieldErrors, setCustomFieldErrors] = useState<{[key: string]: string}>({});
+  const [customFieldErrors, setCustomFieldErrors] = useState<{ [key: string]: string }>({});
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -422,7 +422,7 @@ const EditLead: React.FC<EditLeadProps> = ({
   };
 
   const validateCustomFields = () => {
-    const errors: {[key: string]: string} = {};
+    const errors: { [key: string]: string } = {};
     let isValid = true;
     customFields.forEach(field => {
       if (field.key.trim() === '' && field.value.trim() !== '') {
@@ -441,7 +441,7 @@ const EditLead: React.FC<EditLeadProps> = ({
         return;
       }
       setLoading(true);
-      const meta: {[key: string]: any} = {};
+      const meta: { [key: string]: any } = {};
       if (areaRequirements.trim()) meta.area_requirements = areaRequirements.trim();
       if (officeType) meta.office_type = officeType;
       if (location.trim()) meta.location = location.trim();
