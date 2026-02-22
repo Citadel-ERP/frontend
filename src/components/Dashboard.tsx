@@ -52,6 +52,7 @@ import { ValidationScreen } from './ValidationScreen';
 import DriverManager from './driver_manager/DriverManager';
 import HR_Manager from './hr_manager/HR_Manager';
 import HREmployeeManager from './hr_employee_management/hr_employee_management';
+import AccessModule from './access/access';
 
 // Import components
 import AllModulesModal from './dashboard/allModules';
@@ -122,7 +123,7 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     gradientColors: ['#00d285', '#00b872'],
     displayName: 'Attendance'
   },
-  
+
   'office': {
     icon: 'business',
     iconFamily: 'Ionicons',
@@ -137,17 +138,17 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
   },
 
   'asset': {
-  icon: 'hardware-chip',
-  iconFamily: 'Ionicons',
-  gradientColors: ['#80006b', '#4d0069'],
-  displayName: 'Assets'
-},
-'assets': {
-  icon: 'hardware-chip',
-  iconFamily: 'Ionicons',
-  gradientColors: ['#80006b', '#4d0069'],
-  displayName: 'Assets'
-},
+    icon: 'hardware-chip',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#80006b', '#4d0069'],
+    displayName: 'Assets'
+  },
+  'assets': {
+    icon: 'hardware-chip',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#80006b', '#4d0069'],
+    displayName: 'Assets'
+  },
 
   // Car/Cab modules
   'cab': {
@@ -283,7 +284,13 @@ const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
     iconFamily: 'FontAwesome5',
     gradientColors: ['#636e72', '#546E7A'],
     displayName: 'Module'
-  }
+  },
+  'access': {
+    icon: 'shield-checkmark',
+    iconFamily: 'Ionicons',
+    gradientColors: ['#00b894', '#00cec9'],
+    displayName: 'Access Control'
+  },
 };
 
 // Helper function to get module config
@@ -302,7 +309,7 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
 
   //asset modules
   'asset': 'asset',
-  'assets': 'asset',  
+  'assets': 'asset',
   'Asset': 'asset',
 
   //office modules
@@ -339,6 +346,9 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
   'profile-assets': 'profile',
   'profile-payslips': 'profile',
   'profile-documents': 'profile',
+
+  'access': 'access',
+  'Access': 'access',
 };
 
 // Main Dashboard Component
@@ -366,6 +376,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
+  const [showAccess, setShowAccess] = useState(false);
 
   // ============================================================================
   // NEW: Dynamic Tile Configuration State
@@ -404,7 +415,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
   const [activeNavItem, setActiveNavItem] = useState('home');
-  
+
   // Theme state
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -412,7 +423,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // All modules modal
   const [allModulesVisible, setAllModulesVisible] = useState(false);
   const [showAsset, setShowAsset] = useState(false);
-  const [showOffice, setShowOffice] = useState(false); 
+  const [showOffice, setShowOffice] = useState(false);
 
   // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
@@ -544,9 +555,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'chat': () => setShowChat(true),
         'chatRoom': () => setShowChatRoom(true),
         'assets': () => setShowAsset(true),
-        'asset': () => setShowAsset(true), 
+        'asset': () => setShowAsset(true),
         'office': () => setShowOffice(true),
-        'offices': () => setShowOffice(true) 
+        // 'offices': () => setShowOffice(true),
+        'access': () => setShowAccess(true),
       };
 
       const action = navigationActions[targetPage];
@@ -1350,43 +1362,45 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowDriverManager,
       setShowHrManager,
       setShowAsset,
-      setShowOffice, 
+      setShowOffice,
+      setShowAccess,
       Alert
     });
   }, [modules, isWeb, setShowAsset]);
 
   const handleBackFromPage = useCallback(() => {
-  if (isWeb) {
-    setActivePage('dashboard');
-  } else {
-    setShowAttendance(false);
-    setShowAsset(false);
-    setShowOffice(false);
-    setShowProfile(false);
-    setShowHR(false);
-    setShowCab(false);
-    setShowDriver(false);
-    setShowBDT(false);
-    setShowMedical(false);
-    setShowScoutBoy(false);
-    setShowReminder(false);
-    setShowBUP(false);
-    setShowSiteManager(false);
-    setShowNotifications(false);
-    setShowSettings(false);
-    setShowEmployeeManagement(false);
-    setShowHREmployeeManagement(false);
-    setShowChat(false);
-    setShowChatRoom(false);
-    setShowValidation(false);
-    setShowDriverManager(false);
-    setShowHrManager(false);
-    setActiveMenuItem('Dashboard');
-    setActiveNavItem('home');  // ← ADD THIS LINE
-  }
-  // Reset profile modal state
-  setProfileModalToOpen(null);
-}, [isWeb]);
+    if (isWeb) {
+      setActivePage('dashboard');
+    } else {
+      setShowAttendance(false);
+      setShowAsset(false);
+      setShowOffice(false);
+      setShowProfile(false);
+      setShowHR(false);
+      setShowCab(false);
+      setShowDriver(false);
+      setShowBDT(false);
+      setShowMedical(false);
+      setShowScoutBoy(false);
+      setShowReminder(false);
+      setShowBUP(false);
+      setShowSiteManager(false);
+      setShowNotifications(false);
+      setShowSettings(false);
+      setShowEmployeeManagement(false);
+      setShowHREmployeeManagement(false);
+      setShowChat(false);
+      setShowChatRoom(false);
+      setShowValidation(false);
+      setShowDriverManager(false);
+      setShowHrManager(false);
+      setActiveMenuItem('Dashboard');
+      setActiveNavItem('home'); 
+      setShowAccess(false);
+    }
+    // Reset profile modal state
+    setProfileModalToOpen(null);
+  }, [isWeb]);
 
   const handleLogout = useCallback(async () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -1437,12 +1451,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         setShowHR(true);
       }
     } else if (navItem === 'assets' || navItem === 'asset') {
-    if (isWeb) {
-      setActivePage('assets');
-    } else {
-      setShowAsset(true);
+      if (isWeb) {
+        setActivePage('assets');
+      } else {
+        setShowAsset(true);
+      }
     }
-  }
     else if (navItem === 'support') {
       Alert.alert('Support', 'Support feature will be available soon!');
     } else if (navItem !== 'home') {
@@ -1645,20 +1659,25 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
     if (showAsset) {
       return (
-        <AssetModule 
+        <AssetModule
           onBack={handleBackFromPage}
           isDark={isDark}
         />
       );
     }
+    if (showAccess) {
+      return (
+        <AccessModule onBack={handleBackFromPage} />
+      );
+    }
     if (showOffice) {
-    return (
-      <OfficeModule
-        onBack={handleBackFromPage}
-        isDark={isDark}
-      />
-    );
-  }
+      return (
+        <OfficeModule
+          onBack={handleBackFromPage}
+          isDark={isDark}
+        />
+      );
+    }
 
     if (showHrManager) {
       return (
@@ -2148,7 +2167,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       />
                     )}
                     {activePage === 'asset' && (
-                      <AssetModule 
+                      <AssetModule
                         onBack={() => setActivePage('dashboard')}
                         isDark={isDark}
                       />

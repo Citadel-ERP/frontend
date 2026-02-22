@@ -131,6 +131,98 @@ const fmtDate = (s: string): string =>
     hour: '2-digit', minute: '2-digit',
   });
 
+const calcParticipantAmounts = (baseAmount: number, pct: string, tdsPct: string) => {
+  const shareAmt = (baseAmount * (parseFloat(pct) || 0)) / 100;
+  const tdsAmt   = (shareAmt * (parseFloat(tdsPct) || 0)) / 100;
+  return { shareAmt, tdsAmt, final: shareAmt - tdsAmt };
+};
+
+// ─── ParticipantShareRow (MODULE LEVEL — prevents remount on every keystroke) ──
+
+interface ParticipantShareRowProps {
+  inp: ParticipantShareInput;
+  index: number;
+  baseAmount: number;
+  tdsPct: string;
+  isEdit: boolean;
+  onChangeSharePct: (index: number, value: string, isEdit: boolean) => void;
+}
+
+const ParticipantShareRow: React.FC<ParticipantShareRowProps> = ({
+  inp,
+  index,
+  baseAmount,
+  tdsPct,
+  isEdit,
+  onChangeSharePct,
+}) => {
+  const { shareAmt, tdsAmt, final } = calcParticipantAmounts(
+    baseAmount,
+    inp.bdt_share_percentage,
+    tdsPct
+  );
+  const hasPreview =
+    !!inp.bdt_share_percentage && parseFloat(inp.bdt_share_percentage) > 0;
+
+  return (
+    <View style={styles.participantRow}>
+      {/* Header */}
+      <View style={styles.participantHeader}>
+        <View style={styles.participantAvatar}>
+          <Text style={styles.participantAvatarText}>
+            {(inp.user.first_name?.[0] ?? '?').toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.participantName}>{inp.user.full_name}</Text>
+          <Text style={styles.participantRole}>
+            {inp.is_assigned_user ? '👤 Assigned BDT' : '🤝 Collaborator'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Share % input only */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Transaction Share % *</Text>
+        <TextInput
+          style={styles.input}
+          value={inp.bdt_share_percentage}
+          onChangeText={v =>
+            onChangeSharePct(index, v.replace(/[^0-9.]/g, ''), isEdit)
+          }
+          placeholder="e.g. 60"
+          keyboardType="numeric"
+          placeholderTextColor={colors.textSecondary}
+        />
+      </View>
+
+      {/* Live preview */}
+      {hasPreview && (
+        <View style={styles.calculationPreview}>
+          <View style={styles.calculationRow}>
+            <Text style={styles.calculationLabel}>
+              Share ({inp.bdt_share_percentage}%)
+            </Text>
+            <Text style={styles.calculationValue}>{fmtCurrency(shareAmt)}</Text>
+          </View>
+          <View style={styles.calculationRow}>
+            <Text style={styles.calculationLabel}>
+              Less TDS ({tdsPct || '0'}%)
+            </Text>
+            <Text style={[styles.calculationValue, styles.negativeValue]}>
+              − {fmtCurrency(tdsAmt)}
+            </Text>
+          </View>
+          <View style={[styles.calculationRow, styles.finalRow]}>
+            <Text style={styles.finalLabel}>Net Payable</Text>
+            <Text style={styles.finalValue}>{fmtCurrency(final)}</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+};
+
 // ─── Component ────────────────────────────────────────────────────────────
 
 const Incentive: React.FC<IncentiveProps> = ({
@@ -303,7 +395,7 @@ const Incentive: React.FC<IncentiveProps> = ({
 
   // ── Share input helpers ────────────────────────────────────────────────
 
-  const updateSharePct = (
+  const updateSharePct = useCallback((
     index: number,
     value: string,
     isEdit: boolean
@@ -314,7 +406,7 @@ const Incentive: React.FC<IncentiveProps> = ({
       next[index] = { ...next[index], bdt_share_percentage: value };
       return next;
     });
-  };
+  }, []);
 
   // ── Calculation helpers ────────────────────────────────────────────────
 
@@ -323,12 +415,6 @@ const Incentive: React.FC<IncentiveProps> = ({
   ) => {
     const net = gross - referral - bdExp - gw;
     return { net, base: isIntercity ? net * 0.5 : net };
-  };
-
-  const calcParticipantAmounts = (baseAmount: number, pct: string, tdsPct: string) => {
-    const shareAmt = (baseAmount * (parseFloat(pct) || 0)) / 100;
-    const tdsAmt   = (shareAmt * (parseFloat(tdsPct) || 0)) / 100;
-    return { shareAmt, tdsAmt, final: shareAmt - tdsAmt };
   };
 
   // ── Validate share inputs ─────────────────────────────────────────────
@@ -550,6 +636,17 @@ const Incentive: React.FC<IncentiveProps> = ({
     </LinearGradient>
   );
 
+  const GreenHeaderReviewAndConfirm = ({ tall = false }) => (
+    <LinearGradient
+      colors={['#075E54', '#075E54']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={[styles.greenHeaderReview, tall && styles.greenHeaderTall]}
+    >
+      <View style={styles.greenHeaderContent} />
+    </LinearGradient>
+  );
+
   /** Back button row — always rendered inside the header view */
   const HeaderBar = ({
     title,
@@ -570,89 +667,24 @@ const Incentive: React.FC<IncentiveProps> = ({
     </View>
   );
 
-  /**
-   * ParticipantShareRow — only shows the individual share % input.
-   * Live preview uses the shared globalTds / editGlobalTds.
-   */
-  const ParticipantShareRow = ({
-    inp,
-    index,
-    baseAmount,
-    tdsPct,
-    isEdit,
+  const HeaderBarManagement = ({
+    title,
+    onBackPress,
   }: {
-    inp: ParticipantShareInput;
-    index: number;
-    baseAmount: number;
-    tdsPct: string;
-    isEdit: boolean;
-  }) => {
-    const { shareAmt, tdsAmt, final } = calcParticipantAmounts(
-      baseAmount,
-      inp.bdt_share_percentage,
-      tdsPct
-    );
-    const hasPreview =
-      !!inp.bdt_share_percentage && parseFloat(inp.bdt_share_percentage) > 0;
-
-    return (
-      <View style={styles.participantRow}>
-        {/* Header */}
-        <View style={styles.participantHeader}>
-          <View style={styles.participantAvatar}>
-            <Text style={styles.participantAvatarText}>
-              {(inp.user.first_name?.[0] ?? '?').toUpperCase()}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.participantName}>{inp.user.full_name}</Text>
-            <Text style={styles.participantRole}>
-              {inp.is_assigned_user ? '👤 Assigned BDT' : '🤝 Collaborator'}
-            </Text>
-          </View>
+    title: string;
+    onBackPress: () => void;
+  }) => (
+    <View style={[styles.headerManagement, styles.headerWithGreen]}>
+      <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
+        <View style={styles.backIcon}>
+          <View style={styles.backArrow} />
+          <Text style={styles.backText}>Back</Text>
         </View>
-
-        {/* Share % input only */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Transaction Share % *</Text>
-          <TextInput
-            style={styles.input}
-            value={inp.bdt_share_percentage}
-            onChangeText={v =>
-              updateSharePct(index, v.replace(/[^0-9.]/g, ''), isEdit)
-            }
-            placeholder="e.g. 60"
-            keyboardType="numeric"
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-
-        {/* Live preview */}
-        {hasPreview && (
-          <View style={styles.calculationPreview}>
-            <View style={styles.calculationRow}>
-              <Text style={styles.calculationLabel}>
-                Share ({inp.bdt_share_percentage}%)
-              </Text>
-              <Text style={styles.calculationValue}>{fmtCurrency(shareAmt)}</Text>
-            </View>
-            <View style={styles.calculationRow}>
-              <Text style={styles.calculationLabel}>
-                Less TDS ({tdsPct || '0'}%)
-              </Text>
-              <Text style={[styles.calculationValue, styles.negativeValue]}>
-                − {fmtCurrency(tdsAmt)}
-              </Text>
-            </View>
-            <View style={[styles.calculationRow, styles.finalRow]}>
-              <Text style={styles.finalLabel}>Net Payable</Text>
-              <Text style={styles.finalValue}>{fmtCurrency(final)}</Text>
-            </View>
-          </View>
-        )}
-      </View>
-    );
-  };
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerSpacer} />
+    </View>
+  );
 
   // ─── RENDER: Loading ───────────────────────────────────────────────────
 
@@ -690,7 +722,7 @@ const Incentive: React.FC<IncentiveProps> = ({
         {!hideHeader && (
           <>
             <StatusBar barStyle="light-content" backgroundColor="#075E54" />
-            <GreenHeader />
+            <GreenHeaderReviewAndConfirm />
             <HeaderBar
               title="Review & Confirm"
               onBackPress={() => setShowReview(false)}
@@ -761,7 +793,7 @@ const Incentive: React.FC<IncentiveProps> = ({
             colors={['#075E54', '#075E54']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled,{width:'90%',marginLeft:20}]}
           >
             <TouchableOpacity
               onPress={createIncentive}
@@ -993,6 +1025,7 @@ const Incentive: React.FC<IncentiveProps> = ({
                   baseAmount={base}
                   tdsPct={globalTdsPercentage}
                   isEdit={false}
+                  onChangeSharePct={updateSharePct}
                 />
               ))
             )}
@@ -1055,7 +1088,7 @@ const Incentive: React.FC<IncentiveProps> = ({
         <>
           <StatusBar barStyle="light-content" backgroundColor="#075E54" />
           <GreenHeader />
-          <HeaderBar
+          <HeaderBarManagement
             title="Incentive Management"
             onBackPress={onBack}
           />
@@ -1174,6 +1207,7 @@ const Incentive: React.FC<IncentiveProps> = ({
                   baseAmount={baseForEdit}
                   tdsPct={editGlobalTds}
                   isEdit={true}
+                  onChangeSharePct={updateSharePct}
                 />
               ))
             )}
@@ -1338,6 +1372,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     height: Platform.OS === 'ios' ? 130 : 80,
   },
+  greenHeaderReview:{
+    paddingTop: 80,
+    paddingBottom: 0,
+    paddingHorizontal: 20,
+    height: Platform.OS === 'ios' ? 130 : 110,
+  },
   greenHeaderTall: {
     height: Platform.OS === 'ios' ? 150 : 110,
   },
@@ -1348,6 +1388,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.primary,
     marginTop: Platform.OS === 'ios' ? -10 : 0,
+    paddingTop: Platform.OS === 'ios' ? 80 : 50,
+    paddingBottom: 20,
+  },
+  headerManagement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.primary,
+    marginTop: Platform.OS === 'ios' ? -10 : -30,
     paddingTop: Platform.OS === 'ios' ? 80 : 50,
     paddingBottom: 20,
   },
