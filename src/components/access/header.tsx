@@ -8,14 +8,13 @@ import {
   Platform,
   StatusBar,
   Image,
-  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from './types';
 
 interface HeaderProps {
   title: string;
+  subtitle?: string;
   onBack: () => void;
   loading?: boolean;
   rightAction?: {
@@ -26,64 +25,75 @@ interface HeaderProps {
   };
 }
 
+const BackIcon = () => (
+  <View style={styles.backIcon}>
+    <View style={styles.backArrow} />
+    <Text style={styles.backText}>Back</Text>
+  </View>
+);
+
 const Header: React.FC<HeaderProps> = ({
   title,
+  subtitle,
   onBack,
   loading = false,
   rightAction,
 }) => {
-  const statusBarHeight = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight ?? 24;
+  const statusBarHeight = Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ?? 24;
 
   return (
-    <View style={[styles.wrapper, { paddingTop: statusBarHeight }]}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} translucent={false} />
+    <View style={[styles.wrapper, { height: 250 + statusBarHeight, paddingTop: statusBarHeight,marginTop:-40 }]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
       <LinearGradient
-        colors={[COLORS.primary, COLORS.primaryDark]}
+        colors={['#4A5568', '#2D3748']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.gradient}
+        style={[styles.wrapper, { height: 250 + statusBarHeight, paddingTop: statusBarHeight }]}
       >
-        {/* Subtle texture overlay */}
-        <View style={styles.patternOverlay} />
+      {/* Background image */}
+      <Image
+        source={require('../../assets/cars.jpeg')}
+        style={styles.bgImage}
+        resizeMode="cover"
+      />
 
-        <View style={styles.row}>
-          {/* Back button */}
+      {/* Dark overlay */}
+      <View style={styles.overlay} />
+
+      {/* Top row: Back | CITADEL | Right action */}
+      <View style={styles.topRow}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={onBack}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.7}
+        >
+          <BackIcon />
+        </TouchableOpacity>
+
+        <Text style={styles.logoText}>CITADEL</Text>
+
+        {/* Right action button (e.g. "+ Add") */}
+        {rightAction ? (
           <TouchableOpacity
-            style={styles.backBtn}
-            onPress={onBack}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            activeOpacity={0.7}
+            style={styles.rightBtn}
+            onPress={rightAction.onPress}
+            activeOpacity={0.85}
           >
-            <Ionicons name="arrow-back" size={22} color={COLORS.white} />
+            <Text style={styles.rightBtnText}>
+              {rightAction.icon === 'add' ? '+ ' : ''}{rightAction.label ?? ''}
+            </Text>
           </TouchableOpacity>
+        ) : (
+          <View style={styles.spacer} />
+        )}
+      </View>
 
-          {/* Title */}
-          <View style={styles.titleContainer}>
-            <Text style={styles.logoText}>CITADEL</Text>
-            <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          </View>
-
-          {/* Right action */}
-          {rightAction ? (
-            <TouchableOpacity
-              style={[styles.rightBtn, rightAction.color ? { backgroundColor: rightAction.color + '33' } : {}]}
-              onPress={rightAction.onPress}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              activeOpacity={0.7}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : rightAction.icon ? (
-                <Ionicons name={rightAction.icon as any} size={20} color={COLORS.white} />
-              ) : (
-                <Text style={styles.rightBtnText}>{rightAction.label}</Text>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.spacer} />
-          )}
-        </View>
+      {/* Title section */}
+      <View style={styles.titleSection}>
+        <Text style={styles.title}>{title}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
       </LinearGradient>
     </View>
   );
@@ -91,66 +101,95 @@ const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: COLORS.primary,
-  },
-  gradient: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    position: 'relative',
     overflow: 'hidden',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    
   },
-  patternOverlay: {
+  bgImage: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    width: '100%',
+    height: '100%',
   },
-  row: {
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    padding: 8,
+  },
+  backIcon: {
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    alignContent: 'center',
   },
-  titleContainer: {
-    flex: 1,
-    marginHorizontal: 12,
+  backArrow: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#fff',
+    transform: [{ rotate: '-45deg' }],
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 16,
+    marginLeft: 2,
   },
   logoText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-    marginBottom: 1,
-  },
-  title: {
-    color: COLORS.white,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1.5,
   },
   rightBtn: {
-    width: 40,
-    height: 40,
+    backgroundColor: COLORS.secondary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   rightBtnText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   spacer: {
-    width: 40,
+    width: 60,
+  },
+  titleSection: {
+    position: 'absolute',
+    bottom: 62,
+    left: 16,
+    right: 16,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  subtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
   },
 });
 

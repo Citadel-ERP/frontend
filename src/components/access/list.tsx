@@ -47,7 +47,6 @@ const EmployeeRow: React.FC<EmployeeRowProps> = React.memo(({ employee, onPress 
 
   return (
     <TouchableOpacity style={styles.row} onPress={() => onPress(employee)} activeOpacity={0.7}>
-      {/* Avatar */}
       <View style={styles.avatarContainer}>
         {employee.profile_picture ? (
           <Image source={{ uri: employee.profile_picture }} style={styles.avatarImage} />
@@ -56,11 +55,9 @@ const EmployeeRow: React.FC<EmployeeRowProps> = React.memo(({ employee, onPress 
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
         )}
-        {/* Role dot */}
         <View style={[styles.roleDot, { backgroundColor: roleColor[employee.role] ?? COLORS.primary }]} />
       </View>
 
-      {/* Info */}
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{name}</Text>
         <Text style={styles.email} numberOfLines={1}>{employee.email ?? 'No email'}</Text>
@@ -76,7 +73,6 @@ const EmployeeRow: React.FC<EmployeeRowProps> = React.memo(({ employee, onPress 
         </View>
       </View>
 
-      {/* Chevron */}
       <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
     </TouchableOpacity>
   );
@@ -113,7 +109,6 @@ const ModuleRow: React.FC<ModuleRowProps> = React.memo(({ module, onPress }) => 
 
   return (
     <TouchableOpacity style={styles.row} onPress={() => onPress(module)} activeOpacity={0.7}>
-      {/* Icon */}
       <View style={[styles.moduleIconWrapper, { backgroundColor: accentColor + '18' }]}>
         {module.module_icon ? (
           <Image source={{ uri: module.module_icon }} style={styles.moduleIcon} resizeMode="contain" />
@@ -122,7 +117,6 @@ const ModuleRow: React.FC<ModuleRowProps> = React.memo(({ module, onPress }) => 
         )}
       </View>
 
-      {/* Info */}
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{module.module_name}</Text>
         <Text style={styles.email} numberOfLines={1}>ID: {module.module_unique_name}</Text>
@@ -142,9 +136,6 @@ const ModuleRow: React.FC<ModuleRowProps> = React.memo(({ module, onPress }) => 
     </TouchableOpacity>
   );
 });
-
-// ─── Separator ────────────────────────────────────────────────────────────────
-const ItemSeparator = () => <View style={styles.separator} />;
 
 // ─── Empty State ─────────────────────────────────────────────────────────────
 const EmptyState: React.FC<{ tab: ActiveTab; searching: boolean }> = ({ tab, searching }) => (
@@ -216,30 +207,17 @@ const AccessList: React.FC<AccessListProps> = ({
   );
 
   const renderEmployee = useCallback(
-    ({ item }: { item: Employee }) => (
-      <EmployeeRow employee={item} onPress={onEmployeePress} />
-    ),
+    ({ item }: { item: Employee }) => <EmployeeRow employee={item} onPress={onEmployeePress} />,
     [onEmployeePress],
   );
 
   const renderModule = useCallback(
-    ({ item }: { item: ModuleItem }) => (
-      <ModuleRow module={item} onPress={onModulePress} />
-    ),
+    ({ item }: { item: ModuleItem }) => <ModuleRow module={item} onPress={onModulePress} />,
     [onModulePress],
   );
 
   const keyExtractorEmployee = useCallback((item: Employee) => item.employee_id, []);
   const keyExtractorModule = useCallback((item: ModuleItem) => item.module_id, []);
-
-  const refreshControl = (
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      colors={[COLORS.primary]}
-      tintColor={COLORS.primary}
-    />
-  );
 
   if (loading) {
     return (
@@ -250,39 +228,23 @@ const AccessList: React.FC<AccessListProps> = ({
     );
   }
 
-  if (tab === 'employees') {
-    return (
-      <FlatList
-        data={filteredEmployees}
-        renderItem={renderEmployee}
-        keyExtractor={keyExtractorEmployee}
-        ItemSeparatorComponent={ItemSeparator}
-        contentContainerStyle={filteredEmployees.length === 0 ? styles.emptyFlex : styles.list}
-        ListEmptyComponent={<EmptyState tab="employees" searching={searchQuery.length > 0} />}
-        refreshControl={refreshControl}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={15}
-        initialNumToRender={15}
-        windowSize={10}
-      />
-    );
-  }
+  const data = tab === 'employees' ? filteredEmployees : filteredModules;
+  const isEmpty = data.length === 0;
 
   return (
     <FlatList
-      data={filteredModules}
-      renderItem={renderModule}
-      keyExtractor={keyExtractorModule}
-      ItemSeparatorComponent={ItemSeparator}
-      contentContainerStyle={filteredModules.length === 0 ? styles.emptyFlex : styles.list}
-      ListEmptyComponent={<EmptyState tab="modules" searching={searchQuery.length > 0} />}
-      refreshControl={refreshControl}
+      // ─── THE KEY: scrollEnabled={false} lets the parent ScrollView own
+      // the scroll gesture — exactly how Vehicles.tsx does it.
+      scrollEnabled={false}
+      data={tab === 'employees' ? filteredEmployees : filteredModules}
+      renderItem={tab === 'employees' ? renderEmployee : renderModule}
+      keyExtractor={tab === 'employees' ? keyExtractorEmployee : keyExtractorModule}
+      contentContainerStyle={isEmpty ? styles.emptyFlex : styles.list}
+      ListEmptyComponent={
+        <EmptyState tab={tab} searching={searchQuery.length > 0} />
+      }
       showsVerticalScrollIndicator={false}
-      removeClippedSubviews={true}
-      maxToRenderPerBatch={15}
-      initialNumToRender={15}
-      windowSize={10}
+      removeClippedSubviews={false}  // must be false when scrollEnabled={false}
     />
   );
 };
@@ -295,10 +257,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   emptyFlex: {
-    flex: 1,
+    flexGrow: 1,
+    paddingVertical: 60,
     backgroundColor: COLORS.background,
   },
-  // Row shared
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -312,9 +274,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
-  },
-  separator: {
-    height: 0,
   },
   info: {
     flex: 1,
@@ -351,7 +310,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  // Employee avatar
   avatarContainer: {
     position: 'relative',
   },
@@ -382,7 +340,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.surface,
   },
-  // Module icon
   moduleIconWrapper: {
     width: 50,
     height: 50,
@@ -409,9 +366,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textTertiary,
   },
-  // Loader
   loaderContainer: {
-    flex: 1,
+    paddingVertical: 60,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
@@ -421,9 +377,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
-  // Empty state
   emptyContainer: {
-    flex: 1,
+    paddingVertical: 60,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,

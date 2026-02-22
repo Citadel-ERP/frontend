@@ -1,13 +1,17 @@
 // access/navigation.tsx
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTab, COLORS } from './types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface NavigationProps {
   activeTab: ActiveTab;
@@ -18,7 +22,7 @@ interface NavigationProps {
 
 const TABS: { key: ActiveTab; label: string; icon: string; activeIcon: string }[] = [
   { key: 'employees', label: 'Employees', icon: 'people-outline', activeIcon: 'people' },
-  { key: 'modules', label: 'Modules', icon: 'grid-outline', activeIcon: 'grid' },
+  { key: 'modules', label: 'Modules', icon: 'bookmark-outline', activeIcon: 'bookmark' },
 ];
 
 const Navigation: React.FC<NavigationProps> = ({
@@ -32,68 +36,119 @@ const Navigation: React.FC<NavigationProps> = ({
     modules: moduleCount,
   };
 
+  const activeIndex = TABS.findIndex((t) => t.key === activeTab);
+  const pillAnim = useRef(new Animated.Value(activeIndex)).current;
+
+  useEffect(() => {
+    Animated.spring(pillAnim, {
+      toValue: activeIndex,
+      useNativeDriver: true,
+      tension: 68,
+      friction: 11,
+    }).start();
+  }, [activeIndex]);
+
+  // pill translates across the container width (minus padding)
+  const containerInnerWidth = SCREEN_WIDTH - 32 - 8; // horizontal padding 16*2, inner padding 4*2
+  const pillWidth = containerInnerWidth / TABS.length;
+
+  const pillTranslateX = pillAnim.interpolate({
+    inputRange: [0, TABS.length - 1],
+    outputRange: [0, pillWidth * (TABS.length - 1)],
+  });
+
   return (
-    <View style={styles.container}>
-      {TABS.map((tab) => {
-        const isActive = activeTab === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, isActive && styles.activeTab]}
-            onPress={() => onTabChange(tab.key)}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={(isActive ? tab.activeIcon : tab.icon) as any}
-              size={18}
-              color={isActive ? COLORS.white : COLORS.textSecondary}
-              style={styles.tabIcon}
-            />
-            <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
-              {tab.label}
-            </Text>
-            {counts[tab.key] > 0 && (
-              <View style={[styles.badge, isActive ? styles.activeBadge : styles.inactiveBadge]}>
-                <Text style={[styles.badgeText, isActive && styles.activeBadgeText]}>
-                  {counts[tab.key]}
-                </Text>
-              </View>
-            )}
-            {isActive && <View style={styles.activeIndicator} />}
-          </TouchableOpacity>
-        );
-      })}
+    <View style={styles.outerContainer}>
+      <View style={styles.container}>
+        {/* Animated sliding pill */}
+        <Animated.View
+          style={[
+            styles.pill,
+            {
+              width: pillWidth,
+              transform: [{ translateX: pillTranslateX }],
+            },
+          ]}
+        />
+
+        {TABS.map((tab, idx) => {
+          const isActive = activeTab === tab.key;
+          const count = counts[tab.key];
+
+          // Interpolate icon/label color based on pill position
+          const colorAnim = pillAnim.interpolate({
+            inputRange: TABS.map((_, i) => i),
+            outputRange: TABS.map((_, i) => (i === idx ? 1 : 0)),
+            extrapolate: 'clamp',
+          });
+
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={styles.tab}
+              onPress={() => onTabChange(tab.key)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={(isActive ? tab.activeIcon : tab.icon) as any}
+                size={18}
+                color={isActive ? COLORS.white : COLORS.textSecondary}
+              />
+              <Animated.Text
+                style={[
+                  styles.tabLabel,
+                  isActive && styles.activeTabLabel,
+                ]}
+              >
+                {tab.label}
+                {count > 0 ? ` (${count})` : ''}
+              </Animated.Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  outerContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 10,
+  },
+  container: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 30,
+    padding: 4,
+    position: 'relative',
+  },
+  pill: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    bottom: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: 25,
+    zIndex: 0,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    position: 'relative',
+    borderRadius: 25,
     gap: 6,
-  },
-  activeTab: {
-    backgroundColor: COLORS.primary,
-  },
-  tabIcon: {
-    marginRight: 2,
+    zIndex: 1,
   },
   tabLabel: {
     fontSize: 14,
@@ -101,39 +156,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   activeTabLabel: {
-    color: COLORS.white,
-  },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  activeBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  inactiveBadge: {
-    backgroundColor: COLORS.primary + '20',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  activeBadgeText: {
-    color: COLORS.white,
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: COLORS.secondary,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
+    color: '#fff',
   },
 });
 

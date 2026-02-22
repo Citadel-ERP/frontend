@@ -1,5 +1,5 @@
 // access/moduleDetails.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
   ActivityIndicator,
   TextInput,
   Platform,
+  StatusBar,
+  RefreshControl,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ModuleItem, COLORS } from './types';
-import { getModuleAccentColor } from './list';
+import { ModuleItem, Employee, COLORS } from './types';
+import { getModuleAccentColor, getInitials, getAvatarColor } from './list';
 import { BACKEND_URL } from '../../config/config';
 
 interface ModuleDetailsProps {
@@ -23,6 +26,17 @@ interface ModuleDetailsProps {
   token: string | null;
   onBack: () => void;
   onModuleUpdated: (updated: ModuleItem) => void;
+}
+
+interface ModuleUser {
+  employee_id: string;
+  full_name?: string;
+  first_name: string;
+  last_name?: string | null;
+  email?: string | null;
+  profile_picture?: string | null;
+  designation?: string | null;
+  role?: string;
 }
 
 const ModuleDetails: React.FC<ModuleDetailsProps> = ({
@@ -35,11 +49,41 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [moduleUsers, setModuleUsers] = useState<ModuleUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   // Edit draft state
   const [draftName, setDraftName] = useState(initialModule.module_name);
-  const [draftIconUri, setDraftIconUri] = useState<string | null>(null); // local URI picked by user
+  const [draftIconUri, setDraftIconUri] = useState<string | null>(null);
 
   const accent = getModuleAccentColor(module.module_unique_name);
+  const statusBarHeight = Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ?? 24;
+
+  // ─── Fetch users with access to this module ───────────────────────────────
+  const fetchModuleUsers = useCallback(async (silent = false) => {
+    if (!token) return;
+    if (!silent) setUsersLoading(true);
+    else setRefreshing(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/citadel_admin/getUsersOfModule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, module_id: module.module_id }),
+      });
+      const data = await response.json();
+      if (response.ok && data.users) {
+        setModuleUsers(data.users as ModuleUser[]);
+      }
+    } catch (err) {
+      console.error('fetchModuleUsers error:', err);
+    } finally {
+      setUsersLoading(false);
+      setRefreshing(false);
+    }
+  }, [token, module.module_id]);
+
+  useEffect(() => { fetchModuleUsers(); }, [fetchModuleUsers]);
 
   // ─── Enter edit mode ──────────────────────────────────────────────────────
   const enterEdit = useCallback(() => {
@@ -48,7 +92,6 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
     setIsEditing(true);
   }, [module.module_name]);
 
-  // ─── Cancel edit ─────────────────────────────────────────────────────────
   const cancelEdit = useCallback(() => {
     setDraftName(module.module_name);
     setDraftIconUri(null);
@@ -81,7 +124,6 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
       return;
     }
     if (trimmedName === module.module_name && !draftIconUri) {
-      // Nothing changed
       setIsEditing(false);
       return;
     }
@@ -129,10 +171,8 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
     }
   }, [draftName, draftIconUri, module, token, onModuleUpdated]);
 
-  // ─── Current icon source ──────────────────────────────────────────────────
   const iconSource = draftIconUri ? { uri: draftIconUri } : module.module_icon ? { uri: module.module_icon } : null;
 
-  // ─── Format date ──────────────────────────────────────────────────────────
   const formatDate = (iso: string) => {
     try {
       return new Date(iso).toLocaleDateString('en-IN', {
@@ -148,13 +188,34 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* ── Editing toolbar (shown when in edit mode) ── */}
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* ── Green Header ── */}
+      <LinearGradient
+        colors={[COLORS.primaryLight, COLORS.primary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: statusBarHeight + 8 }]}
+      >
+        <TouchableOpacity style={styles.backBtn} onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Module Details</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>{module.module_name}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.editHeaderBtn, isEditing && styles.editHeaderBtnActive]}
+          onPress={isEditing ? cancelEdit : enterEdit}
+        >
+          <Ionicons name={isEditing ? 'close' : 'pencil'} size={16} color="#fff" />
+        </TouchableOpacity>
+      </LinearGradient>
+
+      {/* ── Edit toolbar ── */}
       {isEditing && (
         <View style={styles.editToolbar}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={cancelEdit} disabled={saving}>
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={styles.editToolbarTitle}>Edit Module</Text>
+          <Text style={styles.editToolbarHint}>Editing module — make your changes below</Text>
           <TouchableOpacity
             style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
             onPress={handleSave}
@@ -163,22 +224,29 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
             {saving ? (
               <ActivityIndicator size="small" color={COLORS.white} />
             ) : (
-              <Text style={styles.saveBtnText}>Save</Text>
+              <>
+                <Ionicons name="checkmark" size={15} color="#fff" />
+                <Text style={styles.saveBtnText}>Save</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
       )}
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* ── Module Header Card ── */}
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchModuleUsers(true)}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
+        {/* ── Module Hero Card ── */}
         <View style={[styles.heroCard, { borderTopColor: accent }]}>
-          {/* Edit button (top right, only when NOT editing) */}
-          {!isEditing && (
-            <TouchableOpacity style={styles.editFab} onPress={enterEdit} activeOpacity={0.8}>
-              <Ionicons name="pencil" size={16} color={COLORS.white} />
-            </TouchableOpacity>
-          )}
-
           {/* Icon */}
           {isEditing ? (
             <TouchableOpacity style={[styles.iconPickerBtn, { borderColor: accent }]} onPress={handlePickImage} activeOpacity={0.8}>
@@ -221,12 +289,10 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
             <Text style={styles.heroName}>{module.module_name}</Text>
           )}
 
-          {/* Unique name tag */}
           <View style={[styles.uniqueTag, { backgroundColor: accent + '15' }]}>
             <Text style={[styles.uniqueTagText, { color: accent }]}>#{module.module_unique_name}</Text>
           </View>
 
-          {/* Generic badge */}
           {module.is_generic && (
             <View style={styles.genericBadge}>
               <Ionicons name="star" size={12} color={COLORS.primary} />
@@ -238,8 +304,8 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
         {/* ── Stats Row ── */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statValue}>{module.allowed_tags?.length ?? 0}</Text>
-            <Text style={styles.statLabel}>Allowed Tags</Text>
+            <Text style={styles.statValue}>{moduleUsers.length}</Text>
+            <Text style={styles.statLabel}>Users</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
@@ -253,7 +319,7 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
           </View>
         </View>
 
-        {/* ── Module ID Info ── */}
+        {/* ── Module Information ── */}
         <View style={styles.infoSection}>
           <Text style={styles.infoSectionTitle}>Module Information</Text>
           <View style={styles.infoCard}>
@@ -266,21 +332,84 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
           </View>
         </View>
 
-        {/* ── Allowed Tags ── */}
-        {module.allowed_tags && module.allowed_tags.length > 0 && (
-          <View style={styles.infoSection}>
-            <Text style={styles.infoSectionTitle}>Allowed Tags</Text>
-            <View style={styles.tagsContainer}>
-              {module.allowed_tags.map((tag) => (
-                <View key={tag.id} style={[styles.tagChip, { backgroundColor: accent + '15' }]}>
-                  <Ionicons name="pricetag" size={12} color={accent} />
-                  <Text style={[styles.tagChipText, { color: accent }]}>{tag.tag_name}</Text>
-                  <Text style={styles.tagType}>({tag.tag_type})</Text>
-                </View>
-              ))}
-            </View>
+        {/* ── Allowed Employees ── */}
+        <View style={styles.infoSection}>
+          <View style={styles.employeesSectionHeader}>
+            <Text style={styles.infoSectionTitle}>Allowed Employees</Text>
+            {!usersLoading && (
+              <View style={styles.userCountBadge}>
+                <Text style={styles.userCountText}>{moduleUsers.length}</Text>
+              </View>
+            )}
           </View>
-        )}
+
+          {usersLoading ? (
+            <View style={styles.usersLoader}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.usersLoaderText}>Loading employees...</Text>
+            </View>
+          ) : moduleUsers.length === 0 ? (
+            <View style={styles.usersEmpty}>
+              <View style={styles.usersEmptyIcon}>
+                <Ionicons name="people-outline" size={28} color={COLORS.textTertiary} />
+              </View>
+              <Text style={styles.usersEmptyTitle}>No Access Granted</Text>
+              <Text style={styles.usersEmptySubtitle}>No employees have access to this module yet</Text>
+            </View>
+          ) : (
+            <View style={styles.employeesGrid}>
+              {moduleUsers.map((user) => {
+                const displayName = user.full_name || `${user.first_name} ${user.last_name ?? ''}`.trim();
+                const initials = getInitials(displayName);
+                const avatarColor = getAvatarColor(user.employee_id);
+
+                const roleColor: Record<string, string> = {
+                  admin: '#0984e3',
+                  manager: '#6c5ce7',
+                  employee: COLORS.primary,
+                };
+                const userRoleColor = roleColor[user.role ?? 'employee'] ?? COLORS.primary;
+
+                return (
+                  <View key={user.employee_id} style={styles.employeeCard}>
+                    {/* Avatar */}
+                    {user.profile_picture ? (
+                      <Image source={{ uri: user.profile_picture }} style={styles.empAvatar} />
+                    ) : (
+                      <View style={[styles.empAvatarFallback, { backgroundColor: avatarColor }]}>
+                        <Text style={styles.empAvatarText}>{initials}</Text>
+                      </View>
+                    )}
+
+                    {/* Name */}
+                    <Text style={styles.empName} numberOfLines={1}>{displayName}</Text>
+
+                    {/* Designation */}
+                    {user.designation ? (
+                      <Text style={styles.empDesignation} numberOfLines={1}>{user.designation}</Text>
+                    ) : (
+                      <Text style={styles.empDesignation} numberOfLines={1}>{user.email ?? ''}</Text>
+                    )}
+
+                    {/* Role chip */}
+                    {user.role && (
+                      <View style={[styles.empRoleChip, { backgroundColor: userRoleColor + '18' }]}>
+                        <Text style={[styles.empRoleText, { color: userRoleColor }]}>
+                          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Access indicator */}
+                    <View style={styles.empAccessDot}>
+                      <Ionicons name="checkmark-circle" size={14} color={COLORS.primary} />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -335,8 +464,48 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scroll: {
+  // ── Header ──
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: {
     flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  headerTitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  editHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editHeaderBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   // Edit toolbar
   editToolbar: {
@@ -348,33 +517,24 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
     elevation: 3,
   },
-  cancelBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  cancelBtnText: {
-    fontSize: 15,
+  editToolbarHint: {
+    fontSize: 13,
     color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  editToolbarTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    flex: 1,
   },
   saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 10,
-    minWidth: 64,
-    alignItems: 'center',
+    minWidth: 72,
+    justifyContent: 'center',
+    marginLeft: 12,
   },
   saveBtnDisabled: {
     opacity: 0.6,
@@ -383,6 +543,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.white,
+  },
+  scroll: {
+    flex: 1,
   },
   // Hero card
   heroCard: {
@@ -399,22 +562,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
     position: 'relative',
-  },
-  editFab: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 5,
   },
   heroIconWrapper: {
     width: 90,
@@ -435,7 +582,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Edit icon picker
   iconPickerBtn: {
     width: 90,
     height: 90,
@@ -465,7 +611,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  // Name input
   nameInputWrapper: {
     width: '100%',
     marginBottom: 8,
@@ -553,7 +698,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   infoSectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.textPrimary,
     marginBottom: 10,
@@ -570,35 +715,132 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  // Tags
-  tagsContainer: {
+  // Employees section
+  employeesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  userCountBadge: {
+    backgroundColor: COLORS.primary + '18',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  userCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  usersLoader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 32,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+  },
+  usersLoaderText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  usersEmpty: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    gap: 8,
+  },
+  usersEmptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  usersEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  usersEmptySubtitle: {
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+  },
+  // Employee grid cards
+  employeesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
+  },
+  employeeCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 14,
+    alignItems: 'center',
+    width: '47%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 3,
+    position: 'relative',
+    gap: 4,
   },
-  tagChip: {
-    flexDirection: 'row',
+  empAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginBottom: 4,
+    borderWidth: 2,
+    borderColor: COLORS.primary + '30',
+  },
+  empAvatarFallback: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 5,
+    justifyContent: 'center',
+    marginBottom: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  tagChipText: {
-    fontSize: 13,
+  empAvatarText: {
+    color: '#fff',
+    fontSize: 20,
     fontWeight: '700',
   },
-  tagType: {
+  empName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  empDesignation: {
     fontSize: 11,
     color: COLORS.textTertiary,
+    textAlign: 'center',
+  },
+  empRoleChip: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 2,
+  },
+  empRoleText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  empAccessDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
   },
 });
 
