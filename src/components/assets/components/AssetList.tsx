@@ -61,6 +61,7 @@ export const AssetList: React.FC<AssetListProps> = ({
     const location = extractLocation(item.asset_name);
     const baseName = extractAssetBaseName(item.asset_name);
     const iconName = getAssetIcon(item.asset_type);
+    const showLocation = location && location !== 'Unknown';
 
     return (
       <TouchableOpacity
@@ -73,19 +74,21 @@ export const AssetList: React.FC<AssetListProps> = ({
         </View>
 
         <View style={styles.assetInfo}>
+          {/* Name + location badge + delete */}
           <View style={styles.assetHeader}>
             <View style={styles.titleContainer}>
               <Text style={[styles.assetName, { color: theme.textMain }]} numberOfLines={1}>
                 {baseName}
               </Text>
-              <View style={[styles.locationBadge, { backgroundColor: theme.accentBlue + '20' }]}>
-                <Ionicons name="location-outline" size={12} color={theme.accentBlue} />
-                <Text style={[styles.locationText, { color: theme.accentBlue }]}>
-                  {location}
-                </Text>
-              </View>
+              {showLocation && (
+                <View style={[styles.locationBadge, { backgroundColor: theme.accentBlue + '20' }]}>
+                  <Ionicons name="location-outline" size={12} color={theme.accentBlue} />
+                  <Text style={[styles.locationText, { color: theme.accentBlue }]}>
+                    {location}
+                  </Text>
+                </View>
+              )}
             </View>
-
             <TouchableOpacity
               onPress={() => onDeletePress(item)}
               style={[styles.deleteButton, { backgroundColor: theme.deleteBg }]}
@@ -94,13 +97,23 @@ export const AssetList: React.FC<AssetListProps> = ({
             </TouchableOpacity>
           </View>
 
-          <View style={styles.typeContainer}>
+          {/* Type */}
+          <View style={styles.metaRow}>
             <Ionicons name="pricetag-outline" size={14} color={theme.textSub} />
-            <Text style={[styles.assetType, { color: theme.textSub }]}>
-              {item.asset_type}
-            </Text>
+            <Text style={[styles.metaText, { color: theme.textSub }]}>{item.asset_type}</Text>
           </View>
 
+          {/* Serial number */}
+          {item.asset_serial ? (
+            <View style={styles.metaRow}>
+              <Ionicons name="barcode-outline" size={14} color={theme.textSub} />
+              <Text style={[styles.metaText, { color: theme.textSub }]}>
+                S/N: {item.asset_serial}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Description */}
           {item.asset_description ? (
             <View style={styles.descriptionContainer}>
               <Ionicons name="document-text-outline" size={14} color={theme.textSub} />
@@ -110,14 +123,17 @@ export const AssetList: React.FC<AssetListProps> = ({
             </View>
           ) : null}
 
+          {/* Footer: count + date */}
           <View style={styles.assetFooter}>
             <View style={styles.countContainer}>
               <Ionicons name="layers-outline" size={16} color={theme.accentBlue} />
               <Text style={[styles.assetCount, { color: theme.textMain }]}>
-                Count: <Text style={[styles.countNumber, { color: theme.accentBlue }]}>{item.asset_count}</Text>
+                Count:{' '}
+                <Text style={[styles.countNumber, { color: theme.accentBlue }]}>
+                  {item.asset_count}
+                </Text>
               </Text>
             </View>
-
             {item.created_at && (
               <View style={styles.dateContainer}>
                 <Ionicons name="time-outline" size={12} color={theme.textSub} />
@@ -137,9 +153,7 @@ export const AssetList: React.FC<AssetListProps> = ({
       <View style={[styles.emptyIconContainer, { backgroundColor: theme.accentBlue + '20' }]}>
         <Ionicons name="cube-outline" size={64} color={theme.accentBlue} />
       </View>
-      <Text style={[styles.emptyText, { color: theme.textMain }]}>
-        No Assets Found
-      </Text>
+      <Text style={[styles.emptyText, { color: theme.textMain }]}>No Assets Found</Text>
       <Text style={[styles.emptySubText, { color: theme.textSub }]}>
         Click the + button to add your first asset or upload an Excel file
       </Text>
@@ -149,26 +163,7 @@ export const AssetList: React.FC<AssetListProps> = ({
   const renderLoadingState = () => (
     <View style={styles.centerContainer}>
       <ActivityIndicator size="large" color={theme.accentBlue} />
-      <Text style={[styles.loadingText, { color: theme.textSub }]}>
-        Loading assets...
-      </Text>
-    </View>
-  );
-
-  const renderError = () => (
-    <View style={styles.centerContainer}>
-      <View style={[styles.errorIconContainer, { backgroundColor: theme.deleteBg }]}>
-        <Ionicons name="alert-circle-outline" size={64} color="#ff4444" />
-      </View>
-      <Text style={[styles.errorText, { color: theme.textMain }]}>
-        Failed to load assets
-      </Text>
-      <TouchableOpacity
-        style={[styles.retryButton, { backgroundColor: theme.accentBlue }]}
-        onPress={onRefresh}
-      >
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </TouchableOpacity>
+      <Text style={[styles.loadingText, { color: theme.textSub }]}>Loading assets...</Text>
     </View>
   );
 
@@ -178,63 +173,20 @@ export const AssetList: React.FC<AssetListProps> = ({
 
   const renderListHeader = () => {
     if (assets.length === 0) return null;
-
     return (
-      <View>
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statsContainer}>
-            <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
-              <Text style={[styles.statNumber, { color: theme.accentBlue }]}>
-                {assets.length}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSub }]}>
-                Total Assets
-              </Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
-              <Text style={[styles.statNumber, { color: theme.accentBlue }]}>
-                {assets.reduce((sum, asset) => sum + (asset.asset_count || 0), 0)}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSub }]}>
-                Total Count
-              </Text>
-            </View>
+      <View style={styles.statsRow}>
+        <View style={styles.statsContainer}>
+          <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.statNumber, { color: theme.accentBlue }]}>{assets.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSub }]}>Total Assets</Text>
           </View>
-
-          {/* Filter Icon Button */}
-          {/* <TouchableOpacity
-            onPress={onFilterPress}
-            style={[
-              styles.filterButton,
-              {
-                backgroundColor: selectedCity ? theme.accentBlue : theme.cardBg,
-                borderColor: theme.accentBlue,
-              },
-            ]}
-          >
-            <Ionicons
-              name="filter-outline"
-              size={20}
-              color={selectedCity ? '#ffffff' : theme.accentBlue}
-            />
-            {selectedCity ? (
-              <Text style={styles.filterActiveText} numberOfLines={1}>
-                {selectedCity}
-              </Text>
-            ) : null}
-          </TouchableOpacity>*/}
-        </View> 
-
-        {/* Active Filter Badge */}
-        {selectedCity ? (
-          <View style={[styles.activeFilterBanner, { backgroundColor: theme.accentBlue + '15', borderColor: theme.accentBlue + '40' }]}>
-            <Ionicons name="location-outline" size={14} color={theme.accentBlue} />
-            <Text style={[styles.activeFilterText, { color: theme.accentBlue }]}>
-              Filtered by: <Text style={{ fontWeight: '700' }}>{selectedCity}</Text>
+          <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.statNumber, { color: theme.accentBlue }]}>
+              {assets.reduce((sum, a) => sum + (a.asset_count || 0), 0)}
             </Text>
+            <Text style={[styles.statLabel, { color: theme.textSub }]}>Total Count</Text>
           </View>
-        ) : null}
+        </View>
       </View>
     );
   };
@@ -263,31 +215,20 @@ export const AssetList: React.FC<AssetListProps> = ({
       }
       ListEmptyComponent={!loading ? renderEmptyState : null}
       ListHeaderComponent={renderListHeader}
-      stickyHeaderIndices={assets.length > 0 ? [0] : undefined}
     />
   );
 };
 
 const styles = StyleSheet.create({
-  listContainer: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
+  listContainer: { padding: 16, paddingBottom: 32 },
+  emptyListContainer: { flexGrow: 1, justifyContent: 'center' },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
     marginBottom: 16,
-    gap: 12,
   },
-  statsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-  },
+  statsContainer: { flex: 1, flexDirection: 'row', gap: 12 },
   statBox: {
     flex: 1,
     padding: 16,
@@ -299,51 +240,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    gap: 4,
-    minWidth: 48,
-    alignSelf: 'stretch',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  filterActiveText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-    maxWidth: 70,
-  },
-  activeFilterBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  activeFilterText: {
-    fontSize: 13,
-  },
+  statNumber: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
+  statLabel: { fontSize: 12, fontWeight: '500' },
   assetCard: {
     flexDirection: 'row',
     borderRadius: 16,
@@ -363,9 +261,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  assetInfo: {
-    flex: 1,
-  },
+  assetInfo: { flex: 1 },
   assetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -379,11 +275,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  assetName: {
-    fontSize: 18,
-    fontWeight: '600',
-    maxWidth: '60%',
-  },
+  assetName: { fontSize: 18, fontWeight: '600', maxWidth: '60%' },
   locationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -392,10 +284,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 4,
   },
-  locationText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  locationText: { fontSize: 12, fontWeight: '500' },
   deleteButton: {
     width: 36,
     height: 36,
@@ -404,54 +293,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
-  typeContainer: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
     gap: 6,
   },
-  assetType: {
-    fontSize: 14,
-    flex: 1,
-  },
+  metaText: { fontSize: 14, flex: 1 },
   descriptionContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 8,
     gap: 6,
   },
-  assetDescription: {
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
-  },
+  assetDescription: { fontSize: 14, flex: 1, lineHeight: 20 },
   assetFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
   },
-  countContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  assetCount: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  countNumber: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dateText: {
-    fontSize: 11,
-  },
+  countContainer: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  assetCount: { fontSize: 14, fontWeight: '500' },
+  countNumber: { fontSize: 16, fontWeight: '700' },
+  dateContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dateText: { fontSize: 11 },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -466,18 +332,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubText: {
-    fontSize: 14,
-    textAlign: 'center',
-    maxWidth: 250,
-    lineHeight: 20,
-  },
+  emptyText: { fontSize: 20, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  emptySubText: { fontSize: 14, textAlign: 'center', maxWidth: 250, lineHeight: 20 },
   errorIconContainer: {
     width: 120,
     height: 120,
@@ -486,23 +342,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  errorText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-  },
+  errorText: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
+  retryButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+  retryButtonText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  loadingText: { marginTop: 16, fontSize: 16 },
 });

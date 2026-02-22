@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,22 +19,32 @@ interface CreateAssetModalProps {
   onClose: () => void;
   onSubmit: (data: AssetFormData) => Promise<boolean>;
   isDark?: boolean;
+  city?: string;
 }
+
+const EMPTY_FORM = (city: string): AssetFormData => ({
+  asset_name: '',
+  asset_type: '',
+  asset_description: '',
+  asset_count: '',
+  asset_serial: '',
+  city,
+});
 
 export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
   visible,
   onClose,
   onSubmit,
   isDark = false,
+  city = '',
 }) => {
-  const [formData, setFormData] = useState<AssetFormData>({
-    asset_name: '',
-    asset_type: '',
-    asset_description: '',
-    asset_count: '',
-    asset_serial: '',
-  });
+  const [formData, setFormData] = useState<AssetFormData>(EMPTY_FORM(city));
   const [loading, setLoading] = useState(false);
+
+  // Sync city if it changes externally
+  useEffect(() => {
+    setFormData((prev) => ({ ...prev, city }));
+  }, [city]);
 
   const theme = {
     bgColor: isDark ? '#111a2d' : '#ffffff',
@@ -43,28 +53,39 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: '#008069',
     borderColor: isDark ? '#2a3549' : '#e0e0e0',
+    cityBadgeBg: isDark ? '#1e3a2f' : '#e6f4f1',
   };
 
   const handleSubmit = async () => {
-    if (!formData.asset_name || !formData.asset_type || !formData.asset_count) {
+    if (!formData.asset_name.trim() || !formData.asset_type.trim() || !formData.asset_count) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
 
+    // Auto-append city suffix to asset_name if not already present
+    const suffix = `-${city.toLowerCase()}`;
+    const finalName =
+      city && !formData.asset_name.toLowerCase().endsWith(suffix)
+        ? `${formData.asset_name.trim()}${suffix}`
+        : formData.asset_name.trim();
+
     setLoading(true);
-    const success = await onSubmit(formData);
+    const success = await onSubmit({
+      ...formData,
+      asset_name: finalName,
+      city,
+    });
     setLoading(false);
 
     if (success) {
-      setFormData({
-        asset_name: '',
-        asset_type: '',
-        asset_description: '',
-        asset_count: '',
-        asset_serial: '',
-      });
+      setFormData(EMPTY_FORM(city));
       onClose();
     }
+  };
+
+  const handleClose = () => {
+    setFormData(EMPTY_FORM(city));
+    onClose();
   };
 
   return (
@@ -72,66 +93,80 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalContainer}
       >
         <View style={[styles.modalContent, { backgroundColor: theme.bgColor }]}>
+          {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: theme.textMain }]}>
               Create New Asset
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={handleClose}>
               <Ionicons name="close" size={24} color={theme.textSub} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: theme.textMain }]}>
-              Serial Number
-            </Text>
-            <TextInput
-              style={[styles.input, { 
-                backgroundColor: theme.modalBg,
-                color: theme.textMain,
-                borderColor: theme.borderColor,
-              }]}
-              placeholder="e.g., SN-123456"
-              placeholderTextColor={theme.textSub}
-              value={formData.asset_serial}
-              onChangeText={(text) => setFormData({ ...formData, asset_serial: text })}
-            />
-          </View>
+          {/* City badge — read-only */}
+          {city ? (
+            <View style={[styles.cityBadge, { backgroundColor: theme.cityBadgeBg }]}>
+              <Ionicons name="location" size={16} color={theme.accentBlue} />
+              <Text style={[styles.cityBadgeText, { color: theme.accentBlue }]}>
+                {city}
+              </Text>
+            </View>
+          ) : null}
 
           <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Serial Number */}
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: theme.textMain }]}>Serial Number</Text>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.modalBg,
+                  color: theme.textMain,
+                  borderColor: theme.borderColor,
+                }]}
+                placeholder="e.g., SN-123456"
+                placeholderTextColor={theme.textSub}
+                value={formData.asset_serial}
+                onChangeText={(t) => setFormData({ ...formData, asset_serial: t })}
+              />
+            </View>
+
+            {/* Asset Name */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>
                 Asset Name <Text style={styles.required}>*</Text>
               </Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
                 }]}
-                placeholder="e.g., laptop-bangalore"
+                placeholder="e.g., Laptop, Printer"
                 placeholderTextColor={theme.textSub}
                 value={formData.asset_name}
-                onChangeText={(text) => setFormData({ ...formData, asset_name: text })}
+                onChangeText={(t) => setFormData({ ...formData, asset_name: t })}
               />
-              <Text style={[styles.hint, { color: theme.textSub }]}>
-                Include location with hyphen (e.g., laptop-bangalore)
-              </Text>
+              {city ? (
+                <Text style={[styles.hint, { color: theme.textSub }]}>
+                  Will be saved as "{formData.asset_name || 'name'}-{city.toLowerCase()}"
+                </Text>
+              ) : null}
             </View>
 
+            {/* Asset Type */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>
                 Asset Type <Text style={styles.required}>*</Text>
               </Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -139,16 +174,15 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
                 placeholder="e.g., Laptop, Printer, Monitor"
                 placeholderTextColor={theme.textSub}
                 value={formData.asset_type}
-                onChangeText={(text) => setFormData({ ...formData, asset_type: text })}
+                onChangeText={(t) => setFormData({ ...formData, asset_type: t })}
               />
             </View>
 
+            {/* Description */}
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: theme.textMain }]}>
-                Description
-              </Text>
+              <Text style={[styles.label, { color: theme.textMain }]}>Description</Text>
               <TextInput
-                style={[styles.input, styles.textArea, { 
+                style={[styles.input, styles.textArea, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -156,18 +190,19 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
                 placeholder="Enter asset description"
                 placeholderTextColor={theme.textSub}
                 value={formData.asset_description}
-                onChangeText={(text) => setFormData({ ...formData, asset_description: text })}
+                onChangeText={(t) => setFormData({ ...formData, asset_description: t })}
                 multiline
                 numberOfLines={3}
               />
             </View>
 
+            {/* Asset Count */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>
                 Asset Count <Text style={styles.required}>*</Text>
               </Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -175,23 +210,22 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
                 placeholder="Enter quantity"
                 placeholderTextColor={theme.textSub}
                 value={formData.asset_count.toString()}
-                onChangeText={(text) => setFormData({ ...formData, asset_count: text })}
+                onChangeText={(t) => setFormData({ ...formData, asset_count: t })}
                 keyboardType="numeric"
               />
             </View>
           </ScrollView>
 
+          {/* Footer */}
           <View style={styles.modalFooter}>
             <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onClose}
+              style={[styles.button, styles.cancelButton, { borderColor: theme.borderColor }]}
+              onPress={handleClose}
             >
-              <Text style={[styles.buttonText, { color: theme.textMain }]}>
-                Cancel
-              </Text>
+              <Text style={[styles.buttonText, { color: theme.textMain }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.button, styles.submitButton, { backgroundColor: theme.accentBlue }]}
+              style={[styles.button, { backgroundColor: theme.accentBlue }]}
               onPress={handleSubmit}
               disabled={loading}
             >
@@ -210,7 +244,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
     borderTopLeftRadius: 24,
@@ -222,11 +256,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '600',
+  },
+  cityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+    gap: 6,
+  },
+  cityBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   formGroup: {
     marginBottom: 16,
@@ -260,21 +308,17 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+    gap: 12,
   },
   button: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 6,
   },
   cancelButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  submitButton: {
-    backgroundColor: '#008069',
   },
   buttonText: {
     fontSize: 16,
