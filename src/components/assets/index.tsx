@@ -14,6 +14,7 @@ import { ExcelUploadModal } from './components/ExcelUploadModal';
 import { useAssets } from './hooks/useAssets';
 import { Asset, AssetFormData } from './types/asset.types';
 import { DeleteAssetModal } from './components/DeleteAssetModal';
+import { AssetCitySelection } from './components/CitySelection';
 
 interface AssetModuleProps {
   onBack: () => void;
@@ -21,6 +22,8 @@ interface AssetModuleProps {
 }
 
 export default function AssetModule({ onBack, isDark = false }: AssetModuleProps) {
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+
   const {
     assets,
     filteredAssets,
@@ -34,7 +37,7 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
     createAsset,
     updateAsset,
     deleteAsset,
-  } = useAssets();
+  } = useAssets(selectedCity ?? '');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -42,12 +45,23 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
-  const [selectedCity, setSelectedCity] = useState<string>('');
 
   const theme = {
     bgColor: isDark ? '#050b18' : '#ece5dd',
   };
 
+  // ─── City not yet chosen → show city picker ───────────────────────────────
+  if (!selectedCity) {
+    return (
+      <AssetCitySelection
+        onCitySelect={(city) => setSelectedCity(city)}
+        onBack={onBack}
+        isDark={isDark}
+      />
+    );
+  }
+
+  // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleAssetPress = (asset: Asset) => {
     setSelectedAsset(asset);
     setShowUpdateModal(true);
@@ -75,14 +89,14 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
         const success = await createAsset(asset);
         if (success) successCount++;
         else errorCount++;
-      } catch (error) {
+      } catch {
         errorCount++;
       }
     }
 
     Alert.alert(
       'Upload Complete',
-      `Successfully uploaded: ${successCount}\nFailed: ${errorCount}`
+      `Successfully uploaded: ${successCount}\nFailed: ${errorCount}`,
     );
   };
 
@@ -90,11 +104,12 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
     fetchAssets();
   };
 
-  const handleCityFilter = (city: string) => {
-    setSelectedCity(city);
-    setFilters({ ...filters, city });
+  // Go back to city selection instead of exiting the module entirely
+  const handleBackToCity = () => {
+    setSelectedCity(null);
   };
 
+  // ─── Main asset list UI ───────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bgColor }]}>
       <StatusBar
@@ -103,14 +118,14 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
       />
 
       <AssetHeader
-        title="Asset Management"
-        onBack={onBack}
+        title={`Assets · ${selectedCity}`}
+        onBack={handleBackToCity}
         onSearch={(query) => setFilters({ ...filters, search: query })}
         searchQuery={filters.search || ''}
         onAddPress={() => setShowCreateModal(true)}
         onUploadPress={() => setShowUploadModal(true)}
         selectedCity={selectedCity}
-        onCityFilter={handleCityFilter}
+        onCityFilter={() => {}}   // no-op – city is set at module level now
         isDark={isDark}
       />
 
@@ -121,6 +136,7 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
         onRefresh={handleRefresh}
         onAssetPress={handleAssetPress}
         onDeletePress={handleDeletePress}
+        selectedCity={selectedCity}
         isDark={isDark}
       />
 
@@ -141,6 +157,7 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
         onClose={() => setShowCreateModal(false)}
         onSubmit={createAsset}
         isDark={isDark}
+        city={selectedCity}
       />
 
       <UpdateAssetModal

@@ -1,10 +1,11 @@
 export interface Asset {
-  id?: number;
+  id: number;
   asset_name: string;
   asset_type: string;
   asset_description?: string;
   asset_count: number;
-  asset_serial?: string;
+  asset_serial?: string;  
+  city?: string;       
   created_at?: string;
 }
 
@@ -12,8 +13,9 @@ export interface AssetFormData {
   asset_name: string;
   asset_type: string;
   asset_description?: string;
-  asset_count: number | string;
-  asset_serial?: string;
+  asset_count: string | number;
+  asset_serial?: string; 
+  city?: string;          
 }
 
 export interface AssetFilters {
