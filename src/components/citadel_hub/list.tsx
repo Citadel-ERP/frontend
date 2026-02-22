@@ -8,7 +8,8 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  RefreshControl
+  RefreshControl,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAvatarColor } from './avatarColors';
@@ -45,7 +46,7 @@ interface ChatRoom {
   room_type: 'direct' | 'group';
   profile_picture?: string;
   admin?: User;
-  members: (User | ChatRoomMember)[]; // ✅ Updated to handle both types
+  members: (User | ChatRoomMember)[];
   last_message_at: string;
   created_at: string;
   is_muted?: boolean;
@@ -63,8 +64,10 @@ interface ListProps {
   onPin: (roomId: number) => void;
   onUnpin: (roomId: number) => void;
   onMarkAsUnread: (roomId: number) => void;
+  onDeleteChat: (roomId: number) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  onStartChat?: () => void;
 }
 
 export const List: React.FC<ListProps> = ({
@@ -76,12 +79,13 @@ export const List: React.FC<ListProps> = ({
   onPin,
   onUnpin,
   onMarkAsUnread,
+  onDeleteChat,
   onRefresh,
+  onStartChat,
   isRefreshing = false,
 }) => {
   const [contextMenuRoom, setContextMenuRoom] = useState<number | null>(null);
 
-  // ✅ Helper to extract User from ChatRoomMember or User
   const getUserFromMember = (member: User | ChatRoomMember): User | null => {
     if (!member) return null;
     if ('first_name' in member && 'last_name' in member) {
@@ -93,19 +97,17 @@ export const List: React.FC<ListProps> = ({
     return null;
   };
 
-  // ✅ FIXED: Properly filters out current user
   const getChatName = (room: ChatRoom) => {
     if (room.room_type === 'group') {
       return room.name || 'Unnamed Group';
     }
 
-    // Find the OTHER user (not current user)
     const currentUserId = currentUser.id || currentUser.employee_id;
 
     const otherMember = room.members.find(m => {
       const user = getUserFromMember(m);
       const userId = user?.id || user?.employee_id;
-      return user && userId !== currentUserId; // ✅ Exclude current user
+      return user && userId !== currentUserId;
     });
 
     const otherUser = getUserFromMember(otherMember!);
@@ -123,7 +125,6 @@ export const List: React.FC<ListProps> = ({
         );
       }
 
-      // ✅ Group placeholder with light background and dark icon
       const colors = getAvatarColor(room.id);
 
       return (
@@ -133,7 +134,6 @@ export const List: React.FC<ListProps> = ({
       );
     }
 
-    // Find the OTHER user (not current user)
     const currentUserId = currentUser.id || currentUser.employee_id;
 
     const otherMember = room.members.find(m => {
@@ -153,7 +153,6 @@ export const List: React.FC<ListProps> = ({
       );
     }
 
-    // ✅ User placeholder with light background and dark initials
     const initials = otherUser
       ? `${otherUser.first_name?.[0] || ''}${otherUser.last_name?.[0] || ''}`.toUpperCase()
       : '?';
@@ -195,6 +194,22 @@ export const List: React.FC<ListProps> = ({
     if (message_type === 'video') return `${senderName}: 🎥 Video`;
 
     return `${senderName}: ${content}`;
+  };
+
+  const handleDeleteChat = (roomId: number) => {
+    setContextMenuRoom(null);
+    Alert.alert(
+      'Delete Chat',
+      'Are you sure you want to delete this chat? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => onDeleteChat(roomId),
+        },
+      ]
+    );
   };
 
   const pinnedCount = chatRooms.filter(r => r.is_pinned).length;
@@ -242,12 +257,9 @@ export const List: React.FC<ListProps> = ({
                 {isPinned && (
                   <Ionicons name="pin" size={16} color="#8696a0" />
                 )}
+                {/* ✅ CHANGED: Show dot only, no count number */}
                 {(room.unread_count || 0) > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>
-                      {room.unread_count}
-                    </Text>
-                  </View>
+                  <View style={styles.unreadDot} />
                 )}
               </View>
             </View>
@@ -257,6 +269,30 @@ export const List: React.FC<ListProps> = ({
     );
   };
 
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconCircle}>
+        <View style={styles.emptyIconInner}>
+          <Ionicons name="chatbubbles-outline" size={52} color="#00a884" />
+        </View>
+      </View>
+      <Text style={styles.emptyTitle}>No chats yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Start a new conversation with your colleagues
+      </Text>
+      <TouchableOpacity
+        style={styles.startChatButton}
+        onPress={onStartChat}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+        <Text style={styles.startChatButtonText}>Start Chat</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const contextRoom = chatRooms.find(r => r.id === contextMenuRoom);
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -264,16 +300,17 @@ export const List: React.FC<ListProps> = ({
         renderItem={renderChatItem}
         keyExtractor={(item) => item.id.toString()}
         style={styles.list}
-        // ✅ ADD REFRESHCONTROL:
+        contentContainerStyle={chatRooms.length === 0 ? styles.emptyListContent : undefined}
+        ListEmptyComponent={renderEmptyState}
         refreshControl={
           onRefresh ? (
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
-              colors={['#00a884']} // Android
-              tintColor="#00a884" // iOS
-              title="Pull to refresh" // iOS
-              titleColor="#00a884" // iOS
+              colors={['#00a884']}
+              tintColor="#00a884"
+              title="Pull to refresh"
+              titleColor="#00a884"
             />
           ) : undefined
         }
@@ -288,6 +325,8 @@ export const List: React.FC<ListProps> = ({
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setContextMenuRoom(null)}>
           <View style={styles.contextMenu}>
+
+            {/* Mark as unread */}
             <TouchableOpacity
               style={styles.contextMenuItem}
               onPress={() => {
@@ -301,7 +340,8 @@ export const List: React.FC<ListProps> = ({
               <Text style={styles.contextMenuText}>Mark as unread</Text>
             </TouchableOpacity>
 
-            {contextMenuRoom && chatRooms.find(r => r.id === contextMenuRoom)?.is_pinned ? (
+            {/* Pin / Unpin */}
+            {contextRoom?.is_pinned ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => {
@@ -314,7 +354,7 @@ export const List: React.FC<ListProps> = ({
               >
                 <Text style={styles.contextMenuText}>Unpin chat</Text>
               </TouchableOpacity>
-            ) : pinnedCount < 5 && (
+            ) : pinnedCount < 5 ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => {
@@ -327,9 +367,10 @@ export const List: React.FC<ListProps> = ({
               >
                 <Text style={styles.contextMenuText}>Pin chat</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
 
-            {contextMenuRoom && chatRooms.find(r => r.id === contextMenuRoom)?.is_muted ? (
+            {/* Mute / Unmute */}
+            {contextRoom?.is_muted ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => {
@@ -357,13 +398,21 @@ export const List: React.FC<ListProps> = ({
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity
-              style={styles.contextMenuItem}
-              onPress={() => setContextMenuRoom(null)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.contextMenuText}>Delete chat</Text>
-            </TouchableOpacity>
+            {/* Delete chat — only for direct chats */}
+            {contextRoom?.room_type === 'direct' && (
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                onPress={() => {
+                  if (contextMenuRoom) {
+                    handleDeleteChat(contextMenuRoom);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.contextMenuText, styles.deleteText]}>Delete chat</Text>
+              </TouchableOpacity>
+            )}
+
           </View>
         </Pressable>
       </Modal>
@@ -377,6 +426,66 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+  },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 80,
+  },
+  emptyIconCircle: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(0, 168, 132, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  emptyIconInner: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(0, 168, 132, 0.14)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#111b21',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#8696a0',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 32,
+  },
+  startChatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00a884',
+    paddingVertical: 13,
+    paddingHorizontal: 32,
+    borderRadius: 28,
+    shadowColor: '#00a884',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  startChatButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   chatItem: {
     flexDirection: 'row',
@@ -399,14 +508,12 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   avatarPlaceholder: {
-    // backgroundColor: '#e9edef',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 18,
     fontWeight: '600',
-    // color: '#ffffff',
   },
   chatInfo: {
     flex: 1,
@@ -445,18 +552,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  unreadBadge: {
+  // ✅ CHANGED: Replaced unreadBadge + unreadBadgeText with a simple dot
+  unreadDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#00a884',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  unreadBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ffffff',
   },
   pinnedDivider: {
     height: 8,
@@ -492,5 +593,8 @@ const styles = StyleSheet.create({
   contextMenuText: {
     fontSize: 14,
     color: '#111b21',
+  },
+  deleteText: {
+    color: '#ef4444',
   },
 });
