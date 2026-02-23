@@ -1492,6 +1492,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       'settings': 'settings',
       'validation': 'validation',
       'notifications': 'notifications',
+      'messages': 'messages',
       'logout': 'dashboard'
     };
 
@@ -1502,6 +1503,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       } else {
         const mobileHandlers: Record<ActivePage, () => void> = {
           'profile': () => setShowProfile(true),
+          'messages': () => setShowChat(true),
           'settings': () => setShowSettings(true),
           'notifications': () => setShowNotifications(true),
           'validation': () => setShowValidation(true),
@@ -1521,7 +1523,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           'hrManager': () => { },
           'hrEmployeeManager': () => { },
           'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy feature will be available soon!'),
-          'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
+          // 'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
           'chat': () => { },
           'chatRoom': () => { },
           // 'asset': () => setShowAsset(true),  // Add this
