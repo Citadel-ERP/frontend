@@ -1665,18 +1665,27 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [handleTyping]);
 
   const handleMessagesRead = useCallback((roomId: number, userId: number) => {
-    const currentUserId = currentUser.id || parseInt(currentUser.employee_id || '0');
-    const readerIsOtherUser = userId !== currentUserId;
+  const currentUserId = String(currentUser.id || currentUser.employee_id);
+  const readerUserId = String(userId);
+  const readerIsOtherUser = readerUserId !== currentUserId;
 
-    if (readerIsOtherUser && selectedChatRoom && selectedChatRoom.id === roomId) {
+  if (readerIsOtherUser) {
+    // Update unread count in chat list regardless of active room
+    setChatRooms(prev => prev.map(room =>
+      room.id === roomId ? { ...room, unread_count: 0 } : room
+    ));
+
+    // Update message tick statuses only if this is the active room
+    if (selectedChatRoom && selectedChatRoom.id === roomId) {
       setMessages(prev => {
         const updated = prev.map(m => {
           const isOwnMessage =
-            (m.sender.id || m.sender.employee_id) ===
-            (currentUser.id || currentUser.employee_id);
+            String(m.sender?.id || m.sender?.employee_id) === currentUserId;
+          const isRealMessage = !String(m.id).startsWith('temp_');
           if (
             isOwnMessage &&
-            (m.status === 'sent' || m.status === 'delivered')
+            isRealMessage &&
+            m.status !== 'read'
           ) {
             return { ...m, status: 'read' as MessageStatus };
           }
@@ -1686,9 +1695,13 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         return updated;
       });
     }
-
-    loadChatRooms();
-  }, [selectedChatRoom, currentUser, saveMessageCache, loadChatRooms]);
+  } else {
+    // Current user read — clear their own unread
+    setChatRooms(prev => prev.map(room =>
+      room.id === roomId ? { ...room, unread_count: 0 } : room
+    ));
+  }
+}, [selectedChatRoom, currentUser, saveMessageCache]);
 
   useEffect(() => {
     handlersRef.current.handleMessagesRead = handleMessagesRead;
@@ -2736,28 +2749,58 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   // ============= HANDLE NEW INCOMING MESSAGES =============
   // When new message arrives via WebSocket, insert it correctly
   const handleNewMessage = useCallback((message: Message) => {
-    if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
-      setMessages(prev => {
-        // Check if message already exists (deduplicate)
-        if (prev.some(m => m.id === message.id)) {
-          return prev;
-        }
-
-        // Add to end (most recent)
-        return [...prev, message];
+  if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
+    setMessages(prev => {
+      // 1. Replace matching temp message (same sender + content + type within 30s)
+      const tempIndex = prev.findIndex(m => {
+        if (!String(m.id).startsWith('temp_')) return false;
+        const isOwnMessage =
+          (m.sender?.id || m.sender?.employee_id) ===
+          (message.sender?.id || message.sender?.employee_id);
+        const sameContent = m.content === message.content;
+        const sameType = m.message_type === message.message_type;
+        const timeDiff = Math.abs(
+          new Date(message.created_at).getTime() - new Date(m.created_at).getTime()
+        );
+        return isOwnMessage && sameContent && sameType && timeDiff < 30000;
       });
 
-      // Update pagination state: we now have newer messages
-      setMessagePagination(prev => ({
-        ...prev,
-        hasMoreNewer: false,  // We're at the latest
-        nextCursor: null,
-      }));
-    }
+      if (tempIndex !== -1) {
+        // Replace temp with real message, preserve read status
+        const updated = [...prev];
+        updated[tempIndex] = { ...message, status: 'sent' as MessageStatus };
+        return updated;
+      }
 
-    // Update chat list
-    loadChatRoomsInitial();  // Refresh to get updated last_message
-  }, [selectedChatRoom, loadChatRoomsInitial]);
+      // 2. Deduplicate by real ID
+      if (prev.some(m => m.id === message.id)) {
+        return prev;
+      }
+
+      // 3. New message from someone else — append
+      return [...prev, { ...message, status: 'sent' as MessageStatus }];
+    });
+
+    setMessagePagination(prev => ({
+      ...prev,
+      hasMoreNewer: false,
+      nextCursor: null,
+    }));
+  }
+
+  // Update chat list unread counts / last message preview
+  setChatRooms(prev => prev.map(room => {
+    if (room.id === message.chat_room) {
+      const isCurrentRoom = selectedChatRoom && room.id === selectedChatRoom.id;
+      return {
+        ...room,
+        last_message_at: message.created_at,
+        unread_count: isCurrentRoom ? 0 : (room.unread_count || 0) + 1,
+      };
+    }
+    return room;
+  }));
+}, [selectedChatRoom]);
 
   // ============= INITIAL LOAD =============
   useEffect(() => {

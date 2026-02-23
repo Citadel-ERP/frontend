@@ -152,6 +152,7 @@ interface ChatProps {
   onMute?: (duration: string) => void;
   onUnmute?: () => void;
   onContactPress?: () => void;
+  onScroll?: (event: any) => void;
 }
 
 const QUICK_REACTIONS = ['😂', '👍', '😢', '❤️', '😮', '🙏', '👏'];
@@ -424,7 +425,8 @@ export const Chat: React.FC<ChatProps> = ({
   onMessageInfo,
   onMute,
   onUnmute,
-  onContactPress
+  onContactPress,
+  onScroll,
 }) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -593,35 +595,32 @@ export const Chat: React.FC<ChatProps> = ({
 
   // Active room tracking via WebSocket
   useEffect(() => {
-    if (!chatRoom?.id) return;
+  if (!chatRoom?.id) return;
+  const isWsReady = ws?.current?.readyState === WebSocket.OPEN;
+  if (!isWsReady) return;
 
-    const isWsReady = ws?.current?.readyState === WebSocket.OPEN;
+  try {
+    ws.current.send(JSON.stringify({
+      action: 'set_active_room',
+      room_id: chatRoom.id
+    }));
+    // ✅ ADD THIS — tell server you've read messages when you open the chat
+    ws.current.send(JSON.stringify({
+      action: 'read_messages',
+      room_id: chatRoom.id
+    }));
+  } catch (error) {
+    console.error('❌ Failed to set active room:', error);
+  }
 
-    if (!isWsReady) {
-      return;
+  return () => {
+    if (ws?.current?.readyState === WebSocket.OPEN) {
+      try {
+        ws.current.send(JSON.stringify({ action: 'clear_active_room' }));
+      } catch (error) {}
     }
-
-    try {
-      ws.current.send(JSON.stringify({
-        action: 'set_active_room',
-        room_id: chatRoom.id
-      }));
-    } catch (error) {
-      console.error('❌ Failed to set active room:', error);
-    }
-
-    return () => {
-      if (ws?.current?.readyState === WebSocket.OPEN) {
-        try {
-          ws.current.send(JSON.stringify({
-            action: 'clear_active_room'
-          }));
-        } catch (error) {
-          console.error('❌ Failed to clear active room:', error);
-        }
-      }
-    };
-  }, [chatRoom?.id]);
+  };
+}, [chatRoom?.id]);
 
   // Animate reaction bar
   useEffect(() => {
@@ -2055,7 +2054,8 @@ export const Chat: React.FC<ChatProps> = ({
         // In Chat component, update FlatList:
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={messagesToDisplay} 
+          keyboardDismissMode="on-drag"
           renderItem={renderMessage}
           keyExtractor={item => item.id.toString()}
           inverted={true}  // Keep inverted
@@ -2070,6 +2070,29 @@ export const Chat: React.FC<ChatProps> = ({
                 <Text style={styles.loadingText}>Loading older messages...</Text>
               </View>
             ) : null
+          }
+          style={[styles.messagesList, { marginBottom: bottomOffset + INPUT_CONTAINER_HEIGHT }]}
+          contentContainerStyle={[
+            styles.messagesContent,
+            {
+              paddingBottom: INPUT_CONTAINER_HEIGHT + bottomOffset + 50,
+            },
+          ]}
+          ListFooterComponent={
+            isLoading || isSearching ? (
+              <View style={styles.loadingIndicator}>
+                <ActivityIndicator size="small" color="#00a884" />
+              </View>
+            ) : null
+          }
+          keyboardShouldPersistTaps="handled"
+           maintainVisibleContentPosition={
+            Platform.OS === 'ios'
+              ? {
+                minIndexForVisible: 0,
+                autoscrollToTopThreshold: 10,
+              }
+              : undefined
           }
         />
       )}
