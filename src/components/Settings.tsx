@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingBottom: 12,
-    marginTop: Platform.OS === 'ios' ? -60 : Platform.OS === 'android' ? -30 : 0,
+    marginTop: Platform.OS === 'ios' ? 0 : Platform.OS === 'android' ? -30 : 0,
   },
   headerContent: {
   flexDirection: 'row',
