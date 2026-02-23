@@ -1285,34 +1285,34 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleSearchTextChange = (text: string) => {
-  setSearchText(text);
-  if (text.trim()) {
-    setSearchOffset(0);
-    setSearchResults([]);  // clear previous results
-    setIsSearching(true);
-    onSearch(text, 0, (results, hasMore) => {
-      setSearchResults(results);
-      setHasMoreSearchResults(hasMore);
+    setSearchText(text);
+    if (text.trim()) {
+      setSearchOffset(0);
+      setSearchResults([]);  // clear previous results
+      setIsSearching(true);
+      onSearch(text, 0, (results, hasMore) => {
+        setSearchResults(results);
+        setHasMoreSearchResults(hasMore);
+        setIsSearching(false);
+      });
+    } else {
+      setSearchResults([]);
       setIsSearching(false);
-    });
-  } else {
-    setSearchResults([]);
-    setIsSearching(false);
-  }
-};
+    }
+  };
 
   const handleSearchLoadMore = () => {
-  if (!isSearching && hasMoreSearchResults && searchText.trim()) {
-    const newOffset = searchOffset + 20;
-    setSearchOffset(newOffset);
-    setIsSearching(true);
-    onSearch(searchText, newOffset, (results, hasMore) => {
-      setSearchResults(prev => [...prev, ...results]);
-      setHasMoreSearchResults(hasMore);
-      setIsSearching(false);
-    });
-  }
-};
+    if (!isSearching && hasMoreSearchResults && searchText.trim()) {
+      const newOffset = searchOffset + 20;
+      setSearchOffset(newOffset);
+      setIsSearching(true);
+      onSearch(searchText, newOffset, (results, hasMore) => {
+        setSearchResults(prev => [...prev, ...results]);
+        setHasMoreSearchResults(hasMore);
+        setIsSearching(false);
+      });
+    }
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -2003,53 +2003,73 @@ export const Chat: React.FC<ChatProps> = ({
           <Text style={styles.searchEmptySubtext}>Try different keywords</Text>
         </View>
       ) : (
+        // <FlatList
+        //   ref={flatListRef}
+        //   data={messagesToDisplay}
+        //   renderItem={renderMessage}
+        //   keyboardDismissMode="on-drag"
+        //   keyExtractor={(item, index) => {
+        //     if (item?.id != null) {
+        //       return item.id.toString();
+        //     }
+        //     return `msg-${index}-${item?.created_at || Date.now()}`;
+        //   }}
+        //   style={[styles.messagesList, { marginBottom: bottomOffset + INPUT_CONTAINER_HEIGHT }]}
+        //   contentContainerStyle={[
+        //     styles.messagesContent,
+        //     {
+        //       paddingBottom: INPUT_CONTAINER_HEIGHT + bottomOffset + 10,
+        //     },
+        //   ]}
+        //   inverted={true}
+        //   onEndReached={isSearchMode ? handleSearchLoadMore : onLoadMore}
+        //   onEndReachedThreshold={0.5}
+        //   onScrollToIndexFailed={(info) => {
+        //     // Fallback: wait a tick then try offset-based scroll
+        //     const wait = new Promise(resolve => setTimeout(resolve, 500));
+        //     wait.then(() => {
+        //       flatListRef.current?.scrollToIndex({
+        //         index: info.index,
+        //         animated: true,
+        //         viewPosition: 0.5,
+        //       });
+        //     });
+        //   }}
+        //   ListFooterComponent={
+        //     isLoading || isSearching ? (
+        //       <View style={styles.loadingIndicator}>
+        //         <ActivityIndicator size="small" color="#00a884" />
+        //       </View>
+        //     ) : null
+        //   }
+        //   keyboardShouldPersistTaps="handled"
+        //   maintainVisibleContentPosition={
+        //     Platform.OS === 'ios'
+        //       ? {
+        //         minIndexForVisible: 0,
+        //         autoscrollToTopThreshold: 10,
+        //       }
+        //       : undefined
+        //   }
+        // />
+        // In Chat component, update FlatList:
         <FlatList
           ref={flatListRef}
-          data={messagesToDisplay}
+          data={messages}
           renderItem={renderMessage}
-          keyboardDismissMode="on-drag"
-          keyExtractor={(item, index) => {
-            if (item?.id != null) {
-              return item.id.toString();
-            }
-            return `msg-${index}-${item?.created_at || Date.now()}`;
-          }}
-          style={[styles.messagesList, { marginBottom: bottomOffset + INPUT_CONTAINER_HEIGHT }]}
-          contentContainerStyle={[
-            styles.messagesContent,
-            {
-              paddingBottom: INPUT_CONTAINER_HEIGHT + bottomOffset + 10,
-            },
-          ]}
-          inverted={true}
-          onEndReached={isSearchMode ? handleSearchLoadMore : onLoadMore}
-          onEndReachedThreshold={0.5}
-          onScrollToIndexFailed={(info) => {
-            // Fallback: wait a tick then try offset-based scroll
-            const wait = new Promise(resolve => setTimeout(resolve, 500));
-            wait.then(() => {
-              flatListRef.current?.scrollToIndex({
-                index: info.index,
-                animated: true,
-                viewPosition: 0.5,
-              });
-            });
-          }}
-          ListFooterComponent={
-            isLoading || isSearching ? (
+          keyExtractor={item => item.id.toString()}
+          inverted={true}  // Keep inverted
+          onScroll={onScroll}  // NEW: Forward scroll
+          scrollEventThrottle={400}  // NEW
+          onEndReached={onLoadMore}  // NEW: Load older when scrolling up
+          onEndReachedThreshold={0.2}  // NEW
+          ListHeaderComponent={  // Header because inverted
+            hasMore && isLoading ? (
               <View style={styles.loadingIndicator}>
                 <ActivityIndicator size="small" color="#00a884" />
+                <Text style={styles.loadingText}>Loading older messages...</Text>
               </View>
             ) : null
-          }
-          keyboardShouldPersistTaps="handled"
-          maintainVisibleContentPosition={
-            Platform.OS === 'ios'
-              ? {
-                minIndexForVisible: 0,
-                autoscrollToTopThreshold: 10,
-              }
-              : undefined
           }
         />
       )}

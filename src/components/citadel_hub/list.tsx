@@ -10,6 +10,7 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAvatarColor } from './avatarColors';
@@ -73,6 +74,10 @@ interface ListProps {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   onStartChat?: () => void;
+  onScroll?: () => void;      // NEW
+  onLoadMore?: () => void;    // NEW
+  hasMore?: boolean;          // NEW
+  isLoadingMore?: boolean;    // NEW
 }
 
 // ── Helper: is this chat actually muted right now (considering expiry) ─────
@@ -95,6 +100,10 @@ export const List: React.FC<ListProps> = ({
   onRefresh,
   onStartChat,
   isRefreshing = false,
+  onScroll,      // NEW
+  onLoadMore,    // NEW
+  hasMore,       // NEW
+  isLoadingMore, // NEW
 }) => {
   const [contextMenuRoom, setContextMenuRoom] = useState<number | null>(null);
   // ── Mute duration sheet state ──────────────────────────────────────────────
@@ -289,18 +298,32 @@ export const List: React.FC<ListProps> = ({
         data={chatRooms}
         renderItem={renderChatItem}
         keyExtractor={item => item.id.toString()}
+        onScroll={onScroll}  // NEW: Forward scroll events
+        scrollEventThrottle={400}  // NEW: Throttle to reduce events
+        onEndReached={onLoadMore}  // NEW: Trigger load more at bottom
+        onEndReachedThreshold={0.1}  // NEW: Trigger when 10% from bottom
         style={styles.list}
         contentContainerStyle={chatRooms.length === 0 ? styles.emptyListContent : undefined}
         ListEmptyComponent={renderEmptyState}
+        // refreshControl={
+        //   onRefresh ? (
+        //     <RefreshControl
+        //       refreshing={isRefreshing}
+        //       onRefresh={onRefresh}
+        //       colors={['#00a884']}
+        //       tintColor="#00a884"
+        //     />
+        //   ) : undefined
+        // }
         refreshControl={
-          onRefresh ? (
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              colors={['#00a884']}
-              tintColor="#00a884"
-            />
-          ) : undefined
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+        }
+        ListFooterComponent={
+          hasMore && isLoadingMore ? (
+            <View style={styles.loadingFooter}>
+              <ActivityIndicator size="small" color="#00a884" />
+            </View>
+          ) : null
         }
       />
 
@@ -444,4 +467,8 @@ const styles = StyleSheet.create({
   sheetOptionText: { fontSize: 16, color: '#111b21' },
   sheetCancel: { borderBottomWidth: 0, marginTop: 8 },
   sheetCancelText: { fontSize: 16, color: '#00a884', fontWeight: '600', textAlign: 'center' },
+  loadingFooter: {  // ← ADD THIS
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
 });

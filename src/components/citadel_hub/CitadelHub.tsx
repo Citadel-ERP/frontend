@@ -45,6 +45,22 @@ export interface User {
   role?: string;
 }
 
+export interface PaginationState {
+  cursor: string | null;
+  hasMore: boolean;
+  isLoading: boolean;
+  isPrefetching: boolean;
+}
+
+export interface MessagePaginationState {
+  nextCursor: string | null;  // For newer messages
+  prevCursor: string | null;  // For older messages
+  hasMoreNewer: boolean;
+  hasMoreOlder: boolean;
+  isLoadingOlder: boolean;
+  isPrefetchingOlder: boolean;
+}
+
 export interface ChatRoomMember {
   id?: number;
   user?: User;
@@ -190,6 +206,29 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [showBlockedContacts, setShowBlockedContacts] = useState(false);
   const [messageInfoTarget, setMessageInfoTarget] = useState<Message | null>(null);
   const [showContactPicker, setShowContactPicker] = useState(false);
+  const [chatListPagination, setChatListPagination] = useState<PaginationState>({
+    cursor: null,
+    hasMore: true,
+    isLoading: false,
+    isPrefetching: false,
+  });
+
+  const [messagePagination, setMessagePagination] = useState<MessagePaginationState>({
+    nextCursor: null,
+    prevCursor: null,
+    hasMoreNewer: false,
+    hasMoreOlder: true,
+    isLoadingOlder: false,
+    isPrefetchingOlder: false,
+  });
+
+  const [searchState, setSearchState] = useState({
+    query: '',
+    results: [] as any[],
+    cursor: null as string | null,
+    hasMore: false,
+    isSearching: false,
+  });
 
 
   // ✅ NEW: Camera state
@@ -208,6 +247,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [isConnected, setIsConnected] = useState(false);
   const pingInterval = useRef<NodeJS.Timeout | null>(null);
   const maxReconnectAttempts = 10;
+  const prefetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollPositionRef = useRef(0);
 
   const isReconnecting = useRef(false);
 
@@ -303,9 +344,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, []);
 
-
-
-  // ✅ NEW: Camera capture handler — sends captured photo/video as a message
   const handleCameraCapture = useCallback((uri: string, type: 'picture' | 'video') => {
     if (!selectedChatRoom) return;
     const messageType = type === 'picture' ? 'image' : 'video';
@@ -403,7 +441,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }, 2000);
   }, [selectedChatRoom, loadChatRooms]);
 
-  // ============= CACHE MANAGEMENT =============
   const loadCache = useCallback(async () => {
     try {
       if (Platform.OS === 'web') return;
@@ -614,7 +651,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [selectedChatRoom]);
 
-  // ============= DATA LOADING FUNCTIONS =============
   const loadMessages = useCallback(async (roomId: number, page: number = 1, useCache: boolean = true) => {
     if (isLoadingMessages) return;
 
@@ -903,8 +939,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [selectedChatRoom, sendContactMessage]);
 
-
-
   const retryPendingActions = useCallback(() => {
     pendingActions.forEach(action => {
       if (action.status === 'pending' || action.status === 'failed') {
@@ -1191,7 +1225,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handlersRef.current.handleMemberRemoved = handleMemberRemoved;
   }, [handleMemberRemoved]);
 
-  // ============= WEBSOCKET CONNECTION =============
   const connectWebSocket = useCallback(() => {
     if (isReconnecting.current) {
       console.log('Already attempting to reconnect...');
@@ -1414,91 +1447,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       setIsRefreshing(false);
     }
   }, [isConnected, loadChatRooms, loadNotifications, connectWebSocket, sendWebSocketMessage]);
-
-  // ============= WEBSOCKET MESSAGE HANDLERS =============
-  const handleNewMessage = useCallback((message: Message) => {
-    console.log('🔥 HANDLE NEW MESSAGE CALLED:', message.id, 'temp_id:', (message as any).temp_id);
-
-    if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
-      setMessages(prev => {
-        const tempId = (message as any).temp_id;
-        let tempIndex = -1;
-
-        if (tempId) {
-          tempIndex = prev.findIndex(m => String(m.id) === String(tempId));
-        }
-
-        if (tempIndex === -1) {
-          tempIndex = prev.findIndex(m => {
-            if (!String(m.id).startsWith('temp_')) return false;
-            const isSameSender =
-              (m.sender.id || m.sender.employee_id) ===
-              (message.sender.id || message.sender.employee_id);
-            const isSameContent = m.content === message.content;
-            const isSameType = m.message_type === message.message_type;
-            const timeDiff = new Date().getTime() - new Date(m.created_at).getTime();
-            return isSameSender && isSameContent && isSameType && timeDiff < 10000;
-          });
-        }
-
-        let updated: Message[];
-
-        if (tempIndex !== -1) {
-          updated = [...prev];
-          updated[tempIndex] = {
-            ...message,
-            status: 'delivered',
-            isUploading: false,
-          };
-        } else {
-          const exists = prev.some(m => m.id === message.id);
-          if (exists) {
-            updated = prev.map(m =>
-              m.id === message.id
-                ? { ...message, status: 'delivered', isUploading: false }
-                : m
-            );
-          } else {
-            const wasPendingDeletion = Array.from(pendingDeletions).some(pid => {
-              const tempMsg = prev.find(m => String(m.id) === pid);
-              if (!tempMsg) return false;
-              const isSameSender =
-                (tempMsg.sender.id || tempMsg.sender.employee_id) ===
-                (message.sender.id || message.sender.employee_id);
-              const isSameContent = tempMsg.content === message.content;
-              const isSameType = tempMsg.message_type === message.message_type;
-              return isSameSender && isSameContent && isSameType;
-            });
-
-            if (wasPendingDeletion) {
-              console.log(`🗑️ Message ${message.id} was pending deletion, deleting now...`);
-              sendWebSocketMessage('delete_message_for_me', { message_id: message.id });
-              updated = prev.filter(m => !String(m.id).startsWith('temp_'));
-            } else {
-              updated = [...prev, { ...message, status: 'delivered', isUploading: false }];
-            }
-          }
-        }
-
-        updated = updated.sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-        saveMessageCache(selectedChatRoom.id, updated);
-        return updated;
-      });
-
-      if (isConnected && ws.current?.readyState === WebSocket.OPEN) {
-        sendWebSocketMessage('read_messages', { room_id: selectedChatRoom.id });
-      }
-    }
-
-    loadChatRooms();
-    loadNotifications();
-  }, [selectedChatRoom, currentUser, isConnected, pendingDeletions, saveMessageCache, loadChatRooms, loadNotifications, sendWebSocketMessage]);
-
-  useEffect(() => {
-    handlersRef.current.handleNewMessage = handleNewMessage;
-  }, [handleNewMessage]);
 
   const handleMessageEdited = useCallback((message: Message) => {
     setMessages(prev => {
@@ -1766,7 +1714,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handlersRef.current.handleStatusUpdate = handleStatusUpdate;
   }, [handleStatusUpdate]);
 
-  // ============= ACTION HANDLERS WITH OPTIMISTIC UPDATES =============
   const handleDeleteForMe = useCallback((messageId: number) => {
     if (!selectedChatRoom) return;
 
@@ -1907,7 +1854,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     );
   }, [selectedChatRoom, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
 
-  // ============= CHAT MANAGEMENT FUNCTIONS =============
   const createDirectChat = async (employeeId: string) => {
     try {
       const result = await apiCall('createDirectChat', { employee_id: employeeId });
@@ -2057,7 +2003,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     setViewMode('addMember');
   }, []);
 
-  // ============= MESSAGE SENDING =============
   const sendMessage = async (
     content: string,
     messageType: string = 'text',
@@ -2163,7 +2108,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   };
 
-  // ============= RETRY FAILED MESSAGE =============
   const handleRetryMessage = useCallback(async (tempId: string) => {
     if (!selectedChatRoom) return;
 
@@ -2207,7 +2151,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   };
 
-  // ============= FILTERING =============
   const getFilteredChatRooms = useCallback(() => {
     let filtered = [...chatRooms];
     console.log('🔍 Filtering chat rooms with query:', searchQuery, 'and filter type:', filtered);
@@ -2253,7 +2196,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     });
   }, [chatRooms, searchQuery, filterType, currentUser]);
 
-  // ============= EVENT HANDLERS =============
   const handleChatSelect = useCallback((room: ChatRoom) => {
     // Clear unread dot when opening chat
     setChatRooms(prev => prev.map(r =>
@@ -2293,7 +2235,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     });
   }, [selectedChatRoom, sendWebSocketMessage]);
 
-  // ============= EFFECTS =============
   useEffect(() => {
     loadCache();
     loadChatRooms();
@@ -2530,6 +2471,279 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [isConnected, pendingActions, retryPendingActions]);
 
+
+  // NEW CODE FROM HERE
+  const loadChatRoomsInitial = useCallback(async () => {
+    try {
+      setChatListPagination(prev => ({ ...prev, isLoading: true }));
+
+      const result = await apiCall('getChatRooms', {
+        limit: 15,
+        cursor: null,
+      });
+
+      setChatRooms(result.chat_rooms || []);
+      setChatListPagination({
+        cursor: result.next_cursor,
+        hasMore: result.has_more,
+        isLoading: false,
+        isPrefetching: false,
+      });
+    } catch (error) {
+      console.error('Error loading chat rooms:', error);
+      setChatListPagination(prev => ({ ...prev, isLoading: false }));
+    }
+  }, [apiBaseUrl, token]);
+
+  const loadChatRoomsMore = useCallback(async (prefetch: boolean = false) => {
+    if (!chatListPagination.hasMore || chatListPagination.isLoading || chatListPagination.isPrefetching) {
+      return;
+    }
+
+    try {
+      if (prefetch) {
+        setChatListPagination(prev => ({ ...prev, isPrefetching: true }));
+      } else {
+        setChatListPagination(prev => ({ ...prev, isLoading: true }));
+      }
+
+      const result = await apiCall('getChatRooms', {
+        limit: 15,
+        cursor: chatListPagination.cursor,
+      });
+
+      // Merge new rooms, avoiding duplicates
+      setChatRooms(prev => {
+        const existingIds = new Set(prev.map(r => r.id));
+        const newRooms = (result.chat_rooms || []).filter((r: ChatRoom) => !existingIds.has(r.id));
+        return [...prev, ...newRooms];
+      });
+
+      setChatListPagination({
+        cursor: result.next_cursor,
+        hasMore: result.has_more,
+        isLoading: false,
+        isPrefetching: false,
+      });
+    } catch (error) {
+      console.error('Error loading more chat rooms:', error);
+      setChatListPagination(prev => ({ ...prev, isLoading: false, isPrefetching: false }));
+    }
+  }, [chatListPagination, apiBaseUrl, token]);
+
+  // ============= SMART PREFETCH FOR CHAT LIST =============
+  const handleChatListScroll = useCallback((event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    const scrollPercentage = (contentOffset.y + layoutMeasurement.height) / contentSize.height;
+
+    // When user reaches 75%, prefetch next batch in background
+    if (scrollPercentage > 0.75 && chatListPagination.hasMore && !chatListPagination.isPrefetching) {
+      // Debounce prefetch
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current);
+      }
+
+      prefetchTimeoutRef.current = setTimeout(() => {
+        console.log('🔄 Prefetching next batch of chat rooms...');
+        loadChatRoomsMore(true);  // Prefetch = true (no loader)
+      }, 300);
+    }
+
+    // If user scrolls to very bottom AND we haven't prefetched, show loader
+    if ((contentOffset.y + layoutMeasurement.height >= contentSize.height - paddingToBottom)
+      && chatListPagination.hasMore
+      && !chatListPagination.isPrefetching) {
+      loadChatRoomsMore(false);  // Show loader
+    }
+  }, [chatListPagination, loadChatRoomsMore]);
+
+  // ============= MESSAGE PAGINATION =============
+  const loadMessagesInitial = useCallback(async (roomId: number) => {
+    try {
+      const result = await apiCall('getMessages', {
+        chat_room_id: roomId,
+        limit: 50,
+      });
+
+      setMessages((result.messages || []).reverse());
+      setMessagePagination({
+        nextCursor: result.next_cursor,
+        prevCursor: result.prev_cursor,
+        hasMoreNewer: result.has_more_newer,
+        hasMoreOlder: result.has_more_older,
+        isLoadingOlder: false,
+        isPrefetchingOlder: false,
+      });
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  }, [apiBaseUrl, token]);
+
+  const loadMessagesOlder = useCallback(async (prefetch: boolean = false) => {
+    if (!selectedChatRoom ||
+      !messagePagination.hasMoreOlder ||
+      messagePagination.isLoadingOlder ||
+      messagePagination.isPrefetchingOlder) {
+      return;
+    }
+
+    try {
+      if (prefetch) {
+        setMessagePagination(prev => ({ ...prev, isPrefetchingOlder: true }));
+      } else {
+        setMessagePagination(prev => ({ ...prev, isLoadingOlder: true }));
+      }
+
+      const result = await apiCall('getMessages', {
+        chat_room_id: selectedChatRoom.id,
+        limit: 50,
+        before_cursor: messagePagination.prevCursor,
+      });
+
+      // Prepend older messages
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const newMessages = (result.messages || []).filter((m: Message) => !existingIds.has(m.id));
+        return [...newMessages.reverse(), ...prev];
+      });
+
+      setMessagePagination(prev => ({
+        ...prev,
+        prevCursor: result.prev_cursor,
+        hasMoreOlder: result.has_more_older,
+        isLoadingOlder: false,
+        isPrefetchingOlder: false,
+      }));
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+      setMessagePagination(prev => ({ ...prev, isLoadingOlder: false, isPrefetchingOlder: false }));
+    }
+  }, [selectedChatRoom, messagePagination, apiBaseUrl, token]);
+
+  // ============= SMART PREFETCH FOR MESSAGES =============
+  const handleMessageScroll = useCallback((event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+
+    // FlatList is inverted, so scroll to top = scroll up = load older
+    // When contentOffset.y is near 0, user is at the "top" (oldest visible message)
+    const scrollPercentage = contentOffset.y / (contentSize.height - layoutMeasurement.height);
+
+    // When user scrolls up past 25% from top, prefetch older messages
+    if (scrollPercentage < 0.25 && messagePagination.hasMoreOlder && !messagePagination.isPrefetchingOlder) {
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current);
+      }
+
+      prefetchTimeoutRef.current = setTimeout(() => {
+        console.log('🔄 Prefetching older messages...');
+        loadMessagesOlder(true);
+      }, 300);
+    }
+
+    // If user reaches absolute top and we haven't prefetched, show loader
+    if (contentOffset.y <= 10 && messagePagination.hasMoreOlder && !messagePagination.isPrefetchingOlder) {
+      loadMessagesOlder(false);
+    }
+  }, [messagePagination, loadMessagesOlder]);
+
+  // ============= SEARCH IMPLEMENTATION =============
+  const searchChatRooms = useCallback(async (query: string, isInitial: boolean = true) => {
+    if (!query.trim()) {
+      setSearchState({ query: '', results: [], cursor: null, hasMore: false, isSearching: false });
+      return;
+    }
+
+    try {
+      setSearchState(prev => ({ ...prev, isSearching: true }));
+
+      const result = await apiCall('searchChatRooms', {
+        query,
+        limit: 20,
+        cursor: isInitial ? null : searchState.cursor,
+      });
+
+      setSearchState({
+        query,
+        results: isInitial ? result.results : [...searchState.results, ...result.results],
+        cursor: result.next_cursor,
+        hasMore: result.has_more,
+        isSearching: false,
+      });
+    } catch (error) {
+      console.error('Error searching chat rooms:', error);
+      setSearchState(prev => ({ ...prev, isSearching: false }));
+    }
+  }, [searchState, apiBaseUrl, token]);
+
+  const searchMessages = useCallback(async (
+    query: string,
+    roomId: number | null,
+    callback?: (results: Message[], hasMore: boolean) => void
+  ) => {
+    if (!query.trim()) {
+      if (callback) callback([], false);
+      return;
+    }
+
+    try {
+      const result = await apiCall('searchMessages', {
+        query,
+        chat_room_id: roomId,
+        limit: 20,
+      });
+
+      if (callback) {
+        callback(result.results || [], result.has_more);
+      }
+    } catch (error) {
+      console.error('Error searching messages:', error);
+      if (callback) callback([], false);
+    }
+  }, [apiBaseUrl, token]);
+
+  // ============= HANDLE NEW INCOMING MESSAGES =============
+  // When new message arrives via WebSocket, insert it correctly
+  const handleNewMessage = useCallback((message: Message) => {
+    if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
+      setMessages(prev => {
+        // Check if message already exists (deduplicate)
+        if (prev.some(m => m.id === message.id)) {
+          return prev;
+        }
+
+        // Add to end (most recent)
+        return [...prev, message];
+      });
+
+      // Update pagination state: we now have newer messages
+      setMessagePagination(prev => ({
+        ...prev,
+        hasMoreNewer: false,  // We're at the latest
+        nextCursor: null,
+      }));
+    }
+
+    // Update chat list
+    loadChatRoomsInitial();  // Refresh to get updated last_message
+  }, [selectedChatRoom, loadChatRoomsInitial]);
+
+  // ============= INITIAL LOAD =============
+  useEffect(() => {
+    loadChatRoomsInitial();
+  }, [loadChatRoomsInitial]);
+
+  useEffect(() => {
+    if (selectedChatRoom) {
+      loadMessagesInitial(selectedChatRoom.id);
+    }
+  }, [selectedChatRoom?.id]);
+
+  useEffect(() => {
+    handlersRef.current.handleNewMessage = handleNewMessage;
+  }, [handleNewMessage]);
+
+
   // ============= RENDER =============
   return (
     <SafeAreaView style={styles.container}>
@@ -2546,6 +2760,49 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       )}
 
       {!showBlockedContacts && viewMode === 'list' && (
+        // <View style={styles.listView}>
+        //   <Header
+        //     currentUser={currentUser}
+        //     unreadCount={unreadCount}
+        //     onMenuClick={(action) => {
+        //       if (action === 'newGroup') setViewMode('newGroup');
+        //       if (action === 'newChat') setViewMode('newChat');
+        //       if (action === 'blockedContacts') setShowBlockedContacts(true);
+        //     }}
+        //     onBack={() => {
+        //       if (onBack) onBack();
+        //     }}
+        //     onCameraClick={() => { setCameraMode('picture'); setCameraVisible(true); }}
+        //   />
+        //   <SearchAndFilter
+        //     searchQuery={searchQuery}
+        //     onSearchChange={setSearchQuery}
+        //     filterType={filterType}
+        //     onFilterChange={setFilterType}
+        //   />
+        //   <List
+        //     chatRooms={getFilteredChatRooms()}
+        //     currentUser={currentUser}
+        //     onChatSelect={handleChatSelect}
+        //     onMute={(roomId: number, duration: string) => muteChat(roomId, duration)}
+        //     onUnmute={unmuteChat}
+        //     onPin={pinChat}
+        //     onUnpin={unpinChat}
+        //     onMarkAsUnread={markAsUnread}
+        //     onRefresh={handleRefresh}
+        //     isRefreshing={isRefreshing}
+        //     onStartChat={() => setViewMode('newChat')}
+        //     onDeleteChat={handleDeleteChat}
+        //   />
+        //   <TouchableOpacity
+        //     style={styles.fab}
+        //     onPress={() => setViewMode('newChat')}
+        //     activeOpacity={0.8}
+        //   >
+        //     <Ionicons name="chatbubble" size={24} color="#ffffff" />
+        //   </TouchableOpacity>
+        // </View>
+
         <View style={styles.listView}>
           <Header
             currentUser={currentUser}
@@ -2560,25 +2817,29 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             }}
             onCameraClick={() => { setCameraMode('picture'); setCameraVisible(true); }}
           />
+
           <SearchAndFilter
             searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            onSearchChange={(query) => {
+              setSearchQuery(query);
+              if (query.trim()) {
+                searchChatRooms(query, true);
+              }
+            }}
             filterType={filterType}
             onFilterChange={setFilterType}
           />
+
           <List
-            chatRooms={getFilteredChatRooms()}
+            chatRooms={searchQuery ? searchState.results : chatRooms}
             currentUser={currentUser}
             onChatSelect={handleChatSelect}
-            onMute={(roomId: number, duration: string) => muteChat(roomId, duration)}
-            onUnmute={unmuteChat}
-            onPin={pinChat}
-            onUnpin={unpinChat}
-            onMarkAsUnread={markAsUnread}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefreshing}
-            onStartChat={() => setViewMode('newChat')}
-            onDeleteChat={handleDeleteChat}
+            onRefresh={loadChatRoomsInitial}
+            isRefreshing={chatListPagination.isLoading}
+            onScroll={handleChatListScroll}  // NEW: Handle scroll for prefetch
+            onLoadMore={() => loadChatRoomsMore(false)}  // NEW: Explicit load more
+            hasMore={chatListPagination.hasMore}
+            isLoadingMore={chatListPagination.isLoading || chatListPagination.isPrefetching}
           />
           <TouchableOpacity
             style={styles.fab}
@@ -2595,6 +2856,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           chatRoom={selectedChatRoom}
           messages={messages}
           currentUser={currentUser}
+          onScroll={handleMessageScroll}   
           typingUsers={typingUsers[selectedChatRoom.id] || []}
           userStatuses={userStatuses}
           onBack={() => setViewMode('list')}
@@ -2603,10 +2865,14 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onTyping={() => sendWebSocketMessage('typing', { room_id: selectedChatRoom.id })}
           onStopTyping={() => sendWebSocketMessage('stop_typing', { room_id: selectedChatRoom.id })}
           onReact={handleReact}
-          onLoadMore={loadMoreMessages}
-          hasMore={hasMoreMessages}
-          isLoading={isLoadingMessages}
-          onSearch={handleSearch}
+          // onLoadMore={loadMoreMessages}
+          // hasMore={hasMoreMessages}
+          // isLoading={isLoadingMessages}
+          // onSearch={handleSearch}
+          onLoadMore={() => loadMessagesOlder(false)}
+          hasMore={messagePagination.hasMoreOlder}
+          isLoading={messagePagination.isLoadingOlder || messagePagination.isPrefetchingOlder}
+          onSearch={(query, callback) => searchMessages(query, selectedChatRoom.id, callback)}
           onClearChat={handleClearChat}
           onDeleteForMe={handleDeleteForMe}
           onDeleteForEveryone={handleDeleteForEveryone}
@@ -2765,7 +3031,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         />
       )}
 
-      {/* ✅ NEW: CameraRecorder — always mounted, shown/hidden via `visible` prop */}
       <CameraRecorder
         visible={cameraVisible}
         mode={cameraMode}
