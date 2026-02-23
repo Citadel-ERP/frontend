@@ -1349,8 +1349,8 @@ const s = StyleSheet.create({
     lineHeight: 20,
   },
   documentsContainer: { marginBottom: 6, gap: 6 },
-  imageWrapper: { position: 'relative', borderRadius: 8, overflow: 'hidden' },
-  commentImage: { width: 180, height: 130, borderRadius: 8 },
+  imageWrapper: { position: 'relative', borderRadius: 8, overflow: 'hidden', width:'100%'},
+  commentImage: { width: 200, height: 130, borderRadius: 8 },
   imageOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
