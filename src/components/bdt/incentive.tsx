@@ -81,7 +81,7 @@ interface IncentiveData {
   bdt_share: number | null;
   less_tax: number | null;
   final_amount_payable: number | null;
-  status: 'pending' | 'correction' | 'accepted' | 'accepted_by_bdt' | 'payment_raised' | 'paid' | 'completed';
+  status: 'pending' | 'correction' | 'accepted' | 'accepted_by_bdt' | 'payment_raised' | 'paid' | 'completed' | 'payment_confirmation';
   remarks: Remark[];
   city?: string;
   /** Per-user share allocated by BUP for the requesting BDT user. null = not yet set. */
@@ -91,9 +91,9 @@ interface IncentiveData {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const EXPENSE_OPTIONS = [
-  { label: 'Referral',   key: 'referral'    },
+  { label: 'Referral', key: 'referral' },
   { label: 'BD Expenses', key: 'bd_expenses' },
-  { label: 'Goodwill',   key: 'goodwill'    },
+  // { label: 'Goodwill',   key: 'goodwill'    },
 ];
 
 const INTERCITY_CITIES = [
@@ -107,8 +107,8 @@ const hasValue = (v: number | null | undefined): boolean =>
   v !== null && v !== undefined && v !== 0;
 
 /** True when a MyShare object has actual share data set by BUP */
-const shareIsSet = (share: MyShare | null): boolean =>
-  share !== null && hasValue(share.bdt_share);
+const shareIsSet = (share: MyShare | null | undefined): boolean =>
+  share != null && hasValue(share.bdt_share);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -120,25 +120,25 @@ const Incentive: React.FC<IncentiveProps> = ({
   canCreate = false,
   onIncentiveCreated,
 }) => {
-  const [token, setToken]               = useState<string | null>(null);
-  const [loading, setLoading]           = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [incentiveData, setIncentiveData] = useState<IncentiveData | null>(null);
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [showCalculation, setShowCalculation] = useState(false);
-  const [newRemark, setNewRemark]       = useState('');
+  const [newRemark, setNewRemark] = useState('');
   const [addingRemark, setAddingRemark] = useState(false);
 
   // Create-form state
-  const [grossIncome, setGrossIncome]   = useState('');
+  const [grossIncome, setGrossIncome] = useState('');
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
   const [expenseValues, setExpenseValues] = useState<Record<string, string>>({
     referral: '', bd_expenses: '', goodwill: '',
   });
-  const [intercityDeals, setIntercityDeals]     = useState('No');
-  const [showIntercityDD, setShowIntercityDD]   = useState(false);
-  const [selectedCity, setSelectedCity]         = useState('');
-  const [showCityDD, setShowCityDD]             = useState(false);
-  const [customCity, setCustomCity]             = useState('');
+  const [intercityDeals, setIntercityDeals] = useState('No');
+  const [showIntercityDD, setShowIntercityDD] = useState(false);
+  const [selectedCity, setSelectedCity] = useState('');
+  const [showCityDD, setShowCityDD] = useState(false);
+  const [customCity, setCustomCity] = useState('');
 
   // ── Token ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -189,9 +189,9 @@ const Incentive: React.FC<IncentiveProps> = ({
 
         const newSelected = new Set<string>();
         const newValues: Record<string, string> = { referral: '', bd_expenses: '', goodwill: '' };
-        if (inc.referral_amt > 0)  { newSelected.add('referral');    newValues.referral    = fmt(inc.referral_amt.toString()); }
-        if (inc.bdt_expenses > 0)  { newSelected.add('bd_expenses'); newValues.bd_expenses = fmt(inc.bdt_expenses.toString()); }
-        if (inc.goodwill > 0)      { newSelected.add('goodwill');    newValues.goodwill    = fmt(inc.goodwill.toString()); }
+        if (inc.referral_amt > 0) { newSelected.add('referral'); newValues.referral = fmt(inc.referral_amt.toString()); }
+        if (inc.bdt_expenses > 0) { newSelected.add('bd_expenses'); newValues.bd_expenses = fmt(inc.bdt_expenses.toString()); }
+        if (inc.goodwill > 0) { newSelected.add('goodwill'); newValues.goodwill = fmt(inc.goodwill.toString()); }
         setExpenseValues(newValues);
         setSelectedExpenses(newSelected);
         setIntercityDeals(inc.intercity_deals ? 'Yes' : 'No');
@@ -225,10 +225,10 @@ const Incentive: React.FC<IncentiveProps> = ({
 
   // ── Calculate from form ────────────────────────────────────────────────────
   const calcFromForm = () => {
-    const gross      = parseFloat(parse(grossIncome)) || 0;
-    const referral   = expenseValues.referral    ? parseFloat(parse(expenseValues.referral))    : 0;
-    const bdExp      = expenseValues.bd_expenses ? parseFloat(parse(expenseValues.bd_expenses)) : 0;
-    const goodwillAmt = expenseValues.goodwill   ? parseFloat(parse(expenseValues.goodwill))   : 0;
+    const gross = parseFloat(parse(grossIncome)) || 0;
+    const referral = expenseValues.referral ? parseFloat(parse(expenseValues.referral)) : 0;
+    const bdExp = expenseValues.bd_expenses ? parseFloat(parse(expenseValues.bd_expenses)) : 0;
+    const goodwillAmt = expenseValues.goodwill ? parseFloat(parse(expenseValues.goodwill)) : 0;
     const netEarning = gross - referral - bdExp - goodwillAmt;
     const isIntercity = intercityDeals === 'Yes';
     const intercityAmount = isIntercity ? netEarning * 0.5 : netEarning;
@@ -253,25 +253,25 @@ const Incentive: React.FC<IncentiveProps> = ({
       setLoading(true);
       const c = calcFromForm();
       const isIntercity = intercityDeals === 'Yes';
-      const cityToSend  = selectedCity === 'Other' ? customCity : selectedCity;
+      const cityToSend = selectedCity === 'Other' ? customCity : selectedCity;
 
       const res = await fetch(`${BACKEND_URL}/employee/createIncentive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          lead_id:               leadId,
+          lead_id: leadId,
           gross_income_recieved: parse(grossIncome),
-          referral_amt:          expenseValues.referral    ? parse(expenseValues.referral)    : 0,
-          bdt_expenses:          expenseValues.bd_expenses ? parse(expenseValues.bd_expenses) : 0,
-          goodwill:              expenseValues.goodwill    ? parse(expenseValues.goodwill)    : 0,
-          intercity_deals:       isIntercity,
-          intercity_amount:      c.intercityAmount,
-          net_company_earning:   c.netEarning,
+          referral_amt: expenseValues.referral ? parse(expenseValues.referral) : 0,
+          bdt_expenses: expenseValues.bd_expenses ? parse(expenseValues.bd_expenses) : 0,
+          goodwill: 0,
+          intercity_deals: isIntercity,
+          intercity_amount: c.intercityAmount,
+          net_company_earning: c.netEarning,
           // BDT does NOT set share/TDS — BUP will set them per-user later
-          bdt_share:            null,
-          tds_deducted:         null,
-          less_tax:             null,
+          bdt_share: null,
+          tds_deducted: null,
+          less_tax: null,
           final_amount_payable: null,
           city: isIntercity ? cityToSend : null,
         }),
@@ -363,23 +363,23 @@ const Incentive: React.FC<IncentiveProps> = ({
   };
 
   const getStatusColor = (s: string): string => ({
-    pending:          colors.warning,
-    correction:       colors.error,
-    accepted:         colors.success,
-    accepted_by_bdt:  colors.success,
-    payment_raised:   colors.info,
+    pending: colors.warning,
+    correction: colors.error,
+    accepted: colors.success,
+    accepted_by_bdt: colors.success,
+    payment_raised: colors.info,
     payment_confirmation: colors.info,
-    completed:        colors.primary,
+    completed: colors.primary,
   }[s] ?? colors.textSecondary);
 
   const getStatusText = (s: string): string => ({
-    pending:              'Under Review',
-    correction:           'Needs Correction',
-    accepted:             'Accepted',
-    accepted_by_bdt:      'Confirmed by BDT',
-    payment_raised:       'Payment Processing',
+    pending: 'Under Review',
+    correction: 'Needs Correction',
+    accepted: 'Accepted',
+    accepted_by_bdt: 'Confirmed by BDT',
+    payment_raised: 'Payment Processing',
     payment_confirmation: 'Payment Processing',
-    completed:            'Completed',
+    completed: 'Completed',
   }[s] ?? s);
 
   // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -421,7 +421,7 @@ const Incentive: React.FC<IncentiveProps> = ({
    * Conditionally renders either the user's actual share (set by BUP)
    * or a "pending BUP calculation" notice.
    */
-  const MyShareSection = ({ share }: { share: MyShare | null }) => {
+  const MyShareSection = ({ share }: { share: MyShare | null | undefined }) => {
     if (shareIsSet(share)) {
       // BUP has already allocated a share for this user
       return (
@@ -515,9 +515,9 @@ const Incentive: React.FC<IncentiveProps> = ({
           {selectedExpenses.size > 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Expenses</Text>
-              {c.referral  > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>Referral</Text><Text style={s.infoValue}>₹{c.referral.toLocaleString('en-IN')}</Text></View>}
-              {c.bdExp     > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>BD Expenses</Text><Text style={s.infoValue}>₹{c.bdExp.toLocaleString('en-IN')}</Text></View>}
-              {c.goodwillAmt > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>Goodwill</Text><Text style={s.infoValue}>₹{c.goodwillAmt.toLocaleString('en-IN')}</Text></View>}
+              {c.referral > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>Referral</Text><Text style={s.infoValue}>₹{c.referral.toLocaleString('en-IN')}</Text></View>}
+              {c.bdExp > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>BD Expenses</Text><Text style={s.infoValue}>₹{c.bdExp.toLocaleString('en-IN')}</Text></View>}
+              {/* {c.goodwillAmt > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>Goodwill</Text><Text style={s.infoValue}>₹{c.goodwillAmt.toLocaleString('en-IN')}</Text></View>} */}
             </View>
           )}
 
@@ -758,12 +758,12 @@ const Incentive: React.FC<IncentiveProps> = ({
               <Text style={s.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
             </View>
           )}
-          {incentiveData.goodwill > 0 && (
+          {/* {incentiveData.goodwill > 0 && (
             <View style={[s.infoRow, s.dividerRow]}>
               <Text style={s.infoLabel}>Goodwill:</Text>
               <Text style={s.infoValue}>{formatCurrency(incentiveData.goodwill)}</Text>
             </View>
-          )}
+          )} */}
           {incentiveData.bdt_expenses > 0 && (
             <View style={[s.infoRow, s.dividerRow]}>
               <Text style={s.infoLabel}>BD Expenses:</Text>
@@ -807,12 +807,12 @@ const Incentive: React.FC<IncentiveProps> = ({
               <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.bdt_expenses)}</Text>
             </View>
           )}
-          {incentiveData.goodwill > 0 && (
+          {/* {incentiveData.goodwill > 0 && (
             <View style={s.calculationRow}>
               <Text style={s.calculationLabel}>Less: Goodwill</Text>
               <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.goodwill)}</Text>
             </View>
-          )}
+          )} */}
           <View style={[s.calculationRow, s.highlightRow]}>
             <Text style={s.calculationLabelBold}>Net Company Earnings</Text>
             <Text style={s.calculationValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
@@ -884,6 +884,11 @@ const Incentive: React.FC<IncentiveProps> = ({
             <Text style={s.acceptButtonText}>Accept Payment Confirmation</Text>
           </TouchableOpacity>
         )}
+        {incentiveData.status === 'payment_confirmation' && (
+          <TouchableOpacity style={s.acceptButton} onPress={acceptPaymentConfirmation}>
+            <Text style={s.acceptButtonText}>Completed</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -894,93 +899,93 @@ const Incentive: React.FC<IncentiveProps> = ({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container:         { flex: 1, backgroundColor: colors.primary },
-  header:            { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary, marginTop: 30 },
-  headerWithGreen:   { backgroundColor: 'transparent', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
-  greenHeader:       { paddingTop: 80, paddingBottom: 20, paddingHorizontal: spacing.lg },
-  greenHeaderContent:{ marginTop: 0 },
-  backButton:        { padding: spacing.sm, borderRadius: borderRadius.sm },
-  backIcon:          { height: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
-  backArrow:         { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
-  backText:          { color: '#fff', fontSize: 16, marginLeft: 2 },
-  headerTitle:       { fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center', fontSize: 20 },
-  headerSpacer:      { width: 40 },
-  scrollView:        { flex: 1, backgroundColor: colors.backgroundSecondary },
-  card:              { backgroundColor: colors.white, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, ...shadows.md },
-  reviewTitle:       { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
-  sectionTitle:      { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
-  leadName:          { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500' },
-  leadNameLarge:     { fontSize: fontSize.lg, color: colors.text, fontWeight: '600' },
-  cardTitle:         { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
-  statusHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  statusBadge:       { marginTop: -15, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
-  statusText:        { color: colors.white, fontSize: 12, fontWeight: '600' },
-  label:             { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
-  input:             { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.white },
-  expenseInfoText:   { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md, fontStyle: 'italic' },
-  expenseItem:       { marginBottom: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  container: { flex: 1, backgroundColor: colors.primary },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary, marginTop: 30 },
+  headerWithGreen: { backgroundColor: 'transparent', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  greenHeader: { paddingTop: 80, paddingBottom: 20, paddingHorizontal: spacing.lg },
+  greenHeaderContent: { marginTop: 0 },
+  backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
+  backIcon: { height: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
+  backArrow: { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
+  backText: { color: '#fff', fontSize: 16, marginLeft: 2 },
+  headerTitle: { fontWeight: '600', color: colors.white, flex: 1, textAlign: 'center', fontSize: 20 },
+  headerSpacer: { width: 40 },
+  scrollView: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  card: { backgroundColor: colors.white, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, ...shadows.md },
+  reviewTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
+  sectionTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
+  leadName: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500' },
+  leadNameLarge: { fontSize: fontSize.lg, color: colors.text, fontWeight: '600' },
+  cardTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  statusBadge: { marginTop: -15, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
+  statusText: { color: colors.white, fontSize: 12, fontWeight: '600' },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.white },
+  expenseInfoText: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md, fontStyle: 'italic' },
+  expenseItem: { marginBottom: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  checkbox:          { width: 20, height: 20, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
-  checkboxChecked:   { borderColor: colors.primary, backgroundColor: colors.primary },
-  checkmark:         { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
-  expenseLabel:      { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
-  expenseInput:      { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.backgroundSecondary, marginTop: spacing.xs },
-  dropdown:          { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white },
-  dropdownText:      { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
-  dropdownArrow:     { fontSize: fontSize.sm, color: colors.textSecondary },
-  dropdownMenu:      { marginTop: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, backgroundColor: colors.white, ...shadows.sm },
-  dropdownItem:      { paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-  dropdownItemText:  { fontSize: fontSize.md, color: colors.text },
-  selectedText:      { color: colors.primary, fontWeight: '600' },
-  summaryGrid:       { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.backgroundSecondary, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },
-  summaryItem:       { flex: 1, alignItems: 'center' },
-  summaryLabel:      { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs },
-  summaryValue:      { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
+  checkbox: { width: 20, height: 20, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
+  checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
+  checkmark: { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
+  expenseLabel: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  expenseInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.backgroundSecondary, marginTop: spacing.xs },
+  dropdown: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white },
+  dropdownText: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  dropdownArrow: { fontSize: fontSize.sm, color: colors.textSecondary },
+  dropdownMenu: { marginTop: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, backgroundColor: colors.white, ...shadows.sm },
+  dropdownItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dropdownItemText: { fontSize: fontSize.md, color: colors.text },
+  selectedText: { color: colors.primary, fontWeight: '600' },
+  summaryGrid: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.backgroundSecondary, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs },
+  summaryValue: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
   expenseSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
-  badgeYes:          { backgroundColor: colors.success + '20', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.success },
-  badgeNo:           { backgroundColor: colors.textSecondary + '20', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.textSecondary },
-  badgeTextYes:      { fontSize: fontSize.sm, fontWeight: '600', color: colors.success },
-  badgeTextNo:       { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
-  calculationRow:    { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
-  dividerRow:        { borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: spacing.sm },
-  calculationLabel:  { fontSize: fontSize.sm, color: colors.textSecondary, flex: 1 },
-  calculationValue:  { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
-  negativeValue:     { color: colors.error },
-  highlightRow:      { backgroundColor: colors.info + '10', paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, marginVertical: spacing.xs },
+  badgeYes: { backgroundColor: colors.success + '20', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.success },
+  badgeNo: { backgroundColor: colors.textSecondary + '20', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.textSecondary },
+  badgeTextYes: { fontSize: fontSize.sm, fontWeight: '600', color: colors.success },
+  badgeTextNo: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
+  calculationRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dividerRow: { borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: spacing.sm },
+  calculationLabel: { fontSize: fontSize.sm, color: colors.textSecondary, flex: 1 },
+  calculationValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  negativeValue: { color: colors.error },
+  highlightRow: { backgroundColor: colors.info + '10', paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, marginVertical: spacing.xs },
   calculationLabelBold: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600', flex: 1 },
   calculationValueBold: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
-  finalRow:          { backgroundColor: colors.success + '15', paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, marginTop: spacing.md, borderWidth: 2, borderColor: colors.success },
-  finalLabel:        { fontSize: fontSize.md, color: colors.success, fontWeight: '700', flex: 1 },
-  finalValue:        { fontSize: fontSize.xl, color: colors.success, fontWeight: '700' },
-  pendingBupBox:     { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.warning + '15', borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.warning },
-  pendingBupIcon:    { fontSize: 20 },
-  pendingBupTitle:   { fontSize: fontSize.sm, fontWeight: '700', color: colors.warning, marginBottom: 2 },
+  finalRow: { backgroundColor: colors.success + '15', paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, marginTop: spacing.md, borderWidth: 2, borderColor: colors.success },
+  finalLabel: { fontSize: fontSize.md, color: colors.success, fontWeight: '700', flex: 1 },
+  finalValue: { fontSize: fontSize.xl, color: colors.success, fontWeight: '700' },
+  pendingBupBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.warning + '15', borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.warning },
+  pendingBupIcon: { fontSize: 20 },
+  pendingBupTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.warning, marginBottom: 2 },
   pendingBupSubtext: { fontSize: fontSize.xs, color: colors.text, lineHeight: 16 },
-  infoCard:          { backgroundColor: colors.info + '15', marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.info },
-  infoCardTitle:     { fontSize: fontSize.md, fontWeight: '600', color: colors.info, marginBottom: spacing.xs },
-  infoCardText:      { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
-  continueButton:    { paddingVertical: 14, paddingHorizontal: 16, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
+  infoCard: { backgroundColor: colors.info + '15', marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.info },
+  infoCardTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.info, marginBottom: spacing.xs },
+  infoCardText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  continueButton: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
   gradientTouchable: { width: '100%', alignItems: 'center', paddingVertical: 16 },
-  continueButtonText:{ color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  submitButton:      { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, minHeight: 50 },
-  submitBtnTouchable:{ width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md },
-  submitBtnText:     { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  disabledBtn:       { opacity: 0.7 },
-  acceptButton:      { backgroundColor: colors.success, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
-  acceptButtonText:  { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  infoRow:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs },
-  infoLabel:         { fontSize: fontSize.sm, color: colors.textSecondary },
-  infoValue:         { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
-  remarkItem:        { backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.sm },
-  remarkHeader:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
-  remarkAuthor:      { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
-  remarkDate:        { fontSize: fontSize.xs, color: colors.textSecondary },
-  remarkText:        { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
-  remarkInput:       { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, padding: spacing.md, backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md, textAlignVertical: 'top', minHeight: 100 },
-  loadingContainer:  { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary },
-  loadingText:       { marginTop: spacing.md, color: colors.textSecondary, fontSize: fontSize.md },
-  emptyContainer:    { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary, paddingHorizontal: spacing.lg },
-  emptyText:         { color: colors.textSecondary, fontSize: fontSize.md, textAlign: 'center' },
+  continueButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  submitButton: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, minHeight: 50 },
+  submitBtnTouchable: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md },
+  submitBtnText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  disabledBtn: { opacity: 0.7 },
+  acceptButton: { backgroundColor: colors.success, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
+  acceptButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs },
+  infoLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
+  infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  remarkItem: { backgroundColor: colors.backgroundSecondary, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.sm },
+  remarkHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
+  remarkAuthor: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  remarkDate: { fontSize: fontSize.xs, color: colors.textSecondary },
+  remarkText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  remarkInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, padding: spacing.md, backgroundColor: colors.white, fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md, textAlignVertical: 'top', minHeight: 100 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary },
+  loadingText: { marginTop: spacing.md, color: colors.textSecondary, fontSize: fontSize.md },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary, paddingHorizontal: spacing.lg },
+  emptyText: { color: colors.textSecondary, fontSize: fontSize.md, textAlign: 'center' },
 });
 
 export default Incentive;

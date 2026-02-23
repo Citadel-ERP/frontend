@@ -1,6 +1,6 @@
 // bup/incentive.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, TextInput, ActivityIndicator, Platform,
@@ -73,12 +73,11 @@ interface Participant {
   user_id: number;
 }
 
-/** Per-participant share input — only stores the individual's share %, TDS is global */
 interface ParticipantShareInput {
   user_id: number;
   user: UserMinimal;
   is_assigned_user: boolean;
-  bdt_share_percentage: string; // individual
+  bdt_share_percentage: string;
 }
 
 interface IncentiveProps {
@@ -137,7 +136,7 @@ const calcParticipantAmounts = (baseAmount: number, pct: string, tdsPct: string)
   return { shareAmt, tdsAmt, final: shareAmt - tdsAmt };
 };
 
-// ─── ParticipantShareRow (MODULE LEVEL — prevents remount on every keystroke) ──
+// ─── ParticipantShareRow ──────────────────────────────────────────────────
 
 interface ParticipantShareRowProps {
   inp: ParticipantShareInput;
@@ -149,24 +148,16 @@ interface ParticipantShareRowProps {
 }
 
 const ParticipantShareRow: React.FC<ParticipantShareRowProps> = ({
-  inp,
-  index,
-  baseAmount,
-  tdsPct,
-  isEdit,
-  onChangeSharePct,
+  inp, index, baseAmount, tdsPct, isEdit, onChangeSharePct,
 }) => {
   const { shareAmt, tdsAmt, final } = calcParticipantAmounts(
-    baseAmount,
-    inp.bdt_share_percentage,
-    tdsPct
+    baseAmount, inp.bdt_share_percentage, tdsPct
   );
   const hasPreview =
     !!inp.bdt_share_percentage && parseFloat(inp.bdt_share_percentage) > 0;
 
   return (
     <View style={styles.participantRow}>
-      {/* Header */}
       <View style={styles.participantHeader}>
         <View style={styles.participantAvatar}>
           <Text style={styles.participantAvatarText}>
@@ -176,42 +167,30 @@ const ParticipantShareRow: React.FC<ParticipantShareRowProps> = ({
         <View style={{ flex: 1 }}>
           <Text style={styles.participantName}>{inp.user.full_name}</Text>
           <Text style={styles.participantRole}>
-            {inp.is_assigned_user ? '👤 Assigned BDT' : '🤝 Collaborator'}
+            {inp.is_assigned_user ? '👤 Assigned Transaction Team' : '🤝 Collaborator'}
           </Text>
         </View>
       </View>
-
-      {/* Share % input only */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Transaction Share % *</Text>
         <TextInput
           style={styles.input}
           value={inp.bdt_share_percentage}
-          onChangeText={v =>
-            onChangeSharePct(index, v.replace(/[^0-9.]/g, ''), isEdit)
-          }
+          onChangeText={v => onChangeSharePct(index, v.replace(/[^0-9.]/g, ''), isEdit)}
           placeholder="e.g. 60"
           keyboardType="numeric"
           placeholderTextColor={colors.textSecondary}
         />
       </View>
-
-      {/* Live preview */}
       {hasPreview && (
         <View style={styles.calculationPreview}>
           <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>
-              Share ({inp.bdt_share_percentage}%)
-            </Text>
+            <Text style={styles.calculationLabel}>Share ({inp.bdt_share_percentage}%)</Text>
             <Text style={styles.calculationValue}>{fmtCurrency(shareAmt)}</Text>
           </View>
           <View style={styles.calculationRow}>
-            <Text style={styles.calculationLabel}>
-              Less TDS ({tdsPct || '0'}%)
-            </Text>
-            <Text style={[styles.calculationValue, styles.negativeValue]}>
-              − {fmtCurrency(tdsAmt)}
-            </Text>
+            <Text style={styles.calculationLabel}>Less TDS ({tdsPct || '0'}%)</Text>
+            <Text style={[styles.calculationValue, styles.negativeValue]}>− {fmtCurrency(tdsAmt)}</Text>
           </View>
           <View style={[styles.calculationRow, styles.finalRow]}>
             <Text style={styles.finalLabel}>Net Payable</Text>
@@ -236,7 +215,7 @@ const Incentive: React.FC<IncentiveProps> = ({
   const [isCreateMode, setIsCreateMode]   = useState(false);
   const [showReview, setShowReview]       = useState(false);
 
-  // Create-mode: income fields
+  // Create-mode fields
   const [grossIncome, setGrossIncome]           = useState('');
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
   const [expenseValues, setExpenseValues]       = useState<{ [key: string]: string }>({
@@ -247,11 +226,7 @@ const Incentive: React.FC<IncentiveProps> = ({
   const [selectedCity, setSelectedCity]         = useState('');
   const [showCityDD, setShowCityDD]             = useState(false);
   const [customCity, setCustomCity]             = useState('');
-
-  // Shared TDS % (one field for all participants)
   const [globalTdsPercentage, setGlobalTdsPercentage] = useState('');
-
-  // Per-participant share inputs (create mode)
   const [participants, setParticipants]         = useState<Participant[]>([]);
   const [shareInputs, setShareInputs]           = useState<ParticipantShareInput[]>([]);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
@@ -260,6 +235,22 @@ const Incentive: React.FC<IncentiveProps> = ({
   const [editShareInputs, setEditShareInputs]   = useState<ParticipantShareInput[]>([]);
   const [editGlobalTds, setEditGlobalTds]       = useState('');
   const [newRemark, setNewRemark]               = useState('');
+
+  // ── NEW: Editable expense fields for existing incentive (BUP edit mode) ──
+  const [editReferral, setEditReferral]         = useState('');
+  const [editBdExpenses, setEditBdExpenses]     = useState('');
+  const [editGoodwill, setEditGoodwill]         = useState('');
+
+  // ── Derived base amount for edit mode — recomputes live as BUP edits expenses ──
+  const editBaseAmount = useMemo(() => {
+    if (!incentiveData) return 0;
+    const gross    = incentiveData.gross_income_recieved;
+    const referral = parseFloat(parse(editReferral)) || 0;
+    const bdExp    = parseFloat(parse(editBdExpenses)) || 0;
+    const gw       = parseFloat(parse(editGoodwill)) || 0;
+    const net      = gross - referral - bdExp - gw;
+    return incentiveData.intercity_deals ? net * 0.5 : net;
+  }, [incentiveData, editReferral, editBdExpenses, editGoodwill]);
 
   // ── Token ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -330,9 +321,8 @@ const Incentive: React.FC<IncentiveProps> = ({
         setParticipants(parts);
         setShareInputs(
           parts.map(p => ({
-            user_id:              p.user_id,
-            user:                 p.user,
-            is_assigned_user:     p.is_assigned_user,
+            user_id: p.user_id, user: p.user,
+            is_assigned_user: p.is_assigned_user,
             bdt_share_percentage: '',
           }))
         );
@@ -344,9 +334,15 @@ const Incentive: React.FC<IncentiveProps> = ({
     }
   }, [token, leadId]);
 
-  // Pre-populate edit inputs from existing collaborator_shares
+  // ── Build edit inputs from existing incentive ──────────────────────────
   const buildEditShareInputs = useCallback(async (incentive: IncentiveData) => {
     if (!token) return;
+
+    // Pre-fill editable expense fields from the saved incentive
+    setEditReferral(incentive.referral_amt > 0 ? fmt(String(incentive.referral_amt)) : '');
+    setEditBdExpenses(incentive.bdt_expenses > 0 ? fmt(String(incentive.bdt_expenses)) : '');
+    setEditGoodwill(incentive.goodwill > 0 ? fmt(String(incentive.goodwill)) : '');
+
     let parts: Participant[] = [];
     try {
       const res = await fetch(`${BACKEND_URL}/manager/getLeadParticipants`, {
@@ -363,14 +359,12 @@ const Incentive: React.FC<IncentiveProps> = ({
       console.error('buildEditShareInputs participants error', e);
     }
 
-    // Map existing shares by participant user_id
     const sharesByUserId = new Map<number, CollaboratorShare>();
     for (const s of incentive.collaborator_shares || []) {
       const p = parts.find(p => p.user.employee_id === s.user.employee_id);
       if (p) sharesByUserId.set(p.user_id, s);
     }
 
-    // Derive a single global TDS from the first share that has one
     const firstShareWithTds = (incentive.collaborator_shares || []).find(
       s => s.tds_percentage != null
     );
@@ -382,9 +376,8 @@ const Incentive: React.FC<IncentiveProps> = ({
       parts.map(p => {
         const existing = sharesByUserId.get(p.user_id);
         return {
-          user_id:              p.user_id,
-          user:                 p.user,
-          is_assigned_user:     p.is_assigned_user,
+          user_id: p.user_id, user: p.user,
+          is_assigned_user: p.is_assigned_user,
           bdt_share_percentage: existing?.bdt_share_percentage != null
             ? String(existing.bdt_share_percentage)
             : '',
@@ -394,12 +387,7 @@ const Incentive: React.FC<IncentiveProps> = ({
   }, [token, leadId]);
 
   // ── Share input helpers ────────────────────────────────────────────────
-
-  const updateSharePct = useCallback((
-    index: number,
-    value: string,
-    isEdit: boolean
-  ) => {
+  const updateSharePct = useCallback((index: number, value: string, isEdit: boolean) => {
     const setter = isEdit ? setEditShareInputs : setShareInputs;
     setter(prev => {
       const next = [...prev];
@@ -408,8 +396,7 @@ const Incentive: React.FC<IncentiveProps> = ({
     });
   }, []);
 
-  // ── Calculation helpers ────────────────────────────────────────────────
-
+  // ── Calculation helpers (create mode) ─────────────────────────────────
   const calcBaseAmount = (
     gross: number, referral: number, bdExp: number, gw: number, isIntercity: boolean
   ) => {
@@ -418,33 +405,24 @@ const Incentive: React.FC<IncentiveProps> = ({
   };
 
   // ── Validate share inputs ─────────────────────────────────────────────
-
-  const validateShareInputs = (
-    inputs: ParticipantShareInput[],
-    tdsPct: string
-  ): string | null => {
+  const validateShareInputs = (inputs: ParticipantShareInput[], tdsPct: string): string | null => {
     if (inputs.length === 0) return null;
     for (const inp of inputs) {
       if (!inp.bdt_share_percentage || parseFloat(inp.bdt_share_percentage) <= 0) {
         return `Please enter Transaction Team Share % for ${inp.user.full_name}`;
       }
     }
-    if (!tdsPct || parseFloat(tdsPct) < 0) {
-      return 'Please enter a valid TDS %';
-    }
+    if (!tdsPct || parseFloat(tdsPct) < 0) return 'Please enter a valid TDS %';
     return null;
   };
 
   // ── Create incentive ───────────────────────────────────────────────────
-
   const createIncentive = async () => {
     if (!token) return;
     if (!grossIncome) { Alert.alert('Error', 'Please enter gross income'); return; }
-
     for (const expense of selectedExpenses) {
       if (!expenseValues[expense]) {
-        Alert.alert('Error', 'Please enter values for all selected expenses');
-        return;
+        Alert.alert('Error', 'Please enter values for all selected expenses'); return;
       }
     }
     if (intercityDeals === 'Yes' && !selectedCity) {
@@ -453,7 +431,6 @@ const Incentive: React.FC<IncentiveProps> = ({
     if (selectedCity === 'Other' && !customCity.trim()) {
       Alert.alert('Error', 'Please enter city name'); return;
     }
-
     const shareErr = validateShareInputs(shareInputs, globalTdsPercentage);
     if (shareErr) { Alert.alert('Error', shareErr); return; }
 
@@ -470,11 +447,11 @@ const Incentive: React.FC<IncentiveProps> = ({
         base, inp.bdt_share_percentage, String(tdsPct)
       );
       return {
-        user_id:              inp.user_id,
+        user_id: inp.user_id,
         bdt_share_percentage: parseFloat(inp.bdt_share_percentage),
-        tds_percentage:       tdsPct,
-        bdt_share:            shareAmt,
-        tds_deducted:         tdsAmt,
+        tds_percentage: tdsPct,
+        bdt_share: shareAmt,
+        tds_deducted: tdsAmt,
         final_amount_payable: final,
       };
     });
@@ -486,17 +463,14 @@ const Incentive: React.FC<IncentiveProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token,
-          lead_id:              leadId,
+          token, lead_id: leadId,
           gross_income_recieved: parse(grossIncome),
-          referral_amt:         referral,
-          bdt_expenses:         bdExp,
-          goodwill:             gw,
-          intercity_deals:      isIntercity,
-          intercity_amount:     isIntercity ? base : null,
-          net_company_earning:  net,
-          city:                 isIntercity ? cityToSend : null,
-          participant_shares:   participantSharesPayload,
+          referral_amt: referral, bdt_expenses: bdExp, goodwill: gw,
+          intercity_deals: isIntercity,
+          intercity_amount: isIntercity ? base : null,
+          net_company_earning: net,
+          city: isIntercity ? cityToSend : null,
+          participant_shares: participantSharesPayload,
         }),
       });
       if (!res.ok) throw new Error('Failed to create incentive');
@@ -515,20 +489,21 @@ const Incentive: React.FC<IncentiveProps> = ({
   };
 
   // ── Update incentive ───────────────────────────────────────────────────
-
   const updateIncentive = async () => {
     if (!token || !incentiveData) return;
 
     const shareErr = validateShareInputs(editShareInputs, editGlobalTds);
     if (shareErr) { Alert.alert('Error', shareErr); return; }
 
-    const base = (
-      incentiveData.intercity_deals && incentiveData.intercity_amount
-        ? incentiveData.intercity_amount
-        : incentiveData.net_company_earning
-    ) || 0;
+    const tdsPct  = parseFloat(editGlobalTds) || 0;
+    const base    = editBaseAmount; // uses live-computed value
 
-    const tdsPct = parseFloat(editGlobalTds) || 0;
+    // Recompute net_company_earning and intercity_amount from edited expenses
+    const gross   = incentiveData.gross_income_recieved;
+    const referral = parseFloat(parse(editReferral)) || 0;
+    const bdExp   = parseFloat(parse(editBdExpenses)) || 0;
+    const gw      = parseFloat(parse(editGoodwill)) || 0;
+    const net     = gross - referral - bdExp - gw;
 
     const participantSharesPayload = editShareInputs.map(inp => ({
       user_id:              inp.user_id,
@@ -543,9 +518,15 @@ const Incentive: React.FC<IncentiveProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          lead_id:            leadId,
-          remark:             newRemark.trim() || undefined,
-          participant_shares: participantSharesPayload,
+          lead_id: leadId,
+          remark:  newRemark.trim() || undefined,
+          // Updated expense fields
+          referral_amt:        referral,
+          bdt_expenses:        bdExp,
+          goodwill:            gw,
+          net_company_earning: net,
+          intercity_amount:    incentiveData.intercity_deals ? base : null,
+          participant_shares:  participantSharesPayload,
         }),
       });
       if (!res.ok) throw new Error('Failed to update incentive');
@@ -553,7 +534,7 @@ const Incentive: React.FC<IncentiveProps> = ({
       setIncentiveData(data.incentive);
       setNewRemark('');
       await buildEditShareInputs(data.incentive);
-      Alert.alert('Success', 'Incentive updated! BDT will be notified to review.');
+      Alert.alert('Success', 'Incentive updated! Transaction Team member will be notified to review.');
     } catch (e) {
       console.error('updateIncentive error', e);
       Alert.alert('Error', 'Failed to update incentive. Please try again.');
@@ -563,7 +544,6 @@ const Incentive: React.FC<IncentiveProps> = ({
   };
 
   // ── Accept / send for payment ──────────────────────────────────────────
-
   const acceptIncentive = async () => {
     if (!token) return;
     try {
@@ -597,39 +577,29 @@ const Incentive: React.FC<IncentiveProps> = ({
   };
 
   // ── Status helpers ─────────────────────────────────────────────────────
+  const statusColor = (s: string) => ({
+    pending:              colors.warning,
+    correction:           colors.warning,
+    accepted:             colors.success,
+    accepted_by_bdt:      colors.info,
+    payment_confirmation: colors.primary,
+    completed:            colors.success,
+  }[s] ?? colors.textSecondary);
 
-  const statusColor = (s: string) => {
-    const map: Record<string, string> = {
-      pending:              colors.warning,
-      correction:           colors.warning,
-      accepted:             colors.success,
-      accepted_by_bdt:      colors.info,
-      payment_confirmation: colors.primary,
-      completed:            colors.success,
-    };
-    return map[s] ?? colors.textSecondary;
-  };
+  const statusLabel = (s: string) => ({
+    pending:              'Pending BUP Review',
+    correction:           'Awaiting Employee Review',
+    accepted:             'Accepted By BUP',
+    accepted_by_bdt:      'Accepted By Team',
+    payment_confirmation: 'Payment Processing',
+    completed:            'Completed',
+  }[s] ?? s);
 
-  const statusLabel = (s: string) => {
-    const map: Record<string, string> = {
-      pending:              'Pending BUP Review',
-      correction:           'Awaiting BDT Review',
-      accepted:             'Accepted by BUP',
-      accepted_by_bdt:      'Accepted by BDT',
-      payment_confirmation: 'Payment Processing',
-      completed:            'Completed',
-    };
-    return map[s] ?? s;
-  };
-
-  // ── Reusable UI pieces ─────────────────────────────────────────────────
-
-  /** Standard green header bar (matches old component) */
+  // ─── Header components ─────────────────────────────────────────────────
   const GreenHeader = ({ tall = false }) => (
     <LinearGradient
       colors={['#075E54', '#075E54']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
       style={[styles.greenHeader, tall && styles.greenHeaderTall]}
     >
       <View style={styles.greenHeaderContent} />
@@ -639,22 +609,14 @@ const Incentive: React.FC<IncentiveProps> = ({
   const GreenHeaderReviewAndConfirm = ({ tall = false }) => (
     <LinearGradient
       colors={['#075E54', '#075E54']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
       style={[styles.greenHeaderReview, tall && styles.greenHeaderTall]}
     >
       <View style={styles.greenHeaderContent} />
     </LinearGradient>
   );
 
-  /** Back button row — always rendered inside the header view */
-  const HeaderBar = ({
-    title,
-    onBackPress,
-  }: {
-    title: string;
-    onBackPress: () => void;
-  }) => (
+  const HeaderBar = ({ title, onBackPress }: { title: string; onBackPress: () => void }) => (
     <View style={[styles.header, styles.headerWithGreen]}>
       <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
         <View style={styles.backIcon}>
@@ -667,13 +629,7 @@ const Incentive: React.FC<IncentiveProps> = ({
     </View>
   );
 
-  const HeaderBarManagement = ({
-    title,
-    onBackPress,
-  }: {
-    title: string;
-    onBackPress: () => void;
-  }) => (
+  const HeaderBarManagement = ({ title, onBackPress }: { title: string; onBackPress: () => void }) => (
     <View style={[styles.headerManagement, styles.headerWithGreen]}>
       <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
         <View style={styles.backIcon}>
@@ -687,7 +643,6 @@ const Incentive: React.FC<IncentiveProps> = ({
   );
 
   // ─── RENDER: Loading ───────────────────────────────────────────────────
-
   if (loading && !incentiveData && !isCreateMode) {
     return (
       <View style={styles.container}>
@@ -707,7 +662,6 @@ const Incentive: React.FC<IncentiveProps> = ({
   }
 
   // ─── RENDER: Create mode — Review screen ──────────────────────────────
-
   if (isCreateMode && canCreate && showReview) {
     const gross     = parseFloat(parse(grossIncome)) || 0;
     const referral  = parseFloat(parse(expenseValues.referral || '0')) || 0;
@@ -723,15 +677,10 @@ const Incentive: React.FC<IncentiveProps> = ({
           <>
             <StatusBar barStyle="light-content" backgroundColor="#075E54" />
             <GreenHeaderReviewAndConfirm />
-            <HeaderBar
-              title="Review & Confirm"
-              onBackPress={() => setShowReview(false)}
-            />
+            <HeaderBar title="Review & Confirm" onBackPress={() => setShowReview(false)} />
           </>
         )}
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-
-          {/* Summary */}
           <View style={styles.card}>
             <Text style={styles.reviewTitle}>Review Details</Text>
             <Text style={styles.leadName}>Lead: {leadName}</Text>
@@ -753,7 +702,6 @@ const Incentive: React.FC<IncentiveProps> = ({
             </View>
           </View>
 
-          {/* Per-participant breakdown */}
           {shareInputs.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Per-Person Breakdown</Text>
@@ -765,19 +713,15 @@ const Incentive: React.FC<IncentiveProps> = ({
                   <View key={inp.user_id} style={styles.reviewPersonRow}>
                     <Text style={styles.participantName}>{inp.user.full_name}</Text>
                     <Text style={styles.participantRole}>
-                      {inp.is_assigned_user ? 'Assigned BDT' : 'Collaborator'}
+                      {inp.is_assigned_user ? 'Assigned Transaction Team member' : 'Collaborator'}
                     </Text>
                     <View style={styles.calculationRow}>
-                      <Text style={styles.calculationLabel}>
-                        Share ({inp.bdt_share_percentage}%)
-                      </Text>
+                      <Text style={styles.calculationLabel}>Share ({inp.bdt_share_percentage}%)</Text>
                       <Text style={styles.calculationValue}>{fmtCurrency(shareAmt)}</Text>
                     </View>
                     <View style={styles.calculationRow}>
                       <Text style={styles.calculationLabel}>TDS ({tdsPct}%)</Text>
-                      <Text style={[styles.calculationValue, styles.negativeValue]}>
-                        − {fmtCurrency(tdsAmt)}
-                      </Text>
+                      <Text style={[styles.calculationValue, styles.negativeValue]}>− {fmtCurrency(tdsAmt)}</Text>
                     </View>
                     <View style={[styles.calculationRow, styles.finalRow]}>
                       <Text style={styles.finalLabel}>Net Payable</Text>
@@ -791,15 +735,12 @@ const Incentive: React.FC<IncentiveProps> = ({
 
           <LinearGradient
             colors={['#075E54', '#075E54']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.submitButton, submitting && styles.submitButtonDisabled,{width:'90%',marginLeft:20}]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled, { width: '90%', marginLeft: 20 }]}
           >
             <TouchableOpacity
-              onPress={createIncentive}
-              disabled={submitting}
-              style={styles.submitButtonTouchable}
-              activeOpacity={0.8}
+              onPress={createIncentive} disabled={submitting}
+              style={styles.submitButtonTouchable} activeOpacity={0.8}
             >
               {submitting
                 ? <ActivityIndicator color="#fff" size="small" />
@@ -807,7 +748,6 @@ const Incentive: React.FC<IncentiveProps> = ({
               }
             </TouchableOpacity>
           </LinearGradient>
-
           <View style={{ height: 100 }} />
         </ScrollView>
       </View>
@@ -815,7 +755,6 @@ const Incentive: React.FC<IncentiveProps> = ({
   }
 
   // ─── RENDER: Create mode — Form screen ────────────────────────────────
-
   if (isCreateMode && canCreate) {
     const gross     = parseFloat(parse(grossIncome)) || 0;
     const referral  = parseFloat(parse(expenseValues.referral || '0')) || 0;
@@ -827,17 +766,10 @@ const Incentive: React.FC<IncentiveProps> = ({
     const handleContinue = () => {
       if (!grossIncome) { Alert.alert('Error', 'Please enter gross income'); return; }
       for (const k of selectedExpenses) {
-        if (!expenseValues[k]) {
-          Alert.alert('Error', 'Please enter values for all selected expenses');
-          return;
-        }
+        if (!expenseValues[k]) { Alert.alert('Error', 'Please enter values for all selected expenses'); return; }
       }
-      if (isIntercity && !selectedCity) {
-        Alert.alert('Error', 'Please select a city'); return;
-      }
-      if (selectedCity === 'Other' && !customCity.trim()) {
-        Alert.alert('Error', 'Please enter city name'); return;
-      }
+      if (isIntercity && !selectedCity) { Alert.alert('Error', 'Please select a city'); return; }
+      if (selectedCity === 'Other' && !customCity.trim()) { Alert.alert('Error', 'Please enter city name'); return; }
       const shareErr = validateShareInputs(shareInputs, globalTdsPercentage);
       if (shareErr) { Alert.alert('Error', shareErr); return; }
       setShowReview(true);
@@ -853,8 +785,6 @@ const Incentive: React.FC<IncentiveProps> = ({
           </>
         )}
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-
-          {/* Gross income */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Income Details</Text>
             <View style={styles.inputGroup}>
@@ -870,12 +800,9 @@ const Incentive: React.FC<IncentiveProps> = ({
             </View>
           </View>
 
-          {/* Expenses */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Expenses (Optional)</Text>
-            <Text style={styles.expenseInfoText}>
-              Check the expenses that apply and enter their amounts
-            </Text>
+            <Text style={styles.expenseInfoText}>Check the expenses that apply and enter their amounts</Text>
             {EXPENSE_OPTIONS.map(opt => (
               <View key={opt.key} style={styles.expenseItem}>
                 <TouchableOpacity
@@ -892,9 +819,7 @@ const Incentive: React.FC<IncentiveProps> = ({
                   }}
                 >
                   <View style={[styles.checkbox, selectedExpenses.has(opt.key) && styles.checkboxChecked]}>
-                    {selectedExpenses.has(opt.key) && (
-                      <Text style={styles.checkmark}>✓</Text>
-                    )}
+                    {selectedExpenses.has(opt.key) && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                   <Text style={styles.expenseLabel}>{opt.label}</Text>
                 </TouchableOpacity>
@@ -902,9 +827,7 @@ const Incentive: React.FC<IncentiveProps> = ({
                   <TextInput
                     style={styles.expenseInput}
                     value={expenseValues[opt.key]}
-                    onChangeText={v =>
-                      setExpenseValues(prev => ({ ...prev, [opt.key]: fmt(v) }))
-                    }
+                    onChangeText={v => setExpenseValues(prev => ({ ...prev, [opt.key]: fmt(v) }))}
                     placeholder="Enter amount"
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
@@ -914,14 +837,10 @@ const Incentive: React.FC<IncentiveProps> = ({
             ))}
           </View>
 
-          {/* Intercity */}
           <View style={styles.card}>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Intercity Deal? *</Text>
-              <TouchableOpacity
-                style={styles.dropdown}
-                onPress={() => setShowIntercityDD(prev => !prev)}
-              >
+              <TouchableOpacity style={styles.dropdown} onPress={() => setShowIntercityDD(prev => !prev)}>
                 <Text style={styles.dropdownText}>{intercityDeals}</Text>
                 <Text style={styles.dropdownArrow}>{showIntercityDD ? '▲' : '▼'}</Text>
               </TouchableOpacity>
@@ -929,8 +848,7 @@ const Incentive: React.FC<IncentiveProps> = ({
                 <View style={styles.dropdownMenu}>
                   {['Yes', 'No'].map(opt => (
                     <TouchableOpacity
-                      key={opt}
-                      style={styles.dropdownItem}
+                      key={opt} style={styles.dropdownItem}
                       onPress={() => {
                         setIntercityDeals(opt);
                         setShowIntercityDD(false);
@@ -949,10 +867,7 @@ const Incentive: React.FC<IncentiveProps> = ({
             {intercityDeals === 'Yes' && (
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>City *</Text>
-                <TouchableOpacity
-                  style={styles.dropdown}
-                  onPress={() => setShowCityDD(prev => !prev)}
-                >
+                <TouchableOpacity style={styles.dropdown} onPress={() => setShowCityDD(prev => !prev)}>
                   <Text style={styles.dropdownText}>{selectedCity || 'Select a city'}</Text>
                   <Text style={styles.dropdownArrow}>{showCityDD ? '▲' : '▼'}</Text>
                 </TouchableOpacity>
@@ -960,8 +875,7 @@ const Incentive: React.FC<IncentiveProps> = ({
                   <View style={styles.dropdownMenu}>
                     {INTERCITY_CITIES.map(city => (
                       <TouchableOpacity
-                        key={city}
-                        style={styles.dropdownItem}
+                        key={city} style={styles.dropdownItem}
                         onPress={() => {
                           setSelectedCity(city);
                           setShowCityDD(false);
@@ -988,17 +902,12 @@ const Incentive: React.FC<IncentiveProps> = ({
             )}
           </View>
 
-          {/* Transaction Team Share Distribution */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Transaction Team Share Distribution</Text>
             <Text style={styles.expenseInfoText}>
               Set the share % for each participant. A single TDS % applies to all.
-              {base > 0
-                ? ` Base amount: ₹${base.toLocaleString('en-IN')}`
-                : ''}
+              {base > 0 ? ` Base amount: ₹${base.toLocaleString('en-IN')}` : ''}
             </Text>
-
-            {/* ── Global TDS — ONE field for everyone ── */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>TDS % (applies to all participants) *</Text>
               <TextInput
@@ -1010,8 +919,6 @@ const Incentive: React.FC<IncentiveProps> = ({
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
-
-            {/* ── Per-participant share % ── */}
             {loadingParticipants ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} />
             ) : shareInputs.length === 0 ? (
@@ -1019,13 +926,9 @@ const Incentive: React.FC<IncentiveProps> = ({
             ) : (
               shareInputs.map((inp, idx) => (
                 <ParticipantShareRow
-                  key={inp.user_id}
-                  inp={inp}
-                  index={idx}
-                  baseAmount={base}
-                  tdsPct={globalTdsPercentage}
-                  isEdit={false}
-                  onChangeSharePct={updateSharePct}
+                  key={inp.user_id} inp={inp} index={idx}
+                  baseAmount={base} tdsPct={globalTdsPercentage}
+                  isEdit={false} onChangeSharePct={updateSharePct}
                 />
               ))
             )}
@@ -1033,27 +936,24 @@ const Incentive: React.FC<IncentiveProps> = ({
 
           <LinearGradient
             colors={['#075E54', '#075E54']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={styles.continueButton}
           >
             <TouchableOpacity
               onPress={handleContinue}
-              style={[styles.gradientTouchable,{ alignItems: 'center', paddingTop:5,paddingBottom:5 }]}
+              style={[styles.gradientTouchable, { alignItems: 'center', paddingTop: 5, paddingBottom: 5 }]}
               activeOpacity={0.8}
             >
               <Text style={styles.continueButtonText}>Continue to Review</Text>
             </TouchableOpacity>
           </LinearGradient>
-
           <View style={{ height: 100 }} />
         </ScrollView>
       </View>
     );
   }
 
-  // ─── RENDER: No incentive (canCreate = false) ──────────────────────────
-
+  // ─── RENDER: No incentive ──────────────────────────────────────────────
   if (!incentiveData) {
     return (
       <View style={styles.container}>
@@ -1072,13 +972,6 @@ const Incentive: React.FC<IncentiveProps> = ({
   }
 
   // ─── RENDER: Main incentive view ───────────────────────────────────────
-
-  const baseForEdit = (
-    incentiveData.intercity_deals && incentiveData.intercity_amount
-      ? incentiveData.intercity_amount
-      : incentiveData.net_company_earning
-  ) || 0;
-
   const canEditShares =
     incentiveData.status === 'pending' || incentiveData.status === 'correction';
 
@@ -1088,16 +981,13 @@ const Incentive: React.FC<IncentiveProps> = ({
         <>
           <StatusBar barStyle="light-content" backgroundColor="#075E54" />
           <GreenHeader />
-          <HeaderBarManagement
-            title="Incentive Management"
-            onBackPress={onBack}
-          />
+          <HeaderBarManagement title="Incentive Management" onBackPress={onBack} />
         </>
       )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
 
-        {/* ── Status Header ──────────────────────────────────────────── */}
+        {/* ── Status Header ── */}
         <View style={styles.card}>
           <View style={styles.statusHeader}>
             <Text style={styles.cardTitle}>Lead: {leadName}</Text>
@@ -1106,7 +996,7 @@ const Incentive: React.FC<IncentiveProps> = ({
             </View>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>BDT:</Text>
+            <Text style={styles.infoLabel}>Assigned To:</Text>
             <Text style={styles.infoValue}>{incentiveData.bdt.full_name}</Text>
           </View>
           <View style={styles.infoRow}>
@@ -1119,7 +1009,7 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         </View>
 
-        {/* ── Transaction Details ────────────────────────────────────── */}
+        {/* ── Transaction Details (always read-only summary) ── */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Transaction Details</Text>
           <View style={[styles.infoRow, styles.dividerRow]}>
@@ -1170,20 +1060,72 @@ const Incentive: React.FC<IncentiveProps> = ({
           )}
         </View>
 
-        {/* ── BUP input: set / update per-participant shares ──────────── */}
+        {/* ── BUP edit: set / update per-participant shares + editable expenses ── */}
         {canEditShares && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Set Transaction Share & TDS</Text>
+            <Text style={styles.cardTitle}>Update Incentive Details</Text>
+
+            {/* ── Editable expense amounts ── */}
+            <Text style={[styles.label, { marginBottom: spacing.sm, color: colors.primary }]}>
+              Adjust Expenses
+            </Text>
             <Text style={styles.expenseInfoText}>
-              Set the share % for each participant and a single TDS % for all.
-              {'\n'}Base amount:{' '}
-              <Text style={{ fontWeight: '700' }}>
-                ₹{baseForEdit.toLocaleString('en-IN')}
-              </Text>
+              Gross Income: {fmtCurrency(incentiveData.gross_income_recieved)} (fixed)
+              {'\n'}Edit the deductions below — the base amount updates live.
             </Text>
 
-            {/* Global TDS — single field */}
             <View style={styles.inputGroup}>
+              <Text style={styles.label}>Referral Amount</Text>
+              <TextInput
+                style={styles.input}
+                value={editReferral}
+                onChangeText={v => setEditReferral(fmt(v))}
+                placeholder="0"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>BD Expenses</Text>
+              <TextInput
+                style={styles.input}
+                value={editBdExpenses}
+                onChangeText={v => setEditBdExpenses(fmt(v))}
+                placeholder="0"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Goodwill</Text>
+              <TextInput
+                style={styles.input}
+                value={editGoodwill}
+                onChangeText={v => setEditGoodwill(fmt(v))}
+                placeholder="0"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+
+            {/* Live-updated base amount indicator */}
+            <View style={[styles.highlightRow, { marginBottom: spacing.md }]}>
+              <View style={styles.infoRow}>
+                <Text style={styles.calculationLabelBold}>
+                  {incentiveData.intercity_deals ? 'Intercity Base (50%)' : 'Net Company Earning'}
+                </Text>
+                <Text style={styles.calculationValueBold}>
+                  {fmtCurrency(editBaseAmount)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.dividerRow} />
+
+            {/* Global TDS */}
+            <View style={[styles.inputGroup, { marginTop: spacing.md }]}>
               <Text style={styles.label}>TDS % (applies to all participants) *</Text>
               <TextInput
                 style={styles.input}
@@ -1196,32 +1138,31 @@ const Incentive: React.FC<IncentiveProps> = ({
             </View>
 
             {/* Per-participant share % */}
+            <Text style={[styles.label, { marginBottom: spacing.xs, color: colors.primary }]}>
+              Transaction Team Share Distribution
+            </Text>
             {editShareInputs.length === 0 ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />
             ) : (
               editShareInputs.map((inp, idx) => (
                 <ParticipantShareRow
-                  key={inp.user_id}
-                  inp={inp}
-                  index={idx}
-                  baseAmount={baseForEdit}
+                  key={inp.user_id} inp={inp} index={idx}
+                  baseAmount={editBaseAmount}   // ← uses live value
                   tdsPct={editGlobalTds}
-                  isEdit={true}
-                  onChangeSharePct={updateSharePct}
+                  isEdit={true} onChangeSharePct={updateSharePct}
                 />
               ))
             )}
 
             {/* Optional remark */}
             <View style={[styles.inputGroup, { marginTop: spacing.md }]}>
-              <Text style={styles.label}>Remark for BDT (optional)</Text>
+              <Text style={styles.label}>Remark for Transaction Team (optional)</Text>
               <TextInput
                 style={styles.remarkInput}
                 value={newRemark}
                 onChangeText={setNewRemark}
-                placeholder="Add a note for BDT…"
-                multiline
-                numberOfLines={3}
+                placeholder="Add a note for Transaction team"
+                multiline numberOfLines={3}
                 textAlignVertical="top"
                 placeholderTextColor={colors.textSecondary}
               />
@@ -1229,15 +1170,12 @@ const Incentive: React.FC<IncentiveProps> = ({
 
             <LinearGradient
               colors={['#075E54', '#075E54']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
             >
               <TouchableOpacity
-                onPress={updateIncentive}
-                disabled={submitting}
-                style={styles.submitButtonTouchable}
-                activeOpacity={0.8}
+                onPress={updateIncentive} disabled={submitting}
+                style={styles.submitButtonTouchable} activeOpacity={0.8}
               >
                 {submitting
                   ? <ActivityIndicator color="#fff" size="small" />
@@ -1248,17 +1186,14 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         )}
 
-        {/* ── Existing per-person breakdown (read-only) ──────────────── */}
+        {/* ── Read-only share breakdown (non-editable statuses) ── */}
         {!canEditShares && (incentiveData.collaborator_shares?.length ?? 0) > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Transaction Share Breakdown</Text>
-            {/* Show shared TDS once at the top */}
             {incentiveData.collaborator_shares[0]?.tds_percentage != null && (
               <View style={[styles.infoRow, styles.dividerRow, { marginBottom: spacing.sm }]}>
                 <Text style={styles.infoLabel}>TDS % (all participants)</Text>
-                <Text style={styles.infoValue}>
-                  {incentiveData.collaborator_shares[0].tds_percentage}%
-                </Text>
+                <Text style={styles.infoValue}>{incentiveData.collaborator_shares[0].tds_percentage}%</Text>
               </View>
             )}
             {incentiveData.collaborator_shares.map(share => (
@@ -1272,24 +1207,18 @@ const Incentive: React.FC<IncentiveProps> = ({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.participantName}>{share.user.full_name}</Text>
                     <Text style={styles.participantRole}>
-                      {share.is_assigned_user ? '👤 Assigned BDT' : '🤝 Collaborator'}
+                      {share.is_assigned_user ? '👤 Assigned Employee' : '🤝 Collaborator'}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.calculationPreview}>
                   <View style={styles.calculationRow}>
-                    <Text style={styles.calculationLabel}>
-                      Share ({share.bdt_share_percentage ?? '—'}%)
-                    </Text>
+                    <Text style={styles.calculationLabel}>Share ({share.bdt_share_percentage ?? '—'}%)</Text>
                     <Text style={styles.calculationValue}>{fmtCurrency(share.bdt_share)}</Text>
                   </View>
                   <View style={styles.calculationRow}>
-                    <Text style={styles.calculationLabel}>
-                      Less TDS ({share.tds_percentage ?? '—'}%)
-                    </Text>
-                    <Text style={[styles.calculationValue, styles.negativeValue]}>
-                      − {fmtCurrency(share.tds_deducted)}
-                    </Text>
+                    <Text style={styles.calculationLabel}>Less TDS ({share.tds_percentage ?? '—'}%)</Text>
+                    <Text style={[styles.calculationValue, styles.negativeValue]}>− {fmtCurrency(share.tds_deducted)}</Text>
                   </View>
                   <View style={[styles.calculationRow, styles.finalRow]}>
                     <Text style={styles.finalLabel}>Net Payable</Text>
@@ -1301,7 +1230,6 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         )}
 
-        {/* Pending box when no shares set yet and not in editable state */}
         {!canEditShares &&
           (!incentiveData.collaborator_shares || incentiveData.collaborator_shares.length === 0) && (
           <View style={styles.card}>
@@ -1317,7 +1245,7 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         )}
 
-        {/* ── Remarks ───────────────────────────────────────────────── */}
+        {/* ── Remarks ── */}
         {incentiveData.remarks?.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Remarks ({incentiveData.remarks.length})</Text>
@@ -1333,7 +1261,7 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         )}
 
-        {/* ── Action Buttons ────────────────────────────────────────── */}
+        {/* ── Action Buttons ── */}
         {incentiveData.status === 'accepted_by_bdt' && (
           <TouchableOpacity style={styles.acceptButton} onPress={acceptIncentive}>
             <Text style={styles.acceptButtonText}>Accept Incentive</Text>
@@ -1365,103 +1293,66 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
   scrollView: { flex: 1, backgroundColor: colors.backgroundSecondary },
 
-  // Header (restored from old component)
   greenHeader: {
-    paddingTop: 80,
-    paddingBottom: 0,
-    paddingHorizontal: 20,
+    paddingTop: 80, paddingBottom: 0, paddingHorizontal: 20,
     height: Platform.OS === 'ios' ? 130 : 80,
   },
-  greenHeaderReview:{
-    paddingTop: 80,
-    paddingBottom: 0,
-    paddingHorizontal: 20,
+  greenHeaderReview: {
+    paddingTop: 80, paddingBottom: 0, paddingHorizontal: 20,
     height: Platform.OS === 'ios' ? 130 : 110,
   },
-  greenHeaderTall: {
-    height: Platform.OS === 'ios' ? 150 : 110,
-  },
+  greenHeaderTall: { height: Platform.OS === 'ios' ? 150 : 110 },
   greenHeaderContent: { marginTop: 0, paddingBottom: 30 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.primary,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.lg, backgroundColor: colors.primary,
     marginTop: Platform.OS === 'ios' ? -10 : 0,
     paddingTop: Platform.OS === 'ios' ? 80 : 50,
     paddingBottom: 20,
   },
   headerManagement: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.primary,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.lg, backgroundColor: colors.primary,
     marginTop: Platform.OS === 'ios' ? -10 : -30,
     paddingTop: Platform.OS === 'ios' ? 80 : 50,
     paddingBottom: 20,
   },
   headerWithGreen: {
-    backgroundColor: 'transparent',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    marginBottom: 20,
+    backgroundColor: 'transparent', position: 'absolute',
+    top: 0, left: 0, right: 0, zIndex: 10, marginBottom: 20,
   },
-  headerTitle: {
-    fontWeight: '600',
-    color: '#fff',
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 20,
-  },
+  headerTitle: { fontWeight: '600', color: '#fff', flex: 1, textAlign: 'center', fontSize: 20 },
   headerSpacer: { width: 40 },
-  backButton:  { padding: spacing.sm, borderRadius: borderRadius.sm },
-  backIcon:    { height: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
-  backArrow:   {
-    width: 12, height: 12,
-    borderLeftWidth: 2, borderTopWidth: 2,
-    borderColor: '#fff',
-    transform: [{ rotate: '-45deg' }],
+  backButton: { padding: spacing.sm, borderRadius: borderRadius.sm },
+  backIcon: { height: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
+  backArrow: {
+    width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
+    borderColor: '#fff', transform: [{ rotate: '-45deg' }],
   },
   backText: { color: '#fff', fontSize: 16, marginLeft: 2 },
 
-  // Cards
   card: {
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.xl,
-    ...shadows.md,
+    backgroundColor: colors.white, marginHorizontal: spacing.lg,
+    marginTop: spacing.lg, padding: spacing.lg,
+    borderRadius: borderRadius.xl, ...shadows.md,
   },
-  cardTitle:    { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
-  reviewTitle:  { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
-  leadName:     { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500', marginBottom: spacing.md },
+  cardTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  reviewTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
+  leadName: { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '500', marginBottom: spacing.md },
 
-  // Inputs
   inputGroup: { marginBottom: spacing.md },
-  label: {
-    fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm,
-  },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
   input: {
-    borderWidth: 1, borderColor: colors.border,
-    borderRadius: borderRadius.lg,
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    fontSize: fontSize.md, color: colors.text,
-    backgroundColor: colors.white,
+    fontSize: fontSize.md, color: colors.text, backgroundColor: colors.white,
   },
   remarkInput: {
-    borderWidth: 1, borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    backgroundColor: colors.white,
-    fontSize: fontSize.sm, color: colors.text,
-    textAlignVertical: 'top', minHeight: 80,
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
+    padding: spacing.md, backgroundColor: colors.white,
+    fontSize: fontSize.sm, color: colors.text, textAlignVertical: 'top', minHeight: 80,
   },
 
-  // Expenses
   expenseInfoText: {
     fontSize: fontSize.sm, color: colors.textSecondary,
     marginBottom: spacing.md, fontStyle: 'italic',
@@ -1473,8 +1364,7 @@ const styles = StyleSheet.create({
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   checkbox: {
     width: 20, height: 20, borderWidth: 2, borderColor: colors.border,
-    borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center',
-    marginRight: spacing.sm,
+    borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm,
   },
   checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
   checkmark: { color: '#fff', fontSize: fontSize.md, fontWeight: '700' },
@@ -1486,14 +1376,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundSecondary, marginTop: spacing.xs,
   },
 
-  // Dropdown
   dropdown: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md, paddingVertical: spacing.md,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: colors.white,
   },
-  dropdownText:  { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  dropdownText: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
   dropdownArrow: { fontSize: fontSize.sm, color: colors.textSecondary },
   dropdownMenu: {
     marginTop: spacing.xs, borderWidth: 1, borderColor: colors.border,
@@ -1504,19 +1393,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   dropdownItemText: { fontSize: fontSize.md, color: colors.text },
-  selectedText:     { color: colors.primary, fontWeight: '600' },
+  selectedText: { color: colors.primary, fontWeight: '600' },
 
-  // Summary grid
   summaryGrid: {
     flexDirection: 'row', justifyContent: 'space-between',
     backgroundColor: colors.backgroundSecondary,
     borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md,
   },
-  summaryItem:  { flex: 1, alignItems: 'center' },
+  summaryItem: { flex: 1, alignItems: 'center' },
   summaryLabel: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs },
   summaryValue: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
 
-  // Participant rows
   participantRow: {
     marginTop: spacing.md, paddingTop: spacing.md,
     borderTopWidth: 1, borderTopColor: colors.border,
@@ -1528,10 +1415,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm,
   },
   participantAvatarText: { color: '#fff', fontSize: fontSize.md, fontWeight: '700' },
-  participantName:       { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  participantRole:       { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  participantName: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  participantRole: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
 
-  // Calculation rows
   calculationPreview: {
     backgroundColor: colors.backgroundSecondary,
     padding: spacing.md, borderRadius: borderRadius.lg, marginTop: spacing.sm,
@@ -1540,11 +1426,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  calculationLabel:      { fontSize: fontSize.sm, color: colors.textSecondary, flex: 1 },
-  calculationValue:      { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
-  calculationLabelBold:  { fontSize: fontSize.sm, color: colors.text, fontWeight: '600', flex: 1 },
-  calculationValueBold:  { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
-  negativeValue:         { color: colors.error },
+  calculationLabel: { fontSize: fontSize.sm, color: colors.textSecondary, flex: 1 },
+  calculationValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  calculationLabelBold: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600', flex: 1 },
+  calculationValueBold: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
+  negativeValue: { color: colors.error },
   highlightRow: {
     backgroundColor: colors.info + '10',
     paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, marginVertical: spacing.xs,
@@ -1558,19 +1444,15 @@ const styles = StyleSheet.create({
   finalLabel: { fontSize: fontSize.md, color: colors.success, fontWeight: '700', flex: 1 },
   finalValue: { fontSize: fontSize.lg, color: colors.success, fontWeight: '700' },
 
-  // Review person rows
   reviewPersonRow: {
     marginTop: spacing.md, paddingTop: spacing.md,
     borderTopWidth: 1, borderTopColor: colors.border,
   },
-
-  // Existing share rows (read-only view)
   existingShareRow: {
     marginTop: spacing.md, paddingTop: spacing.md,
     borderTopWidth: 1, borderTopColor: colors.border,
   },
 
-  // Status
   statusHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: spacing.md,
@@ -1581,16 +1463,14 @@ const styles = StyleSheet.create({
   },
   statusText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
-  // Info rows
   infoRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', paddingVertical: spacing.xs,
   },
-  dividerRow:   { borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: spacing.sm },
-  infoLabel:    { fontSize: fontSize.sm, color: colors.textSecondary },
-  infoValue:    { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
+  dividerRow: { borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: spacing.sm },
+  infoLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
+  infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
 
-  // Badges
   intercityBadgeYes: {
     backgroundColor: colors.success + '20', paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md, borderRadius: borderRadius.md,
@@ -1602,38 +1482,34 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.textSecondary,
   },
   intercityTextYes: { fontSize: fontSize.sm, fontWeight: '600', color: colors.success },
-  intercityTextNo:  { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
+  intercityTextNo: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
 
-  // Pending box
   pendingBupBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
     padding: spacing.md, backgroundColor: colors.warning + '15',
     borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.warning,
   },
-  pendingBupIcon:    { fontSize: 20 },
-  pendingBupTitle:   { fontSize: fontSize.sm, fontWeight: '700', color: colors.warning, marginBottom: 2 },
+  pendingBupIcon: { fontSize: 20 },
+  pendingBupTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.warning, marginBottom: 2 },
   pendingBupSubtext: { fontSize: fontSize.xs, color: colors.text, lineHeight: 16 },
 
-  // Remarks
   remarkItem: {
     backgroundColor: colors.backgroundSecondary, padding: spacing.md,
     borderRadius: borderRadius.md, marginBottom: spacing.sm,
   },
   remarkHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
   remarkAuthor: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
-  remarkDate:   { fontSize: fontSize.xs, color: colors.textSecondary },
-  remarkText:   { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  remarkDate: { fontSize: fontSize.xs, color: colors.textSecondary },
+  remarkText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
 
-  // Info card
   infoCard: {
     backgroundColor: colors.info + '15', marginHorizontal: spacing.lg,
     marginTop: spacing.lg, padding: spacing.lg,
     borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.info,
   },
   infoCardTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.info, marginBottom: spacing.xs },
-  infoCardText:  { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
+  infoCardText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
 
-  // Buttons
   continueButton: {
     paddingVertical: 14, paddingHorizontal: 16,
     borderRadius: borderRadius.lg, alignItems: 'center',
@@ -1648,10 +1524,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg, ...shadows.md, minHeight: 50,
   },
   submitButtonTouchable: {
-    width: '100%', alignItems: 'center',
-    justifyContent: 'center', paddingVertical: spacing.md,
+    width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md,
   },
-  submitButtonText:     { color: '#fff', fontSize: fontSize.md, fontWeight: '600' },
+  submitButtonText: { color: '#fff', fontSize: fontSize.md, fontWeight: '600' },
   submitButtonDisabled: { opacity: 0.7 },
 
   acceptButton: {
@@ -1662,7 +1537,6 @@ const styles = StyleSheet.create({
   },
   acceptButtonText: { color: '#fff', fontSize: fontSize.md, fontWeight: '600' },
 
-  // Misc
   loadingContainer: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.backgroundSecondary,

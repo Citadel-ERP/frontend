@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,46 +26,84 @@ interface NewChatProps {
   currentUser: User;
   onBack: () => void;
   onCreate: (employeeId: string) => void;
-  onCreateGroup: () => void; // NEW: Navigation to group creation
+  onCreateGroup: () => void;
   apiCall: (endpoint: string, data: any) => Promise<any>;
 }
+
+const PAGE_SIZE = 50;
 
 export const NewChat: React.FC<NewChatProps> = ({
   currentUser,
   onBack,
   onCreate,
-  onCreateGroup, // NEW
+  onCreateGroup,
   apiCall,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
 
+  // Keep a ref to the latest query so async callbacks can guard against stale results
+  const latestQueryRef = useRef('');
+
+  const fetchUsers = useCallback(
+    async (query: string, nextOffset: number, append: boolean) => {
+      if (nextOffset === 0) {
+        setIsSearching(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      try {
+        const result = await apiCall('searchUsers', {
+          search: query,
+          offset: nextOffset,
+          limit: PAGE_SIZE,
+        });
+
+        // Discard if a newer search has already started
+        if (latestQueryRef.current !== query) return;
+
+        if (result.users) {
+          setUsers(prev => (append ? [...prev, ...result.users] : result.users));
+          setHasMore(result.has_more ?? false);
+          setOffset(nextOffset + result.users.length);
+        }
+      } catch (error) {
+        console.error('Error searching users:', error);
+      } finally {
+        if (nextOffset === 0) setIsSearching(false);
+        else setIsLoadingMore(false);
+      }
+    },
+    [apiCall],
+  );
+
+  // Debounce search so we don't hammer the API on every keystroke
   useEffect(() => {
-    searchUsers();
+    latestQueryRef.current = searchQuery;
+    setOffset(0);
+    setHasMore(false);
+
+    const timer = setTimeout(() => {
+      fetchUsers(searchQuery, 0, false);
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const searchUsers = async () => {
-    setIsSearching(true);
-    try {
-      const result = await apiCall('searchUsers', { search: searchQuery });
-      if (result.users) {
-        setUsers(result.users);
-      }
-    } catch (error) {
-      console.error('Error searching users:', error);
-    } finally {
-      setIsSearching(false);
+  const handleLoadMore = () => {
+    if (!isLoadingMore && hasMore) {
+      fetchUsers(searchQuery, offset, true);
     }
   };
 
-  const handleUserSelect = (user: User) => {
-    onCreate(user.employee_id);
-  };
+  const handleUserSelect = (user: User) => onCreate(user.employee_id);
 
-  const clearSearch = () => {
-    setSearchQuery('');
-  };
+  const clearSearch = () => setSearchQuery('');
 
   const renderUser = ({ item: user }: { item: User }) => (
     <TouchableOpacity
@@ -75,10 +113,7 @@ export const NewChat: React.FC<NewChatProps> = ({
     >
       <View style={styles.contactAvatar}>
         {user.profile_picture ? (
-          <Image
-            source={{ uri: user.profile_picture }}
-            style={styles.contactAvatarImage}
-          />
+          <Image source={{ uri: user.profile_picture }} style={styles.contactAvatarImage} />
         ) : (
           <View style={styles.contactAvatarPlaceholder}>
             <Text style={styles.contactAvatarText}>
@@ -88,106 +123,103 @@ export const NewChat: React.FC<NewChatProps> = ({
         )}
       </View>
       <View style={styles.contactInfo}>
-        <Text style={styles.contactName}>
-          {user.first_name} {user.last_name}
-        </Text>
-        <Text style={styles.contactStatus} numberOfLines={1}>
-          {user.email}
-        </Text>
+        <Text style={styles.contactName}>{user.first_name} {user.last_name}</Text>
+        <Text style={styles.contactStatus} numberOfLines={1}>{user.email}</Text>
       </View>
     </TouchableOpacity>
   );
 
+  const renderFooter = () => {
+    if (!hasMore && !isLoadingMore) return null;
+
+    if (isLoadingMore) {
+      return (
+        <View style={styles.loadMoreContainer}>
+          <ActivityIndicator size="small" color="#00a884" />
+        </View>
+      );
+    }
+
+    return (
+      <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore} activeOpacity={0.7}>
+        <Text style={styles.loadMoreText}>Load more</Text>
+        <Ionicons name="chevron-down" size={16} color="#00a884" />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBack}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Select contact</Text>
-        <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
-          <Ionicons name="search" size={24} color="#ffffff" />
+        <View style={styles.headerIconBtn} />
+      </View>
+
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search contacts"
+            placeholderTextColor="#8696a0"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} style={styles.clearButton} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={20} color="#8696a0" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* New Group shortcut */}
+      <View style={styles.actionsSection}>
+        <TouchableOpacity style={styles.actionItem} activeOpacity={0.7} onPress={onCreateGroup}>
+          <View style={[styles.actionIcon, { backgroundColor: '#00a884' }]}>
+            <Ionicons name="people" size={24} color="#ffffff" />
+          </View>
+          <Text style={styles.actionTitle}>New group</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Scrollable content */}
-      <ScrollView 
-        style={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={20} color="#8696a0" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search contacts"
-              placeholderTextColor="#8696a0"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={clearSearch}
-                style={styles.clearButton}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close-circle" size={20} color="#8696a0" />
-              </TouchableOpacity>
-            )}
+      {/* Contacts list */}
+      <View style={styles.contactsSection}>
+        <Text style={styles.sectionTitle}>Contacts on Citadel</Text>
+
+        {isSearching ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color="#00a884" />
+            <Text style={styles.loadingText}>Searching...</Text>
           </View>
-        </View>
-
-        <View style={styles.actionsSection}>
-          <TouchableOpacity 
-            style={styles.actionItem} 
-            activeOpacity={0.7}
-            onPress={onCreateGroup} // NEW: Navigate to group creation
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#00a884' }]}>
-              <Ionicons name="people" size={24} color="#ffffff" />
-            </View>
-            <Text style={styles.actionTitle}>New group</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.contactsSection}>
-          <Text style={styles.sectionTitle}>Contacts on Citadel</Text>
-          
-          {isSearching ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator size="large" color="#00a884" />
-              <Text style={styles.loadingText}>Searching...</Text>
-            </View>
-          ) : users.length > 0 ? (
-            <View>
-              {users.map((user) => (
-                <View key={user.employee_id}>
-                  {renderUser({ item: user })}
-                </View>
-              ))}
-            </View>
-          ) : searchQuery ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="search" size={48} color="#e9edef" />
-              <Text style={styles.emptyText}>No contacts found</Text>
-            </View>
-          ) : null}
-        </View>
-      </ScrollView>
+        ) : users.length > 0 ? (
+          <FlatList
+            data={users}
+            renderItem={renderUser}
+            keyExtractor={item => String(item.employee_id)}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={renderFooter}
+            keyboardShouldPersistTaps="handled"
+          />
+        ) : searchQuery && !isSearching ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="search" size={48} color="#e9edef" />
+            <Text style={styles.emptyText}>No contacts found</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
+  container: { flex: 1, backgroundColor: '#ffffff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,22 +230,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: Platform.OS === 'ios' ? -80 : -50,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 19,
-    color: '#ffffff',
-    fontWeight: '500',
-    marginLeft: 16,
-  },
-  headerIconBtn: {
-    padding: 8,
-  },
-  scrollContent: {
-    flex: 1,
-  },
+  backButton: { padding: 8 },
+  headerTitle: { flex: 1, fontSize: 19, color: '#ffffff', fontWeight: '500', marginLeft: 16 },
+  headerIconBtn: { width: 40 },
   searchContainer: {
     padding: 16,
     borderBottomWidth: 1,
@@ -228,19 +247,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111b21',
-    paddingVertical: 2,
-  },
-  clearButton: {
-    padding: 4,
-    marginLeft: 4,
-  },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#111b21', paddingVertical: 2 },
+  clearButton: { padding: 4, marginLeft: 4 },
   actionsSection: {
     paddingVertical: 8,
     borderBottomWidth: 8,
@@ -255,20 +264,11 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 48, height: 48, borderRadius: 24,
+    justifyContent: 'center', alignItems: 'center',
   },
-  actionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111b21',
-  },
-  contactsSection: {
-    paddingBottom: 20,
-  },
+  actionTitle: { fontSize: 16, fontWeight: '500', color: '#111b21' },
+  contactsSection: { flex: 1 },
   sectionTitle: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -277,29 +277,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     backgroundColor: '#f0f2f5',
   },
-  loadingState: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#667781',
-  },
-  emptyState: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#667781',
-  },
-  contactsList: {
-    flex: 1,
-  },
+  loadingState: { justifyContent: 'center', alignItems: 'center', paddingVertical: 32 },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#667781' },
+  emptyState: { justifyContent: 'center', alignItems: 'center', paddingVertical: 32 },
+  emptyText: { marginTop: 12, fontSize: 14, color: '#667781' },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,39 +289,23 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: '#ffffff',
   },
-  contactAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    overflow: 'hidden',
-  },
-  contactAvatarImage: {
-    width: '100%',
-    height: '100%',
-  },
+  contactAvatar: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden' },
+  contactAvatarImage: { width: '100%', height: '100%' },
   contactAvatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#e9edef',
-    justifyContent: 'center',
+    width: '100%', height: '100%',
+    backgroundColor: '#e9edef', justifyContent: 'center', alignItems: 'center',
+  },
+  contactAvatarText: { fontSize: 16, fontWeight: '600', color: '#8696a0' },
+  contactInfo: { flex: 1 },
+  contactName: { fontSize: 16, fontWeight: '500', color: '#111b21', marginBottom: 2 },
+  contactStatus: { fontSize: 14, color: '#667781' },
+  loadMoreContainer: { paddingVertical: 16, alignItems: 'center' },
+  loadMoreButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 6,
   },
-  contactAvatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#8696a0',
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111b21',
-    marginBottom: 2,
-  },
-  contactStatus: {
-    fontSize: 14,
-    color: '#667781',
-  },
+  loadMoreText: { fontSize: 14, color: '#00a884', fontWeight: '500' },
 });

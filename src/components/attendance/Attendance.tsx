@@ -45,7 +45,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const TOKEN_2_KEY = 'token_2';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CALENDAR_PADDING = 32+40;
+const CALENDAR_PADDING = 32 + 40;
 const DAY_WIDTH = Math.floor((SCREEN_WIDTH - CALENDAR_PADDING) / 7);
 const STATUS_COLORS = {
   present: 'rgb(148, 228, 164)',
@@ -226,7 +226,7 @@ const StatusTooltip: React.FC<{
   );
 };
 
-const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
+const Attendance: React.FC<AttendanceProps> = ({ onBack, initialShowLeaves }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isDriver, setIsDriver] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
@@ -308,6 +308,12 @@ const Attendance: React.FC<AttendanceProps> = ({ onBack }) => {
       return () => clearTimeout(timer);
     }
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (initialShowLeaves) {
+      setShowLeaveScreen(true);
+    }
+  }, [initialShowLeaves]);
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -1728,7 +1734,7 @@ const styles = StyleSheet.create({
   },
   weekDays: {
     flexDirection: 'row',
-    marginBottom: 12, 
+    marginBottom: 12,
   },
   weekDay: {
     flex: 1,
@@ -1736,7 +1742,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#6b7280',
-    width:DAY_WIDTH
+    width: DAY_WIDTH
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -1745,7 +1751,7 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: DAY_WIDTH,
-    height:DAY_WIDTH,
+    height: DAY_WIDTH,
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1754,7 +1760,7 @@ const styles = StyleSheet.create({
   },
   dayCircle: {
     width: DAY_WIDTH - 8,
-    height : DAY_WIDTH-8,
+    height: DAY_WIDTH - 8,
     aspectRatio: 1,
     borderRadius: (DAY_WIDTH - 8) / 2,
     alignItems: 'center',

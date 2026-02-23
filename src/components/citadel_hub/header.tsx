@@ -51,9 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
         <Text style={styles.headerTitle}>Messages</Text>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={onCameraClick} activeOpacity={0.7}>
+          {/* <TouchableOpacity style={styles.headerIconBtn} onPress={onCameraClick} activeOpacity={0.7}>
             <Ionicons name="camera" size={24} color="#ffffff" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity 
             style={styles.headerIconBtn}

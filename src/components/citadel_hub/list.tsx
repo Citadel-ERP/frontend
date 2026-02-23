@@ -344,7 +344,7 @@ export const List: React.FC<ListProps> = ({
               <Text style={styles.contextMenuText}>Mark as unread</Text>
             </TouchableOpacity>
 
-            {contextRoom?.is_pinned ? (
+            {/* {contextRoom?.is_pinned ? (
               <TouchableOpacity
                 style={styles.contextMenuItem}
                 onPress={() => { if (contextMenuRoom) { onUnpin(contextMenuRoom); setContextMenuRoom(null); } }}
@@ -360,7 +360,7 @@ export const List: React.FC<ListProps> = ({
               >
                 <Text style={styles.contextMenuText}>Pin chat</Text>
               </TouchableOpacity>
-            ) : null}
+            ) : null} */}
 
             {/* Mute / Unmute */}
             {contextRoomMuted ? (

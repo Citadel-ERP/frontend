@@ -565,33 +565,37 @@ export const Chat: React.FC<ChatProps> = ({
   }, [chatRoom, currentUser, userStatuses]);
 
   // Room change handling - clear state
+  // useEffect(() => {
+  //   if (previousRoomId.current !== chatRoom?.id) {
+  //     setDisplayMessages([]);
+  //     setSelectedMessages([]);
+  //     setShowQuickReactions(false);
+  //     setLongPressedMessage(null);
+  //     setReplyingTo(null);
+  //     setIsSearchMode(false);
+  //     setSearchText('');
+  //     setSearchResults([]);
+  //     setShowMessageOptionsModal(false);
+
+  //     if (previousRoomId.current !== null) {
+  //       clearMessageCacheForRoom(previousRoomId.current);
+  //     }
+
+  //     const cacheKey = `room_${chatRoom?.id}`;
+  //     const cached = messageCache.get(cacheKey);
+  //     if (cached && cached.length > 0) {
+  //       setDisplayMessages([...cached].reverse());
+  //     }
+
+  //     previousRoomId.current = chatRoom?.id || null;
+  //   } else {
+  //     setDisplayMessages([...messages].reverse());
+  //   }
+  // }, [chatRoom?.id, messages]);
+
   useEffect(() => {
-    if (previousRoomId.current !== chatRoom?.id) {
-      setDisplayMessages([]);
-      setSelectedMessages([]);
-      setShowQuickReactions(false);
-      setLongPressedMessage(null);
-      setReplyingTo(null);
-      setIsSearchMode(false);
-      setSearchText('');
-      setSearchResults([]);
-      setShowMessageOptionsModal(false);
-
-      if (previousRoomId.current !== null) {
-        clearMessageCacheForRoom(previousRoomId.current);
-      }
-
-      const cacheKey = `room_${chatRoom?.id}`;
-      const cached = messageCache.get(cacheKey);
-      if (cached && cached.length > 0) {
-        setDisplayMessages([...cached].reverse());
-      }
-
-      previousRoomId.current = chatRoom?.id || null;
-    } else {
-      setDisplayMessages([...messages].reverse());
-    }
-  }, [chatRoom?.id, messages]);
+    setDisplayMessages([...messages].reverse());
+}, [messages]);
 
   // Active room tracking via WebSocket
   useEffect(() => {

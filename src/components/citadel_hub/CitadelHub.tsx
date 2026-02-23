@@ -24,7 +24,7 @@ import { CameraRecorder } from './cameraRecorder';
 import { BlockedContactsScreen } from './BlockedContactsScreen';
 import { MessageInfo } from './messageInfo';
 import { ContactPicker, ContactData } from './contactPicker';
-import Settings from '../Settings'; 
+import Settings from '../Settings';
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -249,6 +249,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const maxReconnectAttempts = 10;
   const prefetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScrollPositionRef = useRef(0);
+  const loadMessagesAbortRef = useRef<AbortController | null>(null);
+  const readReceiptDebounceRef = useRef<{ [roomId: number]: NodeJS.Timeout }>({});
+
+
 
   const isReconnecting = useRef(false);
 
@@ -287,6 +291,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handleMemberRemoved: (data: any) => { },
     handleChatBlocked: (data: any) => { },
     handleChatUnblocked: (data: any) => { },
+    handleMessageDelivered: (data: any) => { },
   });
 
   const memberAddDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -650,26 +655,52 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       Alert.alert('Error', 'Failed to exit group. you are the Only Admin');
     }
   }, [selectedChatRoom]);
+  const sortChatRooms = (rooms: ChatRoom[]): ChatRoom[] => {
+    return [...rooms].sort((a, b) => {
+      // Pinned rooms always first
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
 
-  const loadMessages = useCallback(async (roomId: number, page: number = 1, useCache: boolean = true) => {
+      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+
+      if (bTime !== aTime) return bTime - aTime;
+      return b.id - a.id; // tiebreak by id desc (newer id = newer room)
+    });
+  };
+  const loadMessages = useCallback(async (
+    roomId: number,
+    page: number = 1,
+    useCache: boolean = true
+  ) => {
     if (isLoadingMessages) return;
+
+    // Create new abort controller for this load
+    loadMessagesAbortRef.current = new AbortController();
+    const signal = loadMessagesAbortRef.current.signal;
 
     setIsLoadingMessages(true);
 
     try {
-      if (useCache && page === 1 && messageCache[roomId] && messageCache[roomId].length > 0) {
-        setMessages(messageCache[roomId]);
-      }
+      // NOTE: Cache pre-population already done in handleChatSelect.
+      // No need to setMessages from cache here — avoids double render.
 
-      const result = await apiCall('getMessages', {
-        chat_room_id: roomId,
-        page,
-        page_size: 50,
+      const response = await fetch(`${apiBaseUrl}/citadel_hub/getMessages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, chat_room_id: roomId, page, page_size: 50 }),
+        signal, // ← cancellable
       });
+
+      if (signal.aborted) return; // room was switched before response arrived
+
+      if (!response.ok) throw new Error(`${response.status}`);
+      const result = await response.json();
+
+      if (signal.aborted) return; // double-check after await
 
       if (result.messages) {
         const newMessages = result.messages.reverse();
-
         if (page === 1) {
           const cachedMessages = messageCache[roomId] || [];
           const mergedMessages = mergeMessages(newMessages, cachedMessages);
@@ -680,34 +711,55 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           setMessages(mergedMessages);
           saveMessageCache(roomId, mergedMessages);
         }
-
         setHasMoreMessages(result.messages.length === 50);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') return; // expected, not an error
       console.error('Error loading messages:', error);
-      if (page === 1 && (!messageCache[roomId] || messageCache[roomId].length === 0)) {
-        Alert.alert('Error', 'Failed to load messages. Please check your connection.');
-      }
     } finally {
-      setIsLoadingMessages(false);
+      if (!signal.aborted) {
+        setIsLoadingMessages(false);
+      }
     }
-  }, [apiBaseUrl, token, messageCache, saveMessageCache]);
+  }, [apiBaseUrl, token, isLoadingMessages, messageCache, messages, saveMessageCache]);
+
 
   const mergeMessages = (newMessages: Message[], cachedMessages: Message[]): Message[] => {
     const messageMap = new Map<number | string, Message>();
+
+    // Load cached first (they may have updated statuses from WS events)
     cachedMessages.forEach(msg => messageMap.set(msg.id, msg));
-    newMessages.forEach(msg => messageMap.set(msg.id, msg));
+
+    // Merge server messages, but PRESERVE higher-fidelity status from cache
+    newMessages.forEach(msg => {
+      const existing = messageMap.get(msg.id);
+      if (existing) {
+        const statusPriority: Record<string, number> = {
+          'sending': 0, 'sent': 1, 'delivered': 2, 'read': 3, 'failed': -1
+        };
+        const existingPriority = statusPriority[existing.status || 'sent'] ?? 1;
+        const newPriority = statusPriority[msg.status || 'sent'] ?? 1;
+        // Keep whichever status is higher fidelity
+        messageMap.set(msg.id, {
+          ...msg,
+          status: existingPriority >= newPriority
+            ? (existing.status || 'delivered')
+            : (msg.status || 'delivered')
+        });
+      } else {
+        const currentUserId = String(currentUser.id || currentUser.employee_id);
+        const isOwn = String(msg.sender?.id || msg.sender?.employee_id) === currentUserId;
+        // For historical messages from DB, default own messages to 'delivered'
+        // (they were clearly delivered since they're in the DB history)
+        messageMap.set(msg.id, {
+          ...msg,
+          status: msg.status || (isOwn ? 'delivered' : undefined)
+        });
+      }
+    });
+
     return Array.from(messageMap.values())
       .filter(msg => !String(msg.id).startsWith('temp_'))
-      .map(msg => {
-        if (!msg.status) {
-          const isOwn =
-            (msg.sender?.id || msg.sender?.employee_id) ===
-            (currentUser.id || currentUser.employee_id);
-          return { ...msg, status: isOwn ? ('delivered' as MessageStatus) : msg.status };
-        }
-        return msg;
-      })
       .sort((a, b) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
@@ -842,7 +894,22 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       return false;
     }
   }, []);
+  const sendReadReceipt = useCallback((roomId: number) => {
+    if (readReceiptDebounceRef.current[roomId]) {
+      clearTimeout(readReceiptDebounceRef.current[roomId]);
+    }
+    readReceiptDebounceRef.current[roomId] = setTimeout(() => {
+      sendWebSocketMessage('read_messages', { room_id: roomId });
+      delete readReceiptDebounceRef.current[roomId];
+    }, 300); // 300ms debounce — batches burst messages
+  }, [sendWebSocketMessage]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(readReceiptDebounceRef.current).forEach(clearTimeout);
+    };
+  }, []);
   const sendContactMessage = useCallback(async (contact: ContactData): Promise<void> => {
     if (!selectedChatRoom) return;
 
@@ -1353,6 +1420,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             case 'role_updated':
               handlersRef.current.handleRoleUpdated(data);
               break;
+            case 'message_delivered':
+              handlersRef.current.handleMessageDelivered(data);
+              break;
             default:
               console.log('Unknown message type:', data.type);
           }
@@ -1665,43 +1735,43 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [handleTyping]);
 
   const handleMessagesRead = useCallback((roomId: number, userId: number) => {
-  const currentUserId = String(currentUser.id || currentUser.employee_id);
-  const readerUserId = String(userId);
-  const readerIsOtherUser = readerUserId !== currentUserId;
+    const currentUserId = String(currentUser.id || currentUser.employee_id);
+    const readerUserId = String(userId);
+    const readerIsOtherUser = readerUserId !== currentUserId;
 
-  if (readerIsOtherUser) {
-    // Update unread count in chat list regardless of active room
-    setChatRooms(prev => prev.map(room =>
-      room.id === roomId ? { ...room, unread_count: 0 } : room
-    ));
+    if (readerIsOtherUser) {
+      // Update unread count in chat list regardless of active room
+      setChatRooms(prev => prev.map(room =>
+        room.id === roomId ? { ...room, unread_count: 0 } : room
+      ));
 
-    // Update message tick statuses only if this is the active room
-    if (selectedChatRoom && selectedChatRoom.id === roomId) {
-      setMessages(prev => {
-        const updated = prev.map(m => {
-          const isOwnMessage =
-            String(m.sender?.id || m.sender?.employee_id) === currentUserId;
-          const isRealMessage = !String(m.id).startsWith('temp_');
-          if (
-            isOwnMessage &&
-            isRealMessage &&
-            m.status !== 'read'
-          ) {
-            return { ...m, status: 'read' as MessageStatus };
-          }
-          return m;
+      // Update message tick statuses only if this is the active room
+      if (selectedChatRoom && selectedChatRoom.id === roomId) {
+        setMessages(prev => {
+          const updated = prev.map(m => {
+            const isOwnMessage =
+              String(m.sender?.id || m.sender?.employee_id) === currentUserId;
+            const isRealMessage = !String(m.id).startsWith('temp_');
+            if (
+              isOwnMessage &&
+              isRealMessage &&
+              m.status !== 'read'
+            ) {
+              return { ...m, status: 'read' as MessageStatus };
+            }
+            return m;
+          });
+          saveMessageCache(roomId, updated);
+          return updated;
         });
-        saveMessageCache(roomId, updated);
-        return updated;
-      });
+      }
+    } else {
+      // Current user read — clear their own unread
+      setChatRooms(prev => prev.map(room =>
+        room.id === roomId ? { ...room, unread_count: 0 } : room
+      ));
     }
-  } else {
-    // Current user read — clear their own unread
-    setChatRooms(prev => prev.map(room =>
-      room.id === roomId ? { ...room, unread_count: 0 } : room
-    ));
-  }
-}, [selectedChatRoom, currentUser, saveMessageCache]);
+  }, [selectedChatRoom, currentUser, saveMessageCache]);
 
   useEffect(() => {
     handlersRef.current.handleMessagesRead = handleMessagesRead;
@@ -1868,30 +1938,30 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [selectedChatRoom, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
 
   const createDirectChat = async (employeeId: string) => {
-  try {
-    // Save current unread counts before loadChatRooms wipes them
-    const savedUnreadCounts = Object.fromEntries(
-      chatRooms.map(r => [r.id, r.unread_count])
-    );
-    
-    const result = await apiCall('createDirectChat', { employee_id: employeeId });
-    if (result.chat_room) {
-      await loadChatRooms();
-      
-      // Restore unread counts for rooms OTHER than the newly opened one
-      setChatRooms(prev => prev.map(r =>
-        r.id !== result.chat_room.id && savedUnreadCounts[r.id] !== undefined
-          ? { ...r, unread_count: savedUnreadCounts[r.id] }
-          : r
-      ));
-      
-      setSelectedChatRoom({
-        ...result.chat_room,
-        created_at: result.chat_room.created_at || new Date().toISOString(),
-      });
-      setViewMode('chat');
-    }
-  }catch (error) {
+    try {
+      // Save current unread counts before loadChatRooms wipes them
+      const savedUnreadCounts = Object.fromEntries(
+        chatRooms.map(r => [r.id, r.unread_count])
+      );
+
+      const result = await apiCall('createDirectChat', { employee_id: employeeId });
+      if (result.chat_room) {
+        await loadChatRooms();
+
+        // Restore unread counts for rooms OTHER than the newly opened one
+        setChatRooms(prev => prev.map(r =>
+          r.id !== result.chat_room.id && savedUnreadCounts[r.id] !== undefined
+            ? { ...r, unread_count: savedUnreadCounts[r.id] }
+            : r
+        ));
+
+        setSelectedChatRoom({
+          ...result.chat_room,
+          created_at: result.chat_room.created_at || new Date().toISOString(),
+        });
+        setViewMode('chat');
+      }
+    } catch (error) {
       console.error('Error creating direct chat:', error);
       Alert.alert('Error', 'Failed to create chat. Please try again.');
     }
@@ -1938,7 +2008,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       const savedUnreadCounts = Object.fromEntries(
         chatRooms.map(r => [r.id, r.unread_count])
       );
-      
+
       if (result.chat_room) {
         const roomId = result.chat_room.id;
         const allMemberIds = [...memberIds, currentUser.employee_id];
@@ -2183,58 +2253,53 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   };
 
   const getFilteredChatRooms = useCallback(() => {
-    let filtered = [...chatRooms];
-    console.log('🔍 Filtering chat rooms with query:', searchQuery, 'and filter type:', filtered);
+    let filtered = [...chatRooms]; // already sorted by state
+
     if (searchQuery) {
       filtered = filtered.filter(room => {
         if (room.room_type === 'group') {
           return room.name?.toLowerCase().includes(searchQuery.toLowerCase());
-        } else {
-          const otherMember = room.members.find(m => {
-            const member = m as ChatRoomMember;
-            const user = member.user || m as User;
-            const userId = user?.id || user?.employee_id;
-            const currentUserId = currentUser.id || currentUser.employee_id;
-            return user && userId !== currentUserId;
-          });
-          if (otherMember) {
-            const member = otherMember as ChatRoomMember;
-            const user = member.user || otherMember as User;
-            if (user) {
-              const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
-              return fullName.includes(searchQuery.toLowerCase());
-            }
-          }
-          return false;
         }
+        const otherMember = room.members.find(m => {
+          const member = m as ChatRoomMember;
+          const user = member.user || m as User;
+          return (user?.id || user?.employee_id) !== (currentUser.id || currentUser.employee_id);
+        });
+        if (otherMember) {
+          const user = (otherMember as ChatRoomMember).user || otherMember as User;
+          return `${user.first_name} ${user.last_name}`.toLowerCase()
+            .includes(searchQuery.toLowerCase());
+        }
+        return false;
       });
     }
 
-    if (filterType === 'unread') {
-      filtered = filtered.filter(room => (room.unread_count || 0) > 0);
-    } else if (filterType === 'groups') {
-      filtered = filtered.filter(room => room.room_type === 'group');
-    }
+    if (filterType === 'unread') filtered = filtered.filter(r => (r.unread_count || 0) > 0);
+    if (filterType === 'groups') filtered = filtered.filter(r => r.room_type === 'group');
 
-    return filtered.sort((a, b) => {
-      if (a.is_pinned && !b.is_pinned) return -1;
-      if (!a.is_pinned && b.is_pinned) return 1;
-
-      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-
-      return bTime - aTime;
-    });
+    return filtered; // order preserved from sorted state
   }, [chatRooms, searchQuery, filterType, currentUser]);
 
   const handleChatSelect = useCallback((room: ChatRoom) => {
-    // Clear unread dot when opening chat
-    setChatRooms(prev => prev.map(r =>
-      r.id === room.id ? { ...r, unread_count: 0 } : r
-    ));
+    if (loadMessagesAbortRef.current) {
+      loadMessagesAbortRef.current.abort();
+    }
+
+    const cached = messageCache[room.id];
+    setMessages(cached && cached.length > 0 ? cached : []);
+
+    setChatRooms(prev =>
+      prev.map(r => r.id === room.id ? { ...r, unread_count: 0 } : r)
+    );
     setSelectedChatRoom({ ...room, unread_count: 0 });
     setViewMode('chat');
-  }, []);
+
+    // ✅ Send read receipt immediately when opening a chat
+    // (covers messages received while chat was closed)
+    setTimeout(() => {
+      sendWebSocketMessage('read_messages', { room_id: room.id });
+    }, 100); // slight delay to let WS join_room complete first
+  }, [messageCache, sendWebSocketMessage]);
 
   const loadMoreMessages = useCallback(() => {
     if (selectedChatRoom && hasMoreMessages && !isLoadingMessages) {
@@ -2334,18 +2399,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [selectedChatRoom?.id, isInitialCacheLoaded]);
 
   const handleReadAll = useCallback(async () => {
-  try {
-    console.log('🔵 handleReadAll called');
-    const result = await apiCall('markAllNotificationsRead', {});
-    console.log('✅ markAllNotificationsRead result:', result);
-    setChatRooms(prev => prev.map(room => ({ ...room, unread_count: 0 })));
-    setUnreadCount(0);
+    try {
+      console.log('🔵 handleReadAll called');
+      const result = await apiCall('markAllNotificationsRead', {});
+      console.log('✅ markAllNotificationsRead result:', result);
+      setChatRooms(prev => prev.map(room => ({ ...room, unread_count: 0 })));
+      setUnreadCount(0);
 
-    await loadChatRooms();
-  } catch (error) {
-    console.error('❌ Error marking all as read:', error);
-  }
-}, [loadChatRooms]);
+      await loadChatRooms();
+    } catch (error) {
+      console.error('❌ Error marking all as read:', error);
+    }
+  }, [loadChatRooms]);
   const handleBlockChat = useCallback(async () => {
     if (!selectedChatRoom) return;
 
@@ -2520,13 +2585,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const loadChatRoomsInitial = useCallback(async () => {
     try {
       setChatListPagination(prev => ({ ...prev, isLoading: true }));
-
-      const result = await apiCall('getChatRooms', {
-        limit: 15,
-        cursor: null,
-      });
-
-      setChatRooms(result.chat_rooms || []);
+      const result = await apiCall('getChatRooms', { limit: 15, cursor: null });
+      setChatRooms(sortChatRooms(result.chat_rooms || [])); // ← sort on set
       setChatListPagination({
         cursor: result.next_cursor,
         hasMore: result.has_more,
@@ -2540,27 +2600,22 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [apiBaseUrl, token]);
 
   const loadChatRoomsMore = useCallback(async (prefetch: boolean = false) => {
-    if (!chatListPagination.hasMore || chatListPagination.isLoading || chatListPagination.isPrefetching) {
-      return;
-    }
+    if (!chatListPagination.hasMore || chatListPagination.isLoading || chatListPagination.isPrefetching) return;
 
     try {
-      if (prefetch) {
-        setChatListPagination(prev => ({ ...prev, isPrefetching: true }));
-      } else {
-        setChatListPagination(prev => ({ ...prev, isLoading: true }));
-      }
+      prefetch
+        ? setChatListPagination(prev => ({ ...prev, isPrefetching: true }))
+        : setChatListPagination(prev => ({ ...prev, isLoading: true }));
 
       const result = await apiCall('getChatRooms', {
         limit: 15,
         cursor: chatListPagination.cursor,
       });
 
-      // Merge new rooms, avoiding duplicates
       setChatRooms(prev => {
         const existingIds = new Set(prev.map(r => r.id));
         const newRooms = (result.chat_rooms || []).filter((r: ChatRoom) => !existingIds.has(r.id));
-        return [...prev, ...newRooms];
+        return sortChatRooms([...prev, ...newRooms]); // ← merge then sort
       });
 
       setChatListPagination({
@@ -2736,8 +2791,9 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         chat_room_id: roomId,
         limit: 20,
       });
-
+      console.log(result);
       if (callback) {
+        console.log(result);
         callback(result.results || [], result.has_more);
       }
     } catch (error) {
@@ -2749,58 +2805,83 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   // ============= HANDLE NEW INCOMING MESSAGES =============
   // When new message arrives via WebSocket, insert it correctly
   const handleNewMessage = useCallback((message: Message) => {
-  if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
-    setMessages(prev => {
-      // 1. Replace matching temp message (same sender + content + type within 30s)
-      const tempIndex = prev.findIndex(m => {
-        if (!String(m.id).startsWith('temp_')) return false;
-        const isOwnMessage =
-          (m.sender?.id || m.sender?.employee_id) ===
-          (message.sender?.id || message.sender?.employee_id);
-        const sameContent = m.content === message.content;
-        const sameType = m.message_type === message.message_type;
-        const timeDiff = Math.abs(
-          new Date(message.created_at).getTime() - new Date(m.created_at).getTime()
-        );
-        return isOwnMessage && sameContent && sameType && timeDiff < 30000;
+    const currentUserId = String(currentUser.id || currentUser.employee_id);
+    const senderId = String(message.sender?.id || message.sender?.employee_id);
+    const isOwnMessage = senderId === currentUserId;
+
+    if (selectedChatRoom && message.chat_room === selectedChatRoom.id) {
+      setMessages(prev => {
+        const tempIndex = prev.findIndex(m => {
+          if (!String(m.id).startsWith('temp_')) return false;
+          const isOwnMsg =
+            (m.sender?.id || m.sender?.employee_id) ===
+            (message.sender?.id || message.sender?.employee_id);
+          const timeDiff = Math.abs(
+            new Date(message.created_at).getTime() -
+            new Date(m.created_at).getTime()
+          );
+          return isOwnMsg && m.content === message.content &&
+            m.message_type === message.message_type && timeDiff < 30000;
+        });
+
+        if (tempIndex !== -1) {
+          const updated = [...prev];
+          updated[tempIndex] = { ...message, status: 'sent' as MessageStatus };
+          return updated;
+        }
+        if (prev.some(m => m.id === message.id)) return prev;
+        return [...prev, { ...message, status: 'sent' as MessageStatus }];
       });
 
-      if (tempIndex !== -1) {
-        // Replace temp with real message, preserve read status
-        const updated = [...prev];
-        updated[tempIndex] = { ...message, status: 'sent' as MessageStatus };
-        return updated;
+      // ✅ FIX: If receiver is viewing this chat, immediately send read receipt
+      if (!isOwnMessage) {
+        sendReadReceipt(selectedChatRoom.id);
       }
-
-      // 2. Deduplicate by real ID
-      if (prev.some(m => m.id === message.id)) {
-        return prev;
-      }
-
-      // 3. New message from someone else — append
-      return [...prev, { ...message, status: 'sent' as MessageStatus }];
-    });
-
-    setMessagePagination(prev => ({
-      ...prev,
-      hasMoreNewer: false,
-      nextCursor: null,
-    }));
-  }
-
-  // Update chat list unread counts / last message preview
-  setChatRooms(prev => prev.map(room => {
-    if (room.id === message.chat_room) {
-      const isCurrentRoom = selectedChatRoom && room.id === selectedChatRoom.id;
-      return {
-        ...room,
-        last_message_at: message.created_at,
-        unread_count: isCurrentRoom ? 0 : (room.unread_count || 0) + 1,
-      };
     }
-    return room;
-  }));
-}, [selectedChatRoom]);
+
+    setChatRooms(prev => {
+      const updated = prev.map(room => {
+        if (room.id === message.chat_room) {
+          const isCurrentRoom = selectedChatRoom && room.id === selectedChatRoom.id;
+          return {
+            ...room,
+            last_message_at: message.created_at,
+            // ✅ FIX: Don't increment unread if user is viewing this chat
+            unread_count: isCurrentRoom ? 0 : (room.unread_count || 0) + 1,
+            last_message: message as any,
+          };
+        }
+        return room;
+      });
+      return sortChatRooms(updated);
+    });
+  }, [selectedChatRoom, currentUser, sendReadReceipt]);
+
+  const handleMessageDelivered = useCallback((data: any) => {
+    const { message_id, room_id } = data;
+
+    if (selectedChatRoom && selectedChatRoom.id.toString() === room_id.toString()) {
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (String(m.id) === String(message_id)) {
+            const currentUserId = String(currentUser.id || currentUser.employee_id);
+            const isOwn = String(m.sender?.id || m.sender?.employee_id) === currentUserId;
+            // Only upgrade to delivered if currently at 'sent', never downgrade from 'read'
+            if (isOwn && m.status === 'sent') {
+              return { ...m, status: 'delivered' as MessageStatus };
+            }
+          }
+          return m;
+        });
+        saveMessageCache(selectedChatRoom.id, updated);
+        return updated;
+      });
+    }
+  }, [selectedChatRoom, currentUser, saveMessageCache]);
+
+  useEffect(() => {
+    handlersRef.current.handleMessageDelivered = handleMessageDelivered;
+  }, [handleMessageDelivered]);
 
   // ============= INITIAL LOAD =============
   useEffect(() => {
@@ -2915,6 +2996,13 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onScroll={handleChatListScroll}  // NEW: Handle scroll for prefetch
             onLoadMore={() => loadChatRoomsMore(false)}  // NEW: Explicit load more
             hasMore={chatListPagination.hasMore}
+            onDeleteChat={handleDeleteChat}
+            onMute={(roomId: number, duration: string) => muteChat(roomId, duration)}
+            onUnmute={unmuteChat}
+            onPin={pinChat}
+            onUnpin={unpinChat}
+            onMarkAsUnread={markAsUnread}
+            onStartChat={() => setViewMode('newChat')}
             isLoadingMore={chatListPagination.isLoading || chatListPagination.isPrefetching}
           />
           <TouchableOpacity
@@ -2929,10 +3017,11 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
       {viewMode === 'chat' && selectedChatRoom && (
         <Chat
+          key={selectedChatRoom.id}
           chatRoom={selectedChatRoom}
           messages={messages}
           currentUser={currentUser}
-          onScroll={handleMessageScroll}   
+          onScroll={handleMessageScroll}
           typingUsers={typingUsers[selectedChatRoom.id] || []}
           userStatuses={userStatuses}
           onBack={() => setViewMode('list')}
@@ -2941,14 +3030,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onTyping={() => sendWebSocketMessage('typing', { room_id: selectedChatRoom.id })}
           onStopTyping={() => sendWebSocketMessage('stop_typing', { room_id: selectedChatRoom.id })}
           onReact={handleReact}
-          // onLoadMore={loadMoreMessages}
-          // hasMore={hasMoreMessages}
-          // isLoading={isLoadingMessages}
-          // onSearch={handleSearch}
           onLoadMore={() => loadMessagesOlder(false)}
           hasMore={messagePagination.hasMoreOlder}
           isLoading={messagePagination.isLoadingOlder || messagePagination.isPrefetchingOlder}
-          onSearch={(query, callback) => searchMessages(query, selectedChatRoom.id, callback)}
+          onSearch={(query, _offset, callback) => searchMessages(query, selectedChatRoom.id, callback)}
           onClearChat={handleClearChat}
           onDeleteForMe={handleDeleteForMe}
           onDeleteForEveryone={handleDeleteForEveryone}
@@ -3007,7 +3092,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           wsRef={ws}
         />
       )}
-      
+
 
       {viewMode === 'newGroup' && (
         <NewGroup
@@ -3027,6 +3112,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           apiCall={apiCall}
         />
       )}
+
+
 
       {viewMode === 'addMember' && selectedChatRoom && (
         <AddMember

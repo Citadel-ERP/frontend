@@ -322,6 +322,7 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
   'HR': 'hr',
   'hr_employee_management': 'hrEmployeeManager',
   'hr_manager': 'hrManager',
+  'hr_management': 'hrManager',
 
   // Transport modules
   'cab': 'cab',
@@ -349,6 +350,15 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
 
   'access': 'access',
   'Access': 'access',
+  'citadel-hub': 'messages',
+  'citadel_hub': 'messages',
+  // Settings
+  'settings': 'settings',
+
+  // Attendance with leaves sub-screen
+  'attendance-leaves': 'attendance',
+
+
 };
 
 // Main Dashboard Component
@@ -373,6 +383,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [lastOpenedModules, setLastOpenedModules] = useState<Module[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [attendanceKey, setAttendanceKey] = useState(0);
+
+  const [attendanceOpenLeaves, setAttendanceOpenLeaves] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
@@ -531,6 +543,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'dashboard': () => { /* Already on dashboard */ },
         'attendance': () => {
           setAttendanceKey(prev => prev + 1);
+          // If notification was for attendance_leaves, open the leave sub-screen
+          if (normalized === 'attendance-leaves') {
+            setAttendanceOpenLeaves(true);
+          } else {
+            setAttendanceOpenLeaves(false);
+          }
           setShowAttendance(true);
         },
         'hr': () => setShowHR(true),
@@ -551,7 +569,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'notifications': () => setShowNotifications(true),
         'validation': () => setShowValidation(true),
         'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy'),
-        'messages': () => Alert.alert('Coming Soon', 'Messages'),
+        'messages': () => setShowChat(true),
         'chat': () => setShowChat(true),
         'chatRoom': () => setShowChatRoom(true),
         'assets': () => setShowAsset(true),
@@ -1373,6 +1391,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setActivePage('dashboard');
     } else {
       setShowAttendance(false);
+    setAttendanceOpenLeaves(false);
       setShowAsset(false);
       setShowOffice(false);
       setShowProfile(false);
@@ -1395,7 +1414,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowDriverManager(false);
       setShowHrManager(false);
       setActiveMenuItem('Dashboard');
-      setActiveNavItem('home'); 
+      setActiveNavItem('home');
       setShowAccess(false);
     }
     // Reset profile modal state
@@ -1687,7 +1706,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     if (showAttendance) {
       return (
-        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} />
+        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} initialShowLeaves={attendanceOpenLeaves} />
       );
     }
 
@@ -2162,10 +2181,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
                     {activePage === 'attendance' && (
                       <AttendanceWrapper
-                        onBack={() => setActivePage('dashboard')}
+                        onBack={() => { setActivePage('dashboard'); setAttendanceOpenLeaves(false); }}
                         attendanceKey={attendanceKey}
+                        initialShowLeaves={attendanceOpenLeaves}
                       />
                     )}
+
                     {activePage === 'asset' && (
                       <AssetModule
                         onBack={() => setActivePage('dashboard')}

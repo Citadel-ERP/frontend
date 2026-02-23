@@ -786,7 +786,7 @@ function App(): React.JSX.Element {
         {renderScreen()}
       </View>
 
-      {__DEV__ && showDevMenu && (
+      {/* {__DEV__ && showDevMenu && (
         <TouchableOpacity
           style={{
             position: 'absolute',
@@ -818,7 +818,7 @@ function App(): React.JSX.Element {
             <Text style={{ color: 'white', fontSize: 24 }}>🔍</Text>
           </View>
         </TouchableOpacity>
-      )}
+      )} */}
     </SafeAreaProvider>
   );
 }
