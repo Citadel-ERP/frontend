@@ -467,8 +467,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack, onReminderUpdate }) => {
                   <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
-                    colors={['#25D366']}
-                    tintColor={'#25D366'}
+                    // colors={['#25D366']}
+                    // tintColor={'#25D366'}
                   />
                 }
               >

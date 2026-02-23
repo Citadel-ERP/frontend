@@ -24,7 +24,7 @@ import { CameraRecorder } from './cameraRecorder';
 import { BlockedContactsScreen } from './BlockedContactsScreen';
 import { MessageInfo } from './messageInfo';
 import { ContactPicker, ContactData } from './contactPicker';
-
+import Settings from '../Settings'; 
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -141,7 +141,7 @@ export interface Notification {
   is_read: boolean;
 }
 
-export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share' | 'addMember' | 'messageInfo';
+export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share' | 'addMember' | 'messageInfo' | 'settings';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -2811,6 +2811,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               if (action === 'newGroup') setViewMode('newGroup');
               if (action === 'newChat') setViewMode('newChat');
               if (action === 'blockedContacts') setShowBlockedContacts(true);
+              if (action === 'settings') setViewMode('settings');
             }}
             onBack={() => {
               if (onBack) onBack();
@@ -2931,6 +2932,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           wsRef={ws}
         />
       )}
+      
 
       {viewMode === 'newGroup' && (
         <NewGroup
@@ -3037,6 +3039,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         onClose={() => setCameraVisible(false)}
         onCapture={handleCameraCapture}
       />
+
+      {viewMode === 'settings' && (
+        <Settings onBack={() => setViewMode('list')} />
+      )}
 
       <ContactPicker
         visible={showContactPicker}

@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import Settings from '../Settings'; 
 interface HeaderProps {
   currentUser: {
     employee_id: string;
@@ -109,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <TouchableOpacity 
               style={styles.dropdownItem}
-              onPress={() => setShowMenu(false)}
+              onPress={() => { onMenuClick('settings'); setShowMenu(false); }}
             >
               <Text style={styles.dropdownText}>Settings</Text>
             </TouchableOpacity>
