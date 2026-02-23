@@ -3203,7 +3203,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       />
 
       {viewMode === 'settings' && (
-        <Settings onBack={() => setViewMode('list')} />
+        <Settings
+          onBack={() => setViewMode('list')}
+          extraTopOffset={Platform.OS === 'ios' ? -60 : 0}
+        />
       )}
 
       <ContactPicker

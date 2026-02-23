@@ -114,6 +114,11 @@ const CitySelection: React.FC<CitySelectionProps> = ({ onCitySelect, onBack }) =
               <Text style={styles.cityName}>{city.label}</Text>
             </TouchableOpacity>
           ))}
+          {filteredCities.length % 3 !== 0 &&
+            Array(3 - (filteredCities.length % 3)).fill(0).map((_, i) => (
+              <View key={`spacer-${i}`} style={[styles.cityCard, { opacity: 0 }]} />
+            ))
+          }
         </View>
         <View style={styles.bottomSpacing} />
       </ScrollView>

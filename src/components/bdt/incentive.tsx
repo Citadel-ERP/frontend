@@ -924,6 +924,7 @@ const s = StyleSheet.create({
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.white },
   expenseInfoText: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md, fontStyle: 'italic' },
   expenseItem: { marginBottom: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   checkbox: { width: 20, height: 20, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
   checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },

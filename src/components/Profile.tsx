@@ -15,6 +15,7 @@ import {
   Keyboard,
   Platform,
   Animated,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,10 +50,16 @@ interface UserData {
 }
 
 interface Asset {
-  name?: string;
-  type?: string;
-  serial_number?: string;
+  asset?: {
+    asset_name?: string;
+    asset_type?: string;
+    serial_id?: string;
+  };
+  asset_count?: number;
+  assigned_at?: string;
+  status?: string;
 }
+
 
 interface Payslip {
   month?: string;
@@ -61,8 +68,8 @@ interface Payslip {
 }
 
 interface Document {
-  document_name?: string;
-  document_type?: string;
+  file_name?: string;
+  document?: string;
 }
 
 interface FormData {
@@ -1268,10 +1275,10 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
                   </View>
                   <View style={styles.modalListItemContent}>
                     <Text style={[styles.modalListItemTitle, { color: colors.text }]}>
-                      {asset.name || 'Unnamed Asset'}
+                      {asset.asset?.asset_name || 'Unnamed Asset'}
                     </Text>
                     <Text style={[styles.modalListItemSubtitle, { color: colors.textTertiary }]}>
-                      {asset.type || 'No type'} • Serial: {asset.serial_number || 'N/A'}
+                      {asset.asset?.asset_type || 'No type'} • Serial: {asset.asset?.serial_id || 'N/A'}
                     </Text>
                   </View>
                 </View>
@@ -1324,11 +1331,19 @@ const Profile: React.FC<ProfileProps> = ({ onBack, userData: propUserData, onPro
                   </View>
                   <View style={styles.modalListItemContent}>
                     <Text style={[styles.modalListItemTitle, { color: colors.text }]}>
-                      {doc.document_name || 'Unnamed Document'}
+                      {doc.file_name || 'Unnamed Document'}
                     </Text>
+                    {doc.document ? (
+                    <TouchableOpacity onPress={() => Linking.openURL(doc.document!)}>
+                      <Text style={[styles.modalListItemSubtitle, { color: colors.iconActive }]}>
+                        View Document
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
                     <Text style={[styles.modalListItemSubtitle, { color: colors.textTertiary }]}>
-                      Type: {doc.document_type || 'N/A'}
+                      No file attached
                     </Text>
+                  )}
                   </View>
                 </View>
               ))
