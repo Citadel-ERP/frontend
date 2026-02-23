@@ -794,7 +794,7 @@ const EditLead: React.FC<EditLeadProps> = ({
           )}
         </View>
 
-        {/* Incentive Summary Card — only shown after incentive is created */}
+        {/* ─── Incentive Summary Card — COMMENTED OUT (shown via dedicated Incentive screen) ───
         {incentiveData !== null && (
           <View style={s.card}>
             <View style={s.cardHeader}>
@@ -806,8 +806,6 @@ const EditLead: React.FC<EditLeadProps> = ({
                 <Text style={s.incentiveStatusText}>{getIncentiveStatusText(incentiveData.status)}</Text>
               </View>
             </View>
-
-            {/* Always show gross & net */}
             <View style={s.incentiveRow}>
               <Text style={s.incentiveLabel}>Gross Income</Text>
               <Text style={s.incentiveValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
@@ -834,15 +832,12 @@ const EditLead: React.FC<EditLeadProps> = ({
               <Text style={s.incentiveLabelBold}>Net Company Earning</Text>
               <Text style={s.incentiveValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
             </View>
-
             {incentiveData.intercity_deals && (
               <View style={s.incentiveRow}>
                 <Text style={s.incentiveLabel}>Intercity Share (50%)</Text>
                 <Text style={s.incentiveValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
               </View>
             )}
-
-            {/* BUP has set the share — show breakdown and per-collaborator share */}
             {incentiveData.bdt_share !== null ? (
               <>
                 <View style={s.incentiveDivider} />
@@ -858,15 +853,12 @@ const EditLead: React.FC<EditLeadProps> = ({
                   <Text style={s.incentiveFinalLabel}>Final Amount Payable</Text>
                   <Text style={s.incentiveFinalValue}>{formatCurrency(incentiveData.final_amount_payable)}</Text>
                 </View>
-
-                {/* Collaborator share breakdown */}
                 {collaborators.length > 0 && (
                   <>
                     <View style={s.incentiveDivider} />
                     <Text style={[s.incentiveLabel, { marginBottom: 8, marginTop: 4 }]}>COLLEAGUE SHARES</Text>
                     {collaborators.map((collab) => {
-                      // Each collaborator gets an equal split of the final amount
-                      const totalMembers = collaborators.length + 1; // +1 for the BDT lead
+                      const totalMembers = collaborators.length + 1;
                       const perPersonShare = incentiveData.final_amount_payable !== null
                         ? incentiveData.final_amount_payable / totalMembers
                         : null;
@@ -896,6 +888,7 @@ const EditLead: React.FC<EditLeadProps> = ({
             )}
           </View>
         )}
+        ─── End Incentive Summary Card ─── */}
 
         {/* Lead Management Card */}
         <View style={s.card}>
@@ -1181,7 +1174,7 @@ const s = StyleSheet.create({
   saveBtnText: { fontSize: 16, fontWeight: '700', color: THEME_COLORS.white, letterSpacing: 0.3 },
   bottomSpacer: { height: 30 },
 
-  // Incentive card styles
+  // Incentive card styles (kept for reference, card is commented out above)
   incentiveStatusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
