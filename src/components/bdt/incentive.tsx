@@ -93,7 +93,7 @@ interface IncentiveData {
 const EXPENSE_OPTIONS = [
   { label: 'Referral',   key: 'referral'    },
   { label: 'BD Expenses', key: 'bd_expenses' },
-  { label: 'Goodwill',   key: 'goodwill'    },
+  // { label: 'Goodwill',   key: 'goodwill'    },
 ];
 
 const INTERCITY_CITIES = [
@@ -895,10 +895,10 @@ const Incentive: React.FC<IncentiveProps> = ({
 
 const s = StyleSheet.create({
   container:         { flex: 1, backgroundColor: colors.primary },
-  header:            { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary, marginTop: 30 },
+  header:            { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary, marginTop: 45 },
   headerWithGreen:   { backgroundColor: 'transparent', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
   greenHeader:       { paddingTop: 80, paddingBottom: 20, paddingHorizontal: spacing.lg },
-  greenHeaderContent:{ marginTop: 0 },
+  greenHeaderContent:{ marginTop: 17 },
   backButton:        { padding: spacing.sm, borderRadius: borderRadius.sm },
   backIcon:          { height: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
   backArrow:         { width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2, borderColor: colors.white, transform: [{ rotate: '-45deg' }] },
