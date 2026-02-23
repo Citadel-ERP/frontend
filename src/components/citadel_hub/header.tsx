@@ -95,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <TouchableOpacity 
               style={styles.dropdownItem}
-              onPress={() => setShowMenu(false)}
+              onPress={() => { onMenuClick('readAll'); setShowMenu(false); }}
             >
               <Text style={styles.dropdownText}>Read all</Text>
             </TouchableOpacity>

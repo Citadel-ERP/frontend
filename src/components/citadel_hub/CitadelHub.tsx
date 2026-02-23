@@ -1855,17 +1855,30 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   }, [selectedChatRoom, performOptimisticUpdate, sendWebSocketMessage, updatePendingActionStatus]);
 
   const createDirectChat = async (employeeId: string) => {
-    try {
-      const result = await apiCall('createDirectChat', { employee_id: employeeId });
-      if (result.chat_room) {
-        await loadChatRooms();
-        setSelectedChatRoom({
-          ...result.chat_room,
-          created_at: result.chat_room.created_at || new Date().toISOString(),
-        });
-        setViewMode('chat');
-      }
-    } catch (error) {
+  try {
+    // Save current unread counts before loadChatRooms wipes them
+    const savedUnreadCounts = Object.fromEntries(
+      chatRooms.map(r => [r.id, r.unread_count])
+    );
+    
+    const result = await apiCall('createDirectChat', { employee_id: employeeId });
+    if (result.chat_room) {
+      await loadChatRooms();
+      
+      // Restore unread counts for rooms OTHER than the newly opened one
+      setChatRooms(prev => prev.map(r =>
+        r.id !== result.chat_room.id && savedUnreadCounts[r.id] !== undefined
+          ? { ...r, unread_count: savedUnreadCounts[r.id] }
+          : r
+      ));
+      
+      setSelectedChatRoom({
+        ...result.chat_room,
+        created_at: result.chat_room.created_at || new Date().toISOString(),
+      });
+      setViewMode('chat');
+    }
+  }catch (error) {
       console.error('Error creating direct chat:', error);
       Alert.alert('Error', 'Failed to create chat. Please try again.');
     }
@@ -1909,6 +1922,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       const result = await response.json();
       console.log('✅ Group created successfully:', result);
 
+      const savedUnreadCounts = Object.fromEntries(
+        chatRooms.map(r => [r.id, r.unread_count])
+      );
+      
       if (result.chat_room) {
         const roomId = result.chat_room.id;
         const allMemberIds = [...memberIds, currentUser.employee_id];
@@ -1928,10 +1945,11 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         }
 
         await loadChatRooms();
-        setSelectedChatRoom({
-          ...result.chat_room,
-          created_at: result.chat_room.created_at || new Date().toISOString(),
-        });
+        setChatRooms(prev => prev.map(r =>
+          r.id !== result.chat_room.id && savedUnreadCounts[r.id] !== undefined
+            ? { ...r, unread_count: savedUnreadCounts[r.id] }
+            : r
+        ));
         setViewMode('chat');
       }
     } catch (error) {
@@ -2302,6 +2320,19 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, [selectedChatRoom?.id, isInitialCacheLoaded]);
 
+  const handleReadAll = useCallback(async () => {
+  try {
+    console.log('🔵 handleReadAll called');
+    const result = await apiCall('markAllNotificationsRead', {});
+    console.log('✅ markAllNotificationsRead result:', result);
+    setChatRooms(prev => prev.map(room => ({ ...room, unread_count: 0 })));
+    setUnreadCount(0);
+
+    await loadChatRooms();
+  } catch (error) {
+    console.error('❌ Error marking all as read:', error);
+  }
+}, [loadChatRooms]);
   const handleBlockChat = useCallback(async () => {
     if (!selectedChatRoom) return;
 
@@ -2811,6 +2842,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
               if (action === 'newGroup') setViewMode('newGroup');
               if (action === 'newChat') setViewMode('newChat');
               if (action === 'blockedContacts') setShowBlockedContacts(true);
+              if (action === 'readAll') handleReadAll();
               if (action === 'settings') setViewMode('settings');
             }}
             onBack={() => {
