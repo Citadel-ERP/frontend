@@ -13,12 +13,12 @@ import {
   SafeAreaView,
 } from 'react-native';
 import * as Contacts from 'expo-contacts';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { Ionicons } from '@expo/vector-icons';
 import { ContactData } from './contactPicker';
 import { getAvatarColor } from './avatarColors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 type SaveState = 'idle' | 'checking' | 'saving' | 'saved' | 'already_exists';
 
 interface ContactDetailProps {
@@ -28,7 +28,6 @@ interface ContactDetailProps {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-
 export const ContactDetail: React.FC<ContactDetailProps> = ({
   visible,
   contactData,
@@ -36,12 +35,48 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
 }) => {
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
-  // Reset save state when contact changes
   const handleOpen = useCallback(() => setSaveState('idle'), []);
 
-  const handleSaveContact = useCallback(async () => {
+  // ─── Android: open native Add Contact UI ──────────────────────────────────
+  const saveViaIntent = useCallback(async () => {
     if (!contactData) return;
 
+    // Build the intent extras — Android fills the system contact form
+    // with these values and lets the user pick the account themselves.
+    const extras: Record<string, string> = {
+      'android.intent.extra.NAME': contactData.name,
+    };
+
+    // First phone number → PHONE, rest → ignored (intent only supports one
+    // phone natively; user can add more inside the contacts app)
+    if (contactData.phone_numbers.length > 0) {
+      extras['android.intent.extra.PHONE'] = contactData.phone_numbers[0].number;
+    }
+    if (contactData.emails && contactData.emails.length > 0) {
+      extras['android.intent.extra.EMAIL'] = contactData.emails[0].email;
+    }
+
+    try {
+      await IntentLauncher.startActivityAsync(
+        'android.intent.action.INSERT',
+        {
+          type: 'vnd.android.cursor.dir/contact',
+          extra: extras,
+        }
+      );
+      // We can't know for sure if user saved or cancelled,
+      // so optimistically mark as saved once they return.
+      setSaveState('saved');
+    } catch (err) {
+      console.error('Intent error:', err);
+      Alert.alert('Error', 'Could not open Contacts app.');
+      setSaveState('idle');
+    }
+  }, [contactData]);
+
+  // ─── iOS / fallback: use expo-contacts directly ───────────────────────────
+  const saveViaExpoContacts = useCallback(async () => {
+    if (!contactData) return;
     setSaveState('checking');
 
     try {
@@ -55,7 +90,6 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
         return;
       }
 
-      // Check for duplicates by name
       const { data: existing } = await Contacts.getContactsAsync({
         fields: [Contacts.Fields.Name],
       });
@@ -63,7 +97,6 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
         const n = (c.name || `${c.firstName || ''} ${c.lastName || ''}`).trim();
         return n.toLowerCase() === contactData.name.toLowerCase();
       });
-
       if (duplicate) {
         setSaveState('already_exists');
         return;
@@ -71,20 +104,41 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
 
       setSaveState('saving');
 
-      const nameParts = contactData.name.split(' ');
+      const normaliseLabel = (raw: string): string => {
+        const l = (raw || '').toLowerCase();
+        if (l.includes('home')) return 'home';
+        if (l.includes('work') || l.includes('office')) return 'work';
+        if (l.includes('mobile') || l.includes('cell')) return 'mobile';
+        if (l.includes('main')) return 'main';
+        return 'other';
+      };
+
+      const nameParts = contactData.name.trim().split(/\s+/);
+
+      const phoneNumbers: Contacts.PhoneNumber[] = contactData.phone_numbers.map(p => ({
+        id: '',
+        label: normaliseLabel(p.label),
+        number: p.number,
+        isPrimary: false,
+        digits: p.number.replace(/\D/g, ''),
+        countryCode: '',
+      }));
+
+      const emails: Contacts.Email[] = (contactData.emails || []).map(e => ({
+        id: '',
+        label: normaliseLabel(e.label),
+        email: e.email,
+        isPrimary: false,
+      }));
+
       const newContact: Contacts.Contact = {
+        id: '',
         contactType: Contacts.ContactTypes.Person,
         firstName: nameParts[0] || contactData.name,
-        lastName: nameParts.slice(1).join(' ') || undefined,
+        lastName: nameParts.slice(1).join(' ') || '',
         name: contactData.name,
-        phoneNumbers: contactData.phone_numbers.map(p => ({
-          label: p.label,
-          number: p.number,
-        })),
-        emails: (contactData.emails || []).map(e => ({
-          label: e.label,
-          email: e.email,
-        })),
+        phoneNumbers,
+        ...(emails.length > 0 ? { emails } : {}),
       };
 
       await Contacts.addContactAsync(newContact);
@@ -95,6 +149,15 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
       setSaveState('idle');
     }
   }, [contactData]);
+
+  // ─── Unified save handler ─────────────────────────────────────────────────
+  const handleSaveContact = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      await saveViaIntent();
+    } else {
+      await saveViaExpoContacts();
+    }
+  }, [saveViaIntent, saveViaExpoContacts]);
 
   const handleCallNumber = useCallback((number: string) => {
     const url = `tel:${number.replace(/\s/g, '')}`;
@@ -108,10 +171,8 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
   }, []);
 
   // ─── Sub-components ────────────────────────────────────────────────────────
-
   const SaveButton = useCallback(() => {
-    const isProcessing =
-      saveState === 'checking' || saveState === 'saving';
+    const isProcessing = saveState === 'checking' || saveState === 'saving';
 
     if (saveState === 'saved') {
       return (
@@ -159,14 +220,12 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
   }, [saveState, handleSaveContact]);
 
   // ─── Guard ────────────────────────────────────────────────────────────────
-
   if (!contactData) return null;
 
   const colors = getAvatarColor(contactData.name);
   const initial = contactData.name[0]?.toUpperCase() || '?';
 
   // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
     <Modal
       visible={visible}
@@ -255,11 +314,9 @@ export const ContactDetail: React.FC<ContactDetailProps> = ({
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
+// ─── Styles (unchanged) ───────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -271,9 +328,7 @@ const styles = StyleSheet.create({
   },
   closeBtn: { padding: 8, width: 40 },
   headerTitle: { fontSize: 17, fontWeight: '600', color: '#111b21' },
-
   scrollContent: { paddingBottom: 48 },
-
   heroSection: {
     alignItems: 'center',
     paddingTop: 36,
@@ -289,7 +344,6 @@ const styles = StyleSheet.create({
   },
   heroAvatarText: { fontSize: 40, fontWeight: '700' },
   heroName: { fontSize: 24, fontWeight: '700', color: '#111b21' },
-
   saveBtnContainer: { paddingHorizontal: 24, marginBottom: 4 },
   saveBtn: {
     flexDirection: 'row',
@@ -302,7 +356,6 @@ const styles = StyleSheet.create({
   },
   saveBtnMuted: { backgroundColor: '#f0f2f5' },
   saveBtnText: { fontSize: 16, fontWeight: '600', color: '#ffffff' },
-
   section: {
     marginTop: 12,
     borderTopWidth: 1,

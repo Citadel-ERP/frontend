@@ -16,7 +16,8 @@ import {
   useWindowDimensions,
   TextInput,
   Alert,
-  LayoutAnimation
+  LayoutAnimation,
+  Linking,
 } from 'react-native';
 import { ImageStyle } from 'react-native';
 
@@ -1477,7 +1478,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
     }
     else if (navItem === 'support') {
-      Alert.alert('Support', 'Support feature will be available soon!');
+      Linking.openURL('https://citadel-erp.github.io/privacy-policy/');
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
     }
