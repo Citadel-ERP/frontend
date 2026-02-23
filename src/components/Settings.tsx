@@ -199,10 +199,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false }) => {
   );
 
   const renderHeader = () => (
-    <View style={[styles.header, { 
-      backgroundColor: currentTheme.header,
-      paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight,
-    }]}>
+  <View style={[styles.header, { 
+    backgroundColor: currentTheme.header,
+    paddingTop: Platform.OS === 'ios' 
+      ? insets.top 
+      : Platform.OS === 'android' 
+        ? (StatusBar.currentHeight ?? 0) 
+        : 0,
+  }]}>
       <View style={styles.headerContent}>
         <TouchableOpacity 
           onPress={onBack}
@@ -402,14 +406,15 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 12,
+    marginTop: Platform.OS === 'ios' ? -60 : Platform.OS === 'android' ? -30 : 0,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 56,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  minHeight: 52,
+},
   backButton: {
     width: 40,
     height: 40,
