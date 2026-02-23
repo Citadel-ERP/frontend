@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   addButton: {
-    backgroundColor: '#00d285',
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
