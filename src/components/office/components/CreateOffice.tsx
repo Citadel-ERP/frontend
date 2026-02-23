@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OfficeFormData } from '../types/office.types';
@@ -45,27 +46,22 @@ export const CreateOffice: React.FC<CreateOfficeProps> = ({
   const validateForm = (): boolean => {
     const newErrors: typeof errors = {};
 
-    // Required fields
     if (!formData.name.trim()) newErrors.name = 'Office name is required';
     if (!formData.address.trim()) newErrors.address = 'Address is required';
     if (!formData.city.trim()) newErrors.city = 'City is required';
     if (!formData.state.trim()) newErrors.state = 'State is required';
     if (!formData.country.trim()) newErrors.country = 'Country is required';
     if (!formData.zipcode.trim()) newErrors.zipcode = 'Zip code is required';
+
     if (!formData.googleMapsLink.trim()) {
       newErrors.googleMapsLink = 'Google Maps link is required';
     } else {
-      // Validate maps link
-      try {
-        const coords = MapsLinkParser.extractCoordinates(formData.googleMapsLink);
-        if (!coords) {
-          newErrors.googleMapsLink = 'Could not extract coordinates from the link';
-        } else {
-          setMapsLinkValid(true);
-        }
-      } catch (e) {
-        newErrors.googleMapsLink = 'Invalid Google Maps link format';
+      const coords = MapsLinkParser.extractCoordinates(formData.googleMapsLink);
+      if (!coords) {
+        newErrors.googleMapsLink = 'Could not extract coordinates from the link';
         setMapsLinkValid(false);
+      } else {
+        setMapsLinkValid(true);
       }
     }
 
@@ -86,8 +82,9 @@ export const CreateOffice: React.FC<CreateOfficeProps> = ({
 
   const handleMapsLinkChange = (text: string) => {
     setFormData(prev => ({ ...prev, googleMapsLink: text }));
-    
-    // Real-time validation (optional)
+    if (errors.googleMapsLink) {
+      setErrors(prev => ({ ...prev, googleMapsLink: undefined }));
+    }
     if (text.trim()) {
       const coords = MapsLinkParser.extractCoordinates(text);
       setMapsLinkValid(!!coords);
@@ -97,11 +94,10 @@ export const CreateOffice: React.FC<CreateOfficeProps> = ({
   };
 
   const handlePasteExample = () => {
-    setFormData(prev => ({
-      ...prev,
-      googleMapsLink: 'https://maps.google.com/?q=40.7128,-74.0060',
-    }));
+    const example = 'https://maps.google.com/?q=40.7128,-74.0060';
+    setFormData(prev => ({ ...prev, googleMapsLink: example }));
     setMapsLinkValid(true);
+    setErrors(prev => ({ ...prev, googleMapsLink: undefined }));
   };
 
   const renderInput = (
@@ -125,16 +121,16 @@ export const CreateOffice: React.FC<CreateOfficeProps> = ({
           field === 'googleMapsLink' && mapsLinkValid === true && styles.inputValid,
         ]}
         placeholder={placeholder}
+        placeholderTextColor="#9CA3AF"
         value={formData[field]}
         onChangeText={(text) => {
           if (field === 'googleMapsLink') {
             handleMapsLinkChange(text);
           } else {
             setFormData(prev => ({ ...prev, [field]: text }));
-          }
-          // Clear error for this field
-          if (errors[field]) {
-            setErrors(prev => ({ ...prev, [field]: undefined }));
+            if (errors[field]) {
+              setErrors(prev => ({ ...prev, [field]: undefined }));
+            }
           }
         }}
         multiline={options?.multiline}
@@ -155,92 +151,110 @@ export const CreateOffice: React.FC<CreateOfficeProps> = ({
   );
 
   return (
-    <ScrollView 
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {initialData ? 'Update Office' : 'Create New Office'}
-        </Text>
-        <TouchableOpacity onPress={onCancel} disabled={loading}>
-          <Ionicons name="close" size={24} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
-
-      {renderInput('name', 'Office Name')}
-      {renderInput('address', 'Street Address', { multiline: true })}
-      
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          {renderInput('city', 'City')}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {initialData ? 'Update Office' : 'Create New Office'}
+          </Text>
+          <TouchableOpacity
+            onPress={onCancel}
+            disabled={loading}
+            style={styles.closeButton}
+          >
+            <Ionicons name="close" size={24} color="#6B7280" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.halfWidth}>
-          {renderInput('state', 'State')}
-        </View>
-      </View>
 
-      <View style={styles.row}>
-        <View style={styles.halfWidth}>
-          {renderInput('country', 'Country')}
-        </View>
-        <View style={styles.halfWidth}>
-          {renderInput('zipcode', 'Zip Code')}
-        </View>
-      </View>
+        {/* Basic Info */}
+        {renderInput('name', 'Office Name')}
+        {renderInput('address', 'Street Address', { multiline: true })}
 
-      <View style={styles.mapsSection}>
-        <Text style={styles.sectionTitle}>Location (from Google Maps)</Text>
-        <Text style={styles.sectionDescription}>
-          Paste a Google Maps link to automatically set the coordinates
-        </Text>
-        
-        {renderInput('googleMapsLink', 'Google Maps Link')}
-        
-        <TouchableOpacity 
-          style={styles.exampleLink}
-          onPress={handlePasteExample}
-        >
-          <Ionicons name="copy-outline" size={16} color="#008069" />
-          <Text style={styles.exampleLinkText}>Use example link</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.row}>
+          <View style={styles.halfWidth}>
+            {renderInput('city', 'City')}
+          </View>
+          <View style={styles.halfWidth}>
+            {renderInput('state', 'State')}
+          </View>
+        </View>
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={onCancel}
-          disabled={loading}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.button, styles.submitButton]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitButtonText}>
-              {initialData ? 'Update' : 'Create'}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        <View style={styles.row}>
+          <View style={styles.halfWidth}>
+            {renderInput('country', 'Country')}
+          </View>
+          <View style={styles.halfWidth}>
+            {renderInput('zipcode', 'Zip Code')}
+          </View>
+        </View>
+
+        {/* Maps Section */}
+        <View style={styles.mapsSection}>
+          <Text style={styles.sectionTitle}>Location (from Google Maps)</Text>
+          <Text style={styles.sectionDescription}>
+            Paste a Google Maps link to automatically set the coordinates
+          </Text>
+
+          {renderInput('googleMapsLink', 'Google Maps Link', {
+            autoCapitalize: 'none',
+          })}
+
+          <TouchableOpacity
+            style={styles.exampleLink}
+            onPress={handlePasteExample}
+            disabled={loading}
+          >
+            <Ionicons name="copy-outline" size={16} color="#008069" />
+            <Text style={styles.exampleLinkText}>Use example link</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={onCancel}
+            disabled={loading}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.submitButton]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>
+                {initialData ? 'Update' : 'Create'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: '#FFFFFF',
   },
   contentContainer: {
-    padding: 20,
+    padding: 24,
+    paddingBottom: 80,
   },
   header: {
     flexDirection: 'row',
@@ -252,6 +266,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#1F2937',
+  },
+  closeButton: {
+    padding: 8,
+    marginRight: -8,
   },
   inputContainer: {
     marginBottom: 16,
@@ -272,6 +290,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#F9FAFB',
+    color: '#111827',
   },
   inputError: {
     borderColor: '#EF4444',
@@ -279,6 +298,7 @@ const styles = StyleSheet.create({
   },
   inputValid: {
     borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
   },
   errorText: {
     color: '#EF4444',
@@ -336,7 +356,6 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 16,
   },
   button: {
     flex: 1,

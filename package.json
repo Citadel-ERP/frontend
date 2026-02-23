@@ -28,6 +28,7 @@
     "expo-background-fetch": "~14.0.9",
     "expo-camera": "~17.0.10",
     "expo-constants": "^18.0.10",
+    "expo-contacts": "~15.0.11",
     "expo-dev-client": "~6.0.12",
     "expo-device": "^8.0.9",
     "expo-document-picker": "~14.0.8",

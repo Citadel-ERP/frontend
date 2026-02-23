@@ -129,11 +129,7 @@ export const useOffices = () => {
           'Cannot Delete Office',
           err.message,
           [
-            { text: 'OK' },
-            { 
-              text: 'View Employees', 
-              onPress: () => console.log('Navigate to employees') 
-            }
+            { text: 'OK' }
           ]
         );
       } else {

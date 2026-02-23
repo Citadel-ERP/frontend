@@ -20,7 +20,11 @@ import { NewChat } from './newChat';
 import { Edit } from './edit';
 import ShareScreen from './share';
 import { AddMember } from './addMember';
-import { CameraRecorder } from './cameraRecorder'; 
+import { CameraRecorder } from './cameraRecorder';
+import { BlockedContactsScreen } from './BlockedContactsScreen';
+import { MessageInfo } from './messageInfo';
+import { ContactPicker, ContactData } from './contactPicker';
+
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -121,7 +125,7 @@ export interface Notification {
   is_read: boolean;
 }
 
-export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share' | 'addMember';
+export type ViewMode = 'list' | 'chat' | 'chatDetails' | 'newGroup' | 'newChat' | 'edit' | 'share' | 'addMember' | 'messageInfo';
 
 interface CitadelHubProps {
   apiBaseUrl: string;
@@ -183,6 +187,10 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [userStatuses, setUserStatuses] = useState<{ [userId: string]: 'online' | 'offline' | 'away' | 'busy' }>({});
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showBlockedContacts, setShowBlockedContacts] = useState(false);
+  const [messageInfoTarget, setMessageInfoTarget] = useState<Message | null>(null);
+  const [showContactPicker, setShowContactPicker] = useState(false);
+
 
   // ✅ NEW: Camera state
   const [cameraVisible, setCameraVisible] = useState(false);
@@ -200,6 +208,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const [isConnected, setIsConnected] = useState(false);
   const pingInterval = useRef<NodeJS.Timeout | null>(null);
   const maxReconnectAttempts = 10;
+
   const isReconnecting = useRef(false);
 
   // Pagination
@@ -273,6 +282,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   }, []);
 
+  const handleMessageInfo = useCallback((message: Message) => {
+    setMessageInfoTarget(message);
+    setViewMode('messageInfo');
+
+  }, []);
+
   // ============= MARK AS UNREAD (single declaration, async with API call) =============
   const markAsUnread = useCallback(async (roomId: number) => {
     // Optimistic update: show dot immediately
@@ -287,6 +302,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       console.error('Error marking as unread:', error);
     }
   }, []);
+
+
 
   // ✅ NEW: Camera capture handler — sends captured photo/video as a message
   const handleCameraCapture = useCallback((uri: string, type: 'picture' | 'video') => {
@@ -789,6 +806,104 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       return false;
     }
   }, []);
+
+  const sendContactMessage = useCallback(async (contact: ContactData): Promise<void> => {
+    if (!selectedChatRoom) return;
+
+    // Generate unique temp ID with more entropy
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // ✅ Create completely fresh contact data object
+    const safeContactData: ContactData = {
+      name: contact.name,
+      phone_numbers: contact.phone_numbers.map(p => ({
+        label: p.label,
+        number: p.number,
+      })),
+      emails: contact.emails?.map(e => ({
+        label: e.label,
+        email: e.email,
+      })) || [],
+    };
+
+    const tempMessage: Message = {
+      id: tempId as any,
+      sender: currentUser,
+      content: safeContactData.name,
+      message_type: 'contact',
+      created_at: new Date().toISOString(),
+      is_edited: false,
+      contact_data: safeContactData as any,
+      chat_room: selectedChatRoom.id,
+      status: 'sending',
+      tempId,
+    };
+
+    setMessages(prev => {
+      const updated = [...prev, tempMessage];
+      saveMessageCache(selectedChatRoom.id, updated);
+      return updated;
+    });
+
+    // ✅ Send with fresh serialization
+    const sent = sendWebSocketMessage('send_message', {
+      room_id: selectedChatRoom.id,
+      content: safeContactData.name,
+      message_type: 'contact',
+      contact_data: {
+        name: safeContactData.name,
+        phone_numbers: safeContactData.phone_numbers.map(p => ({ ...p })),
+        emails: safeContactData?.emails?.map(e => ({ ...e })),
+      },
+      temp_id: tempId,
+    });
+
+    if (!sent) {
+      setMessages(prev => {
+        const updated = prev.map(m =>
+          String(m.id) === tempId
+            ? { ...m, status: 'failed' as MessageStatus }
+            : m
+        );
+        saveMessageCache(selectedChatRoom.id, updated);
+        return updated;
+      });
+    }
+
+    // ✅ Return promise to allow sequential sending
+    return Promise.resolve();
+  }, [selectedChatRoom, currentUser, sendWebSocketMessage, saveMessageCache]);
+
+  const handleContactSend = useCallback(async (contacts: ContactData[]) => {
+    if (!selectedChatRoom) return;
+
+    // ✅ FIX: Send contacts sequentially with small delay to prevent accumulation
+    for (let i = 0; i < contacts.length; i++) {
+      const contact = contacts[i];
+
+      // Create a completely isolated copy
+      const isolatedContact: ContactData = {
+        name: contact.name,
+        phone_numbers: contact.phone_numbers.map(p => ({
+          label: p.label,
+          number: p.number,
+        })),
+        emails: contact.emails?.map(e => ({
+          label: e.label,
+          email: e.email,
+        })) || [],
+      };
+
+      await sendContactMessage(isolatedContact);
+
+      // Small delay between sends to prevent race conditions
+      if (i < contacts.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }, [selectedChatRoom, sendContactMessage]);
+
+
 
   const retryPendingActions = useCallback(() => {
     pendingActions.forEach(action => {
@@ -1542,6 +1657,8 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     handlersRef.current.handleChatCleared = handleChatCleared;
   }, [handleChatCleared]);
 
+  const searchAccumulatorRef = useRef<Message[]>([]);
+
   const handleSearchResults = useCallback((data: any) => {
     const { messages: results, has_more } = data;
     if (searchCallbackRef.current) {
@@ -1877,10 +1994,26 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
     }
   };
 
-  const muteChat = async (roomId: number) => {
+  const muteChat = async (roomId: number, duration: string = 'always') => {
     try {
-      await apiCall('muteChat', { chat_room_id: roomId });
-      await loadChatRooms();
+      const result = await apiCall('muteChat', { chat_room_id: roomId, duration });
+      const mutedUntil = result.muted_until ?? null;
+
+      // Optimistic update — list
+      setChatRooms(prev =>
+        prev.map(room =>
+          room.id === roomId
+            ? { ...room, is_muted: true, muted_until: mutedUntil }
+            : room
+        )
+      );
+
+      // Optimistic update — open chat (so ChatDetails re-renders immediately)
+      if (selectedChatRoom && selectedChatRoom.id === roomId) {
+        setSelectedChatRoom(prev =>
+          prev ? { ...prev, is_muted: true, muted_until: mutedUntil } : prev
+        );
+      }
     } catch (error) {
       console.error('Error muting chat:', error);
     }
@@ -1889,7 +2022,20 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const unmuteChat = async (roomId: number) => {
     try {
       await apiCall('unmuteChat', { chat_room_id: roomId });
-      await loadChatRooms();
+
+      setChatRooms(prev =>
+        prev.map(room =>
+          room.id === roomId
+            ? { ...room, is_muted: false, muted_until: null }
+            : room
+        )
+      );
+
+      if (selectedChatRoom && selectedChatRoom.id === roomId) {
+        setSelectedChatRoom(prev =>
+          prev ? { ...prev, is_muted: false, muted_until: null } : prev
+        );
+      }
     } catch (error) {
       console.error('Error unmuting chat:', error);
     }
@@ -2109,13 +2255,13 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
   // ============= EVENT HANDLERS =============
   const handleChatSelect = useCallback((room: ChatRoom) => {
-  // Clear unread dot when opening chat
-  setChatRooms(prev => prev.map(r =>
-    r.id === room.id ? { ...r, unread_count: 0 } : r
-  ));
-  setSelectedChatRoom({ ...room, unread_count: 0 });
-  setViewMode('chat');
-}, []);
+    // Clear unread dot when opening chat
+    setChatRooms(prev => prev.map(r =>
+      r.id === room.id ? { ...r, unread_count: 0 } : r
+    ));
+    setSelectedChatRoom({ ...room, unread_count: 0 });
+    setViewMode('chat');
+  }, []);
 
   const loadMoreMessages = useCallback(() => {
     if (selectedChatRoom && hasMoreMessages && !isLoadingMessages) {
@@ -2128,11 +2274,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   const handleSearch = useCallback((
     query: string,
     offset: number,
-    onResult: (results: Message[], hasMore: boolean) => void
+    callback?: (results: Message[], hasMore: boolean) => void
   ) => {
     if (!selectedChatRoom) return;
-    searchCallbackRef.current = onResult;
+
+    // Store callback — will be fired when backend streaming is done
+    if (callback) {
+      searchCallbackRef.current = callback;
+      searchAccumulatorRef.current = []; // reset accumulator for new search
+    }
+
     sendWebSocketMessage('search_messages', {
+      chat_room_id: selectedChatRoom.id,
       room_id: selectedChatRoom.id,
       query,
       offset,
@@ -2381,7 +2534,18 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#008069" />
-      {viewMode === 'list' && (
+      {showBlockedContacts && (
+        <BlockedContactsScreen
+          onBack={() => setShowBlockedContacts(false)}
+          apiCall={apiCall}
+          onUnblock={async (roomId: number) => {
+            await apiCall('unblock_chat', { chat_room_id: roomId });
+            await loadChatRooms();  // refresh so unblocked chat reappears in list
+          }}
+        />
+      )}
+
+      {!showBlockedContacts && viewMode === 'list' && (
         <View style={styles.listView}>
           <Header
             currentUser={currentUser}
@@ -2389,6 +2553,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onMenuClick={(action) => {
               if (action === 'newGroup') setViewMode('newGroup');
               if (action === 'newChat') setViewMode('newChat');
+              if (action === 'blockedContacts') setShowBlockedContacts(true);
             }}
             onBack={() => {
               if (onBack) onBack();
@@ -2405,7 +2570,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             chatRooms={getFilteredChatRooms()}
             currentUser={currentUser}
             onChatSelect={handleChatSelect}
-            onMute={muteChat}
+            onMute={(roomId: number, duration: string) => muteChat(roomId, duration)}
             onUnmute={unmuteChat}
             onPin={pinChat}
             onUnpin={unpinChat}
@@ -2448,6 +2613,23 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           onShare={handleShare}
           onRetry={handleRetryMessage}
           ws={ws}
+          onMessageInfo={handleMessageInfo}
+          onMute={(duration: string) => muteChat(selectedChatRoom.id, duration)}
+          onUnmute={() => unmuteChat(selectedChatRoom.id)}
+          onContactPress={() => setShowContactPicker(true)}
+        />
+      )}
+
+      {viewMode === 'messageInfo' && messageInfoTarget && selectedChatRoom && (
+        <MessageInfo
+          message={messageInfoTarget}
+          chatRoom={selectedChatRoom}
+          currentUser={currentUser}
+          onBack={() => {
+            setViewMode('chat');
+            setMessageInfoTarget(null);
+          }}
+          apiCall={apiCall}
         />
       )}
 
@@ -2471,7 +2653,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           currentUser={currentUser}
           onBack={() => setViewMode('chat')}
           onEdit={() => setViewMode('edit')}
-          onMute={() => muteChat(selectedChatRoom.id)}
+          onMute={(duration: string) => muteChat(selectedChatRoom.id, duration)}
           onUnmute={() => unmuteChat(selectedChatRoom.id)}
           onAddMember={handleAddMember}
           onExitGroup={handleExitGroup}
@@ -2589,6 +2771,12 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
         mode={cameraMode}
         onClose={() => setCameraVisible(false)}
         onCapture={handleCameraCapture}
+      />
+
+      <ContactPicker
+        visible={showContactPicker}
+        onClose={() => setShowContactPicker(false)}
+        onSend={handleContactSend}
       />
     </SafeAreaView>
   );

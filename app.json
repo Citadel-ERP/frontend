@@ -53,6 +53,7 @@
         "NSPhotoLibraryUsageDescription": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
         "NSPhotoLibraryAddUsageDescription": "Citadel needs permission to save photos to your photo library.",
         "NSFaceIDUsageDescription": "Face ID is used to securely authenticate you.",
+        "NSContactsUsageDescription": "Citadel needs access to your contacts so you can share them in chats.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
           "attendance": "Your location is needed to verify you are at the office for attendance."
         },
@@ -84,7 +85,9 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
       ]
     },
     "web": {
@@ -94,6 +97,12 @@
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Citadel needs access to your contacts so you can share them in chats."
+        }
+      ],
       [
         "expo-location",
         {

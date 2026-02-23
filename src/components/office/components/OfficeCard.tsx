@@ -10,14 +10,13 @@ import {
   UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Office } from '../types/office.types';  // Import Office type
+import { Office } from '../types/office.types';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Rename the props interface to avoid conflict
 interface OfficeCardProps {
   office: Office;
   onEdit: (office: Office) => void;
@@ -47,7 +46,7 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded(!expanded);
-    
+
     Animated.timing(animation, {
       toValue: expanded ? 0 : 1,
       duration: 300,
@@ -66,11 +65,12 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({
   };
 
   const getCoordinatesDisplay = () => {
-  if (!office.latitude || !office.longitude) {
-    return 'Coordinates not available';
-  }
-  return `${office.latitude.toFixed(6)}, ${office.longitude.toFixed(6)}`;
-};
+    if (!office.latitude || !office.longitude) {
+      return 'No coords';
+    }
+    // Shortened to prevent overflow
+    return `${office.latitude.toFixed(4)}, ${office.longitude.toFixed(4)}`;
+  };
 
   return (
     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.borderColor }]}>
@@ -89,26 +89,29 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({
             </Text>
           </View>
         </View>
-        
+
         <Animated.View style={{ transform: [{ rotate: rotateArrow }] }}>
           <Ionicons name="chevron-down" size={20} color={theme.textSub} />
         </Animated.View>
       </TouchableOpacity>
 
-      {/* Quick Info Row - Always Visible */}
+      {/* Quick Info Row - FIX: wrap and constrain to prevent overflow */}
       <View style={styles.quickInfoRow}>
-        <View style={styles.coordinatePill}>
+        <View style={[styles.coordinatePill, { flex: 1, marginRight: 6 }]}>
           <Ionicons name="locate" size={12} color={theme.accentBlue} />
-          <Text style={[styles.coordinateText, { color: theme.textSub }]}>
+          <Text
+            style={[styles.coordinateText, { color: theme.textSub }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {getCoordinatesDisplay()}
           </Text>
         </View>
-        
+
         <View style={styles.employeeCountPill}>
           <Ionicons name="people" size={12} color={theme.textSub} />
           <Text style={[styles.employeeCountText, { color: theme.textSub }]}>
-            {/* This would need actual employee count from API */}
-            0 employees
+            0
           </Text>
         </View>
       </View>
@@ -117,7 +120,7 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({
       {expanded && (
         <View style={styles.expandedContent}>
           <View style={[styles.divider, { backgroundColor: theme.borderColor }]} />
-          
+
           {/* Full Address */}
           <View style={styles.detailRow}>
             <Ionicons name="location-outline" size={18} color={theme.textSub} />
@@ -131,6 +134,14 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({
             <Ionicons name="flag-outline" size={18} color={theme.textSub} />
             <Text style={[styles.detailText, { color: theme.textSub }]}>
               {office.address.country}
+            </Text>
+          </View>
+
+          {/* Coordinates (full precision in expanded) */}
+          <View style={styles.detailRow}>
+            <Ionicons name="locate" size={18} color={theme.textSub} />
+            <Text style={[styles.detailText, { color: theme.textSub }]}>
+              {office.latitude?.toFixed(6) ?? 'N/A'}, {office.longitude?.toFixed(6) ?? 'N/A'}
             </Text>
           </View>
 
@@ -164,17 +175,6 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({
               </Text>
             </TouchableOpacity>
           </View>
-
-          {/* Warning for offices with employees (if API provides count) */}
-          {/* This is a placeholder - you'd need to get actual employee count */}
-          {false && (
-            <View style={[styles.warningBox, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-              <Ionicons name="warning" size={16} color={theme.warning} />
-              <Text style={[styles.warningText, { color: theme.warning }]}>
-                5 employees assigned to this office
-              </Text>
-            </View>
-          )}
         </View>
       )}
     </View>
@@ -202,6 +202,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
   },
   iconContainer: {
     width: 48,
@@ -222,11 +223,12 @@ const styles = StyleSheet.create({
   officeCity: {
     fontSize: 13,
   },
+  // FIX: removed marginLeft offset, use flexDirection row with flex so pills share space
   quickInfoRow: {
     flexDirection: 'row',
     marginTop: 12,
-    marginLeft: 60, // Align with icon width + margin
-    gap: 8,
+    marginLeft: 60,
+    alignItems: 'center',
   },
   coordinatePill: {
     flexDirection: 'row',
@@ -236,10 +238,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
+    overflow: 'hidden',
   },
   coordinateText: {
     fontSize: 11,
     fontFamily: 'monospace',
+    flexShrink: 1,
   },
   employeeCountPill: {
     flexDirection: 'row',
@@ -249,6 +253,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
+    flexShrink: 0,
   },
   employeeCountText: {
     fontSize: 11,
@@ -307,17 +312,5 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
-    gap: 8,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 13,
   },
 });

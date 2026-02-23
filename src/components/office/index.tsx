@@ -3,21 +3,19 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   SafeAreaView,
   FlatList,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useOffices } from './hooks/useOffices';
 import { DeleteOffice } from './components/DeleteOffice';
 import { CreateOffice } from './components/CreateOffice';
 import { OfficeHeader } from './components/OfficeHeader';
-import { ListOffices } from './components/ListOffices';
 import { Office, OfficeFormData } from './types/office.types';
 import { UpdateOffice } from './components/UpdateOffice';
-import { globalStyles } from './styles';
 import { OfficeCard } from './components/OfficeCard';
 
 interface OfficeModuleProps {
@@ -90,43 +88,12 @@ export default function OfficeModule({ onBack, isDark = false }: OfficeModulePro
     cancelDelete();
   };
 
-  // Theme colors
   const theme = {
     bgColor: isDark ? '#050b18' : '#ece5dd',
     cardBg: isDark ? '#111a2d' : '#f6f6f6',
     textMain: isDark ? '#ffffff' : '#333333',
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: '#008069',
-  };
-
-  // Render content - use FlatList instead of ScrollView
-  const renderContent = () => {
-    if (loading && !refreshing) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.accentBlue} />
-          <Text style={[styles.loadingText, { color: theme.textSub }]}>
-            Loading offices...
-          </Text>
-        </View>
-      );
-    }
-
-    if (offices.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="business-outline" size={80} color={theme.textSub} />
-          <Text style={[styles.emptyTitle, { color: theme.textMain }]}>
-            No Offices Found
-          </Text>
-          <Text style={[styles.emptyText, { color: theme.textSub }]}>
-            Click the + button to create your first office location
-          </Text>
-        </View>
-      );
-    }
-
-    return null;
   };
 
   const renderOfficeItem = ({ item }: { item: Office }) => (
@@ -148,7 +115,7 @@ export default function OfficeModule({ onBack, isDark = false }: OfficeModulePro
         isDark={isDark}
       />
 
-      {/* Content - Use FlatList to avoid nesting issues */}
+      {/* Content */}
       {loading && !refreshing && offices.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.accentBlue} />
@@ -172,7 +139,6 @@ export default function OfficeModule({ onBack, isDark = false }: OfficeModulePro
           renderItem={renderOfficeItem}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
-          scrollEnabled={modalState === 'none'}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -183,32 +149,48 @@ export default function OfficeModule({ onBack, isDark = false }: OfficeModulePro
         />
       )}
 
-      {/* Create Modal */}
-      {modalState === 'create' && (
-        <View style={styles.modalContainer}>
-          <CreateOffice
-            onSubmit={handleSubmitCreate}
-            onCancel={handleCancel}
-            loading={loading}
-          />
-        </View>
-      )}
-
-      {/* Update Modal */}
-      {modalState === 'update' && editingOffice && (
+      {/* ── CREATE MODAL ── */}
+      <Modal
+        visible={modalState === 'create'}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCancel}
+        statusBarTranslucent
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <UpdateOffice
-              office={editingOffice}
-              onSubmit={handleSubmitUpdate}
+          <View style={styles.modalSheet}>
+            <CreateOffice
+              onSubmit={handleSubmitCreate}
               onCancel={handleCancel}
               loading={loading}
             />
           </View>
         </View>
-      )}
+      </Modal>
 
-      {/* Delete Modal */}
+      {/* ── UPDATE MODAL ── */}
+      <Modal
+        visible={modalState === 'update' && editingOffice !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCancel}
+        statusBarTranslucent
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            {editingOffice && (
+              <UpdateOffice
+                office={editingOffice}
+                onSubmit={handleSubmitUpdate}
+                onCancel={handleCancel}
+                loading={loading}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── DELETE MODAL ── (uses its own internal Modal, so no wrapper needed) */}
       <DeleteOffice
         visible={modalState === 'delete'}
         office={selectedOffice}
@@ -222,7 +204,8 @@ export default function OfficeModule({ onBack, isDark = false }: OfficeModulePro
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   listContent: {
     padding: 16,
@@ -232,7 +215,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 400,
   },
   loadingText: {
     marginTop: 12,
@@ -242,7 +224,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 400,
     paddingHorizontal: 40,
   },
   emptyTitle: {
@@ -256,39 +237,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  modalContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
+  // Semi-transparent backdrop that fills the screen
   modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',   // Sheet slides up from the bottom
   },
-  modalContent: {
+  // The white sheet that contains the form
+  modalSheet: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    width: '90%',
-    maxWidth: 500,
-    maxHeight: '85%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '92%',
     overflow: 'hidden',
+    // Shadow for iOS
+    minHeight: 600, 
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    // Shadow for Android
+    elevation: 20,
   },
 });

@@ -102,6 +102,13 @@ export const Header: React.FC<HeaderProps> = ({
 
             <TouchableOpacity 
               style={styles.dropdownItem}
+              onPress={() => { onMenuClick('blockedContacts'); setShowMenu(false); }}
+            >
+              <Text style={styles.dropdownText}>Blocked contacts</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dropdownItem}
               onPress={() => setShowMenu(false)}
             >
               <Text style={styles.dropdownText}>Settings</Text>

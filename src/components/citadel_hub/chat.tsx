@@ -21,6 +21,7 @@ import {
   Clipboard,
   ImageBackground,
   StatusBar,
+  Pressable
 
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -35,6 +36,9 @@ import { Video, ResizeMode } from 'expo-av';
 import { AudioRecorder } from './audioRecorder';
 import { AudioPlayer } from './audioPlayer';
 import { getAvatarColor } from './avatarColors';
+import { ContactMessage } from './contactMessage';
+import { ContactDetail } from './contactDetail';
+import { ContactData } from './contactPicker';
 
 
 
@@ -72,6 +76,11 @@ interface MessageReaction {
   emoji: string;
 }
 
+interface MessageReadReceipt {
+  user: User;
+  read_at: string;
+}
+
 // ============= MESSAGE STATUS TYPE =============
 type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
@@ -96,6 +105,7 @@ interface Message {
   status?: MessageStatus;
   tempId?: string;
   isUploading?: boolean;
+  read_receipts?: MessageReadReceipt[];
   // ========================================
 }
 
@@ -131,17 +141,51 @@ interface ChatProps {
   onLoadMore: () => void;
   hasMore: boolean;
   isLoading: boolean;
-  onSearch: (query: string, offset: number) => void;
+  onSearch: (query: string, offset: number, callback?: (results: Message[], hasMore: boolean) => void) => void;
   onClearChat: () => void;
   onDeleteForMe: (messageId: number) => void;
   onDeleteForEveryone: (messageId: number) => void;
   onShare?: (messageIds: number[], messages: Message[], chatRoomId?: number) => void;
   onRetry?: (tempId: string) => void;
   ws?: React.MutableRefObject<WebSocket | null>;
+  onMessageInfo?: (message: Message) => void;
+  onMute?: (duration: string) => void;
+  onUnmute?: () => void;
+  onContactPress?: () => void;
 }
 
 const QUICK_REACTIONS = ['😂', '👍', '😢', '❤️', '😮', '🙏', '👏'];
 
+const getEffectiveStatus = (
+  message: Message,
+  currentUser: User,
+  chatRoom: ChatRoom
+): MessageStatus | undefined => {
+  // Always trust explicit frontend status for in-progress states
+  if (message.status === 'sending' || message.status === 'failed') {
+    return message.status;
+  }
+  // Status ticks only apply to own messages
+  const currentUserId = currentUser.id || currentUser.employee_id;
+  const senderId = message.sender.id || message.sender.employee_id;
+  if (senderId !== currentUserId) {
+    return message.status;
+  }
+  // If backend sent read_receipts, derive 'read' from them
+  const receipts = message.read_receipts;
+  if (receipts && receipts.length > 0) {
+    const readByOther = receipts.some(r => {
+      const rUserId = r.user?.id || r.user?.employee_id;
+      return rUserId !== currentUserId;
+    });
+    if (readByOther) return 'read';
+  }
+  // Fall back to explicit status if set
+  if (message.status) return message.status;
+  // Real DB messages (non-temp IDs) default to 'delivered'
+  if (!String(message.id).startsWith('temp_')) return 'delivered';
+  return undefined;
+};
 
 const MessageStatusTick: React.FC<{ status?: MessageStatus }> = ({ status }) => {
   if (status === 'sending') {
@@ -192,18 +236,7 @@ const MessageStatusTick: React.FC<{ status?: MessageStatus }> = ({ status }) => 
   }
   return null;
 };
-//   if (status === 'read') {
-//     return (
-//       <Ionicons
-//         name="checkmark-done"
-//         size={14}
-//         color="#53bdeb"
-//         style={styles.messageStatus}
-//       />
-//     );
-//   }
-//   return null;
-// };
+
 
 
 interface SwipeableMessageProps {
@@ -388,6 +421,10 @@ export const Chat: React.FC<ChatProps> = ({
   onShare,
   onRetry,
   ws,
+  onMessageInfo,
+  onMute,
+  onUnmute,
+  onContactPress
 }) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -418,6 +455,9 @@ export const Chat: React.FC<ChatProps> = ({
   const [showCameraRecorder, setShowCameraRecorder] = useState(false);
   const [cameraMode, setCameraMode] = useState<'picture' | 'video'>('picture');
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const [showMuteSheet, setShowMuteSheet] = useState(false);
+  const [contactDetailVisible, setContactDetailVisible] = useState(false);
+  const [detailContact, setDetailContact] = useState<ContactData | null>(null);
 
   // ── Highlight state for scroll-to-parent ──
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | string | null>(null);
@@ -685,6 +725,11 @@ export const Chat: React.FC<ChatProps> = ({
     setShowAudioRecorder(false);
   };
 
+  const handleViewContact = useCallback((contactData: ContactData) => {
+    setDetailContact(contactData);
+    setContactDetailVisible(true);
+  }, []);
+
   const getChatAvatar = useCallback(() => {
     if (chatRoom.room_type === 'group') {
       if (chatRoom.profile_picture) {
@@ -856,6 +901,12 @@ export const Chat: React.FC<ChatProps> = ({
       setShowMessageOptionsModal(false);
     });
   };
+  const isLongPressedMessageOwn = useMemo(() => {
+    if (!longPressedMessage) return false;
+    const currentUserId = currentUser.id || currentUser.employee_id;
+    const senderId = longPressedMessage.sender.id || longPressedMessage.sender.employee_id;
+    return senderId === currentUserId;
+  }, [longPressedMessage, currentUser]);
 
   const handleDeleteForMe = () => {
     setShowDeleteModal(false);
@@ -928,7 +979,9 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleMessageInfo = () => {
-    Alert.alert('Message Info', 'Opening message information...');
+    if (longPressedMessage && onMessageInfo) {
+      onMessageInfo(longPressedMessage);
+    }
     setShowMessageOptionsModal(false);
     handleClearSelection();
   };
@@ -1196,8 +1249,27 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleMuteChat = () => {
-    Alert.alert('Mute Chat', 'You will not receive notifications from this chat');
     setShowOptionsModal(false);
+    if (chatRoom.is_muted) {
+      if (onUnmute) {
+        onUnmute();
+        Alert.alert('Unmuted', 'Notifications turned on.', [{ text: 'OK' }]);
+      }
+    } else {
+      setShowMuteSheet(true);
+    }
+  };
+
+  const handleMuteOption = (duration: string, label: string) => {
+    setShowMuteSheet(false);
+    if (onMute) {
+      onMute(duration);
+      Alert.alert(
+        'Notifications Muted',
+        duration === 'always' ? 'Muted forever.' : `Muted for ${label}.`,
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const handleSearchPress = () => {
@@ -1213,24 +1285,34 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleSearchTextChange = (text: string) => {
-    setSearchText(text);
-    if (text.trim()) {
-      setSearchOffset(0);
-      setIsSearching(true);
-      onSearch(text, 0);
-    } else {
-      setSearchResults([]);
-    }
-  };
+  setSearchText(text);
+  if (text.trim()) {
+    setSearchOffset(0);
+    setSearchResults([]);  // clear previous results
+    setIsSearching(true);
+    onSearch(text, 0, (results, hasMore) => {
+      setSearchResults(results);
+      setHasMoreSearchResults(hasMore);
+      setIsSearching(false);
+    });
+  } else {
+    setSearchResults([]);
+    setIsSearching(false);
+  }
+};
 
   const handleSearchLoadMore = () => {
-    if (!isSearching && hasMoreSearchResults && searchText.trim()) {
-      const newOffset = searchOffset + 100;
-      setSearchOffset(newOffset);
-      setIsSearching(true);
-      onSearch(searchText, newOffset);
-    }
-  };
+  if (!isSearching && hasMoreSearchResults && searchText.trim()) {
+    const newOffset = searchOffset + 20;
+    setSearchOffset(newOffset);
+    setIsSearching(true);
+    onSearch(searchText, newOffset, (results, hasMore) => {
+      setSearchResults(prev => [...prev, ...results]);
+      setHasMoreSearchResults(hasMore);
+      setIsSearching(false);
+    });
+  }
+};
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -1269,13 +1351,16 @@ export const Chat: React.FC<ChatProps> = ({
   // renderMessage
   // ──────────────────────────────────────────────────────────
   const renderMessage = ({ item: message, index }: { item: Message; index: number }) => {
+    // ── System messages ────────────────────────────────────────────────────────
     if (message.message_type === 'system') {
       const showDate = shouldShowDateSeparator(index, messagesToDisplay);
       return (
         <>
           {showDate && (
             <View style={styles.dateSeparator}>
-              <Text style={styles.dateSeparatorText}>{formatDate(message.created_at)}</Text>
+              <Text style={styles.dateSeparatorText}>
+                {formatDate(message.created_at)}
+              </Text>
             </View>
           )}
           <View style={styles.systemMessageContainer}>
@@ -1285,29 +1370,32 @@ export const Chat: React.FC<ChatProps> = ({
       );
     }
 
-    const isOwnMessage = (message.sender.id || message.sender.employee_id) === (currentUser.id || currentUser.employee_id);
+    // ── Derived state ──────────────────────────────────────────────────────────
+    const isOwnMessage =
+      (message.sender.id || message.sender.employee_id) ===
+      (currentUser.id || currentUser.employee_id);
+
     const showDate = shouldShowDateSeparator(index, messagesToDisplay);
     const reactions = groupedReactions(message.reactions || []);
     const isSelected = selectedMessages.includes(message.id as number);
     const isSelectionMode = selectedMessages.length > 0;
     const isDeleted = isDeletedMessage(message);
 
-    // ── Uploading / sending state ──
     const isUploading = message.isUploading === true;
     const isSending = message.status === 'sending' && !isUploading;
     const isFailed = message.status === 'failed';
+    const effectiveStatus = getEffectiveStatus(message, currentUser, chatRoom);
 
-    // ── Interaction disabled while uploading or in sending state ──
+    // Contact messages are never in an "uploading" state — they're pure JSON
+    const isContact = message.message_type === 'contact';
     const interactionDisabled = isUploading || isSending || isDeleted;
 
-    // Highlight background color for scroll-to effect
     const isHighlighted = String(message.id) === String(highlightedMessageId);
     const highlightBg = highlightAnim.interpolate({
       inputRange: [0, 1],
       outputRange: ['rgba(0, 168, 132, 0)', 'rgba(0, 168, 132, 0.25)'],
     });
 
-    // Guard parent_message access
     const parentMsg = message.parent_message;
     const hasValidParent =
       parentMsg &&
@@ -1315,9 +1403,215 @@ export const Chat: React.FC<ChatProps> = ({
       typeof parentMsg === 'object' &&
       parentMsg.sender;
 
+    // ── Bubble content renderer ────────────────────────────────────────────────
+    const renderBubbleContent = () => {
+      // ── Deleted ──
+      if (isDeleted) {
+        return (
+          <View style={styles.deletedMessageContent}>
+            <Ionicons name="ban-outline" size={16} color="#8696a0" />
+            <Text style={styles.deletedMessageText}>{message.content}</Text>
+          </View>
+        );
+      }
+
+      // ── Image ──
+      if (message.message_type === 'image' && message.image_url) {
+        return (
+          <TouchableOpacity
+            onPress={() => !isUploading && setSelectedImageUrl(message.image_url || null)}
+            activeOpacity={isUploading ? 1 : 0.9}
+            disabled={isUploading}
+          >
+            <View style={{ position: 'relative' }}>
+              <Image
+                source={{ uri: message.image_url }}
+                style={styles.messageImage}
+                resizeMode="cover"
+              />
+              {isUploading && (
+                <View style={styles.mediaUploadingOverlay}>
+                  <ActivityIndicator size="large" color="#ffffff" />
+                </View>
+              )}
+            </View>
+            {message.content && message.content !== message.file_name && (
+              <Text style={styles.messageText}>{message.content}</Text>
+            )}
+          </TouchableOpacity>
+        );
+      }
+
+      // ── Image placeholder (uploading, no URL yet) ──
+      if (isUploading && message.message_type === 'image') {
+        return (
+          <View style={[styles.messageImage, styles.mediaUploadingPlaceholder]}>
+            <ActivityIndicator size="large" color="#00a884" />
+            <Text style={styles.uploadingText}>Uploading...</Text>
+          </View>
+        );
+      }
+
+      // ── Video ──
+      if (message.message_type === 'video' && message.video_url) {
+        return (
+          <View style={styles.videoMessageContainer}>
+            <TouchableOpacity
+              style={styles.videoThumbnailContainer}
+              onPress={() => !isUploading && setSelectedVideoUrl(message.video_url || null)}
+              activeOpacity={isUploading ? 1 : 0.8}
+              disabled={isUploading}
+            >
+              <Video
+                source={{ uri: message.video_url }}
+                style={styles.videoThumbnail}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={false}
+                isMuted
+                useNativeControls={false}
+                posterSource={{ uri: message.video_url }}
+                usePoster
+              />
+              <View style={styles.videoOverlay}>
+                {isUploading ? (
+                  <ActivityIndicator size="large" color="#ffffff" />
+                ) : (
+                  <View style={styles.playButtonContainer}>
+                    <Ionicons name="play-circle" size={56} color="#ffffff" />
+                  </View>
+                )}
+              </View>
+              <View style={styles.videoDurationBadge}>
+                <Ionicons name="videocam" size={12} color="#ffffff" />
+              </View>
+            </TouchableOpacity>
+            {message.content && message.content !== message.file_name && (
+              <Text style={styles.messageText}>{message.content}</Text>
+            )}
+          </View>
+        );
+      }
+
+      // ── Video placeholder (uploading, no URL yet) ──
+      if (isUploading && message.message_type === 'video') {
+        return (
+          <View style={styles.videoMessageContainer}>
+            <View style={[styles.videoThumbnailContainer, styles.mediaUploadingPlaceholder]}>
+              <ActivityIndicator size="large" color="#00a884" />
+              <Text style={styles.uploadingText}>Uploading video...</Text>
+            </View>
+          </View>
+        );
+      }
+
+      // ── Audio ──
+      if (message.message_type === 'audio' && message.audio_url) {
+        if (isUploading) {
+          return (
+            <View style={styles.audioUploadingContainer}>
+              <ActivityIndicator size="small" color="#00a884" />
+              <Text style={styles.uploadingText}>Uploading audio...</Text>
+            </View>
+          );
+        }
+        return (
+          <AudioPlayer audioUrl={message.audio_url} isOwnMessage={isOwnMessage} />
+        );
+      }
+
+      // ── Audio placeholder (uploading, no URL yet) ──
+      if (isUploading && message.message_type === 'audio') {
+        return (
+          <View style={styles.audioUploadingContainer}>
+            <ActivityIndicator size="small" color="#00a884" />
+            <Text style={styles.uploadingText}>Uploading audio...</Text>
+          </View>
+        );
+      }
+
+      // ── File ──
+      if (message.message_type === 'file' && message.file_url) {
+        return (
+          <TouchableOpacity
+            style={styles.fileContainer}
+            activeOpacity={0.7}
+            onPress={() => {
+              Linking.openURL(message.file_url!).catch(() =>
+                Alert.alert('Error', 'Could not open file. Please try again.')
+              );
+            }}
+          >
+            <Ionicons name="document-attach" size={32} color="#00a884" />
+            <View style={styles.fileInfo}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {message.file_name || message.content || 'File'}
+              </Text>
+              <Text style={styles.fileSize}>Tap to open</Text>
+            </View>
+          </TouchableOpacity>
+        );
+      }
+
+      // ── File placeholder (uploading, no URL yet) ──
+      if (isUploading && message.message_type === 'file') {
+        return (
+          <View style={styles.fileContainer}>
+            <ActivityIndicator size="small" color="#00a884" />
+            <View style={styles.fileInfo}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {message.content || 'Uploading file...'}
+              </Text>
+              <Text style={styles.fileSize}>Uploading...</Text>
+            </View>
+          </View>
+        );
+      }
+
+      // ── Contact ──
+      if (message.message_type === 'contact') {
+        // contact_data is available (normal case)
+        if (message.contact_data) {
+          return (
+            <ContactMessage
+              contactData={message.contact_data as ContactData}
+              isOwnMessage={isOwnMessage}
+              onPress={() => handleViewContact(message.contact_data as ContactData)}
+            />
+          );
+        }
+
+        // contact_data missing — malformed or still sending
+        return (
+          <View style={styles.fileContainer}>
+            {isSending ? (
+              <ActivityIndicator size="small" color="#00a884" />
+            ) : (
+              <Ionicons name="person-outline" size={32} color="#00a884" />
+            )}
+            <View style={styles.fileInfo}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {message.content || 'Contact'}
+              </Text>
+              <Text style={styles.fileSize}>
+                {isSending ? 'Sending...' : 'Contact'}
+              </Text>
+            </View>
+          </View>
+        );
+      }
+
+      // ── Text (default) ──
+      if (message.message_type === 'text') {
+        return <Text style={styles.messageText}>{message.content}</Text>;
+      }
+
+      return null;
+    };
+
+    // ── Full message node ──────────────────────────────────────────────────────
     const messageContent = (
       <View
-        ref={(ref) => (messageRefs.current[String(message.id)] = ref)}
+        ref={ref => (messageRefs.current[String(message.id)] = ref)}
         style={[
           styles.messageWrapper,
           isOwnMessage ? styles.messageWrapperOwn : styles.messageWrapperOther,
@@ -1328,47 +1622,82 @@ export const Chat: React.FC<ChatProps> = ({
         <TouchableOpacity
           style={[
             styles.messageTouchable,
-            isOwnMessage ? styles.messageTouchableOwn : styles.messageTouchableOther,
+            isOwnMessage
+              ? styles.messageTouchableOwn
+              : styles.messageTouchableOther,
           ]}
-          onPress={() => (isSelectionMode && !interactionDisabled) ? handleMessageTap(message.id) : null}
-          onLongPress={(e) => !interactionDisabled ? handleLongPress(message, e) : null}
-          activeOpacity={interactionDisabled ? 1 : (isSelectionMode ? 0.7 : 0.9)}
+          onPress={() =>
+            isSelectionMode && !interactionDisabled
+              ? handleMessageTap(message.id)
+              : null
+          }
+          onLongPress={e =>
+            !interactionDisabled ? handleLongPress(message, e) : null
+          }
+          activeOpacity={
+            interactionDisabled ? 1 : isSelectionMode ? 0.7 : 0.9
+          }
           delayLongPress={interactionDisabled ? 0 : 500}
           disabled={isDeleted}
         >
+          {/* ── Selection checkbox ── */}
           {isSelectionMode && !interactionDisabled && (
             <View style={styles.checkboxContainer}>
-              <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+              <View
+                style={[
+                  styles.checkbox,
+                  isSelected && styles.checkboxSelected,
+                ]}
+              >
                 {isSelected && (
                   <Ionicons name="checkmark" size={16} color="#ffffff" />
                 )}
               </View>
             </View>
           )}
-          {!isOwnMessage && chatRoom.room_type === 'group' && !isSelectionMode && !isDeleted && (
-            <View style={styles.messageAvatar}>
-              {message.sender.profile_picture ? (
-                <Image
-                  source={{ uri: message.sender.profile_picture }}
-                  style={styles.messageAvatarImage}
-                />
-              ) : (
-                (() => {
-                  const senderId = message.sender.employee_id || message.sender.id?.toString() || '';
-                  const colors = getAvatarColor(senderId);
-                  return (
-                    <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.light }]}>
-                      <Text style={[styles.messageAvatarText, { color: colors.dark }]}>
-                        {message.sender.first_name?.[0] || '?'}
-                      </Text>
-                    </View>
-                  );
-                })()
-              )}
-            </View>
-          )}
+
+          {/* ── Group sender avatar ── */}
+          {!isOwnMessage &&
+            chatRoom.room_type === 'group' &&
+            !isSelectionMode &&
+            !isDeleted && (
+              <View style={styles.messageAvatar}>
+                {message.sender.profile_picture ? (
+                  <Image
+                    source={{ uri: message.sender.profile_picture }}
+                    style={styles.messageAvatarImage}
+                  />
+                ) : (
+                  (() => {
+                    const senderId =
+                      message.sender.employee_id ||
+                      message.sender.id?.toString() ||
+                      '';
+                    const colors = getAvatarColor(senderId);
+                    return (
+                      <View
+                        style={[
+                          styles.messageAvatarPlaceholder,
+                          { backgroundColor: colors.light },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.messageAvatarText,
+                            { color: colors.dark },
+                          ]}
+                        >
+                          {message.sender.first_name?.[0] || '?'}
+                        </Text>
+                      </View>
+                    );
+                  })()
+                )}
+              </View>
+            )}
+
           <View style={styles.messageContentWrapper}>
-            {/* ── Reply context (tap to scroll) ── */}
+            {/* ── Reply context ── */}
             {hasValidParent && (
               <TouchableOpacity
                 onPress={() => scrollToMessage(parentMsg!.id)}
@@ -1378,7 +1707,8 @@ export const Chat: React.FC<ChatProps> = ({
                 <View style={styles.replyBar} />
                 <View style={styles.replyInfo}>
                   <Text style={styles.replySender}>
-                    {(parentMsg!.sender.id || parentMsg!.sender.employee_id) === (currentUser.id || currentUser.employee_id)
+                    {(parentMsg!.sender.id || parentMsg!.sender.employee_id) ===
+                      (currentUser.id || currentUser.employee_id)
                       ? 'You'
                       : parentMsg!.sender.first_name || 'Unknown'}
                   </Text>
@@ -1391,164 +1721,94 @@ export const Chat: React.FC<ChatProps> = ({
               </TouchableOpacity>
             )}
 
-            <View style={[
-              styles.messageBubble,
-              isOwnMessage ? styles.messageBubbleSent : styles.messageBubbleReceived,
-              isDeleted && styles.messageBubbleDeleted,
-              isFailed && styles.messageBubbleFailed,
-            ]}>
+            {/* ── Bubble ── */}
+            <View
+              style={[
+                styles.messageBubble,
+                isOwnMessage
+                  ? styles.messageBubbleSent
+                  : styles.messageBubbleReceived,
+                isDeleted && styles.messageBubbleDeleted,
+                isFailed && styles.messageBubbleFailed,
+                // Contact cards manage their own padding — remove default bubble
+                // padding so the card can fill edge-to-edge cleanly
+                isContact && !isDeleted && styles.messageBubbleContact,
+              ]}
+            >
+              {/* Forwarded indicator */}
               {message.is_forwarded && !isDeleted && (
                 <View style={styles.forwardedIndicator}>
                   <Ionicons name="arrow-forward" size={12} color="#8696a0" />
                   <Text style={styles.forwardedText}>Forwarded</Text>
                 </View>
               )}
-              {!isOwnMessage && chatRoom.room_type === 'group' && !isDeleted && (
-                <Text style={[styles.messageSenderName, { color: '#00a884' }]}>
-                  {message.sender.first_name}
-                </Text>
-              )}
-              {isDeleted ? (
-                <View style={styles.deletedMessageContent}>
-                  <Ionicons name="ban-outline" size={16} color="#8696a0" />
-                  <Text style={styles.deletedMessageText}>{message.content}</Text>
-                </View>
-              ) : message.message_type === 'image' && message.image_url ? (
-                // ── Image with uploading overlay ──
-                <TouchableOpacity
-                  onPress={() => !isUploading && setSelectedImageUrl(message.image_url || null)}
-                  activeOpacity={isUploading ? 1 : 0.9}
-                  disabled={isUploading}
-                >
-                  <View style={{ position: 'relative' }}>
-                    <Image
-                      source={{ uri: message.image_url }}
-                      style={styles.messageImage}
-                      resizeMode="cover"
-                    />
-                    {isUploading && (
-                      <View style={styles.mediaUploadingOverlay}>
-                        <ActivityIndicator size="large" color="#ffffff" />
-                      </View>
-                    )}
-                  </View>
-                  {message.content && message.content !== message.file_name && (
-                    <Text style={styles.messageText}>{message.content}</Text>
-                  )}
-                </TouchableOpacity>
-              ) : isUploading && message.message_type === 'image' ? (
-                // ── Image not yet uploaded: show placeholder ──
-                <View style={[styles.messageImage, styles.mediaUploadingPlaceholder]}>
-                  <ActivityIndicator size="large" color="#00a884" />
-                  <Text style={styles.uploadingText}>Uploading...</Text>
-                </View>
-              ) : message.message_type === 'video' && message.video_url ? (
-                // ── Video with uploading overlay ──
-                <View style={styles.videoMessageContainer}>
-                  <TouchableOpacity
-                    style={styles.videoThumbnailContainer}
-                    onPress={() => !isUploading && setSelectedVideoUrl(message.video_url || null)}
-                    activeOpacity={isUploading ? 1 : 0.8}
-                    disabled={isUploading}
-                  >
-                    <Video
-                      source={{ uri: message.video_url }}
-                      style={styles.videoThumbnail}
-                      resizeMode={ResizeMode.COVER}
-                      shouldPlay={false}
-                      isMuted
-                      useNativeControls={false}
-                      posterSource={{ uri: message.video_url }}
-                      usePoster
-                    />
-                    <View style={styles.videoOverlay}>
-                      {isUploading ? (
-                        <ActivityIndicator size="large" color="#ffffff" />
-                      ) : (
-                        <View style={styles.playButtonContainer}>
-                          <Ionicons name="play-circle" size={56} color="#ffffff" />
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.videoDurationBadge}>
-                      <Ionicons name="videocam" size={12} color="#ffffff" />
-                    </View>
-                  </TouchableOpacity>
-                  {message.content && message.content !== message.file_name && (
-                    <Text style={styles.messageText}>{message.content}</Text>
-                  )}
-                </View>
-              ) : isUploading && message.message_type === 'video' ? (
-                // ── Video not yet uploaded: show placeholder ──
-                <View style={[styles.videoMessageContainer]}>
-                  <View style={[styles.videoThumbnailContainer, styles.mediaUploadingPlaceholder]}>
-                    <ActivityIndicator size="large" color="#00a884" />
-                    <Text style={styles.uploadingText}>Uploading video...</Text>
-                  </View>
-                </View>
-              ) : message.message_type === 'audio' && message.audio_url ? (
-                // ── Audio with uploading guard ──
-                isUploading ? (
-                  <View style={styles.audioUploadingContainer}>
-                    <ActivityIndicator size="small" color="#00a884" />
-                    <Text style={styles.uploadingText}>Uploading audio...</Text>
-                  </View>
-                ) : (
-                  <AudioPlayer
-                    audioUrl={message.audio_url}
-                    isOwnMessage={isOwnMessage}
-                  />
-                )
-              ) : isUploading && message.message_type === 'audio' ? (
-                // ── Audio not yet uploaded ──
-                <View style={styles.audioUploadingContainer}>
-                  <ActivityIndicator size="small" color="#00a884" />
-                  <Text style={styles.uploadingText}>Uploading audio...</Text>
-                </View>
-              ) : message.message_type === 'file' && message.file_url ? (
-                <TouchableOpacity
-                  style={styles.fileContainer}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (message.file_url) {
-                      Linking.openURL(message.file_url).catch(err => {
-                        console.error('Failed to open file:', err);
-                        Alert.alert('Error', 'Could not open file. Please try again.');
-                      });
-                    }
-                  }}
-                >
-                  <Ionicons name="document-attach" size={32} color="#00a884" />
-                  <View style={styles.fileInfo}>
-                    <Text style={styles.fileName} numberOfLines={1}>
-                      {message.file_name || message.content || 'File'}
-                    </Text>
-                    <Text style={styles.fileSize}>Tap to open</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : isUploading && message.message_type === 'file' ? (
-                // ── File not yet uploaded ──
-                <View style={styles.fileContainer}>
-                  <ActivityIndicator size="small" color="#00a884" />
-                  <View style={styles.fileInfo}>
-                    <Text style={styles.fileName} numberOfLines={1}>
-                      {message.content || 'Uploading file...'}
-                    </Text>
-                    <Text style={styles.fileSize}>Uploading...</Text>
-                  </View>
-                </View>
-              ) : message.message_type === 'text' ? (
-                <Text style={styles.messageText}>{message.content}</Text>
-              ) : null}
 
-              {/* ── Message meta: time + status tick ── */}
-              <View style={styles.messageMeta}>
-                <Text style={[styles.messageTime, isDeleted && styles.deletedMessageTime]}>
+              {/* Group sender name */}
+              {!isOwnMessage &&
+                chatRoom.room_type === 'group' &&
+                !isDeleted &&
+                !isContact && (
+                  <Text
+                    style={[styles.messageSenderName, { color: '#00a884' }]}
+                  >
+                    {message.sender.first_name}
+                  </Text>
+                )}
+
+              {/* ── Actual content ── */}
+              {renderBubbleContent()}
+
+              {/* ── Meta row: time + status ── */}
+              {/* Hide meta inside contact bubble — it sits below the card's CTA */}
+              {!isContact && (
+                <View style={styles.messageMeta}>
+                  <Text
+                    style={[
+                      styles.messageTime,
+                      isDeleted && styles.deletedMessageTime,
+                    ]}
+                  >
+                    {formatTime(message.created_at)}
+                  </Text>
+
+                  {isOwnMessage && !isDeleted && (
+                    isFailed ? (
+                      <View style={styles.failedContainer}>
+                        <Ionicons
+                          name="alert-circle"
+                          size={14}
+                          color="#ea4335"
+                        />
+                        {onRetry && (
+                          <TouchableOpacity
+                            onPress={() => onRetry(String(message.id))}
+                            style={styles.retryButton}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.retryText}>Retry</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ) : (
+                      <MessageStatusTick status={effectiveStatus} />
+                    )
+                  )}
+
+                  {message.is_edited && !isDeleted && (
+                    <Text style={styles.editedLabel}>edited</Text>
+                  )}
+                </View>
+              )}
+            </View>
+
+            {/* Meta row for contact messages — rendered outside bubble */}
+            {isContact && (
+              <View style={[styles.messageMeta, styles.contactMeta]}>
+                <Text style={styles.messageTime}>
                   {formatTime(message.created_at)}
                 </Text>
                 {isOwnMessage && !isDeleted && (
                   isFailed ? (
-                    // ── Failed: show alert icon + retry button ──
                     <View style={styles.failedContainer}>
                       <Ionicons name="alert-circle" size={14} color="#ea4335" />
                       {onRetry && (
@@ -1562,14 +1822,13 @@ export const Chat: React.FC<ChatProps> = ({
                       )}
                     </View>
                   ) : (
-                    <MessageStatusTick status={message.status} />
+                    <MessageStatusTick status={effectiveStatus} />
                   )
                 )}
-                {message.is_edited && !isDeleted && (
-                  <Text style={styles.editedLabel}>edited</Text>
-                )}
               </View>
-            </View>
+            )}
+
+            {/* ── Reactions ── */}
             {Object.keys(reactions).length > 0 && !isDeleted && (
               <View style={styles.messageReactions}>
                 {Object.entries(reactions).map(([emoji, users]) => (
@@ -1590,42 +1849,39 @@ export const Chat: React.FC<ChatProps> = ({
       </View>
     );
 
+    // ── Swipeable + highlight wrapper ─────────────────────────────────────────
+    const swipeableContent = (
+      <SwipeableMessage
+        isOwnMessage={isOwnMessage}
+        onSwipeReply={() => {
+          if (!interactionDisabled && !isSelectionMode) {
+            setReplyingTo(message);
+            inputRef.current?.focus();
+          }
+        }}
+        disabled={interactionDisabled || isSelectionMode}
+      >
+        {messageContent}
+      </SwipeableMessage>
+    );
+
     return (
       <>
-        {/* Highlight wrapper */}
         {isHighlighted ? (
-          <Animated.View style={{ backgroundColor: highlightBg, borderRadius: 4 }}>
-            <SwipeableMessage
-              isOwnMessage={isOwnMessage}
-              onSwipeReply={() => {
-                if (!interactionDisabled && !isSelectionMode) {
-                  setReplyingTo(message);
-                  inputRef.current?.focus();
-                }
-              }}
-              disabled={interactionDisabled || isSelectionMode}
-            >
-              {messageContent}
-            </SwipeableMessage>
+          <Animated.View
+            style={{ backgroundColor: highlightBg, borderRadius: 4 }}
+          >
+            {swipeableContent}
           </Animated.View>
         ) : (
-          <SwipeableMessage
-            isOwnMessage={isOwnMessage}
-            onSwipeReply={() => {
-              if (!interactionDisabled && !isSelectionMode) {
-                setReplyingTo(message);
-                inputRef.current?.focus();
-              }
-            }}
-            disabled={interactionDisabled || isSelectionMode}
-          >
-            {messageContent}
-          </SwipeableMessage>
+          swipeableContent
         )}
 
         {showDate && (
           <View style={styles.dateSeparator}>
-            <Text style={styles.dateSeparatorText}>{formatDate(message.created_at)}</Text>
+            <Text style={styles.dateSeparatorText}>
+              {formatDate(message.created_at)}
+            </Text>
           </View>
         )}
       </>
@@ -1982,6 +2238,7 @@ export const Chat: React.FC<ChatProps> = ({
           setShowAttachmentMenu(false);
           setShowAudioRecorder(true);
         }}
+        onContactPress={onContactPress || (() => { })}
       />
 
       {/* Emoji Picker */}
@@ -2016,11 +2273,15 @@ export const Chat: React.FC<ChatProps> = ({
                 <Ionicons name="copy-outline" size={20} color="#3b4a54" />
                 <Text style={styles.messageOptionText}>Copy</Text>
               </TouchableOpacity>
-              <View style={styles.messageOptionDivider} />
-              <TouchableOpacity style={styles.messageOptionItem} onPress={handleMessageInfo} activeOpacity={0.7}>
-                <Ionicons name="information-circle-outline" size={20} color="#3b4a54" />
-                <Text style={styles.messageOptionText}>Info</Text>
-              </TouchableOpacity>
+              {isLongPressedMessageOwn && (
+                <>
+                  <View style={styles.messageOptionDivider} />
+                  <TouchableOpacity style={styles.messageOptionItem} onPress={handleMessageInfo} activeOpacity={0.7}>
+                    <Ionicons name="information-circle-outline" size={20} color="#3b4a54" />
+                    <Text style={styles.messageOptionText}>Info</Text>
+                  </TouchableOpacity>
+                </>
+              )}
               {/* DO NOT DELETE BELOW EVER DO NOT DELETE!!!!!!!!!!!!!! */}
               {/* <View style={styles.messageOptionDivider} /> */}
               {/* <TouchableOpacity style={styles.messageOptionItem} onPress={handlePinMessage} activeOpacity={0.7}>
@@ -2068,7 +2329,7 @@ export const Chat: React.FC<ChatProps> = ({
                 </View>
               </View>
             </TouchableOpacity>
-            {longPressedMessage && canDeleteForEveryone(longPressedMessage) && (
+            {isLongPressedMessageOwn && longPressedMessage && canDeleteForEveryone(longPressedMessage) && (
               <TouchableOpacity style={styles.deleteModalOption} onPress={handleDeleteForEveryone} activeOpacity={0.7}>
                 <View style={styles.deleteModalOptionContent}>
                   <Ionicons name="trash-bin-outline" size={24} color="#ea4335" />
@@ -2085,6 +2346,8 @@ export const Chat: React.FC<ChatProps> = ({
               <Text style={styles.deleteModalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </Animated.View>
+
+
         </View>
       </Modal>
 
@@ -2096,29 +2359,21 @@ export const Chat: React.FC<ChatProps> = ({
           onPress={() => setShowOptionsModal(false)}
         >
           <View style={styles.modalContent}>
-            <TouchableOpacity
-              style={styles.modalMenuItem}
-              onPress={handleSearchPress}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.modalMenuItem} onPress={handleSearchPress} activeOpacity={0.7}>
               <Text style={styles.modalMenuText}>Search</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalMenuItem}
-              onPress={() => {
-                setShowOptionsModal(false);
-                setShowClearChatConfirm(true);
-              }}
+              onPress={() => { setShowOptionsModal(false); setShowClearChatConfirm(true); }}
               activeOpacity={0.7}
             >
               <Text style={styles.modalMenuText}>Clear Chat</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalMenuItem}
-              onPress={handleMuteChat}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalMenuText}>Mute</Text>
+            {/* Mute / Unmute — now shows correct label */}
+            <TouchableOpacity style={styles.modalMenuItem} onPress={handleMuteChat} activeOpacity={0.7}>
+              <Text style={styles.modalMenuText}>
+                {chatRoom.is_muted ? 'Unmute notifications' : 'Mute notifications'}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -2200,10 +2455,55 @@ export const Chat: React.FC<ChatProps> = ({
         onClose={() => setShowAudioRecorder(false)}
         onSend={handleAudioCapture}
       />
+      {/* Mute Duration Sheet */}
+      <Modal
+        transparent
+        visible={showMuteSheet}
+        animationType="slide"
+        onRequestClose={() => setShowMuteSheet(false)}
+      >
+        <Pressable style={muteSheetStyles.overlay} onPress={() => setShowMuteSheet(false)}>
+          <View style={muteSheetStyles.sheet}>
+            <View style={muteSheetStyles.header}>
+              <Text style={muteSheetStyles.title}>Mute notifications for…</Text>
+            </View>
+            <TouchableOpacity style={muteSheetStyles.option} onPress={() => handleMuteOption('8h', '8 hours')} activeOpacity={0.7}>
+              <Text style={muteSheetStyles.optionText}>8 hours</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={muteSheetStyles.option} onPress={() => handleMuteOption('24h', '24 hours')} activeOpacity={0.7}>
+              <Text style={muteSheetStyles.optionText}>24 hours</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={muteSheetStyles.option} onPress={() => handleMuteOption('always', 'always')} activeOpacity={0.7}>
+              <Text style={muteSheetStyles.optionText}>Always</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[muteSheetStyles.option, muteSheetStyles.cancel]} onPress={() => setShowMuteSheet(false)} activeOpacity={0.7}>
+              <Text style={muteSheetStyles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <ContactDetail
+        visible={contactDetailVisible}
+        contactData={detailContact}
+        onClose={() => {
+          setContactDetailVisible(false);
+          setDetailContact(null);
+        }}
+      />
     </ImageBackground>
   );
 };
-
+const muteSheetStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 28 },
+  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e9edef' },
+  title: { fontSize: 16, fontWeight: '600', color: '#111b21', textAlign: 'center' },
+  option: { paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 0.5, borderBottomColor: '#e9edef' },
+  optionText: { fontSize: 16, color: '#111b21' },
+  cancel: { borderBottomWidth: 0, marginTop: 8 },
+  cancelText: { fontSize: 16, color: '#00a884', fontWeight: '600', textAlign: 'center' },
+});
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -3130,5 +3430,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  messageBubbleContact: {
+    // Remove default padding so ContactMessage card fills flush to bubble edges
+    padding: 0,
+    overflow: 'hidden',
+  },
+  contactMeta: {
+    // Sits just below the contact card, aligned to the trailing edge
+    marginTop: 4,
+    paddingHorizontal: 4,
   },
 });

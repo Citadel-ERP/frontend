@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { Asset, AssetFormData, AssetFilters } from '../types/asset.types';
 import { AssetService } from '../services/assetService';
@@ -11,32 +11,46 @@ export const useAssets = (city: string = '') => {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<AssetFilters>({});
 
+  // Track the city that was last successfully fetched to prevent duplicate calls
+  const lastFetchedCityRef = useRef<string | null>(null);
+  const isFetchingRef = useRef(false);
+
   // ─── Fetch ────────────────────────────────────────────────────────────────
   const fetchAssets = useCallback(
     async (showLoading = true) => {
+      // GUARD: Don't fetch if no city is selected
+      if (!city) return;
+
+      // GUARD: Don't fetch if already fetching
+      if (isFetchingRef.current) return;
+
+      isFetchingRef.current = true;
       if (showLoading) setLoading(true);
       setError(null);
+
       try {
-        // Always pass city — backend handles exact matching
-        const response = await AssetService.getAssets(city || undefined);
+        const response = await AssetService.getAssets(city);
         if (response.data && Array.isArray(response.data)) {
           setAssets(response.data);
+          lastFetchedCityRef.current = city;
         }
       } catch (err: any) {
         setError(err.message);
         Alert.alert('Error', err.message || 'Failed to fetch assets');
       } finally {
         if (showLoading) setLoading(false);
+        isFetchingRef.current = false;
       }
     },
-    [city], // re-fetch automatically when city changes
+    [city],
   );
 
   const refreshAssets = useCallback(async () => {
+    if (!city) return;
     setRefreshing(true);
     await fetchAssets(false);
     setRefreshing(false);
-  }, [fetchAssets]);
+  }, [fetchAssets, city]);
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
   const createAsset = useCallback(
@@ -105,11 +119,10 @@ export const useAssets = (city: string = '') => {
     [fetchAssets],
   );
 
-  // ─── Client-side filtering (search + type only; city is handled server-side) ──
+  // ─── Client-side filtering ────────────────────────────────────────────────
   const filterAssets = useCallback(
     (rawAssets: Asset[]): Asset[] => {
       return rawAssets.filter((asset) => {
-        // 1. Text search
         if (filters.search) {
           const q = filters.search.toLowerCase();
           const matches =
@@ -120,7 +133,6 @@ export const useAssets = (city: string = '') => {
           if (!matches) return false;
         }
 
-        // 2. Asset-type dropdown filter
         if (filters.asset_type && asset.asset_type !== filters.asset_type) {
           return false;
         }
@@ -131,10 +143,20 @@ export const useAssets = (city: string = '') => {
     [filters],
   );
 
-  // ─── Bootstrap ────────────────────────────────────────────────────────────
+  // ─── Bootstrap: only fetch when city is set ───────────────────────────────
   useEffect(() => {
+    if (!city) {
+      // Clear assets when city is cleared (user went back to city selection)
+      setAssets([]);
+      lastFetchedCityRef.current = null;
+      return;
+    }
+
+    // Only fetch if the city has actually changed
+    if (lastFetchedCityRef.current === city) return;
+
     fetchAssets();
-  }, [fetchAssets]); // fetchAssets already re-creates when city changes
+  }, [city, fetchAssets]);
 
   return {
     assets,

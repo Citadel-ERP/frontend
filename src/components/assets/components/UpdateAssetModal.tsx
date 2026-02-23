@@ -9,7 +9,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset, AssetFormData } from '../types/asset.types';
@@ -22,6 +21,18 @@ interface UpdateAssetModalProps {
   isDark?: boolean;
 }
 
+// Matches backend CITY_CHOICES exactly
+export const CITY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'bangalore', label: 'Bangalore' },
+  { value: 'chennai', label: 'Chennai' },
+  { value: 'delhi', label: 'Delhi' },
+  { value: 'gurgaon', label: 'Gurgaon' },
+  { value: 'hyderabad', label: 'Hyderabad' },
+  { value: 'mumbai', label: 'Mumbai' },
+  { value: 'noida', label: 'Noida' },
+  { value: 'pune', label: 'Pune' },
+];
+
 export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
   visible,
   asset,
@@ -31,6 +42,7 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<Partial<AssetFormData>>({});
   const [loading, setLoading] = useState(false);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
 
   useEffect(() => {
     if (asset) {
@@ -39,7 +51,9 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
         asset_type: asset.asset_type,
         asset_description: asset.asset_description,
         asset_count: asset.asset_count.toString(),
-        asset_serial: asset.asset_serial ?? '', 
+        asset_serial: asset.asset_serial ?? '',
+        // asset_city comes from serializer as asset_city field
+        city: (asset as any).asset_city ?? asset.city ?? '',
       });
     }
   }, [asset]);
@@ -51,6 +65,8 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
     textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: '#008069',
     borderColor: isDark ? '#2a3549' : '#e0e0e0',
+    dropdownBg: isDark ? '#1a2539' : '#ffffff',
+    dropdownItemHover: isDark ? '#243050' : '#f0f0f0',
   };
 
   const handleSubmit = async () => {
@@ -61,9 +77,20 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
     setLoading(false);
 
     if (success) {
+      setShowCityDropdown(false);
       onClose();
     }
   };
+
+  const handleClose = () => {
+    setShowCityDropdown(false);
+    onClose();
+  };
+
+  const selectedCityLabel =
+    CITY_OPTIONS.find(
+      (c) => c.value === formData.city?.toLowerCase(),
+    )?.label ?? formData.city ?? 'Select city';
 
   if (!asset) return null;
 
@@ -72,26 +99,27 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalContainer}
       >
         <View style={[styles.modalContent, { backgroundColor: theme.bgColor }]}>
+          {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.textMain }]}>
-              Update Asset
-            </Text>
-            <TouchableOpacity onPress={onClose}>
+            <Text style={[styles.modalTitle, { color: theme.textMain }]}>Update Asset</Text>
+            <TouchableOpacity onPress={handleClose}>
               <Ionicons name="close" size={24} color={theme.textSub} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.formGroup}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* Serial Number */}
+            <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>Serial Number</Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -103,11 +131,11 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
               />
             </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Asset Name */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>Asset Name</Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -117,10 +145,11 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
               />
             </View>
 
+            {/* Asset Type */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>Asset Type</Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -130,10 +159,11 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
               />
             </View>
 
+            {/* Description */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>Description</Text>
               <TextInput
-                style={[styles.input, styles.textArea, { 
+                style={[styles.input, styles.textArea, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -145,10 +175,11 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
               />
             </View>
 
+            {/* Asset Count */}
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: theme.textMain }]}>Asset Count</Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.modalBg,
                   color: theme.textMain,
                   borderColor: theme.borderColor,
@@ -158,16 +189,97 @@ export const UpdateAssetModal: React.FC<UpdateAssetModalProps> = ({
                 keyboardType="numeric"
               />
             </View>
+
+            {/* City Dropdown */}
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: theme.textMain }]}>City</Text>
+              <TouchableOpacity
+                style={[
+                  styles.input,
+                  styles.dropdownTrigger,
+                  {
+                    backgroundColor: theme.modalBg,
+                    borderColor: showCityDropdown ? theme.accentBlue : theme.borderColor,
+                  },
+                ]}
+                onPress={() => setShowCityDropdown((prev) => !prev)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.dropdownTriggerText,
+                    {
+                      color: formData.city ? theme.textMain : theme.textSub,
+                    },
+                  ]}
+                >
+                  {selectedCityLabel}
+                </Text>
+                <Ionicons
+                  name={showCityDropdown ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={theme.textSub}
+                />
+              </TouchableOpacity>
+
+              {showCityDropdown && (
+                <View
+                  style={[
+                    styles.dropdownList,
+                    {
+                      backgroundColor: theme.dropdownBg,
+                      borderColor: theme.borderColor,
+                    },
+                  ]}
+                >
+                  {CITY_OPTIONS.map((cityOption) => {
+                    const isSelected =
+                      formData.city?.toLowerCase() === cityOption.value;
+                    return (
+                      <TouchableOpacity
+                        key={cityOption.value}
+                        style={[
+                          styles.dropdownItem,
+                          isSelected && {
+                            backgroundColor: theme.accentBlue + '20',
+                          },
+                        ]}
+                        onPress={() => {
+                          setFormData({ ...formData, city: cityOption.value });
+                          setShowCityDropdown(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            { color: isSelected ? theme.accentBlue : theme.textMain },
+                          ]}
+                        >
+                          {cityOption.label}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={18}
+                            color={theme.accentBlue}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </ScrollView>
 
+          {/* Footer */}
           <View style={styles.modalFooter}>
             <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onClose}
+              style={[styles.button, styles.cancelButton, { borderColor: theme.borderColor }]}
+              onPress={handleClose}
             >
-              <Text style={[styles.buttonText, { color: theme.textMain }]}>
-                Cancel
-              </Text>
+              <Text style={[styles.buttonText, { color: theme.textMain }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, styles.submitButton, { backgroundColor: theme.accentBlue }]}
@@ -225,6 +337,40 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownTriggerText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  dropdownList: {
+    borderWidth: 1,
+    borderRadius: 12,
+    marginTop: 4,
+    overflow: 'hidden',
+    zIndex: 999,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -232,22 +378,20 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+    gap: 12,
   },
   button: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 6,
+    justifyContent: 'center',
   },
   cancelButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
-  submitButton: {
-    backgroundColor: '#008069',
-  },
+  submitButton: {},
   buttonText: {
     fontSize: 16,
     fontWeight: '600',

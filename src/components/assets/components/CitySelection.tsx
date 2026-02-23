@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     paddingHorizontal: 16,
-    paddingTop: 60,
+    paddingTop: Platform.OS == 'ios' ? 60 : 40,
     paddingBottom: 0,
     position: 'relative',
     zIndex: 1,
@@ -223,6 +223,7 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     position: 'relative',
     zIndex: 1,
+    marginTop:20
   },
   sectionTitle: {
     fontSize: 30,
