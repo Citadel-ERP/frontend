@@ -71,16 +71,19 @@ const Header: React.FC<HeaderProps> = ({
               {showCreateButton && onCreate && (
                 <View style={styles.headerActions}>
                   <TouchableOpacity 
-                    onPress={onCreate} 
-                    style={styles.createButton}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                      <Text style={styles.addButtonText}>Add</Text>
-                    )}
-                  </TouchableOpacity>
+                      onPress={onCreate} 
+                      style={styles.createButton}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="add" size={18} color="#fff" />
+                          <Text style={styles.addButtonText}>Add</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -190,12 +193,6 @@ const styles = StyleSheet.create({
   alignItems: 'center',
   justifyContent: 'center',
 },
-addButtonText: {
-  color: '#fff',
-  fontSize: 14,
-  fontWeight: '600',
-  letterSpacing: 0.5,
-},
   headerActions: {
   position: 'absolute',
   right: 10,  
@@ -207,10 +204,14 @@ addButtonText: {
   paddingVertical: 8,
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  backgroundColor: 'transparent',
   borderRadius: 6,
-  borderWidth: 1,
-  borderColor: '#fff',
+},
+addButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '600',
+  letterSpacing: 0.5,
 },
 });
 

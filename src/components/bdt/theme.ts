@@ -12,7 +12,7 @@ export const lightTheme = {
   gray: '#6B7280',
   info: '#3B82F6',
   error: '#EF4444',
-  success: '#10B981',
+  success: '#075E54',
   warning: '#F59E0B',
   moduleColors: {
     bdt: '#1da1f2',

@@ -19,6 +19,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/stack": "^6.4.1",
     "@types/react-router": "^5.1.20",
+    "@types/xlsx": "^0.0.35",
     "ajv": "^8.17.1",
     "axios": "^1.11.0",
     "dayjs": "^1.11.18",
@@ -27,13 +28,14 @@
     "expo-background-fetch": "~14.0.9",
     "expo-camera": "~17.0.10",
     "expo-constants": "^18.0.10",
+    "expo-contacts": "~15.0.11",
     "expo-dev-client": "~6.0.12",
     "expo-device": "^8.0.9",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.21",
     "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.10",
-    "expo-intent-launcher": "~13.0.7",
+    "expo-intent-launcher": "~13.0.8",
     "expo-linear-gradient": "^15.0.8",
     "expo-local-authentication": "~17.0.7",
     "expo-location": "~19.0.7",
@@ -64,7 +66,8 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-view-shot": "^4.0.3",
     "react-native-web": "^0.21.0",
-    "rn-wave-bottom-bar": "^2.2.36"
+    "rn-wave-bottom-bar": "^2.2.36",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

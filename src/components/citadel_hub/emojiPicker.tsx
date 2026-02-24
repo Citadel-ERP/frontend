@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Fixed height – exactly like WhatsApp (50% of screen)
-const EMOJI_PICKER_HEIGHT = SCREEN_HEIGHT * 0.5;
+const EMOJI_PICKER_HEIGHT = SCREEN_HEIGHT * 0.4;
 
 interface EmojiPickerProps {
   visible: boolean;
@@ -537,7 +537,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   pickerContainer: {
     position: 'absolute',

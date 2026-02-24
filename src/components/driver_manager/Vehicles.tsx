@@ -2311,7 +2311,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 </View>
                                 <TouchableOpacity
                                     style={{
-                                        backgroundColor: '#00d285',
+                                        backgroundColor: 'transparent',
                                         paddingHorizontal: 16,
                                         paddingVertical: 8,
                                         borderRadius: 8,

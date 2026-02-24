@@ -30,9 +30,17 @@
           "location",
           "fetch",
           "remote-notification",
+          "processing",
+          "location",
+          "fetch",
+          "remote-notification",
           "processing"
         ],
         "BGTaskSchedulerPermittedIdentifiers": [
+          "com.citadelnetinc.app.background",
+          "com.citadelnetinc.app.refresh",
+          "com.citadelnetinc.app.location",
+          "com.citadelnetinc.app.processing",
           "com.citadelnetinc.app.background",
           "com.citadelnetinc.app.refresh",
           "com.citadelnetinc.app.location",
@@ -45,9 +53,11 @@
         "NSPhotoLibraryUsageDescription": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
         "NSPhotoLibraryAddUsageDescription": "Citadel needs permission to save photos to your photo library.",
         "NSFaceIDUsageDescription": "Face ID is used to securely authenticate you.",
+        "NSContactsUsageDescription": "Citadel needs access to your contacts so you can share them in chats.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
           "attendance": "Your location is needed to verify you are at the office for attendance."
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -58,22 +68,26 @@
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
-        "POST_NOTIFICATIONS",
-        "CAMERA",
-        "VIBRATE",
-        "WAKE_LOCK",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT",
-        "RECEIVE_BOOT_COMPLETED",
-        "SYSTEM_ALERT_WINDOW",
-        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
       ]
     },
     "web": {
@@ -83,7 +97,12 @@
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
-      
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Citadel needs access to your contacts so you can share them in chats."
+        }
+      ],
       [
         "expo-location",
         {
@@ -121,7 +140,7 @@
           "color": "#2D3748",
           "useNextNotificationsApi": true,
           "androidMode": "default",
-    "androidCollapsedTitle": "#{unread_notifications} new interactions"
+          "androidCollapsedTitle": "#{unread_notifications} new interactions"
         }
       ],
       "expo-task-manager",

@@ -247,27 +247,24 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e9e9e959', // Green color for Add button
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 6,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'transparent',  
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  gap: 2,
+  borderRadius: 8,
+  whiteSpace: 'nowrap',
+},
+  addButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '600',
+  letterSpacing: 0.5,
+},
   addIcon: {
     marginRight: 4,
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   saveButton: {
     backgroundColor: '#1DA1F2', // Blue color for Save button

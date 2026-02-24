@@ -2,6 +2,7 @@
 
 export interface AttendanceProps {
   onBack: () => void;
+  initialShowLeaves?: boolean;
 }
 
 export interface LeaveBalance {

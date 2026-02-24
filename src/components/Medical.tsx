@@ -479,7 +479,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
             <Ionicons name="chevron-back" size={24} color="white" />
-            <Text style={styles.backText}>Back</Text>
+            {/* <Text style={styles.backText}>Back</Text> */}
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <View style={[styles.avatar, { backgroundColor: '#25D366' }]}>
@@ -508,7 +508,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
              <Ionicons name="chevron-back" size={24} color="white" />
-            <Text style={styles.backText}>Back</Text>
+            {/* <Text style={styles.backText}>Back</Text> */}
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <View style={[styles.avatar, { backgroundColor: '#25D366' }]}>
@@ -543,7 +543,7 @@ const Medical: React.FC<MedicalProps> = ({ onBack }) => {
 <View style={styles.header}>
   <TouchableOpacity style={styles.backButton} onPress={onBack}>
      <Ionicons name="chevron-back" size={24} color="white" />
-            <Text style={styles.backText}>Back</Text>
+            {/* <Text style={styles.backText}>Back</Text> */}
   </TouchableOpacity>
   <View style={styles.headerContent}>
     <View style={[styles.avatar, { backgroundColor: policyColor }]}>

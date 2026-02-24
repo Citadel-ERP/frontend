@@ -33,6 +33,12 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [pendingLeadUpdate, setPendingLeadUpdate] = useState<any>(null);
+  const [incentiveCanCreate, setIncentiveCanCreate] = useState(false);
+  const [pendingPaymentReceivedUpdate, setPendingPaymentReceivedUpdate] = useState<{
+    leadData: Lead;
+    editingEmails: string[];
+    editingPhones: string[];
+  } | null>(null);
   const [totalLeads, setTotalLeads] = useState<number>(0);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
@@ -304,8 +310,10 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   const handleBackPress = useCallback(() => {
     if (viewMode === 'incentive') {
-      setViewMode('detail');
-      setIsEditMode(false);
+      setViewMode(pendingPaymentReceivedUpdate ? 'detail' : 'detail');
+      setIsEditMode(!!pendingPaymentReceivedUpdate);
+      setPendingPaymentReceivedUpdate(null);
+      setIncentiveCanCreate(false);
     } else if (viewMode === 'detail' && isEditMode) {
       setIsEditMode(false);
     } else if (viewMode === 'detail' && !isEditMode) {
@@ -317,7 +325,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } else if (viewMode === 'list') {
       onBack();
     }
-  }, [viewMode, isEditMode, fetchLeads, onBack]);
+  }, [viewMode, isEditMode, pendingPaymentReceivedUpdate, fetchLeads, onBack]);
 
   // Handle Android back button
   useEffect(() => {
@@ -347,7 +355,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
       if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
 
-      // ADD THIS: Include meta field if it exists
       if (leadData.meta !== undefined && leadData.meta !== null) {
         updatePayload.meta = leadData.meta;
       }
@@ -375,7 +382,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           lead.id === selectedLead.id ? updatedLead : lead
         )
       );
-      // Refresh status counts after update
       await fetchStatusCounts();
       Alert.alert('Success', 'Lead updated successfully!');
       return true;
@@ -386,7 +392,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [token, selectedLead]);
+  }, [token, selectedLead, fetchStatusCounts]);
 
   const checkExistingInvoice = useCallback(async (leadId: number): Promise<boolean> => {
     try {
@@ -403,7 +409,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         })
       });
 
-      // If response is 200, invoice exists - return true
       if (response.ok) {
         const data = await response.json();
         Alert.alert(
@@ -414,41 +419,48 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         return true;
       }
 
-      // If response is 400, no invoice exists - return false
       return false;
     } catch (error) {
       console.error('Error checking invoice:', error);
-      // If there's an error, assume no invoice and allow creation
       return false;
     }
   }, [token]);
 
+  const handleIncentiveCreatedFromEdit = useCallback(async () => {
+    if (!pendingPaymentReceivedUpdate) return;
+    const { leadData, editingEmails, editingPhones } = pendingPaymentReceivedUpdate;
+    const success = await updateLead(leadData, editingEmails, editingPhones);
+    if (success) {
+      setIsEditMode(false);
+      setPendingPaymentReceivedUpdate(null);
+      setIncentiveCanCreate(false);
+      setViewMode('detail');
+    }
+  }, [pendingPaymentReceivedUpdate, updateLead]);
+
   const handleSaveLead = useCallback(async (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => {
     if (updatedLead.phase === 'post_property_finalization' && updatedLead.subphase === 'raise_invoice') {
-      // Check if invoice already exists
       const invoiceExists = await checkExistingInvoice(updatedLead.id);
-
       if (invoiceExists) {
-        // Invoice exists, just update the lead without showing invoice form
         const success = await updateLead(updatedLead, editingEmails, editingPhones);
-        if (success) {
-          setIsEditMode(false);
-        }
+        if (success) setIsEditMode(false);
         return;
       }
-
-      // No invoice exists, proceed to show invoice form
-      setPendingLeadUpdate({
-        leadData: updatedLead,
-        editingEmails: editingEmails,
-        editingPhones: editingPhones
-      });
+      setPendingLeadUpdate({ leadData: updatedLead, editingEmails, editingPhones });
       setShowInvoiceForm(true);
+
+    } else if (updatedLead.subphase === 'payment_received') {
+      setPendingPaymentReceivedUpdate({
+        leadData: updatedLead,
+        editingEmails,
+        editingPhones,
+      });
+      setIncentiveCanCreate(true);
+      setViewMode('incentive');
+
     } else {
       const success = await updateLead(updatedLead, editingEmails, editingPhones);
-      if (success) {
-        setIsEditMode(false);
-      }
+      if (success) setIsEditMode(false);
     }
   }, [updateLead, checkExistingInvoice]);
 
@@ -489,10 +501,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           leadId={selectedLead.id}
           leadName={selectedLead.company}
           hideHeader={false}
+          canCreate={incentiveCanCreate}
+          onIncentiveCreated={
+            pendingPaymentReceivedUpdate 
+              ? handleIncentiveCreatedFromEdit 
+              : undefined
+          }
         />
       );
     }
-    
+
     if (viewMode === 'detail' && selectedLead) {
       if (isEditMode) {
         return (
@@ -571,7 +589,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         onThemeToggle: toggleDarkMode,
       };
     }
-    
+
     if (viewMode === 'detail') {
       if (isEditMode) {
         return {
@@ -591,7 +609,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         onThemeToggle: toggleDarkMode,
       };
     }
-    
+
     if (viewMode === 'create') {
       return {
         showBackButton: true,
@@ -600,7 +618,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         onThemeToggle: toggleDarkMode,
       };
     }
-    
+
     if (viewMode === 'incentive') {
       return {
         showBackButton: true,

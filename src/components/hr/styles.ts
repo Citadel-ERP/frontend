@@ -677,7 +677,7 @@ export const styles = StyleSheet.create({
   },
   messagesListContent: {
     paddingHorizontal: 8,
-    paddingBottom: 20
+    paddingBottom: 60
   },
   messageRow: { 
     flexDirection: 'row',

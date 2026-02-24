@@ -10,13 +10,13 @@ export const styles = StyleSheet.create({
         backgroundColor: WHATSAPP_COLORS.white
     },
     headerAddButton: {
-        backgroundColor: '#00d285',
+        backgroundColor: 'transparent',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 8,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
         },
 attachedFilesPreview: {
     position: 'absolute',  // Add this

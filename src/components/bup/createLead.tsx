@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -138,7 +136,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'collaborator' | 'officeType' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'status' | 'phase' | 'subphase' | 'officeType' | null>(null);
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -177,11 +175,14 @@ const CreateLead: React.FC<CreateLeadProps> = ({
     }
   }, []);
 
+  // ── UPDATED: triggers on debounced search value, no longer tied to activeDropdown ──
   useEffect(() => {
-    if (activeDropdown === 'collaborator') {
+    if (debouncedCollaboratorSearch.length >= 2) {
       searchCollaborators(debouncedCollaboratorSearch);
+    } else {
+      setCollaboratorResults([]);
     }
-  }, [debouncedCollaboratorSearch, activeDropdown]);
+  }, [debouncedCollaboratorSearch]);
 
   const fetchPhases = async (): Promise<void> => {
     try {
@@ -301,7 +302,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
   };
 
   const handleAddCollaborator = (user: AssignedTo): void => {
-    // Check if collaborator already exists
     if (collaborators.some(collab => collab.user.email === user.email)) {
       Alert.alert('Info', 'This collaborator is already added.');
       return;
@@ -499,15 +499,14 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         }
       });
 
-      // Create lead payload
       const createPayload: any = {
         token: token,
-        name: formData.company.trim(), // Use company name as lead name
+        name: formData.company.trim(),
         city: selectedCity,
         status: formData.status,
         phase: formData.phase,
         subphase: formData.subphase,
-        assigned_to: selectedBDT.email, // Use selected BDT as assigned_to
+        assigned_to: selectedBDT.email,
         company: formData.company.trim()
       };
 
@@ -523,7 +522,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         createPayload.meta = meta;
       }
 
-      // Step 1: Create the lead
       const createResponse = await fetch(`${BACKEND_URL}/manager/createLead`, {
         method: 'POST',
         headers: {
@@ -540,7 +538,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
       const createData = await createResponse.json();
       const leadId = createData.lead.id;
 
-      // Step 2: Add collaborators if any
       if (collaborators.length > 0) {
         const collaboratorPromises = collaborators.map(async (collaborator) => {
           const collaboratorPayload = {
@@ -628,7 +625,9 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         style={s.scrollView} 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={s.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* ── Basic Information ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.primary + '15' }]}>
@@ -649,15 +648,15 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           </View>
 
           <View style={s.field}>
-          <Text style={s.label}>Contact Person Name</Text>
-          <TextInput
-            style={s.input}
-            value={formData.contactPersonName}
-            onChangeText={(text) => setFormData({ ...formData, contactPersonName: text })}
-            placeholder="Enter contact person name (optional)"
-            placeholderTextColor={THEME_COLORS.textTertiary}
-          />
-        </View>
+            <Text style={s.label}>Contact Person Name</Text>
+            <TextInput
+              style={s.input}
+              value={formData.contactPersonName}
+              onChangeText={(text) => setFormData({ ...formData, contactPersonName: text })}
+              placeholder="Enter contact person name (optional)"
+              placeholderTextColor={THEME_COLORS.textTertiary}
+            />
+          </View>
 
           <View style={s.field}>
             <Text style={s.label}>Assigned To</Text>
@@ -689,6 +688,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           </View>
         </View>
 
+        {/* ── Colleagues ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.collabBg }]}>
@@ -705,31 +705,63 @@ const CreateLead: React.FC<CreateLeadProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => handleRemoveCollaborator(idx)} 
-                style={s.deleteBtn}
+                style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
+                <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           ))}
 
+          {/* ── UPDATED: Inline search replaces dropdown trigger ── */}
           <View style={s.addRow}>
-            <TouchableOpacity 
-              style={[s.selector, { flex: 1 }]} 
-              onPress={() => setActiveDropdown('collaborator')}
-              activeOpacity={0.7}
-            >
-              <View style={s.selectorContent}>
-                <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.collabBg }]}>
-                  <Ionicons name="person-add" size={14} color={THEME_COLORS.collabBorder} />
-                </View>
-                <Text style={s.selectorPlaceholder}>Add colleagues (optional)</Text>
-              </View>
-              <Ionicons name="chevron-down" size={18} color={THEME_COLORS.textSecondary} />
-            </TouchableOpacity>
+            <View style={s.searchContainer}>
+              <TextInput
+                style={s.searchInput}
+                value={collaboratorSearch}
+                onChangeText={setCollaboratorSearch}
+                placeholder="Search colleagues..."
+                placeholderTextColor={THEME_COLORS.textTertiary}
+                autoCapitalize="none"
+              />
+              {collaboratorLoading && (
+                <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />
+              )}
+            </View>
           </View>
+
+          {collaboratorResults.length > 0 && (
+            <View style={s.resultsBox}>
+              {collaboratorResults
+                .filter(user => !collaborators.some(c => c.user.email === user.email))
+                .map((user) => (
+                  <TouchableOpacity
+                    key={user.email}
+                    style={s.resultItem}
+                    onPress={() => handleAddCollaborator(user)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={s.resultContent}>
+                      <View style={[s.iconCircleSmall, { backgroundColor: THEME_COLORS.collabBg }]}>
+                        <Ionicons name="person-add" size={14} color={THEME_COLORS.collabBorder} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.resultText} numberOfLines={1}>
+                          {user.full_name || `${user.first_name} ${user.last_name}`}
+                        </Text>
+                        <Text style={s.resultSubText} numberOfLines={1}>
+                          {user.email}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="add-circle" size={22} color={THEME_COLORS.success} />
+                  </TouchableOpacity>
+                ))}
+            </View>
+          )}
         </View>
 
+        {/* ── Lead Specific Information ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.leadInfoBg }]}>
@@ -826,6 +858,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           </TouchableOpacity>
         </View>
 
+        {/* ── Email Addresses ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.emailBg }]}>
@@ -842,10 +875,10 @@ const CreateLead: React.FC<CreateLeadProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => handleRemoveEmail(index)} 
-                style={s.deleteBtn}
+                style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
+                <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           )) : (
@@ -879,6 +912,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           {emailError && <Text style={s.error}>{emailError}</Text>}
         </View>
 
+        {/* ── Phone Numbers ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.phoneBg }]}>
@@ -895,10 +929,10 @@ const CreateLead: React.FC<CreateLeadProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => handleRemovePhone(index)} 
-                style={s.deleteBtn}
+                style={s.listItemDeleteBtn}
                 activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={20} color={THEME_COLORS.danger} />
+                <Ionicons name="close" size={20} color={THEME_COLORS.danger} />
               </TouchableOpacity>
             </View>
           )) : (
@@ -931,6 +965,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           {phoneError && <Text style={s.error}>{phoneError}</Text>}
         </View>
 
+        {/* ── Lead Management ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <View style={[s.cardIcon, { backgroundColor: THEME_COLORS.managementBg }]}>
@@ -1003,6 +1038,7 @@ const CreateLead: React.FC<CreateLeadProps> = ({
         <View style={s.bottomSpacer} />
       </ScrollView>
 
+      {/* ── Dropdown Modals ── */}
       <DropdownModal
         visible={activeDropdown === 'status'}
         onClose={() => setActiveDropdown(null)}
@@ -1066,72 +1102,6 @@ const CreateLead: React.FC<CreateLeadProps> = ({
           border: THEME_COLORS.border,
         }}
       />
-
-      {activeDropdown === 'collaborator' && (
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Add Colleagues</Text>
-              <TouchableOpacity 
-                onPress={() => setActiveDropdown(null)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={22} color={THEME_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={s.searchContainer}>
-              <TextInput
-                style={s.searchInput}
-                value={collaboratorSearch}
-                onChangeText={setCollaboratorSearch}
-                placeholder="Search colleagues..."
-                placeholderTextColor={THEME_COLORS.textTertiary}
-                autoCapitalize="none"
-              />
-              {collaboratorLoading && <ActivityIndicator size="small" color={THEME_COLORS.primary} style={s.searchLoader} />}
-            </View>
-            
-            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>              
-              {collaboratorResults.length > 0 ? (
-                collaboratorResults.map((user) => (
-                  <TouchableOpacity
-                    key={user.email}
-                    style={s.modalItem}
-                    onPress={() => handleAddCollaborator(user)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={s.modalItemContent}>
-                      <Ionicons 
-                        name="person" 
-                        size={18} 
-                        color={THEME_COLORS.textSecondary}
-                      />
-                      <View style={s.modalItemInfo}>
-                        <Text style={s.modalItemName} numberOfLines={1}>
-                          {user.full_name || `${user.first_name} ${user.last_name}`}
-                        </Text>
-                        <Text style={s.modalItemEmail} numberOfLines={1}>
-                          {user.email}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons name="add-circle" size={20} color={THEME_COLORS.primary} />
-                  </TouchableOpacity>
-                ))
-              ) : (
-                !collaboratorLoading && collaboratorResults.length === 0 && (
-                  <View style={s.emptyState}>
-                    <Text style={s.emptyText}>
-                      {collaboratorSearch ? 'No users found' : 'Start typing to search'}
-                    </Text>
-                  </View>
-                )
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      )}
     </KeyboardAvoidingView>
   );
 };
@@ -1317,7 +1287,9 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    paddingRight: 12,
+    paddingLeft: 14,
+    paddingVertical: 12,
     borderRadius: 10,
     marginBottom: 8,
     backgroundColor: THEME_COLORS.surface,
@@ -1336,9 +1308,15 @@ const s = StyleSheet.create({
     color: THEME_COLORS.textPrimary,
     flex: 1,
   },
-  deleteBtn: {
-    padding: 4,
-    marginLeft: 8,
+  // ── UPDATED: matches EditLead delete button style ──
+  listItemDeleteBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: THEME_COLORS.background,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   
   addRow: {
@@ -1367,11 +1345,13 @@ const s = StyleSheet.create({
     fontWeight: '500',
   },
   
+  // ── Inline colleague search (matches EditLead) ──
   searchContainer: {
     flex: 1,
     position: 'relative',
   },
   searchInput: {
+    marginBottom: 12,
     borderWidth: 1.5,
     borderColor: THEME_COLORS.border,
     borderRadius: 10,
@@ -1386,6 +1366,39 @@ const s = StyleSheet.create({
     position: 'absolute',
     right: 14,
     top: 12,
+  },
+  resultsBox: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1.5,
+    borderTopColor: THEME_COLORS.divider,
+  },
+  resultItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: THEME_COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: THEME_COLORS.border,
+  },
+  resultContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  resultText: {
+    fontSize: 13,
+    color: THEME_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  resultSubText: {
+    fontSize: 12,
+    color: THEME_COLORS.textTertiary,
+    marginTop: 2,
   },
   
   row: {
@@ -1479,77 +1492,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.3,
   },
   
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '70%',
-    backgroundColor: THEME_COLORS.card,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: THEME_COLORS.divider,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME_COLORS.textPrimary,
-  },
-  modalScroll: {
-    maxHeight: 350,
-  },
-  modalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: THEME_COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: THEME_COLORS.border,
-  },
-  modalItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modalItemInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  modalItemName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: THEME_COLORS.textPrimary,
-  },
-  modalItemEmail: {
-    fontSize: 12,
-    color: THEME_COLORS.textTertiary,
-    marginTop: 2,
-  },
-  
   emptyContactContainer: {
     padding: 16,
     borderRadius: 12,
@@ -1562,17 +1504,6 @@ const s = StyleSheet.create({
   emptyContactText: {
     fontSize: 14,
     color: THEME_COLORS.textTertiary,
-  },
-  
-  emptyState: {
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: THEME_COLORS.textTertiary,
-    fontStyle: 'italic',
   },
   
   bottomSpacer: {

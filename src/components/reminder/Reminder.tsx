@@ -424,25 +424,18 @@ const Reminder: React.FC<ReminderProps> = ({ onBack, onReminderUpdate }) => {
                 </View>
 
                 <View style={styles.rightSection}>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#00d285',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6
-                    }}
-                    onPress={() => {
-                      setSelectedDate(new Date());
-                      setShowCreateModal(true);
-                    }}
-                  >
-                    <Ionicons name="add" size={20} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedDate(new Date());
+                    setShowCreateModal(true);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="add" size={18} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Add</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
               </View>
             </View>
 
@@ -474,8 +467,8 @@ const Reminder: React.FC<ReminderProps> = ({ onBack, onReminderUpdate }) => {
                   <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
-                    colors={['#25D366']}
-                    tintColor={'#25D366'}
+                    // colors={['#25D366']}
+                    // tintColor={'#25D366'}
                   />
                 }
               >

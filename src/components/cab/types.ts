@@ -27,6 +27,7 @@ export interface AssignedEmployee {
     is_approved_by_admin: boolean;
     is_archived: boolean;
     designation: string | null;
+    bio: string | null;
 }
 
 export interface Driver {
@@ -58,75 +59,38 @@ export interface Vehicle {
     registration_certificate: string;
     created_at: string;
     updated_at: string;
-    vehicle_photos?: Array<{ // Add this for multiple images
-    id: number;
-    photo: string;
-    created_at: string;
-    updated_at: string;
-  }>;
-}
-
-export interface MyBookingsScreenProps {
-    bookings: Booking[];
-    loading: boolean;
-    onBack: () => void;
-    onCancelBooking: (booking: Booking) => void;
-    onRefresh?: () => void;
-}
-
-export interface AssignedEmployee {
-    employee_id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    full_name: string;
-    role: string;
-    profile_picture: string | null;
-    is_approved_by_hr: boolean;
-    is_approved_by_admin: boolean;
-    is_archived: boolean;
-    designation: string | null;
-    bio: string | null;
-}
-
-export interface Office {
-    id: number;
-    name: string;
-    address: {
+    vehicle_photos?: Array<{
         id: number;
-        address: string;
-        city: string;
-        state: string;
-        country: string;
-        zip_code: string;
-    };
-    latitude: number | null;
-    longitude: number | null;
+        photo: string;
+        created_at: string;
+        updated_at: string;
+    }>;
 }
 
 export interface VehicleAssignment {
     id: number;
     vehicle: Vehicle;
     assigned_driver: AssignedEmployee | null;
-    assignment_status: string; // 'pending', 'assigned', 'in-progress', 'completed', 'cancelled'
+    assignment_status: string;
     assigned_at: string | null;
     created_at: string;
     updated_at: string;
 }
+
 export interface Booking {
     id: number;
     booked_by: AssignedEmployee;
-    booked_for: AssignedEmployee | null; // Changed from booking_for_someone_else
+    booked_for: AssignedEmployee | null;
     start_time: string;
     end_time: string;
-    grace_period: string | null; // Changed from number to string to match backend
+    grace_period: string | null;
     purpose: string;
-    status: string; // 'pending', 'assigned', 'in-progress', 'completed', 'cancelled'
+    status: string;
     reason_of_cancellation: string | null;
     start_location: string;
     end_location: string;
     office: Office;
-    vehicle_assignments: VehicleAssignment[]; // New: array of vehicle assignments
+    vehicle_assignments: VehicleAssignment[];
     created_at: string;
     updated_at: string;
 }
@@ -150,19 +114,15 @@ export interface BookingFormData {
     bookingFor: AssignedEmployee | null;
 }
 
+/**
+ * NEW: BookingScreen is now just a landing/dashboard screen.
+ * It shows city info, a "Browse Vehicles" CTA, and recent bookings.
+ */
 export interface BookingScreenProps {
-    bookingStep: BookingStep;
-    setBookingStep: (step: BookingStep) => void;
-    bookingForm: BookingFormData;
-    setBookingForm: (form: BookingFormData) => void;
     selectedCity: string;
-    loading: boolean;
     onBack: () => void;
-    onSearchCabs: () => void;
-    onSetActivePickerType: (type: string) => void;
-    onChangeCity: () => void;
-    formatTimeForDisplay: (date: Date) => string;
-    formatDateForDisplay: (date: Date) => string;
+    /** Called when user taps "Browse Vehicles" — navigates to the cabs screen */
+    onBrowseVehicles: () => void;
     token: string | null;
 }
 
@@ -174,9 +134,9 @@ export interface PreviousBookingsSectionProps {
 export interface AvailableCabsScreenProps {
     vehicles: Vehicle[];
     availableDrivers: Driver[];
-    selectedVehicles: Array<{vehicle: Vehicle, driver: Driver | null}>;
+    selectedVehicles: Array<{ vehicle: Vehicle; driver: Driver | null }>;
     onBack: () => void;
-    onUpdateSelection: (selection: Array<{vehicle: Vehicle, driver: Driver | null}>) => void;
+    onUpdateSelection: (selection: Array<{ vehicle: Vehicle; driver: Driver | null }>) => void;
     onProceedToBooking: () => void;
 }
 
@@ -187,7 +147,15 @@ export interface BookVehicleModalProps {
     setBookingForm: (form: BookingFormData) => void;
     loading: boolean;
     onBookVehicle: () => void;
-    selectedVehicles: Array<{vehicle: Vehicle, driver: Driver | null}>;
+    selectedVehicles: Array<{ vehicle: Vehicle; driver: Driver | null }>;
+}
+
+export interface MyBookingsScreenProps {
+    bookings: Booking[];
+    loading: boolean;
+    onBack: () => void;
+    onCancelBooking: (booking: Booking) => void;
+    onRefresh?: () => void;
 }
 
 export interface CancelBookingModalProps {

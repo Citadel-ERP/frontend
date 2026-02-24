@@ -78,6 +78,13 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     { id: 'non_responsive', label: `Non Responsive (${statusCounts.non_responsive || 0})` }
   ];
 
+  // FIX: also call onSearch on every keystroke so parent state stays in sync
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+    onSearch(text);
+    setIsSearchMode(text.length > 0);
+  };
+
   const handleSearchSubmit = () => {
     onSearch(searchQuery);
     setIsSearchMode(true);
@@ -175,7 +182,8 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             style={styles.searchInput}
             placeholder="Search Leads"
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            // FIX: call onSearch on every character change, not just on submit
+            onChangeText={handleSearchChange}
             onSubmitEditing={handleSearchSubmit}
             returnKeyType="search"
             placeholderTextColor="#666"

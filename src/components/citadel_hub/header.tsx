@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import Settings from '../Settings'; 
 interface HeaderProps {
   currentUser: {
     employee_id: string;
@@ -19,14 +19,17 @@ interface HeaderProps {
   };
   unreadCount: number;
   onMenuClick: (action: string) => void;
-  onBack: () => void;  // Add this prop
+  onBack: () => void; 
+  onCameraClick: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
+  
   currentUser, 
   unreadCount, 
   onMenuClick,
-  onBack  // Add this
+  onBack,
+  onCameraClick 
 }) => {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -48,9 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
         <Text style={styles.headerTitle}>Messages</Text>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
+          {/* <TouchableOpacity style={styles.headerIconBtn} onPress={onCameraClick} activeOpacity={0.7}>
             <Ionicons name="camera" size={24} color="#ffffff" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity 
             style={styles.headerIconBtn}
@@ -92,14 +95,21 @@ export const Header: React.FC<HeaderProps> = ({
 
             <TouchableOpacity 
               style={styles.dropdownItem}
-              onPress={() => setShowMenu(false)}
+              onPress={() => { onMenuClick('readAll'); setShowMenu(false); }}
             >
               <Text style={styles.dropdownText}>Read all</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={styles.dropdownItem}
-              onPress={() => setShowMenu(false)}
+              onPress={() => { onMenuClick('blockedContacts'); setShowMenu(false); }}
+            >
+              <Text style={styles.dropdownText}>Blocked contacts</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dropdownItem}
+              onPress={() => { onMenuClick('settings'); setShowMenu(false); }}
             >
               <Text style={styles.dropdownText}>Settings</Text>
             </TouchableOpacity>

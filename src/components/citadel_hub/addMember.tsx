@@ -199,7 +199,7 @@ export const AddMember: React.FC<AddMemberProps> = ({
   const renderUserItem = ({ item }: { item: User }) => {
     const userId = item.employee_id || item.id?.toString() || '';
     const isSelected = selectedUsers.has(userId);
-    const fullName = `${item.first_name} ${item.last_name}`;
+    const fullName = `${item.first_name ?? ''} ${item.last_name ?? ''}`;
     
     // ✅ ADD THIS - Generate colors
     const colors = getAvatarColor(userId);
@@ -220,8 +220,8 @@ export const AddMember: React.FC<AddMemberProps> = ({
             // ✅ CHANGED: Use dynamic colors instead of hardcoded green
             <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.light }]}>
               <Text style={[styles.avatarText, { color: colors.dark }]}>
-                {item.first_name.charAt(0).toUpperCase()}
-                {item.last_name.charAt(0).toUpperCase()}
+                {item.first_name?.charAt(0).toUpperCase()}
+                {item.last_name?.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}

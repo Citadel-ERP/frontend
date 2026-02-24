@@ -2573,18 +2573,20 @@ export const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textSecondary,
     fontStyle: 'italic',
   },
-  addButton:{
-    display:'flex',
-    flexDirection:'row',
-    borderWidth:1,
-    borderColor:WHATSAPP_COLORS.border,
-    borderRadius:8,
-    paddingVertical:6,
-    paddingHorizontal:8,
-    alignItems:'center',
-    justifyContent:'center',
-  },
-  addButtonText:{
-    color:"#fff",
-  }
+  addButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'transparent',  
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  gap: 6,
+  borderRadius: 8,
+  whiteSpace: 'nowrap',
+},
+  addButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '400',
+},
 });

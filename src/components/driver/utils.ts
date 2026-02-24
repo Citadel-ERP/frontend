@@ -49,6 +49,7 @@ export const getStatusColor = (status: string): string => {
         case 'cancelled':
             return '#FF3B30';
         case 'assigned':
+        case 'accepted':
             return '#007AFF';
         default:
             return '#8E8E93';
@@ -76,6 +77,8 @@ export const getStatusIconBooking = (status: string) => {
             return 'sync';
         case 'pending':
             return 'timer-sand';
+        case 'accepted':
+            return 'check-circle';
         default:
             return 'help-circle';
     }
@@ -102,6 +105,8 @@ export const getStatusIcon = (status: string) => {
             return 'sync-circle';
         case 'pending':
             return 'timer';
+        case 'accepted':
+            return 'check-circle';
         default:
             return 'help-circle';
     }
