@@ -1,20 +1,15 @@
+
 import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  SafeAreaView,
-  StatusBar,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { AssetHeader } from './components/AssetHeader';
 import { AssetList } from './components/AssetList';
 import { CreateAssetModal } from './components/CreateAssetModal';
 import { UpdateAssetModal } from './components/UpdateAssetModal';
 import { ExcelUploadModal } from './components/ExcelUploadModal';
-import { useAssets } from './hooks/useAssets';
-import { Asset, AssetFormData } from './types/asset.types';
 import { DeleteAssetModal } from './components/DeleteAssetModal';
 import { AssetCitySelection } from './components/CitySelection';
+import { useAssets } from './hooks/useAssets';
+import { Asset, AssetFormData } from './types/asset.types';
 
 interface AssetModuleProps {
   onBack: () => void;
@@ -23,109 +18,55 @@ interface AssetModuleProps {
 
 export default function AssetModule({ onBack, isDark = false }: AssetModuleProps) {
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
-
-  const {
-    assets,
-    filteredAssets,
-    loading,
-    refreshing,
-    error,
-    filters,
-    setFilters,
-    fetchAssets,
-    refreshAssets,
-    createAsset,
-    updateAsset,
-    deleteAsset,
-  } = useAssets(selectedCity ?? '');
-
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
 
-  const theme = {
-    bgColor: isDark ? '#050b18' : '#ece5dd',
-  };
+  const {
+    assets, filteredAssets, loading, refreshing, error,
+    filters, setFilters, fetchAssets,
+    createAsset, updateAsset, deleteAsset,
+    addSerialIds, deleteSerialId,
+  } = useAssets(selectedCity ?? '');
 
-  // ─── City not yet chosen → show city picker ───────────────────────────────
   if (!selectedCity) {
-    return (
-      <AssetCitySelection
-        onCitySelect={(city) => setSelectedCity(city)}
-        onBack={onBack}
-        isDark={isDark}
-      />
-    );
+    return <AssetCitySelection onCitySelect={setSelectedCity} onBack={onBack} isDark={isDark} />;
   }
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
-  const handleAssetPress = (asset: Asset) => {
-    setSelectedAsset(asset);
-    setShowUpdateModal(true);
-  };
-
-  const handleDeletePress = (asset: Asset) => {
-    setAssetToDelete(asset);
-    setShowDeleteModal(true);
-  };
+  const handleAssetPress = (asset: Asset) => { setSelectedAsset(asset); setShowUpdateModal(true); };
+  const handleDeletePress = (asset: Asset) => { setAssetToDelete(asset); setShowDeleteModal(true); };
 
   const handleConfirmDelete = async (id: number) => {
     const success = await deleteAsset(id);
-    if (success) {
-      setShowDeleteModal(false);
-      setAssetToDelete(null);
-    }
+    if (success) { setShowDeleteModal(false); setAssetToDelete(null); }
   };
 
-  const handleExcelUpload = async (assets: AssetFormData[]) => {
+  const handleExcelUpload = async (assetsData: AssetFormData[]) => {
     let successCount = 0;
     let errorCount = 0;
-
-    for (const asset of assets) {
-      try {
-        const success = await createAsset(asset);
-        if (success) successCount++;
-        else errorCount++;
-      } catch {
-        errorCount++;
-      }
+    for (const asset of assetsData) {
+      const success = await createAsset(asset);
+      if (success) successCount++; else errorCount++;
     }
-
-    Alert.alert(
-      'Upload Complete',
-      `Successfully uploaded: ${successCount}\nFailed: ${errorCount}`,
-    );
+    Alert.alert('Upload Complete', `Uploaded: ${successCount}  Failed: ${errorCount}`);
   };
 
-  const handleRefresh = () => {
-    fetchAssets();
-  };
-
-  // Go back to city selection instead of exiting the module entirely
-  const handleBackToCity = () => {
-    setSelectedCity(null);
-  };
-
-  // ─── Main asset list UI ───────────────────────────────────────────────────
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.bgColor }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor="#008069"
-      />
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#050b18' : '#ece5dd' }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="#008069" />
 
       <AssetHeader
         title={`Assets · ${selectedCity}`}
-        onBack={handleBackToCity}
+        onBack={() => setSelectedCity(null)}
         onSearch={(query) => setFilters({ ...filters, search: query })}
         searchQuery={filters.search || ''}
         onAddPress={() => setShowCreateModal(true)}
         onUploadPress={() => setShowUploadModal(true)}
         selectedCity={selectedCity}
-        onCityFilter={() => {}}   // no-op – city is set at module level now
+        onCityFilter={() => {}}
         isDark={isDark}
       />
 
@@ -133,7 +74,7 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
         assets={filteredAssets}
         loading={loading}
         refreshing={refreshing}
-        onRefresh={handleRefresh}
+        onRefresh={fetchAssets}
         onAssetPress={handleAssetPress}
         onDeletePress={handleDeletePress}
         selectedCity={selectedCity}
@@ -143,10 +84,7 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
       <DeleteAssetModal
         visible={showDeleteModal}
         asset={assetToDelete}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setAssetToDelete(null);
-        }}
+        onClose={() => { setShowDeleteModal(false); setAssetToDelete(null); }}
         onConfirm={handleConfirmDelete}
         loading={loading}
         isDark={isDark}
@@ -163,11 +101,10 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
       <UpdateAssetModal
         visible={showUpdateModal}
         asset={selectedAsset}
-        onClose={() => {
-          setShowUpdateModal(false);
-          setSelectedAsset(null);
-        }}
+        onClose={() => { setShowUpdateModal(false); setSelectedAsset(null); }}
         onSubmit={updateAsset}
+        onAddSerialIds={addSerialIds}
+        onDeleteSerialId={deleteSerialId}
         isDark={isDark}
       />
 
@@ -181,8 +118,4 @@ export default function AssetModule({ onBack, isDark = false }: AssetModuleProps
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
+const styles = StyleSheet.create({ container: { flex: 1 } });

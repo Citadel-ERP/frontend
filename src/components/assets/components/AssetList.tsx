@@ -1,12 +1,8 @@
+
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  ActivityIndicator, RefreshControl, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from '../types/asset.types';
@@ -19,331 +15,251 @@ interface AssetListProps {
   onRefresh?: () => void;
   onAssetPress: (asset: Asset) => void;
   onDeletePress: (asset: Asset) => void;
-  onFilterPress?: () => void;
   selectedCity?: string;
   isDark?: boolean;
 }
 
 export const AssetList: React.FC<AssetListProps> = ({
-  assets,
-  loading,
-  refreshing = false,
-  onRefresh,
-  onAssetPress,
-  onDeletePress,
-  onFilterPress,
-  selectedCity = '',
-  isDark = false,
+  assets, loading, refreshing = false, onRefresh,
+  onAssetPress, onDeletePress, selectedCity = '', isDark = false,
 }) => {
-  const theme = {
-    bgColor: isDark ? '#050b18' : '#ece5dd',
-    cardBg: isDark ? '#111a2d' : '#ffffff',
-    textMain: isDark ? '#ffffff' : '#333333',
-    textSub: isDark ? '#a0a0a0' : '#666666',
-    accentBlue: '#008069',
-    borderColor: isDark ? '#1e2a3a' : '#e0e0e0',
+  const T = {
+    bg: isDark ? '#050b18' : '#ece5dd',
+    card: isDark ? '#111a2d' : '#ffffff',
+    text: isDark ? '#ffffff' : '#333333',
+    sub: isDark ? '#a0a0a0' : '#666666',
+    accent: '#008069',
+    border: isDark ? '#1e2a3a' : '#e0e0e0',
     deleteBg: isDark ? '#3a1a1a' : '#fee',
   };
 
   const getAssetIcon = (assetType: string) => {
-    const type = assetType.toLowerCase();
-    if (type.includes('laptop') || type.includes('computer')) return 'laptop-outline';
-    if (type.includes('printer')) return 'print-outline';
-    if (type.includes('monitor') || type.includes('screen')) return 'desktop-outline';
-    if (type.includes('phone') || type.includes('mobile')) return 'phone-portrait-outline';
-    if (type.includes('tablet')) return 'tablet-portrait-outline';
-    if (type.includes('server')) return 'server-outline';
-    if (type.includes('network') || type.includes('router')) return 'wifi-outline';
+    const t = assetType.toLowerCase();
+    if (t.includes('laptop') || t.includes('computer')) return 'laptop-outline';
+    if (t.includes('printer')) return 'print-outline';
+    if (t.includes('monitor') || t.includes('screen')) return 'desktop-outline';
+    if (t.includes('phone') || t.includes('mobile')) return 'phone-portrait-outline';
+    if (t.includes('tablet')) return 'tablet-portrait-outline';
+    if (t.includes('server')) return 'server-outline';
+    if (t.includes('router') || t.includes('network')) return 'wifi-outline';
     return 'hardware-chip-outline';
   };
 
-  const renderAssetItem = ({ item }: { item: Asset }) => {
+  const renderItem = ({ item }: { item: Asset }) => {
     const location = extractLocation(item.asset_name);
     const baseName = extractAssetBaseName(item.asset_name);
-    const iconName = getAssetIcon(item.asset_type);
-    const showLocation = location && location !== 'Unknown';
+    const serials = item.asset_serial_id ?? [];
+    const availableSerials = serials.filter(s => !s.is_assigned);
+    const assignedSerials = serials.filter(s => s.is_assigned);
+    const hasSerials = serials.length > 0;
 
     return (
       <TouchableOpacity
-        style={[styles.assetCard, { backgroundColor: theme.cardBg }]}
+        style={[styles.card, { backgroundColor: T.card }]}
         onPress={() => onAssetPress(item)}
         activeOpacity={0.7}
       >
-        <View style={[styles.assetIcon, { backgroundColor: theme.accentBlue + '20' }]}>
-          <Ionicons name={iconName as any} size={32} color={theme.accentBlue} />
+        {/* Icon */}
+        <View style={[styles.iconWrap, { backgroundColor: T.accent + '20' }]}>
+          <Ionicons name={getAssetIcon(item.asset_type) as any} size={30} color={T.accent} />
         </View>
 
-        <View style={styles.assetInfo}>
-          {/* Name + location badge + delete */}
-          <View style={styles.assetHeader}>
-            <View style={styles.titleContainer}>
-              <Text style={[styles.assetName, { color: theme.textMain }]} numberOfLines={1}>
-                {baseName}
-              </Text>
-              {showLocation && (
-                <View style={[styles.locationBadge, { backgroundColor: theme.accentBlue + '20' }]}>
-                  <Ionicons name="location-outline" size={12} color={theme.accentBlue} />
-                  <Text style={[styles.locationText, { color: theme.accentBlue }]}>
-                    {location}
-                  </Text>
+        <View style={styles.info}>
+          {/* Title row */}
+          <View style={styles.titleRow}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <Text style={[styles.name, { color: T.text }]} numberOfLines={1}>{baseName}</Text>
+              {location && location !== 'Unknown' && (
+                <View style={[styles.badge, { backgroundColor: T.accent + '20' }]}>
+                  <Ionicons name="location-outline" size={11} color={T.accent} />
+                  <Text style={[styles.badgeText, { color: T.accent }]}>{location}</Text>
                 </View>
               )}
             </View>
             <TouchableOpacity
               onPress={() => onDeletePress(item)}
-              style={[styles.deleteButton, { backgroundColor: theme.deleteBg }]}
+              style={[styles.deleteBtn, { backgroundColor: T.deleteBg }]}
             >
-              <Ionicons name="trash-outline" size={18} color="#ff4444" />
+              <Ionicons name="trash-outline" size={17} color="#ff4444" />
             </TouchableOpacity>
           </View>
 
           {/* Type */}
           <View style={styles.metaRow}>
-            <Ionicons name="pricetag-outline" size={14} color={theme.textSub} />
-            <Text style={[styles.metaText, { color: theme.textSub }]}>{item.asset_type}</Text>
+            <Ionicons name="pricetag-outline" size={13} color={T.sub} />
+            <Text style={[styles.meta, { color: T.sub }]}>{item.asset_type}</Text>
           </View>
 
-          {/* Serial number */}
-          {item.asset_serial ? (
-            <View style={styles.metaRow}>
-              <Ionicons name="barcode-outline" size={14} color={theme.textSub} />
-              <Text style={[styles.metaText, { color: theme.textSub }]}>
-                S/N: {item.asset_serial}
-              </Text>
+          {/* Serial IDs section */}
+          {hasSerials ? (
+            <View style={styles.serialsContainer}>
+              <View style={styles.serialsHeader}>
+                <Ionicons name="barcode-outline" size={13} color={T.sub} />
+                <Text style={[styles.meta, { color: T.sub }]}>
+                  {serials.length} serial{serials.length !== 1 ? 's' : ''}
+                </Text>
+                {assignedSerials.length > 0 && (
+                  <View style={[styles.badge, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={[styles.badgeText, { color: '#D97706' }]}>
+                      {assignedSerials.length} assigned
+                    </Text>
+                  </View>
+                )}
+                {availableSerials.length > 0 && (
+                  <View style={[styles.badge, { backgroundColor: '#DCFCE7' }]}>
+                    <Text style={[styles.badgeText, { color: '#16A34A' }]}>
+                      {availableSerials.length} free
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {/* Show up to 3 serials inline */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                {serials.slice(0, 3).map(s => (
+                  <View key={s.id} style={[
+                    styles.serialChip,
+                    { backgroundColor: s.is_assigned ? '#FFF7ED' : '#F0F9FF',
+                      borderColor: s.is_assigned ? '#FED7AA' : '#BAE6FD' }
+                  ]}>
+                    <Text style={{
+                      fontSize: 11, fontWeight: '600',
+                      color: s.is_assigned ? '#C2410C' : '#0369A1',
+                      fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+                    }}>
+                      {s.serial_id}
+                    </Text>
+                  </View>
+                ))}
+                {serials.length > 3 && (
+                  <View style={[styles.serialChip, { backgroundColor: T.border, borderColor: T.border }]}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: T.sub }}>
+                      +{serials.length - 3} more
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.metaRow}>
+              <Ionicons name="barcode-outline" size={13} color={T.sub} />
+              <Text style={[styles.meta, { color: T.sub + '80' }]}>No serials registered</Text>
+            </View>
+          )}
 
           {/* Description */}
           {item.asset_description ? (
-            <View style={styles.descriptionContainer}>
-              <Ionicons name="document-text-outline" size={14} color={theme.textSub} />
-              <Text style={[styles.assetDescription, { color: theme.textSub }]} numberOfLines={2}>
-                {item.asset_description}
-              </Text>
-            </View>
+            <Text style={[styles.desc, { color: T.sub }]} numberOfLines={1}>
+              {item.asset_description}
+            </Text>
           ) : null}
 
-          {/* Footer: count + date */}
-          <View style={styles.assetFooter}>
-            <View style={styles.countContainer}>
-              <Ionicons name="layers-outline" size={16} color={theme.accentBlue} />
-              <Text style={[styles.assetCount, { color: theme.textMain }]}>
-                Count:{' '}
-                <Text style={[styles.countNumber, { color: theme.accentBlue }]}>
-                  {item.asset_count}
-                </Text>
+          {/* Footer */}
+          <View style={styles.footer}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Ionicons name="layers-outline" size={14} color={T.accent} />
+              <Text style={[styles.meta, { color: T.text }]}>
+                Count: <Text style={{ color: T.accent, fontWeight: '700' }}>{item.asset_count}</Text>
               </Text>
             </View>
-            {item.created_at && (
-              <View style={styles.dateContainer}>
-                <Ionicons name="time-outline" size={12} color={theme.textSub} />
-                <Text style={[styles.dateText, { color: theme.textSub }]}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(item.available_count !== undefined) && (
+                <View style={[styles.badge, { backgroundColor: '#DCFCE7' }]}>
+                  <Text style={[styles.badgeText, { color: '#16A34A' }]}>
+                    {item.available_count} avail
+                  </Text>
+                </View>
+              )}
+              {item.created_at && (
+                <Text style={[styles.date, { color: T.sub }]}>
                   {new Date(item.created_at).toLocaleDateString()}
                 </Text>
-              </View>
-            )}
+              )}
+            </View>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderEmptyState = () => (
-    <View style={styles.centerContainer}>
-      <View style={[styles.emptyIconContainer, { backgroundColor: theme.accentBlue + '20' }]}>
-        <Ionicons name="cube-outline" size={64} color={theme.accentBlue} />
-      </View>
-      <Text style={[styles.emptyText, { color: theme.textMain }]}>No Assets Found</Text>
-      <Text style={[styles.emptySubText, { color: theme.textSub }]}>
-        Click the + button to add your first asset or upload an Excel file
-      </Text>
-    </View>
-  );
-
-  const renderLoadingState = () => (
-    <View style={styles.centerContainer}>
-      <ActivityIndicator size="large" color={theme.accentBlue} />
-      <Text style={[styles.loadingText, { color: theme.textSub }]}>Loading assets...</Text>
-    </View>
-  );
-
   if (loading && !refreshing && assets.length === 0) {
-    return renderLoadingState();
-  }
-
-  const renderListHeader = () => {
-    if (assets.length === 0) return null;
     return (
-      <View style={styles.statsRow}>
-        <View style={styles.statsContainer}>
-          <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.statNumber, { color: theme.accentBlue }]}>{assets.length}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSub }]}>Total Assets</Text>
-          </View>
-          <View style={[styles.statBox, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.statNumber, { color: theme.accentBlue }]}>
-              {assets.reduce((sum, a) => sum + (a.asset_count || 0), 0)}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.textSub }]}>Total Count</Text>
-          </View>
-        </View>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={T.accent} />
+        <Text style={[styles.loadingText, { color: T.sub }]}>Loading assets...</Text>
       </View>
     );
-  };
+  }
 
   return (
     <FlatList
       data={assets}
-      renderItem={renderAssetItem}
-      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-      contentContainerStyle={[
-        styles.listContainer,
-        assets.length === 0 && styles.emptyListContainer,
-      ]}
+      renderItem={renderItem}
+      keyExtractor={item => item.id?.toString() ?? Math.random().toString()}
+      contentContainerStyle={[styles.list, assets.length === 0 && { flexGrow: 1 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        onRefresh ? (
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.accentBlue]}
-            tintColor={theme.accentBlue}
-            title="Pull to refresh"
-            titleColor={theme.textSub}
-          />
-        ) : undefined
+        onRefresh
+          ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[T.accent]} tintColor={T.accent} />
+          : undefined
       }
-      ListEmptyComponent={!loading ? renderEmptyState : null}
-      ListHeaderComponent={renderListHeader}
+      ListHeaderComponent={assets.length > 0 ? (
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 16 }}>
+          {[
+            { label: 'Asset Types', value: assets.length },
+            { label: 'Total Count', value: assets.reduce((s, a) => s + (a.asset_count || 0), 0) },
+            { label: 'Serials Reg.', value: assets.reduce((s, a) => s + (a.asset_serial_id?.length || 0), 0) },
+          ].map(stat => (
+            <View key={stat.label} style={[styles.statBox, { backgroundColor: isDark ? '#111a2d' : '#fff' }]}>
+              <Text style={[styles.statNum, { color: T.accent }]}>{stat.value}</Text>
+              <Text style={[styles.statLabel, { color: T.sub }]}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      ListEmptyComponent={!loading ? (
+        <View style={styles.center}>
+          <View style={[styles.emptyIcon, { backgroundColor: T.accent + '20' }]}>
+            <Ionicons name="cube-outline" size={56} color={T.accent} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: T.text }]}>No Assets Found</Text>
+          <Text style={[styles.emptySub, { color: T.sub }]}>
+            Tap + to add your first asset
+          </Text>
+        </View>
+      ) : null}
     />
   );
 };
 
 const styles = StyleSheet.create({
-  listContainer: { padding: 16, paddingBottom: 32 },
-  emptyListContainer: { flexGrow: 1, justifyContent: 'center' },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+  list: { padding: 16, paddingBottom: 32 },
+  card: {
+    flexDirection: 'row', borderRadius: 16, padding: 14,
+    marginBottom: 12, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08,
+    shadowRadius: 4, elevation: 3,
   },
-  statsContainer: { flex: 1, flexDirection: 'row', gap: 12 },
-  statBox: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statNumber: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
-  statLabel: { fontSize: 12, fontWeight: '500' },
-  assetCard: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  assetIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  assetInfo: { flex: 1 },
-  assetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  titleContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  assetName: { fontSize: 18, fontWeight: '600', maxWidth: '60%' },
-  locationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    gap: 4,
-  },
-  locationText: { fontSize: 12, fontWeight: '500' },
-  deleteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-    gap: 6,
-  },
-  metaText: { fontSize: 14, flex: 1 },
-  descriptionContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-    gap: 6,
-  },
-  assetDescription: { fontSize: 14, flex: 1, lineHeight: 20 },
-  assetFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  countContainer: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  assetCount: { fontSize: 14, fontWeight: '500' },
-  countNumber: { fontSize: 16, fontWeight: '700' },
-  dateContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dateText: { fontSize: 11 },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  emptyText: { fontSize: 20, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
-  emptySubText: { fontSize: 14, textAlign: 'center', maxWidth: 250, lineHeight: 20 },
-  errorIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  errorText: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
-  retryButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  retryButtonText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  loadingText: { marginTop: 16, fontSize: 16 },
+  iconWrap: { width: 56, height: 56, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  info: { flex: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  name: { fontSize: 16, fontWeight: '700' },
+  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, gap: 3 },
+  badgeText: { fontSize: 11, fontWeight: '600' },
+  deleteBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  meta: { fontSize: 13 },
+  serialsContainer: { marginVertical: 4 },
+  serialsHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  serialChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  desc: { fontSize: 12, marginTop: 2, marginBottom: 4 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  date: { fontSize: 11 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  loadingText: { marginTop: 12, fontSize: 15 },
+  emptyIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  emptySub: { fontSize: 14, textAlign: 'center' },
+  statBox: { flex: 1, padding: 14, borderRadius: 14, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
+  statNum: { fontSize: 22, fontWeight: '800', marginBottom: 2 },
+  statLabel: { fontSize: 11, fontWeight: '500', textAlign: 'center' },
 });

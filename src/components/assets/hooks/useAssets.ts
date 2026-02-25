@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { Asset, AssetFormData, AssetFilters } from '../types/asset.types';
@@ -11,39 +12,28 @@ export const useAssets = (city: string = '') => {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<AssetFilters>({});
 
-  // Track the city that was last successfully fetched to prevent duplicate calls
   const lastFetchedCityRef = useRef<string | null>(null);
   const isFetchingRef = useRef(false);
 
-  // ─── Fetch ────────────────────────────────────────────────────────────────
-  const fetchAssets = useCallback(
-    async (showLoading = true) => {
-      // GUARD: Don't fetch if no city is selected
-      if (!city) return;
-
-      // GUARD: Don't fetch if already fetching
-      if (isFetchingRef.current) return;
-
-      isFetchingRef.current = true;
-      if (showLoading) setLoading(true);
-      setError(null);
-
-      try {
-        const response = await AssetService.getAssets(city);
-        if (response.data && Array.isArray(response.data)) {
-          setAssets(response.data);
-          lastFetchedCityRef.current = city;
-        }
-      } catch (err: any) {
-        setError(err.message);
-        Alert.alert('Error', err.message || 'Failed to fetch assets');
-      } finally {
-        if (showLoading) setLoading(false);
-        isFetchingRef.current = false;
+  const fetchAssets = useCallback(async (showLoading = true) => {
+    if (!city || isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (showLoading) setLoading(true);
+    setError(null);
+    try {
+      const response = await AssetService.getAssets(city);
+      if (response.data && Array.isArray(response.data)) {
+        setAssets(response.data);
+        lastFetchedCityRef.current = city;
       }
-    },
-    [city],
-  );
+    } catch (err: any) {
+      setError(err.message);
+      Alert.alert('Error', err.message || 'Failed to fetch assets');
+    } finally {
+      if (showLoading) setLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [city]);
 
   const refreshAssets = useCallback(async () => {
     if (!city) return;
@@ -52,124 +42,100 @@ export const useAssets = (city: string = '') => {
     setRefreshing(false);
   }, [fetchAssets, city]);
 
-  // ─── CRUD ─────────────────────────────────────────────────────────────────
-  const createAsset = useCallback(
-    async (data: AssetFormData) => {
-      const errors = validateAssetForm(data);
-      if (errors.length > 0) {
-        Alert.alert('Validation Error', errors[0].message);
-        return false;
-      }
+  const createAsset = useCallback(async (data: AssetFormData) => {
+    const errors = validateAssetForm(data);
+    if (errors.length > 0) { Alert.alert('Validation Error', errors[0].message); return false; }
+    setLoading(true);
+    try {
+      const response = await AssetService.createAsset(data);
+      Alert.alert('Success', response.message || 'Asset created');
+      await fetchAssets(false);
+      return true;
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+      return false;
+    } finally { setLoading(false); }
+  }, [fetchAssets]);
 
-      setLoading(true);
-      try {
-        const response = await AssetService.createAsset(data);
-        Alert.alert('Success', response.message || 'Asset created successfully');
-        await fetchAssets(false);
-        return true;
-      } catch (err: any) {
-        Alert.alert('Error', err.message);
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fetchAssets],
-  );
+  const updateAsset = useCallback(async (id: number, data: Partial<AssetFormData>) => {
+    setLoading(true);
+    try {
+      const response = await AssetService.updateAsset(id, data);
+      Alert.alert('Success', response.message || 'Asset updated');
+      await fetchAssets(false);
+      return true;
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+      return false;
+    } finally { setLoading(false); }
+  }, [fetchAssets]);
 
-  const updateAsset = useCallback(
-    async (id: number, data: Partial<AssetFormData>) => {
-      const errors = validateAssetForm(data);
-      if (errors.length > 0) {
-        Alert.alert('Validation Error', errors[0].message);
-        return false;
-      }
+  const deleteAsset = useCallback(async (id: number) => {
+    setLoading(true);
+    try {
+      const response = await AssetService.deleteAsset(id);
+      Alert.alert('Success', response.message || 'Asset deleted');
+      await fetchAssets(false);
+      return true;
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+      return false;
+    } finally { setLoading(false); }
+  }, [fetchAssets]);
 
-      setLoading(true);
-      try {
-        const response = await AssetService.updateAsset(id, data);
-        Alert.alert('Success', response.message || 'Asset updated successfully');
-        await fetchAssets(false);
-        return true;
-      } catch (err: any) {
-        Alert.alert('Error', err.message);
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fetchAssets],
-  );
+  // ── Serial operations ────────────────────────────────────────────────────
 
-  const deleteAsset = useCallback(
-    async (id: number) => {
-      setLoading(true);
-      try {
-        const response = await AssetService.deleteAsset(id);
-        Alert.alert('Success', response.message || 'Asset deleted successfully');
-        await fetchAssets(false);
-        return true;
-      } catch (err: any) {
-        Alert.alert('Error', err.message);
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fetchAssets],
-  );
-
-  // ─── Client-side filtering ────────────────────────────────────────────────
-  const filterAssets = useCallback(
-    (rawAssets: Asset[]): Asset[] => {
-      return rawAssets.filter((asset) => {
-        if (filters.search) {
-          const q = filters.search.toLowerCase();
-          const matches =
-            asset.asset_name.toLowerCase().includes(q) ||
-            asset.asset_type.toLowerCase().includes(q) ||
-            (asset.asset_description ?? '').toLowerCase().includes(q) ||
-            (asset.asset_serial ?? '').toLowerCase().includes(q);
-          if (!matches) return false;
-        }
-
-        if (filters.asset_type && asset.asset_type !== filters.asset_type) {
-          return false;
-        }
-
-        return true;
-      });
-    },
-    [filters],
-  );
-
-  // ─── Bootstrap: only fetch when city is set ───────────────────────────────
-  useEffect(() => {
-    if (!city) {
-      // Clear assets when city is cleared (user went back to city selection)
-      setAssets([]);
-      lastFetchedCityRef.current = null;
-      return;
+  const addSerialIds = useCallback(async (assetId: number, serialIds: string[]) => {
+    try {
+      const response = await AssetService.addSerialIds(assetId, serialIds);
+      await fetchAssets(false);
+      return { success: true, message: response.message };
+    } catch (err: any) {
+      return { success: false, message: err.message };
     }
+  }, [fetchAssets]);
 
-    // Only fetch if the city has actually changed
+  const deleteSerialId = useCallback(async (serialIdPk: number) => {
+    try {
+      const response = await AssetService.deleteSerialId(serialIdPk);
+      await fetchAssets(false);
+      return { success: true, message: response.message };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }, [fetchAssets]);
+
+  const filterAssets = useCallback((rawAssets: Asset[]): Asset[] => {
+    return rawAssets.filter((asset) => {
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        const serialMatch = asset.asset_serial_id?.some(s =>
+          s.serial_id.toLowerCase().includes(q)
+        );
+        const matches =
+          asset.asset_name.toLowerCase().includes(q) ||
+          asset.asset_type.toLowerCase().includes(q) ||
+          (asset.asset_description ?? '').toLowerCase().includes(q) ||
+          serialMatch;
+        if (!matches) return false;
+      }
+      if (filters.asset_type && asset.asset_type !== filters.asset_type) return false;
+      return true;
+    });
+  }, [filters]);
+
+  useEffect(() => {
+    if (!city) { setAssets([]); lastFetchedCityRef.current = null; return; }
     if (lastFetchedCityRef.current === city) return;
-
     fetchAssets();
   }, [city, fetchAssets]);
 
   return {
     assets,
     filteredAssets: filterAssets(assets),
-    loading,
-    refreshing,
-    error,
-    filters,
-    setFilters,
-    fetchAssets,
-    refreshAssets,
-    createAsset,
-    updateAsset,
-    deleteAsset,
+    loading, refreshing, error, filters, setFilters,
+    fetchAssets, refreshAssets,
+    createAsset, updateAsset, deleteAsset,
+    addSerialIds, deleteSerialId,
   };
 };
