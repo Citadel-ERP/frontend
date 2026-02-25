@@ -176,8 +176,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-    paddingTop: 55,
-    paddingRight: 6,
+    paddingTop: Platform.OS === 'web' ? 55 : 55,  
+    paddingRight: Platform.OS === 'web' ? 16 : 6,  
   },
   dropdownMenu: {
     backgroundColor: '#ffffff',
@@ -188,7 +188,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-  },
+    marginRight: Platform.OS === 'web' ? 310 : 0, // Adjust margin for web vs mobile
+},
   dropdownItem: {
     paddingVertical: 12,
     paddingHorizontal: 16,
