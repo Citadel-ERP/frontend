@@ -651,26 +651,28 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.assetsModalOverlay}>
-          <View style={styles.assetsModalContainer}>
-            {/* ─── HEADER ──────────────────────────────── */}
-            <View style={styles.assetsModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Ionicons name="create-outline" size={24} color={WHATSAPP_COLORS.primary} />
-                <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
-                  Edit Employee
-                </Text>
-              </View>
-              <TouchableOpacity onPress={onClose} style={{ marginLeft: 12 }}>
-                <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
+      {/* ─── OVERLAY ─────────────────────────────── */}
+      <View style={styles.assetsModalOverlay}>
+        <View style={styles.assetsModalContainer}>
 
-            {/* ─── CONTENT ─────────────────────────────── */}
+          {/* ─── HEADER ──────────────────────────────── */}
+          <View style={styles.assetsModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <Ionicons name="create-outline" size={24} color={WHATSAPP_COLORS.primary} />
+              <Text style={[styles.assetsModalTitle, { marginLeft: 8 }]}>
+                Edit Employee
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ marginLeft: 12 }}>
+              <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* ─── SCROLLABLE CONTENT (KeyboardAvoidingView wraps ONLY this) ─── */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
             <ScrollView
               style={styles.content}
               showsVerticalScrollIndicator={false}
@@ -1276,53 +1278,54 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                 <View style={{ height: 100 }} />
               </View>
             </ScrollView>
+          </KeyboardAvoidingView>
 
-            {/* ─── FOOTER ACTIONS ──────────────────────── */}
-            <View
-              style={[
-                styles.actionContainer,
-                {
-                  backgroundColor: WHATSAPP_COLORS.background,
-                  paddingTop: 12,
-                  borderTopWidth: 1,
-                  borderTopColor: WHATSAPP_COLORS.border,
-                },
-              ]}
+          {/* ─── FOOTER ACTIONS (outside KeyboardAvoidingView — always pinned) ─── */}
+          <View
+            style={[
+              styles.actionContainer,
+              {
+                backgroundColor: WHATSAPP_COLORS.background,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderTopColor: WHATSAPP_COLORS.border,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={[styles.actionButtonLarge, styles.cancelButton]}
+              onPress={onClose}
+              disabled={loading}
+              activeOpacity={0.7}
             >
-              <TouchableOpacity
-                style={[styles.actionButtonLarge, styles.cancelButton]}
-                onPress={onClose}
-                disabled={loading}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.actionButtonLarge,
-                  styles.saveButton,
-                  loading && styles.disabledButton,
-                ]}
-                onPress={handleSave}
-                disabled={loading}
-                activeOpacity={0.7}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                    <Text style={[styles.saveButtonText, { marginLeft: 6 }]}>
-                      Save Changes
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.actionButtonLarge,
+                styles.saveButton,
+                loading && styles.disabledButton,
+              ]}
+              onPress={handleSave}
+              disabled={loading}
+              activeOpacity={0.7}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={[styles.saveButtonText, { marginLeft: 6 }]}>
+                    Save Changes
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
+
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 };
